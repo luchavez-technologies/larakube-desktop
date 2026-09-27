@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
@@ -35,6 +36,8 @@ test('creating a server starts a non-interactive cloud:create child process', fu
 
     expect($run->status)->toBe(RunStatus::Running)
         ->and($run->label)->toBe('Create server my-first-server')
+        ->and($run->kind)->toBe(RunKind::CreateServer)
+        ->and($run->subject)->toBe('my-first-server')
         ->and(implode(' ', $run->command))->not->toContain('dop_v1_secret');
 
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => $alias === $run->alias()

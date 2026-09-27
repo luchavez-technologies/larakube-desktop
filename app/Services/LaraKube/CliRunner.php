@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Enums\RunKind;
 use App\Models\Run;
 use Native\Desktop\Facades\ChildProcess;
 use RuntimeException;
@@ -19,7 +20,7 @@ class CliRunner
      * @param  list<string>  $arguments  CLI arguments after the binary, without secrets
      * @param  array<string, string>  $secretEnvironment  credentials passed by env, never stored on the Run
      */
-    public function start(string $label, array $arguments, array $secretEnvironment = []): Run
+    public function start(string $label, array $arguments, array $secretEnvironment = [], ?RunKind $kind = null, ?string $subject = null): Run
     {
         $cli = $this->locator->find('larakube');
 
@@ -31,6 +32,8 @@ class CliRunner
 
         $run = Run::create([
             'label' => $label,
+            'kind' => $kind,
+            'subject' => $subject,
             'command' => $command,
         ]);
 

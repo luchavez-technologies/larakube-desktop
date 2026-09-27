@@ -3,32 +3,55 @@
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
+/*
+ * Tokens mirror the Figma "LaraKube Desktop" Foundations page, which in turn
+ * matches the docs landing. Section colors come from the logo's cubes.
+ */
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-mono:
+        'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-    /* Sampled from logo.png — brand blue is the tower, the three cubes
-       (terminal, deploy, pulse) accent the Setup, Servers and Tools sections. */
-    --color-brand-50: #eef3fd;
-    --color-brand-100: #cfdff8;
-    --color-brand-400: #7a9fe8;
-    --color-brand-500: #5683e0;
-    --color-brand-600: #4169c9;
-    --color-brand-700: #3355a6;
+    --color-paper: #f6f6f7;
+    --color-surface: #ffffff;
+    --color-line: #e4e4e8;
+    --color-badge: #f1f1f3;
+    --color-ink: #18181b;
+    --color-soft: #5f6068;
+    --color-faint: #a1a1aa;
 
-    --color-setup-500: #d6412d;
-    --color-setup-50: #fbece9;
-    --color-servers-500: #2c9fc0;
-    --color-servers-300: #8bdaed;
-    --color-servers-50: #e8f7fb;
-    --color-tools-500: #8457e0;
-    --color-tools-600: #6d2bc6;
-    --color-tools-300: #c1aeee;
-    --color-tools-50: #f2edfc;
+    --color-accent: #d1261b;
+    --color-accent-hover: #b01f16;
+    --color-accent-tint: #fff0ee;
+    --color-accent-line: #f3c4bf;
+
+    --color-term: #16161a;
+    --color-term-line: #2c2c33;
+    --color-term-text: #b7b7c0;
+    --color-term-dim: #7c7c86;
+    --color-term-bright: #f4f4f5;
+    --color-term-ok: #4ade80;
+    --color-term-bad: #ff8c84;
+
+    --color-ok: #15803d;
+    --color-ok-tint: #ecfdf3;
+    --color-warn: #a16207;
+    --color-warn-tint: #fefce8;
+    --color-warn-line: #f5e7a6;
+    --color-busy: #3355a6;
+    --color-busy-tint: #eef3fd;
+
+    --color-brand: #5683e0;
+    --color-setup: #d6412d;
+    --color-servers: #2c9fc0;
+    --color-tools: #8457e0;
+    --color-tools-tint: #f2edfc;
 }
 
 body {
-    background-color: #f7f8fb;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
 }

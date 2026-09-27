@@ -1,8 +1,10 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import type { ReactNode } from 'react';
+import LogoMark from '@/components/logo-mark';
 import { cn } from '@/lib/utils';
 import { readiness } from '@/routes';
-import { create as createServer } from '@/routes/servers';
+import { index as runsIndex } from '@/routes/runs';
+import { index as serversIndex } from '@/routes/servers';
 
 type NavItem = {
     label: string;
@@ -19,15 +21,15 @@ const navigation: NavItem[] = [
         description: 'Tools & logins',
         href: readiness().url,
         match: '/readiness',
-        accent: 'bg-setup-500',
+        accent: 'bg-setup',
         glyph: '>_',
     },
     {
         label: 'Servers',
         description: 'Create & manage',
-        href: createServer().url,
+        href: serversIndex().url,
         match: '/servers',
-        accent: 'bg-servers-500',
+        accent: 'bg-servers',
         glyph: '↑',
     },
     {
@@ -35,8 +37,16 @@ const navigation: NavItem[] = [
         description: 'Coming soon',
         href: null,
         match: '/tools',
-        accent: 'bg-tools-500',
+        accent: 'bg-tools',
         glyph: '∿',
+    },
+    {
+        label: 'Activity',
+        description: 'Recent runs',
+        href: runsIndex().url,
+        match: '/runs',
+        accent: 'bg-zinc-500',
+        glyph: '≡',
     },
 ];
 
@@ -50,15 +60,12 @@ export default function AppLayout({
     const { url } = usePage();
 
     return (
-        <div className="flex min-h-screen text-slate-900">
+        <div className="flex min-h-screen">
             <Head title={title} />
-            <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-4 py-5">
-                <div className="mb-8 flex items-center gap-2.5 px-2">
-                    <img src="/logo.png" alt="" className="size-9" />
-                    <div className="leading-tight">
-                        <div className="text-sm font-semibold">LaraKube</div>
-                        <div className="text-xs text-slate-500">Desktop</div>
-                    </div>
+            <aside className="sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
+                <div className="mb-5 flex items-center gap-2.5 px-2.5">
+                    <LogoMark />
+                    <span className="text-[15px] font-semibold">LaraKube</span>
                 </div>
                 <nav className="flex flex-col gap-1">
                     {navigation.map((item) => {
@@ -67,7 +74,7 @@ export default function AppLayout({
                             <>
                                 <span
                                     className={cn(
-                                        'flex size-8 items-center justify-center rounded-lg font-mono text-xs font-bold text-white',
+                                        'flex size-7.5 items-center justify-center rounded-lg font-mono text-xs font-medium text-white',
                                         item.accent,
                                     )}
                                 >
@@ -77,7 +84,7 @@ export default function AppLayout({
                                     <span className="block text-sm font-medium">
                                         {item.label}
                                     </span>
-                                    <span className="block text-xs text-slate-500">
+                                    <span className="block text-xs text-soft">
                                         {item.description}
                                     </span>
                                 </span>
@@ -89,10 +96,8 @@ export default function AppLayout({
                                 key={item.label}
                                 href={item.href}
                                 className={cn(
-                                    'flex items-center gap-3 rounded-xl px-2 py-2 transition',
-                                    active
-                                        ? 'bg-brand-50'
-                                        : 'hover:bg-slate-50',
+                                    'flex items-center gap-3 rounded-[10px] px-2.5 py-2 transition',
+                                    active ? 'bg-badge' : 'hover:bg-paper',
                                 )}
                             >
                                 {body}
@@ -100,7 +105,7 @@ export default function AppLayout({
                         ) : (
                             <div
                                 key={item.label}
-                                className="flex cursor-not-allowed items-center gap-3 rounded-xl px-2 py-2 opacity-50"
+                                className="flex cursor-not-allowed items-center gap-3 rounded-[10px] px-2.5 py-2 opacity-45"
                             >
                                 {body}
                             </div>
@@ -108,12 +113,7 @@ export default function AppLayout({
                     })}
                 </nav>
             </aside>
-            <main className="min-w-0 flex-1 px-10 py-8">
-                <h1 className="mb-6 text-2xl font-semibold tracking-tight">
-                    {title}
-                </h1>
-                {children}
-            </main>
+            <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
         </div>
     );
 }

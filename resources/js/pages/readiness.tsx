@@ -1,5 +1,9 @@
 import { Deferred, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import Button, { buttonClass } from '@/components/button';
+import Card from '@/components/card';
+import CopyButton from '@/components/copy-button';
+import { ListRow, TwoLine } from '@/components/list-row';
+import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { create as createServer } from '@/routes/servers';
@@ -22,205 +26,179 @@ export default function Readiness({
 
     return (
         <AppLayout title="Setup">
-            <p className="mb-8 max-w-2xl text-sm text-slate-600">
-                LaraKube Desktop drives the LaraKube CLI on this machine.
-                Everything marked required must be installed before you can
-                create a server.
-            </p>
-
-            <Section title="Command-line tools">
-                <Deferred data="tools" fallback={<SkeletonRows count={6} />}>
+            <PageHeader
+                title="Setup"
+                subtitle="Everything LaraKube Desktop needs on this Mac. Required tools must be installed before you can create a server."
+                actions={
                     <>
-                        {cliMissing && (
-                            <CliMissing command={cliInstallCommand} />
+                        <Button
+                            variant="secondary"
+                            onClick={() =>
+                                router.reload({ only: ['tools', 'providers'] })
+                            }
+                        >
+                            Check again
+                        </Button>
+                        {!cliMissing && (
+                            <Link
+                                href={createServer().url}
+                                className={buttonClass('primary')}
+                            >
+                                Create a server
+                            </Link>
                         )}
-                        <ul className="divide-y divide-slate-100">
-                            {tools?.map((tool) => (
-                                <ToolRow
-                                    key={tool.slug}
-                                    tool={tool}
-                                    cliMissing={cliMissing}
-                                />
-                            ))}
-                        </ul>
                     </>
-                </Deferred>
-            </Section>
+                }
+            />
 
-            <Section title="Cloud accounts">
-                <Deferred
-                    data="providers"
-                    fallback={<SkeletonRows count={4} />}
-                >
-                    {providers ? (
-                        <ul className="divide-y divide-slate-100">
-                            {providers.map((provider) => (
-                                <li
-                                    key={provider.slug}
-                                    className="flex items-center justify-between gap-4 py-3"
+            <Deferred data="tools" fallback={<Skeleton />}>
+                {cliMissing ? (
+                    <CliMissing command={cliInstallCommand} />
+                ) : (
+                    <div className="grid grid-cols-2 items-start gap-4.5">
+                        <Card label="Command-line tools">
+                            {tools?.map((tool) => (
+                                <ListRow
+                                    key={tool.slug}
+                                    action={<ToolState tool={tool} />}
                                 >
-                                    <div>
-                                        <div className="text-sm font-medium">
-                                            {provider.label}
-                                        </div>
-                                        {provider.credentials.hint && (
-                                            <div className="text-xs text-slate-500">
-                                                {provider.credentials.hint}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <StatusPill
-                                        tone={
-                                            provider.credentials.ready
-                                                ? 'ok'
-                                                : 'muted'
+                                    <TwoLine
+                                        title={
+                                            tool.required
+                                                ? tool.label
+                                                : `${tool.label} · optional`
                                         }
-                                    >
-                                        {provider.credentials.ready
-                                            ? 'Ready'
-                                            : 'Not connected'}
-                                    </StatusPill>
-                                </li>
+                                        detail={
+                                            tool.installed
+                                                ? (tool.version ?? tool.path)
+                                                : tool.purpose
+                                        }
+                                        mono={tool.installed}
+                                    />
+                                </ListRow>
                             ))}
-                        </ul>
-                    ) : (
-                        <p className="py-3 text-sm text-slate-600">
-                            Couldn't read cloud providers from the LaraKube CLI.
-                            Install it, or update it to a version that has{' '}
-                            <code className="rounded bg-slate-100 px-1">
-                                cloud:providers
-                            </code>
-                            .
-                        </p>
-                    )}
-                </Deferred>
-            </Section>
-
-            <div className="flex items-center gap-3">
-                <Link
-                    href={createServer().url}
-                    className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
-                >
-                    Create a server
-                </Link>
-                <button
-                    type="button"
-                    onClick={() =>
-                        router.reload({ only: ['tools', 'providers'] })
-                    }
-                    className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-white"
-                >
-                    Check again
-                </button>
-            </div>
+                        </Card>
+                        <Card label="Cloud accounts">
+                            <Deferred
+                                data="providers"
+                                fallback={
+                                    <p className="py-3 text-sm text-soft">
+                                        Checking logins…
+                                    </p>
+                                }
+                            >
+                                {providers ? (
+                                    <>
+                                        {providers.map((provider) => (
+                                            <ListRow
+                                                key={provider.slug}
+                                                action={
+                                                    <StatusPill
+                                                        tone={
+                                                            provider.credentials
+                                                                .ready
+                                                                ? 'ok'
+                                                                : 'muted'
+                                                        }
+                                                    >
+                                                        {provider.credentials
+                                                            .ready
+                                                            ? 'Ready'
+                                                            : 'Not connected'}
+                                                    </StatusPill>
+                                                }
+                                            >
+                                                <TwoLine
+                                                    title={provider.label}
+                                                    detail={
+                                                        provider.credentials
+                                                            .hint ??
+                                                        'Credentials found'
+                                                    }
+                                                />
+                                            </ListRow>
+                                        ))}
+                                        <p className="mt-2 text-xs leading-relaxed text-soft">
+                                            Logins happen in each provider's own
+                                            CLI for now. Connecting accounts
+                                            from here is next.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="py-3 text-sm text-soft">
+                                        Couldn't read cloud providers. Update
+                                        the LaraKube CLI to a version with
+                                        cloud:providers.
+                                    </p>
+                                )}
+                            </Deferred>
+                        </Card>
+                    </div>
+                )}
+            </Deferred>
         </AppLayout>
     );
 }
 
-function ToolRow({ tool, cliMissing }: { tool: Tool; cliMissing: boolean }) {
+function ToolState({ tool }: { tool: Tool }) {
+    if (tool.installed) {
+        return <StatusPill tone="ok">Installed</StatusPill>;
+    }
+
     return (
-        <li className="flex items-center justify-between gap-4 py-3">
-            <div className="min-w-0">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                    {tool.label}
-                    {!tool.required && (
-                        <span className="text-xs font-normal text-slate-400">
-                            optional
-                        </span>
-                    )}
-                </div>
-                <div className="truncate text-xs text-slate-500">
-                    {tool.installed
-                        ? (tool.version ?? tool.path)
-                        : tool.purpose}
-                </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-                {!tool.installed && tool.installable && !cliMissing && (
-                    <Link
-                        href={install(tool.slug).url}
-                        method="post"
-                        as="button"
-                        className="rounded-md px-3 py-1 text-xs font-medium text-brand-700 ring-1 ring-brand-100 hover:bg-brand-50"
-                    >
-                        Install
-                    </Link>
-                )}
-                <StatusPill
-                    tone={
-                        tool.installed ? 'ok' : tool.required ? 'bad' : 'muted'
-                    }
+        <>
+            {tool.installable && (
+                <Link
+                    href={install(tool.slug).url}
+                    method="post"
+                    as="button"
+                    className={buttonClass('secondary', 'sm')}
                 >
-                    {tool.installed ? 'Installed' : 'Missing'}
-                </StatusPill>
-            </div>
-        </li>
+                    Install
+                </Link>
+            )}
+            <StatusPill tone={tool.required ? 'bad' : 'muted'}>
+                Missing
+            </StatusPill>
+        </>
     );
 }
 
 function CliMissing({ command }: { command: string }) {
-    const [copied, setCopied] = useState(false);
-
     return (
-        <div className="mb-4 rounded-xl bg-setup-50 p-4 text-sm">
-            <p className="mb-2 font-medium text-slate-900">
-                Install the LaraKube CLI first
-            </p>
-            <p className="mb-3 text-slate-600">
-                Open Terminal, paste this command, and enter your Mac password
-                when asked. Then click “Check again”.
-            </p>
-            <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded-lg bg-white px-3 py-2 font-mono text-xs ring-1 ring-slate-200">
-                    {command}
-                </code>
-                <button
-                    type="button"
-                    onClick={() => {
-                        void navigator.clipboard.writeText(command);
-                        setCopied(true);
-                    }}
-                    className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
-                >
-                    {copied ? 'Copied' : 'Copy'}
-                </button>
-            </div>
-        </div>
-    );
-}
-
-function Section({
-    title,
-    children,
-}: {
-    title: string;
-    children: React.ReactNode;
-}) {
-    return (
-        <section className="mb-6 max-w-3xl rounded-2xl bg-white px-6 py-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {title}
+        <Card tone="error" className="p-6.5">
+            <h2 className="text-lg font-semibold tracking-[-0.015em]">
+                Install the LaraKube CLI
             </h2>
-            {children}
-        </section>
+            <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
+                LaraKube Desktop runs everything through the LaraKube CLI. Open
+                Terminal, run this command, enter your Mac password when asked,
+                then click Check again.
+            </p>
+            <div className="mt-4 flex max-w-2xl items-center justify-between gap-3 rounded-[10px] bg-surface px-3 py-2.5 ring-1 ring-line">
+                <code className="truncate font-mono text-xs">$ {command}</code>
+                <CopyButton value={command} />
+            </div>
+        </Card>
     );
 }
 
-function SkeletonRows({ count }: { count: number }) {
+function Skeleton() {
     return (
-        <ul className="divide-y divide-slate-100">
-            {Array.from({ length: count }, (_, index) => (
-                <li
-                    key={index}
-                    className="flex items-center justify-between py-3"
+        <div className="grid grid-cols-2 gap-4.5">
+            {[0, 1].map((column) => (
+                <div
+                    key={column}
+                    className="space-y-3 rounded-2xl bg-surface p-5.5 ring-1 ring-line"
                 >
-                    <div className="space-y-1.5">
-                        <div className="h-3.5 w-32 animate-pulse rounded bg-slate-100" />
-                        <div className="h-3 w-56 animate-pulse rounded bg-slate-100" />
-                    </div>
-                    <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
-                </li>
+                    {Array.from({ length: 4 }, (_, row) => (
+                        <div
+                            key={row}
+                            className="h-9 animate-pulse rounded bg-badge"
+                        />
+                    ))}
+                </div>
             ))}
-        </ul>
+        </div>
     );
 }

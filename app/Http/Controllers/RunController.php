@@ -11,12 +11,28 @@ use Inertia\Response;
 
 class RunController extends Controller
 {
+    public function index(): Response
+    {
+        return Inertia::render('runs/index', [
+            'runs' => Run::query()->latest('id')->limit(50)->get()->map(fn (Run $run): array => [
+                'id' => $run->id,
+                'label' => $run->label,
+                'kind' => $run->kind?->value,
+                'status' => $run->status->value,
+                'startedAt' => $run->created_at?->toIso8601String(),
+                'finishedAt' => $run->finished_at?->toIso8601String(),
+            ])->all(),
+        ]);
+    }
+
     public function show(Run $run): Response
     {
         return Inertia::render('runs/show', [
             'run' => [
                 'id' => $run->id,
                 'label' => $run->label,
+                'kind' => $run->kind?->value,
+                'subject' => $run->subject,
                 'status' => $run->status->value,
                 'exitCode' => $run->exit_code,
                 'output' => $run->output,

@@ -1,100 +1,181 @@
 import { Link, usePoll } from '@inertiajs/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import Button, { buttonClass } from '@/components/button';
+import Card from '@/components/card';
+import LogPanel from '@/components/log-panel';
+import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
+import { runStatus } from '@/lib/servers';
 import { cancel } from '@/routes/runs';
+import { index as serversIndex, show as showServer } from '@/routes/servers';
 import type { Run } from '@/types/larakube';
 
-const statusTone = {
-    running: 'busy',
-    succeeded: 'ok',
-    failed: 'bad',
-    cancelled: 'muted',
-} as const;
-const statusLabel = {
-    running: 'Running',
-    succeeded: 'Done',
-    failed: 'Failed',
-    cancelled: 'Cancelled',
-} as const;
+function elapsed(run: Run): string {
+    if (!run.startedAt) return '';
+    const end = run.finishedAt ? new Date(run.finishedAt) : new Date();
+    const seconds = Math.max(
+        0,
+        Math.round((end.getTime() - new Date(run.startedAt).getTime()) / 1000),
+    );
+    const text =
+        seconds >= 60
+            ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`
+            : `${seconds}s`;
+    return run.finishedAt ? `finished in ${text}` : text;
+}
 
 export default function ShowRun({ run }: { run: Run }) {
     const running = run.status === 'running';
     const { stop } = usePoll(1000, { only: ['run'] });
-    const logRef = useRef<HTMLPreElement>(null);
+    const [showLog, setShowLog] = useState(run.status !== 'succeeded');
+    const [label, tone] = runStatus[run.status];
+    const isCreate = run.kind === 'create-server';
 
     useEffect(() => {
-        if (!running) {
-            stop();
-        }
+        if (!running) stop();
     }, [running, stop]);
-
-    useEffect(() => {
-        logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
-    }, [run.output]);
 
     return (
         <AppLayout title={run.label}>
-            <div className="mb-4 flex items-center gap-3">
-                <StatusPill tone={statusTone[run.status]}>
-                    {statusLabel[run.status]}
-                </StatusPill>
-                {run.exitCode !== null && (
-                    <span className="text-xs text-slate-500">
-                        exit code {run.exitCode}
-                    </span>
-                )}
-                {running && (
-                    <Link
-                        href={cancel(run.id).url}
-                        method="post"
-                        as="button"
-                        className="ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-setup-500 ring-1 ring-setup-500/30 hover:bg-setup-50"
-                    >
-                        Cancel
-                    </Link>
-                )}
-            </div>
+            <header className="mb-5 flex items-center justify-between gap-6">
+                <div className="min-w-0">
+                    <h1 className="truncate text-[28px] leading-tight font-semibold tracking-[-0.03em]">
+                        {run.label}
+                    </h1>
+                    <div className="mt-2 flex items-center gap-3">
+                        <StatusPill tone={tone}>{label}</StatusPill>
+                        <span className="font-mono text-xs text-soft">
+                            {elapsed(run)}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                    {running && (
+                        <Link
+                            href={cancel(run.id).url}
+                            method="post"
+                            as="button"
+                            className={buttonClass('danger')}
+                        >
+                            Cancel
+                        </Link>
+                    )}
+                    {!running &&
+                        isCreate &&
+                        run.subject &&
+                        run.status !== 'failed' && (
+                            <Link
+                                href={showServer(run.subject).url}
+                                className={buttonClass('secondary')}
+                            >
+                                View server
+                            </Link>
+                        )}
+                    {!running && run.kind === 'destroy-server' && (
+                        <Link
+                            href={serversIndex().url}
+                            className={buttonClass('secondary')}
+                        >
+                            Back to servers
+                        </Link>
+                    )}
+                </div>
+            </header>
 
+            {isCreate && <RunSteps output={run.output} status={run.status} />}
+
+            {run.status === 'succeeded' && isCreate && (
+                <CreatedCard run={run} />
+            )}
+            {run.status === 'failed' && (
+                <Card tone="error" className="mb-4">
+                    <p className="text-base font-semibold text-accent">
+                        {isCreate
+                            ? "The server couldn't be created"
+                            : 'This run failed'}
+                    </p>
+                    <p className="mt-1 text-[13px] leading-relaxed">
+                        {typeof run.result?.error === 'string'
+                            ? run.result.error
+                            : 'See the log below for what went wrong.'}
+                    </p>
+                </Card>
+            )}
             {run.status === 'cancelled' && (
-                <p className="mb-4 max-w-3xl rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Cancelled. If a cloud server was being created, the provider
-                    finishes its current step and LaraKube keeps track of it, so
-                    anything already created can still be removed with larakube
-                    cloud:destroy.
-                </p>
+                <Card tone="warn" className="mb-4">
+                    <p className="text-base font-semibold text-warn">
+                        Cancelled
+                    </p>
+                    <p className="mt-1 text-[13px] leading-relaxed">
+                        {isCreate
+                            ? 'The provider finishes the step it already started and LaraKube keeps track of everything it made. Open the server to destroy what was created.'
+                            : 'The run was stopped before it finished.'}
+                    </p>
+                </Card>
             )}
 
-            {run.result && <ResultSummary result={run.result} />}
-
-            <pre
-                ref={logRef}
-                className="h-[28rem] overflow-auto rounded-2xl bg-slate-950 p-5 font-mono text-xs leading-relaxed whitespace-pre-wrap text-slate-200"
-            >
-                {run.output || (running ? 'Starting…' : 'No output.')}
-            </pre>
+            {showLog ? (
+                <LogPanel
+                    output={run.output}
+                    placeholder={running ? 'Starting…' : 'No output.'}
+                    className="h-[26rem]"
+                    follow={running}
+                />
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setShowLog(true)}
+                    className="flex w-full items-center justify-between rounded-xl bg-surface px-4.5 py-3 text-left ring-1 ring-line ring-inset"
+                >
+                    <span className="text-[13px] font-medium">
+                        Full log · {run.output.split('\n').length} lines
+                    </span>
+                    <span className="text-[13px] text-soft">Show ▾</span>
+                </button>
+            )}
         </AppLayout>
     );
 }
 
-function ResultSummary({ result }: { result: Record<string, unknown> }) {
-    const entries = Object.entries(result).filter(
-        ([key, value]) =>
-            key !== 'success' && value !== null && typeof value !== 'object',
+function CreatedCard({ run }: { run: Run }) {
+    const result = run.result ?? {};
+    const facts = [
+        ['IP address', result.ip],
+        ['kubectl context', result.context],
+        ['SSH', run.subject ? `ssh ${run.subject}` : null],
+    ].filter(
+        (fact): fact is [string, string] =>
+            typeof fact[1] === 'string' && fact[1] !== '',
     );
 
-    if (entries.length === 0) {
-        return null;
-    }
-
     return (
-        <dl className="mb-4 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-2 rounded-2xl bg-white p-5 text-sm shadow-sm ring-1 ring-slate-200">
-            {entries.map(([key, value]) => (
-                <div key={key}>
-                    <dt className="text-xs text-slate-500">{key}</dt>
-                    <dd className="font-mono break-all">{String(value)}</dd>
-                </div>
-            ))}
-        </dl>
+        <Card className="mb-4 p-5.5">
+            <h2 className="text-[11px] font-medium tracking-[0.06em] text-ok uppercase">
+                Your server is ready
+            </h2>
+            <dl className="mt-3 flex flex-wrap gap-10">
+                {facts.map(([term, value]) => (
+                    <div key={term}>
+                        <dt className="text-xs text-soft">{term}</dt>
+                        <dd className="mt-1 font-mono text-sm font-medium">
+                            {value}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+            <p className="mt-4 text-[13px] text-soft">
+                Connecting a domain and automatic SSL certificates need your
+                input, so they were skipped. Both are coming to the server page.
+            </p>
+            <div className="mt-3 flex gap-2.5">
+                <Button variant="secondary" size="sm" disabled>
+                    Connect a domain
+                </Button>
+                <Button variant="secondary" size="sm" disabled>
+                    Automatic SSL certificates
+                </Button>
+            </div>
+        </Card>
     );
 }

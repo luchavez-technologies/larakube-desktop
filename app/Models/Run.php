@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,8 @@ use InvalidArgumentException;
  *
  * @property int $id
  * @property string $label
+ * @property RunKind|null $kind
+ * @property string|null $subject
  * @property list<string> $command
  * @property RunStatus $status
  * @property int|null $exit_code
@@ -26,7 +29,7 @@ use InvalidArgumentException;
  */
 class Run extends Model
 {
-    protected $fillable = ['label', 'command', 'status', 'exit_code', 'output', 'stdout', 'result', 'finished_at'];
+    protected $fillable = ['label', 'kind', 'subject', 'command', 'status', 'exit_code', 'output', 'stdout', 'result', 'finished_at'];
 
     protected $attributes = [
         'status' => 'running',
@@ -41,6 +44,7 @@ class Run extends Model
     {
         return [
             'command' => 'array',
+            'kind' => RunKind::class,
             'status' => RunStatus::class,
             'result' => 'array',
             'finished_at' => 'datetime',

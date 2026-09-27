@@ -1,29 +1,38 @@
 import { cn } from '@/lib/utils';
 
 const tones = {
-    ok: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
-    warn: 'bg-amber-50 text-amber-800 ring-amber-600/20',
-    bad: 'bg-setup-50 text-setup-500 ring-setup-500/20',
-    busy: 'bg-brand-50 text-brand-700 ring-brand-600/20',
-    muted: 'bg-slate-100 text-slate-600 ring-slate-500/20',
+    ok: 'bg-ok-tint text-ok',
+    warn: 'bg-warn-tint text-warn',
+    bad: 'bg-accent-tint text-accent',
+    busy: 'bg-busy-tint text-busy',
+    muted: 'bg-badge text-soft',
 } as const;
+
+export type Tone = keyof typeof tones;
 
 export default function StatusPill({
     tone,
     children,
 }: {
-    tone: keyof typeof tones;
+    tone: Tone;
     children: string;
 }) {
+    const dot = tone === 'ok' || tone === 'bad' || tone === 'busy';
+
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset',
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap',
                 tones[tone],
             )}
         >
-            {tone === 'busy' && (
-                <span className="size-1.5 animate-pulse rounded-full bg-brand-500" />
+            {dot && (
+                <span
+                    className={cn(
+                        'size-1.5 rounded-full bg-current',
+                        tone === 'busy' && 'animate-pulse',
+                    )}
+                />
             )}
             {children}
         </span>
