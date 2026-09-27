@@ -19,8 +19,9 @@ class CliRunner
     /**
      * @param  list<string>  $arguments  CLI arguments after the binary, without secrets
      * @param  array<string, string>  $secretEnvironment  credentials passed by env, never stored on the Run
+     * @param  array<string, string>  $meta  what the run acts on (server, context, tool), for the UI and cache invalidation
      */
-    public function start(string $label, array $arguments, array $secretEnvironment = [], ?RunKind $kind = null, ?string $subject = null): Run
+    public function start(string $label, array $arguments, array $secretEnvironment = [], ?RunKind $kind = null, ?string $subject = null, array $meta = []): Run
     {
         $cli = $this->locator->find('larakube');
 
@@ -34,6 +35,7 @@ class CliRunner
             'label' => $label,
             'kind' => $kind,
             'subject' => $subject,
+            'meta' => $meta === [] ? null : $meta,
             'command' => $command,
         ]);
 

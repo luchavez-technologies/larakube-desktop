@@ -23,13 +23,19 @@ export type Provider = {
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 
-export type RunKind = 'create-server' | 'destroy-server' | 'install-tool';
+export type RunKind =
+    | 'create-server'
+    | 'destroy-server'
+    | 'install-tool'
+    | 'install-cluster-tool'
+    | 'remove-cluster-tool';
 
 export type Run = {
     id: number;
     label: string;
     kind: RunKind | null;
     subject: string | null;
+    meta: { server?: string; context?: string; tool?: string } | null;
     status: RunStatus;
     exitCode: number | null;
     output: string;
@@ -63,3 +69,35 @@ export const providerLabels: Record<string, string> = {
     gcp: 'Google Cloud',
     aws: 'Amazon Web Services',
 };
+
+/** tool:list wiring cell: wired, unwired, mesh, public, synced, unsynced, OpenBao, N/A or —. */
+export type Wiring = string;
+
+export type ClusterTool = {
+    tool: string;
+    instance: string;
+    icon: string;
+    brand: string;
+    label: string;
+    installed: boolean;
+    namespace: string;
+    host: string | null;
+    url: string | null;
+    installedAt: string | null;
+    sso: Wiring;
+    mail: Wiring;
+    vpn: Wiring;
+    sync: Wiring;
+    rotation: Wiring;
+};
+
+/** "Team Chat (Matrix)" → { summary: "Team Chat", engine: "Matrix" } */
+export function describeTool(label: string): {
+    summary: string;
+    engine: string | null;
+} {
+    const match = label.match(/^(.*?)\s*\((.*)\)\s*$/);
+    return match
+        ? { summary: match[1], engine: match[2] }
+        : { summary: label, engine: null };
+}

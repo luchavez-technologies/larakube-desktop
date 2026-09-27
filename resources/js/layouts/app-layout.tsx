@@ -2,7 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import LogoMark from '@/components/logo-mark';
 import { cn } from '@/lib/utils';
-import { readiness } from '@/routes';
+import { readiness, tools } from '@/routes';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
 
@@ -10,7 +10,7 @@ type NavItem = {
     label: string;
     description: string;
     href: string | null;
-    match: string;
+    active: (url: string) => boolean;
     accent: string;
     glyph: string;
 };
@@ -20,7 +20,7 @@ const navigation: NavItem[] = [
         label: 'Setup',
         description: 'Tools & logins',
         href: readiness().url,
-        match: '/readiness',
+        active: (url) => url.startsWith('/readiness'),
         accent: 'bg-setup',
         glyph: '>_',
     },
@@ -28,15 +28,16 @@ const navigation: NavItem[] = [
         label: 'Servers',
         description: 'Create & manage',
         href: serversIndex().url,
-        match: '/servers',
+        active: (url) => url.startsWith('/servers') && !url.includes('/tools'),
         accent: 'bg-servers',
         glyph: '↑',
     },
     {
         label: 'Tools',
-        description: 'Coming soon',
-        href: null,
-        match: '/tools',
+        description: 'Cluster Tools',
+        href: tools().url,
+        active: (url) =>
+            url.startsWith('/tools') || /^\/servers\/[^/]+\/tools/.test(url),
         accent: 'bg-tools',
         glyph: '∿',
     },
@@ -44,7 +45,7 @@ const navigation: NavItem[] = [
         label: 'Activity',
         description: 'Recent runs',
         href: runsIndex().url,
-        match: '/runs',
+        active: (url) => url.startsWith('/runs'),
         accent: 'bg-zinc-500',
         glyph: '≡',
     },
@@ -69,7 +70,7 @@ export default function AppLayout({
                 </div>
                 <nav className="flex flex-col gap-1">
                     {navigation.map((item) => {
-                        const active = url.startsWith(item.match);
+                        const active = item.active(url);
                         const body = (
                             <>
                                 <span

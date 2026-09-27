@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Services\LaraKube\ToolCatalog;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
@@ -46,6 +47,10 @@ class RecordRunOutput
             'result' => $result,
             'finished_at' => now(),
         ])->save();
+
+        if ($run->kind?->changesClusterTools() && isset($run->meta['context'])) {
+            app(ToolCatalog::class)->forget($run->meta['context']);
+        }
     }
 
     private function run(string $alias): ?Run

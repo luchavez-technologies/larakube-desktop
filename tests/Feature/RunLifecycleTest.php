@@ -68,8 +68,8 @@ test('installing a tool delegates to larakube setup', function () {
     app()->instance(ToolLocator::class, new ToolLocator([$directory]));
     $fake = ChildProcess::fake();
 
-    $this->post(route('tools.install', 'tofu'))->assertRedirect(route('runs.show', Run::sole()));
-    $this->post(route('tools.install', 'git'))->assertNotFound();
+    $this->post(route('setup.tools.install', 'tofu'))->assertRedirect(route('runs.show', Run::sole()));
+    $this->post(route('setup.tools.install', 'git'))->assertNotFound();
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'setup', '--tools=tofu', '--no-interaction']);
 

@@ -33,6 +33,7 @@ class RunController extends Controller
                 'label' => $run->label,
                 'kind' => $run->kind?->value,
                 'subject' => $run->subject,
+                'meta' => $run->meta,
                 'status' => $run->status->value,
                 'exitCode' => $run->exit_code,
                 'output' => $run->output,

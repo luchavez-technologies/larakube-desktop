@@ -18,6 +18,7 @@ use InvalidArgumentException;
  * @property string $label
  * @property RunKind|null $kind
  * @property string|null $subject
+ * @property array<string, string>|null $meta
  * @property list<string> $command
  * @property RunStatus $status
  * @property int|null $exit_code
@@ -29,7 +30,7 @@ use InvalidArgumentException;
  */
 class Run extends Model
 {
-    protected $fillable = ['label', 'kind', 'subject', 'command', 'status', 'exit_code', 'output', 'stdout', 'result', 'finished_at'];
+    protected $fillable = ['label', 'kind', 'subject', 'meta', 'command', 'status', 'exit_code', 'output', 'stdout', 'result', 'finished_at'];
 
     protected $attributes = [
         'status' => 'running',
@@ -45,6 +46,7 @@ class Run extends Model
         return [
             'command' => 'array',
             'kind' => RunKind::class,
+            'meta' => 'array',
             'status' => RunStatus::class,
             'result' => 'array',
             'finished_at' => 'datetime',

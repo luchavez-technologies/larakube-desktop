@@ -7,7 +7,7 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { create as createServer } from '@/routes/servers';
-import { install } from '@/routes/tools';
+import { install } from '@/routes/setup/tools';
 import type { Provider, Tool } from '@/types/larakube';
 
 type Props = {
