@@ -9,9 +9,9 @@ use Native\Desktop\Events\ChildProcess\MessageReceived;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 
-function runLifecycleRun(): Run
+function runLifecycleRun(bool $json = true): Run
 {
-    return Run::create(['label' => 'Create server demo', 'command' => ['larakube', 'cloud:create']]);
+    return Run::create(['label' => 'Create server demo', 'command' => $json ? ['larakube', 'cloud:create', '--json'] : ['larakube', 'dns:init']]);
 }
 
 test('stderr streams into output and the stdout JSON line becomes the result', function () {
@@ -95,4 +95,29 @@ test('output posted back by NativePHP keeps its newlines', function () {
 
     expect($run->output)->toBe("Installing k3s...\n")
         ->and($run->stdout)->toBe('{"success":true,"ip":"203.0.113.10"}'."\n");
+});
+
+test('without --json, stdout is the log rather than a result', function () {
+    $run = runLifecycleRun(json: false);
+
+    event(new MessageReceived($run->alias(), "Reusing the stored Cloudflare token.\n"));
+    event(new ProcessExited($run->alias(), 0));
+
+    $run->refresh();
+
+    expect($run->output)->toBe("Reusing the stored Cloudflare token.\n")
+        ->and($run->stdout)->toBe('')
+        ->and($run->status)->toBe(RunStatus::Succeeded);
+});
+
+test('a run that stops for a missing flag explains which one', function () {
+    $run = runLifecycleRun(json: false);
+
+    event(new MessageReceived($run->alias(), "\n  Missing --group\n\n  a stable name for this multi-zone instance (one.example, two.example)\n\n  Pass --group=… explicitly.\n"));
+    event(new ProcessExited($run->alias(), 1));
+
+    $run->refresh();
+
+    expect($run->status)->toBe(RunStatus::Failed)
+        ->and($run->result['error'])->toBe('The CLI needs --group: a stable name for this multi-zone instance (one.example, two.example).');
 });

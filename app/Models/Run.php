@@ -53,6 +53,12 @@ class Run extends Model
         ];
     }
 
+    /** Under --json the CLI keeps stdout for one result line; otherwise stdout IS the log. */
+    public function emitsJsonResult(): bool
+    {
+        return in_array('--json', $this->command, true);
+    }
+
     /** The NativePHP child-process alias for this run. */
     public function alias(): string
     {

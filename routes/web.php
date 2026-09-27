@@ -22,6 +22,8 @@ Route::pattern('tool', '[a-z][a-z0-9-]*');
 
 Route::get('/servers/{server}', [ServerController::class, 'show'])->name('servers.show');
 Route::delete('/servers/{server}', [ServerController::class, 'destroy'])->name('servers.destroy');
+Route::post('/servers/{server}/dns', [ServerController::class, 'connectDomain'])->name('servers.dns');
+Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->name('servers.tls');
 
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
 Route::get('/servers/{server}/tools', [ClusterToolController::class, 'index'])->name('servers.tools.index');

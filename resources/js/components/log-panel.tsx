@@ -11,6 +11,15 @@ function toneFor(line: string): string {
     return 'text-term-text';
 }
 
+/** The CLI's ASCII-art banner, tagline and platform line, printed whenever it isn't in --json mode. */
+function isBanner(line: string): boolean {
+    return (
+        /[█╗╔╝║╚═]{3,}/.test(line) ||
+        /THE PROFESSIONAL KUBERNETES ORCHESTRATOR/.test(line) ||
+        /^\s*\S+ \/ \S+ • PHP \d/.test(line)
+    );
+}
+
 export default function LogPanel({
     output,
     placeholder,
@@ -23,7 +32,10 @@ export default function LogPanel({
     follow?: boolean;
 }) {
     const ref = useRef<HTMLDivElement>(null);
-    const lines = output.replace(/\s+$/, '').split('\n');
+    const lines = output
+        .replace(/\s+$/, '')
+        .split('\n')
+        .filter((line) => !isBanner(line));
 
     useEffect(() => {
         if (follow) ref.current?.scrollTo({ top: ref.current.scrollHeight });

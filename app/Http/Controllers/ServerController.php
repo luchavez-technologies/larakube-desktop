@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Http\Requests\CloudflareStepRequest;
 use App\Http\Requests\DestroyServerRequest;
 use App\Http\Requests\StoreServerRequest;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -52,15 +54,60 @@ class ServerController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function show(string $server, StackCatalog $catalog): Response
+    public function show(string $server, StackCatalog $catalog, ClusterStatus $status): Response
     {
         $stack = $catalog->find($server);
 
         abort_if($stack === null, 404);
 
+        $context = $stack['status'] === 'ready' ? $stack['context'] : null;
+
         return Inertia::render('servers/show', [
             'server' => $stack,
+            'dns' => Inertia::defer(fn (): ?array => $context !== null ? $status->dns($context) : null, 'dns'),
+            'tls' => Inertia::defer(fn (): ?array => $context !== null ? $status->tls($context) : null, 'tls'),
         ]);
+    }
+
+    public function connectDomain(CloudflareStepRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $context = $this->readyContext($server, $catalog);
+
+        $run = $runner->start(
+            label: "Connect a domain to {$server}",
+            arguments: ['dns:init', 'production', "--context={$context}", ...$request->groupArgument(), '--force'],
+            secretEnvironment: $request->secretEnvironment(),
+            kind: RunKind::ConnectDomain,
+            subject: $server,
+            meta: ['server' => $server, 'context' => $context],
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    public function enableSsl(CloudflareStepRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $context = $this->readyContext($server, $catalog);
+
+        $run = $runner->start(
+            label: "Automatic SSL certificates on {$server}",
+            arguments: ['tls:init', 'production', "--context={$context}", ...$request->groupArgument(), '--force'],
+            secretEnvironment: $request->secretEnvironment(),
+            kind: RunKind::EnableSsl,
+            subject: $server,
+            meta: ['server' => $server, 'context' => $context],
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    private function readyContext(string $server, StackCatalog $catalog): string
+    {
+        $stack = $catalog->find($server);
+
+        abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
+
+        return $stack['context'];
     }
 
     public function destroy(DestroyServerRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse

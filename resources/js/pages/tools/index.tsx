@@ -11,7 +11,7 @@ import {
     show as showTool,
     store,
 } from '@/routes/servers/tools';
-import { describeTool } from '@/types/larakube';
+import { describeTool, toolName } from '@/types/larakube';
 import type { ClusterTool, Server } from '@/types/larakube';
 
 type Props = {
@@ -20,6 +20,19 @@ type Props = {
     tools?: ClusterTool[] | null;
     installing: Record<string, number>;
 };
+
+type Filter = 'all' | 'installed' | 'available';
+
+function matches(tool: ClusterTool, query: string): boolean {
+    const needle = query.trim().toLowerCase();
+
+    return (
+        needle === '' ||
+        `${toolName(tool)} ${tool.label} ${tool.host ?? ''}`
+            .toLowerCase()
+            .includes(needle)
+    );
+}
 
 /** The base domain most installed tools already share, e.g. sso.example.com → example.com. */
 function suggestedDomain(tools: ClusterTool[]): string {
@@ -33,6 +46,13 @@ function suggestedDomain(tools: ClusterTool[]): string {
     return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
 }
 
+function detailUrl(server: Server, tool: ClusterTool): string {
+    return showTool(
+        { server: server.name, tool: tool.tool },
+        tool.instance ? { query: { instance: tool.instance } } : undefined,
+    ).url;
+}
+
 export default function ToolsIndex({
     server,
     servers,
@@ -42,10 +62,20 @@ export default function ToolsIndex({
     const [installingTool, setInstallingTool] = useState<ClusterTool | null>(
         null,
     );
+    const [filter, setFilter] = useState<Filter>('all');
+    const [query, setQuery] = useState('');
+    const installedAll = tools?.filter((tool) => tool.installed) ?? [];
+    const installedSlugs = new Set(installedAll.map((tool) => tool.tool));
+    const availableAll =
+        tools?.filter(
+            (tool) => !tool.installed && !installedSlugs.has(tool.tool),
+        ) ?? [];
+    const installed = installedAll.filter((tool) => matches(tool, query));
+    const available = availableAll.filter((tool) => matches(tool, query));
 
     return (
         <AppLayout title="Tools">
-            <header className="mb-5 flex items-center justify-between gap-6">
+            <header className="mb-6 flex items-center justify-between gap-6">
                 <div>
                     <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
                         Tools
@@ -88,17 +118,90 @@ export default function ToolsIndex({
 
             <Deferred data="tools" fallback={<Loading server={server.name} />}>
                 {tools ? (
-                    <div className="grid grid-cols-3 gap-3.5">
-                        {tools.map((tool) => (
-                            <ToolCard
-                                key={`${tool.tool}-${tool.instance}`}
-                                server={server}
-                                tool={tool}
-                                runId={installing[tool.tool]}
-                                onInstall={() => setInstallingTool(tool)}
+                    <>
+                        <div className="mb-5 flex items-center justify-between gap-4">
+                            <div
+                                className="flex rounded-lg bg-badge p-0.5"
+                                role="tablist"
+                            >
+                                {(
+                                    [
+                                        [
+                                            'all',
+                                            'All',
+                                            installedAll.length +
+                                                availableAll.length,
+                                        ],
+                                        [
+                                            'installed',
+                                            'Installed',
+                                            installedAll.length,
+                                        ],
+                                        [
+                                            'available',
+                                            'Available',
+                                            availableAll.length,
+                                        ],
+                                    ] as const
+                                ).map(([value, label, count]) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={filter === value}
+                                        onClick={() => setFilter(value)}
+                                        className={
+                                            filter === value
+                                                ? 'rounded-md bg-surface px-3 py-1.5 text-[13px] font-medium shadow-sm'
+                                                : 'rounded-md px-3 py-1.5 text-[13px] text-soft hover:text-ink'
+                                        }
+                                    >
+                                        {label}{' '}
+                                        <span className="text-faint">
+                                            {count}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                            <input
+                                type="search"
+                                value={query}
+                                onChange={(event) =>
+                                    setQuery(event.target.value)
+                                }
+                                placeholder="Search tools"
+                                className="w-64 rounded-lg border-0 bg-surface px-3 py-2 text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
                             />
-                        ))}
-                    </div>
+                        </div>
+                        {filter !== 'available' && (
+                            <Section
+                                title={`Installed on ${server.name}`}
+                                count={installed.length}
+                            >
+                                {installed.map((tool) => (
+                                    <InstalledCard
+                                        key={`${tool.tool}-${tool.instance}`}
+                                        server={server}
+                                        tool={tool}
+                                    />
+                                ))}
+                            </Section>
+                        )}
+                        {filter !== 'installed' && (
+                            <Section title="Available" count={available.length}>
+                                {available.map((tool) => (
+                                    <AvailableCard
+                                        key={tool.tool}
+                                        tool={tool}
+                                        runId={installing[tool.tool]}
+                                        onInstall={() =>
+                                            setInstallingTool(tool)
+                                        }
+                                    />
+                                ))}
+                            </Section>
+                        )}
+                    </>
                 ) : (
                     <p className="text-sm text-soft">
                         Couldn't read Cluster Tools from {server.name}. Check
@@ -119,86 +222,157 @@ export default function ToolsIndex({
     );
 }
 
-function ToolCard({
+function Section({
+    title,
+    count,
+    children,
+}: {
+    title: string;
+    count: number;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="mb-7">
+            <h2 className="mb-3 text-[11px] font-medium tracking-[0.06em] text-soft uppercase">
+                {title} <span className="text-faint">· {count}</span>
+            </h2>
+            {count === 0 ? (
+                <p className="rounded-2xl bg-surface px-5 py-5 text-sm text-soft ring-1 ring-line ring-inset">
+                    Nothing here.
+                </p>
+            ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
+                    {children}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ToolIcon({ tool }: { tool: ClusterTool }) {
+    return (
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tools-tint text-lg">
+            {tool.icon}
+        </span>
+    );
+}
+
+function CardHeader({
+    tool,
+    name,
+    href,
+    action,
+}: {
+    tool: ClusterTool;
+    name: string;
+    href?: string;
+    action: React.ReactNode;
+}) {
+    const { engine } = describeTool(tool.label);
+
+    return (
+        <div className="flex items-center gap-3">
+            <ToolIcon tool={tool} />
+            <div className="min-w-0 flex-1">
+                {href ? (
+                    <Link
+                        href={href}
+                        className="block truncate text-sm font-semibold hover:underline"
+                    >
+                        {name}
+                    </Link>
+                ) : (
+                    <p className="truncate text-sm font-semibold">{name}</p>
+                )}
+                {engine && (
+                    <p className="truncate text-xs text-soft">{engine}</p>
+                )}
+            </div>
+            <div className="shrink-0">{action}</div>
+        </div>
+    );
+}
+
+function InstalledCard({
     server,
+    tool,
+}: {
+    server: Server;
+    tool: ClusterTool;
+}) {
+    const url = tool.url?.split(' ')[0] ?? null;
+    const href = detailUrl(server, tool);
+
+    return (
+        <article className="flex flex-col gap-2 rounded-xl bg-surface p-3.5 ring-1 ring-line ring-inset">
+            <CardHeader
+                tool={tool}
+                name={toolName(tool)}
+                href={href}
+                action={
+                    url ? (
+                        <Link
+                            href={open().url}
+                            method="post"
+                            data={{ url }}
+                            as="button"
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            Open
+                        </Link>
+                    ) : (
+                        <Link
+                            href={href}
+                            className={buttonClass('ghost', 'sm')}
+                        >
+                            Details
+                        </Link>
+                    )
+                }
+            />
+            <Link
+                href={href}
+                className="truncate pl-12 font-mono text-[11px] text-soft hover:text-ink"
+            >
+                {tool.host ?? 'No public address'}
+            </Link>
+        </article>
+    );
+}
+
+function AvailableCard({
     tool,
     runId,
     onInstall,
 }: {
-    server: Server;
     tool: ClusterTool;
     runId?: number;
     onInstall: () => void;
 }) {
-    const { summary, engine } = describeTool(tool.label);
+    const { summary } = describeTool(tool.label);
+    const name = toolName(tool);
+    const blurb = summary.toLowerCase() === name.toLowerCase() ? null : summary;
 
     return (
-        <article className="flex flex-col gap-2.5 rounded-2xl bg-surface p-4.5 ring-1 ring-line ring-inset">
-            <div className="flex items-center justify-between">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-tools-tint text-base">
-                    {tool.icon}
-                </span>
-                {tool.installed ? (
-                    <StatusPill tone="ok">Installed</StatusPill>
-                ) : (
-                    runId !== undefined && (
-                        <StatusPill tone="busy">Installing…</StatusPill>
+        <article className="flex flex-col gap-2 rounded-xl bg-surface p-3.5 ring-1 ring-line ring-inset">
+            <CardHeader
+                tool={tool}
+                name={name}
+                action={
+                    runId !== undefined ? (
+                        <Link href={showRun(runId).url} className="inline-flex">
+                            <StatusPill tone="busy">Installing…</StatusPill>
+                        </Link>
+                    ) : (
+                        <Button variant="dark" size="sm" onClick={onInstall}>
+                            Install
+                        </Button>
                     )
-                )}
-            </div>
-            <div className="flex items-baseline gap-2">
-                <Link
-                    href={
-                        showTool({ server: server.name, tool: tool.tool }).url
-                    }
-                    className="text-[15px] font-semibold hover:underline"
-                >
-                    {tool.brand}
-                </Link>
-                {engine && (
-                    <span className="truncate text-[13px] text-soft">
-                        {engine}
-                    </span>
-                )}
-            </div>
-            <p className="text-[13px] leading-relaxed text-soft">{summary}</p>
-            <div className="mt-auto flex items-center justify-between pt-1">
-                <span className="font-mono text-[11px] text-faint">
-                    {tool.tool}:init
-                </span>
-                {tool.installed && tool.url ? (
-                    <Link
-                        href={open().url}
-                        method="post"
-                        data={{ url: tool.url.split(' ')[0] }}
-                        as="button"
-                        className={buttonClass('secondary', 'sm')}
-                    >
-                        Open
-                    </Link>
-                ) : runId !== undefined ? (
-                    <Link
-                        href={showRun(runId).url}
-                        className={buttonClass('ghost', 'sm')}
-                    >
-                        View run
-                    </Link>
-                ) : tool.installed ? (
-                    <Link
-                        href={
-                            showTool({ server: server.name, tool: tool.tool })
-                                .url
-                        }
-                        className={buttonClass('secondary', 'sm')}
-                    >
-                        Details
-                    </Link>
-                ) : (
-                    <Button variant="dark" size="sm" onClick={onInstall}>
-                        Install
-                    </Button>
-                )}
-            </div>
+                }
+            />
+            {blurb && (
+                <p className="truncate pl-12 text-xs text-soft">{blurb}</p>
+            )}
         </article>
     );
 }
@@ -216,6 +390,7 @@ function InstallDialog({
 }) {
     const [domain, setDomain] = useState(suggestedDomain(tools));
     const { engine } = describeTool(tool.label);
+    const name = toolName(tool);
     const ssoInstalled =
         tools.some(
             (candidate) => candidate.tool === 'sso' && candidate.installed,
@@ -238,7 +413,7 @@ function InstallDialog({
             >
                 <div className="flex items-baseline gap-2">
                     <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                        Install {tool.brand}
+                        Install {name}
                     </h2>
                     {engine && (
                         <span className="text-sm text-soft">{engine}</span>
@@ -306,7 +481,7 @@ function InstallDialog({
                                 >
                                     {processing
                                         ? 'Starting…'
-                                        : `Install ${tool.brand}`}
+                                        : `Install ${name}`}
                                 </Button>
                             </div>
                         </>
@@ -339,11 +514,11 @@ function Loading({ server }: { server: string }) {
                 Checking what's installed on {server}. This can take up to a
                 minute the first time.
             </p>
-            <div className="grid grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
                 {Array.from({ length: 9 }, (_, index) => (
                     <div
                         key={index}
-                        className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line"
+                        className="h-20 animate-pulse rounded-xl bg-surface ring-1 ring-line"
                     />
                 ))}
             </div>

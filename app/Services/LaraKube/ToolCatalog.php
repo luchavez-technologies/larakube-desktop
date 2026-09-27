@@ -39,17 +39,37 @@ class ToolCatalog
     }
 
     /**
+     * One tool row. A tool can run several instances on a server (one per
+     * host); $instance picks one, and '' is the default instance.
+     *
      * @return array<string, mixed>|null
      */
-    public function find(string $context, string $tool): ?array
+    public function find(string $context, string $tool, string $instance = ''): ?array
     {
         foreach ($this->forContext($context) ?? [] as $row) {
-            if (($row['tool'] ?? null) === $tool) {
+            if (($row['tool'] ?? null) === $tool && ($row['instance'] ?? '') === $instance) {
                 return $row;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Only what is already cached, never a slow lookup.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function cached(string $context): ?array
+    {
+        $cached = Cache::get($this->key($context));
+
+        if (! is_array($cached) || ! array_is_list($cached)) {
+            return null;
+        }
+
+        /** @var list<array<string, mixed>> $cached */
+        return $cached;
     }
 
     public function forget(string $context): void

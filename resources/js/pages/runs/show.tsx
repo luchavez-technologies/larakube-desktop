@@ -7,9 +7,39 @@ import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
-import { cancel } from '@/routes/runs';
+import { readiness } from '@/routes';
+import { cancel, index as runsIndex } from '@/routes/runs';
 import { index as serversIndex, show as showServer } from '@/routes/servers';
+import { index as toolsIndex } from '@/routes/servers/tools';
 import type { Run } from '@/types/larakube';
+
+/** Where this run came from, so its page always has a way back. */
+function backLink(run: Run): { href: string; label: string } {
+    const server = run.meta?.server ?? null;
+
+    switch (run.kind) {
+        case 'create-server':
+            return run.status === 'succeeded' && run.subject
+                ? { href: showServer(run.subject).url, label: run.subject }
+                : { href: serversIndex().url, label: 'Servers' };
+        case 'destroy-server':
+            return { href: serversIndex().url, label: 'Servers' };
+        case 'connect-domain':
+        case 'enable-ssl':
+            return server
+                ? { href: showServer(server).url, label: server }
+                : { href: serversIndex().url, label: 'Servers' };
+        case 'install-cluster-tool':
+        case 'remove-cluster-tool':
+            return server
+                ? { href: toolsIndex(server).url, label: `Tools on ${server}` }
+                : { href: serversIndex().url, label: 'Servers' };
+        case 'install-tool':
+            return { href: readiness().url, label: 'Setup' };
+        default:
+            return { href: runsIndex().url, label: 'Activity' };
+    }
+}
 
 function elapsed(run: Run): string {
     if (!run.startedAt) return '';
@@ -38,6 +68,12 @@ export default function ShowRun({ run }: { run: Run }) {
 
     return (
         <AppLayout title={run.label}>
+            <Link
+                href={backLink(run).href}
+                className="mb-3 inline-block text-xs text-soft hover:text-ink"
+            >
+                ← {backLink(run).label}
+            </Link>
             <header className="mb-5 flex items-center justify-between gap-6">
                 <div className="min-w-0">
                     <h1 className="truncate text-[28px] leading-tight font-semibold tracking-[-0.03em]">

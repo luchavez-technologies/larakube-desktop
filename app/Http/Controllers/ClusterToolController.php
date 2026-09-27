@@ -11,6 +11,7 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,10 +46,10 @@ class ClusterToolController extends Controller
         ]);
     }
 
-    public function show(string $server, string $tool): Response
+    public function show(Request $request, string $server, string $tool): Response
     {
         $stack = $this->readyServer($server);
-        $row = $this->tools->find((string) $stack['context'], $tool);
+        $row = $this->tools->find((string) $stack['context'], $tool, $request->string('instance')->toString());
 
         abort_if($row === null, 404);
 
@@ -67,7 +68,7 @@ class ClusterToolController extends Controller
         abort_if($row === null, 404);
 
         $run = app(CliRunner::class)->start(
-            label: "Install {$row['brand']} on {$server}",
+            label: 'Install '.$this->displayName($row)." on {$server}",
             arguments: [
                 'tool:add',
                 "--tool={$tool}",
@@ -89,13 +90,16 @@ class ClusterToolController extends Controller
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
-        $row = $this->tools->find($context, $tool);
+        $row = $this->tools->find($context, $tool, $request->string('instance')->toString());
 
         abort_if($row === null || ! $row['installed'], 404);
 
+        // The host is an instance's identity, so --domain removes exactly this one.
+        $host = is_string($row['host'] ?? null) && $row['host'] !== '' ? $row['host'] : null;
+
         $run = app(CliRunner::class)->start(
-            label: "Remove {$row['brand']} from {$server}",
-            arguments: ['tool:remove', "--tool={$tool}", "--context={$context}", '--force'],
+            label: 'Remove '.$this->displayName($row)." from {$server}",
+            arguments: ["{$tool}:remove", 'production', "--context={$context}", ...($host !== null ? ["--domain={$host}"] : []), '--force'],
             kind: RunKind::RemoveClusterTool,
             subject: $tool,
             meta: ['server' => $server, 'context' => $context, 'tool' => $tool],
@@ -109,6 +113,16 @@ class ClusterToolController extends Controller
         $this->tools->forget((string) $this->readyServer($server)['context']);
 
         return to_route('servers.tools.index', $server);
+    }
+
+    /**
+     * The tool's name without the "[instance]" suffix the CLI appends.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function displayName(array $row): string
+    {
+        return (string) preg_replace('/\s*\[[^\]]*\]$/', '', (string) $row['brand']);
     }
 
     /**

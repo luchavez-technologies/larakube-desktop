@@ -127,7 +127,8 @@ test('removing needs the tool name typed and only applies to installed tools', f
     $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso'])
         ->assertRedirect(route('runs.show', Run::sole()));
 
-    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tool:remove', '--tool=sso', '--context=larakube-203.0.113.21', '--force', '--no-interaction']);
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'sso:remove', 'production', '--context=larakube-203.0.113.21', '--domain=sso.example.com', '--force', '--no-interaction']);
+    expect(Run::sole()->label)->toBe('Remove SSO from workshop-demo');
 
     File::deleteDirectory($bin);
 });
@@ -163,6 +164,30 @@ test('Tools in the sidebar returns to the server last browsed', function () {
     $this->get(route('tools'))->assertRedirect(route('servers.tools.index', 'production'));
     $this->get(route('servers.tools.index', 'workshop-demo'))->assertOk();
     $this->get(route('tools'))->assertRedirect(route('servers.tools.index', 'workshop-demo'));
+
+    File::deleteDirectory($bin);
+});
+
+test('each instance of a tool has its own detail page, and removal targets that instance\'s host', function () {
+    $bin = clusterToolsFakeCli();
+    $rows = clusterToolsRows();
+    $rows[] = array_merge($rows[0], ['instance' => 'sso-team-example-com', 'brand' => 'SSO [sso-team-example-com]', 'host' => 'sso.team.example.com', 'url' => 'https://sso.team.example.com']);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode($rows)),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'sso', 'instance' => 'sso-team-example-com']))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('tool.host', 'sso.team.example.com'));
+
+    $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso', 'instance' => 'sso-team-example-com'])
+        ->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--domain=sso.team.example.com', $cmd, true));
+    expect(Run::sole()->label)->toBe('Remove SSO from workshop-demo');
 
     File::deleteDirectory($bin);
 });

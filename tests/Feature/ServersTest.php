@@ -3,9 +3,11 @@
 use App\Enums\RunKind;
 use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Inertia\Testing\AssertableInertia;
+use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 
 function serversFakeCli(): string
@@ -120,4 +122,87 @@ test('activity lists runs newest first', function () {
             ->where('runs.0.label', 'Destroy server one')
             ->where('runs.0.kind', 'destroy-server')
             ->where('runs.1.label', 'Create server one'));
+});
+
+test('Connect a domain runs dns:init against the server with the token in the environment only', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.dns', 'workshop-demo'), ['cloudflare_token' => ''])->assertSessionHasErrors('cloudflare_token');
+    $this->post(route('servers.dns', 'cancel-test'), ['cloudflare_token' => 'cf-token'])->assertNotFound();
+
+    $this->post(route('servers.dns', 'workshop-demo'), ['cloudflare_token' => 'cf-token', 'group' => 'company-domains'])
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    expect(Run::sole()->kind)->toBe(RunKind::ConnectDomain)
+        ->and(json_encode(Run::sole()->command))->not->toContain('cf-token');
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'dns:init', 'production', '--context=larakube-203.0.113.21', '--group=company-domains', '--force', '--no-interaction']
+        && ! str_contains(implode(' ', $cmd), 'cf-token')
+        && ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'cf-token');
+
+    File::deleteDirectory($bin);
+});
+
+test('Automatic SSL runs tls:init and can reuse the stored token', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tls', 'workshop-demo'), [])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tls:init', 'production', '--context=larakube-203.0.113.21', '--force', '--no-interaction']
+        && ! array_key_exists('LARAKUBE_CLOUDFLARE_TOKEN', $env ?? []));
+
+    File::deleteDirectory($bin);
+});
+
+test('the server page asks the server for DNS accounts and certificate status', function () {
+    $bin = serversFakeCli();
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => serversStacks()])),
+        '*dns:list*' => Process::result(output: json_encode([
+            ['zone' => 'one.example', 'slug' => 'first', 'owner' => 'o1', 'ready' => true],
+            ['zone' => 'two.example', 'slug' => 'first', 'owner' => 'o1', 'ready' => true],
+            ['zone' => 'three.example', 'slug' => 'second', 'owner' => 'o2', 'ready' => false],
+        ], JSON_PRETTY_PRINT)),
+        '*tls:show*' => Process::result(output: "Challenge: Cloudflare DNS\n".json_encode(['success' => true, 'challenge' => 'dns', 'zones' => ['one.example'], 'cannotRenew' => []])),
+    ]);
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('dns')
+            ->loadDeferredProps(['dns', 'tls'], fn (AssertableInertia $reload) => $reload
+                ->where('dns', [
+                    ['group' => 'first', 'zones' => ['one.example', 'two.example'], 'ready' => true],
+                    ['group' => 'second', 'zones' => ['three.example'], 'ready' => false],
+                ])
+                ->where('tls.challenge', 'dns')));
+
+    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), '--context=larakube-203.0.113.21'));
+
+    File::deleteDirectory($bin);
+});
+
+test('an unfinished server never asks the cluster for DNS or certificates', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+
+    $this->get(route('servers.show', 'cancel-test'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(['dns', 'tls'], fn (AssertableInertia $reload) => $reload->where('dns', null)->where('tls', null)));
+
+    Process::assertNotRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'dns:list'));
+
+    File::deleteDirectory($bin);
+});
+
+test('a finished Connect a domain run drops the cached DNS status', function () {
+    Cache::put('cluster-status:dns:larakube-203.0.113.21', [['group' => 'old', 'zones' => [], 'ready' => true]]);
+    $run = Run::create(['label' => 'DNS', 'kind' => RunKind::ConnectDomain, 'subject' => 'workshop-demo', 'meta' => ['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21'], 'command' => ['larakube']]);
+
+    event(new ProcessExited($run->alias(), 0));
+
+    expect(Cache::has('cluster-status:dns:larakube-203.0.113.21'))->toBeFalse();
 });

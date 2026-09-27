@@ -10,7 +10,7 @@ import type { Tone } from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { open } from '@/routes';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
-import { describeTool } from '@/types/larakube';
+import { describeTool, toolName } from '@/types/larakube';
 import type { ClusterTool, Server, Wiring } from '@/types/larakube';
 
 const wiringLabels: Record<string, [string, Tone]> = {
@@ -37,6 +37,7 @@ export default function ShowTool({
 }) {
     const [removing, setRemoving] = useState(false);
     const { summary, engine } = describeTool(tool.label);
+    const name = toolName(tool);
     const url = tool.url?.split(' ')[0] ?? null;
     const integrations = (
         [
@@ -52,7 +53,7 @@ export default function ShowTool({
     ).filter(([, , value]) => value !== 'N/A' && value !== '—');
 
     return (
-        <AppLayout title={tool.brand}>
+        <AppLayout title={name}>
             <Link
                 href={toolsIndex(server.name).url}
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
@@ -60,13 +61,13 @@ export default function ShowTool({
                 ← Tools on {server.name}
             </Link>
             <PageHeader
-                title={tool.brand}
+                title={name}
                 badge={
                     <StatusPill tone={tool.installed ? 'ok' : 'muted'}>
                         {tool.installed ? 'Installed' : 'Not installed'}
                     </StatusPill>
                 }
-                meta={[engine, `on ${server.name}`]
+                meta={[engine, tool.host, `on ${server.name}`]
                     .filter(Boolean)
                     .map((part) => (
                         <span key={part}>{part}</span>
@@ -81,7 +82,7 @@ export default function ShowTool({
                             as="button"
                             className={buttonClass('dark')}
                         >
-                            Open {tool.brand}
+                            Open {name}
                         </Link>
                     )
                 }
@@ -132,15 +133,14 @@ export default function ShowTool({
                         )}
                         <Card label="Danger zone" tone="danger">
                             <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
-                                Removes {tool.brand} and its data from{' '}
-                                {server.name}. Anything signing in through it
-                                loses access.
+                                Removes {name} and its data from {server.name}.
+                                Anything signing in through it loses access.
                             </p>
                             <Button
                                 variant="danger"
                                 onClick={() => setRemoving(true)}
                             >
-                                Remove {tool.brand}
+                                Remove {name}
                             </Button>
                         </Card>
                     </div>
@@ -148,8 +148,8 @@ export default function ShowTool({
             ) : (
                 <Card>
                     <p className="py-2 text-sm text-soft">
-                        {tool.brand} isn't installed on {server.name}. Install
-                        it from the{' '}
+                        {name} isn't installed on {server.name}. Install it from
+                        the{' '}
                         <Link
                             href={toolsIndex(server.name).url}
                             className="text-ink underline"
@@ -173,11 +173,11 @@ export default function ShowTool({
                         onClick={(event) => event.stopPropagation()}
                     >
                         <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                            Remove {tool.brand}?
+                            Remove {name}?
                         </h2>
                         <p className="mt-2 text-sm leading-relaxed text-soft">
-                            This deletes {tool.brand} and its data from{' '}
-                            {server.name}. It can't be undone.
+                            This deletes {name} and its data from {server.name}.
+                            It can't be undone.
                         </p>
                         <RemoveForm
                             server={server}
@@ -237,7 +237,9 @@ function RemoveForm({
                             variant="dangerFill"
                             disabled={typed !== tool.tool || processing}
                         >
-                            {processing ? 'Starting…' : `Remove ${tool.brand}`}
+                            {processing
+                                ? 'Starting…'
+                                : `Remove ${toolName(tool)}`}
                         </Button>
                     </div>
                 </>

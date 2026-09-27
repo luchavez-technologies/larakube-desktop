@@ -28,7 +28,9 @@ export type RunKind =
     | 'destroy-server'
     | 'install-tool'
     | 'install-cluster-tool'
-    | 'remove-cluster-tool';
+    | 'remove-cluster-tool'
+    | 'connect-domain'
+    | 'enable-ssl';
 
 export type Run = {
     id: number;
@@ -100,4 +102,9 @@ export function describeTool(label: string): {
     return match
         ? { summary: match[1], engine: match[2] }
         : { summary: label, engine: null };
+}
+
+/** "Chat [chat-luchtech-dev]" → "Chat": tool:list appends the instance to the brand. */
+export function toolName(tool: Pick<ClusterTool, 'brand'>): string {
+    return tool.brand.replace(/\s*\[[^\]]*\]$/, '');
 }

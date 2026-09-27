@@ -10,9 +10,11 @@ enum RunKind: string
     case InstallTool = 'install-tool';
     case InstallClusterTool = 'install-cluster-tool';
     case RemoveClusterTool = 'remove-cluster-tool';
+    case ConnectDomain = 'connect-domain';
+    case EnableSsl = 'enable-ssl';
 
     public function changesClusterTools(): bool
     {
-        return $this === self::InstallClusterTool || $this === self::RemoveClusterTool;
+        return in_array($this, [self::InstallClusterTool, self::RemoveClusterTool, self::ConnectDomain], true);
     }
 }
