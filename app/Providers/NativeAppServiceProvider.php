@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use Native\Desktop\Facades\Window;
 use Native\Desktop\Contracts\ProvidesPhpIni;
+use Native\Desktop\Facades\Window;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
@@ -13,11 +13,19 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
-        Window::open();
+        Window::open()
+            ->title(config('app.name'))
+            ->width(1180)
+            ->height(780)
+            ->minWidth(960)
+            ->minHeight(640)
+            ->rememberState();
     }
 
     /**
      * Return an array of php.ini directives to be set.
+     *
+     * @return array<string, string>
      */
     public function phpIni(): array
     {

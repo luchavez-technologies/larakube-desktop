@@ -8,4 +8,27 @@
         'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
+
+    /* Sampled from logo.png — brand blue is the tower, the three cubes
+       (terminal, deploy, pulse) accent the Setup, Servers and Tools sections. */
+    --color-brand-50: #eef3fd;
+    --color-brand-100: #cfdff8;
+    --color-brand-400: #7a9fe8;
+    --color-brand-500: #5683e0;
+    --color-brand-600: #4169c9;
+    --color-brand-700: #3355a6;
+
+    --color-setup-500: #d6412d;
+    --color-setup-50: #fbece9;
+    --color-servers-500: #2c9fc0;
+    --color-servers-300: #8bdaed;
+    --color-servers-50: #e8f7fb;
+    --color-tools-500: #8457e0;
+    --color-tools-600: #6d2bc6;
+    --color-tools-300: #c1aeee;
+    --color-tools-50: #f2edfc;
+}
+
+body {
+    background-color: #f7f8fb;
 }

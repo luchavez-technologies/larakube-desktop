@@ -1,7 +1,5 @@
 <?php
 
-test('returns a successful response', function () {
-    $response = $this->get(route('home'));
-
-    $response->assertOk();
+test('the home route opens the setup screen', function () {
+    $this->get(route('home'))->assertRedirect(route('readiness'));
 });

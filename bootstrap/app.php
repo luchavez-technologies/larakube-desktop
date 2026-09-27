@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // NativePHP posts child-process output chunks back as events; trimming
+        // them strips the newlines the run log and the --json result rely on.
+        $isNativeEvent = fn (Request $request): bool => $request->is('_native/api/events');
+        $middleware->trimStrings(except: [$isNativeEvent]);
+        $middleware->convertEmptyStringsToNull(except: [$isNativeEvent]);
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
