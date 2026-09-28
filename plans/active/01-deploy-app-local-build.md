@@ -16,7 +16,10 @@
   `cloud:configure --only=hosts` headless, `cloud:deploy` from the app.
   Try each on a throwaway app + `gcp-test-vps`.
 - ❌ **Still to do:**
-  1. Readiness "Container runtime" check (docker/podman + `info`).
+  1. ✅ Readiness shows Docker and Podman (optional rows; OrbStack's
+     `~/.orbstack/bin` and Docker Desktop's bin are searched). Still to add:
+     a real `docker info`/`podman info` check (is the daemon running?), and
+     disabling Deploy for image apps when neither works.
   2. Deploy stepper (cloud:deploy messages), like `run-steps.tsx`.
   3. Link an EXISTING server. CLI gap: `cloud:create <env>` inside a project
      with no expected stack **defaults to creating a new server** headless

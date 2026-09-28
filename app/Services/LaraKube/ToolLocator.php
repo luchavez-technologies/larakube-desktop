@@ -33,6 +33,8 @@ class ToolLocator
             '/usr/local/bin',
             '/home/linuxbrew/.linuxbrew/bin',
             $home !== '' ? "{$home}/google-cloud-sdk/bin" : null,
+            $home !== '' ? "{$home}/.orbstack/bin" : null,
+            '/Applications/Docker.app/Contents/Resources/bin',
             '/usr/bin',
             '/bin',
             '/usr/sbin',
