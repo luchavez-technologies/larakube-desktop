@@ -26,7 +26,7 @@ needs a terminal fails there. That is the recurring bug class: look for
 
 ## Checklist
 
-1. [ ] User runs `./build`; retry the Laravel create (hello-world-desktop).
+1. [x] User runs `./build`; retry the Laravel create (hello-world-desktop): worked.
 2. [ ] Try Vite, Docusaurus and Next.js creates live (Astro worked).
 3. [ ] Deploy each created app to `gcp-test-vps`: Set up → Server → Address
        → Deploy. Static sites (Vite/Astro/Docusaurus) need `plex:init` on

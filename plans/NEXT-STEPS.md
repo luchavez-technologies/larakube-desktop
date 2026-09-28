@@ -11,7 +11,7 @@ Laravel, Next.js, Vite, Astro, Docusaurus, then Statamic and WordPress
 1. **The user runs `./build` in `cli/`.** Everything below needs it:
    `new:options`, `new --email`, `init --email`, the wizard's "None" fix, and
    `laravel new` without `-it`. Never run `./build` yourself.
-2. **Retry the Laravel create.** Projects → hello-world-desktop → Try again
+2. **Done: the Laravel create worked** (hello-world-desktop, 2m 28s). Was: Projects → Try again
    (its run recorded its arguments). The first run pulls the PHP image and
    installs Composer packages; expect several minutes. The older
    `hello-laravel` project predates recorded arguments: Remove it.
@@ -26,7 +26,7 @@ Laravel, Next.js, Vite, Astro, Docusaurus, then Statamic and WordPress
 | Vite       | built, not tried                                       | built                    | no           |
 | Docusaurus | built, not tried                                       | built                    | no           |
 | Next.js    | built, not tried                                       | built                    | no           |
-| Laravel    | failing → fixed, retry it                              | built (email + options)  | no           |
+| Laravel    | ✅ worked live (2.5 min)                               | built (email + options)  | no           |
 | Statamic   | not offered                                            | built (email only)       | no           |
 | WordPress  | not offered (needs `-it` fix in `WordpressNewCommand`) | built (email only)       | no           |
 
