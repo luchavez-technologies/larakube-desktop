@@ -33,6 +33,7 @@ export type RunKind =
     | 'enable-ssl'
     | 'new-project'
     | 'init-project'
+    | 'link-server'
     | 'configure-host'
     | 'deploy-app';
 

@@ -34,6 +34,7 @@ Route::post('/projects/create', [ProjectController::class, 'scaffold'])->name('p
 Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
 Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');
+Route::post('/projects/{project}/link', [ProjectController::class, 'link'])->name('projects.link');
 Route::post('/projects/{project}/host', [ProjectController::class, 'host'])->name('projects.host');
 Route::post('/projects/{project}/retry', [ProjectController::class, 'retry'])->name('projects.retry');
 Route::post('/projects/{project}/editor', [ProjectController::class, 'openInEditor'])->name('projects.editor');

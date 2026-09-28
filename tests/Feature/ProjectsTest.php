@@ -391,3 +391,21 @@ test('a blueprint with no framework reads as Laravel, as the LaraKube CLI does',
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('linking a ready server creates the production environment on it, with no prompts', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.link', $project), ['server' => 'not-a-server'])->assertSessionHasErrors('server');
+    $this->post(route('projects.link', $project), ['server' => 'workshop-demo'])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'env', 'production', '--context=larakube-203.0.113.21', '--ingress=traefik', '--managed=', '--web-hosts=', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+    expect(Run::sole()->kind)->toBe(RunKind::LinkServer);
+
+    File::deleteDirectory($sandbox['home']);
+});

@@ -88,5 +88,18 @@ list can follow.
 
 ## Progress
 
-- Done (cli `269d8a1`): `env --context/--ingress/--managed/--web-hosts`; headless `env` without `--context` errors instead of guessing; `cloud:deploy` skips `Proceed?` under `--no-interaction`.
-- Left: a `--web-host` flag for `PromptsForHosts` (the web host prompt is still interactive), `env:list --json`, the desktop Environments section + Add environment dialog, and a real deploy on `gcp-test-vps`.
+- Done, LaraKube CLI: `env --context/--web-host/--ingress/--managed/--web-hosts`
+  (`269d8a1`, `b44690f`, tests in `EnvHeadlessTest`); headless `env` without
+  `--context` errors instead of guessing; `cloud:deploy` skips `Proceed?`
+  under `--no-interaction`.
+- Done, desktop: project step 2 "Link" picks a ready server and runs
+  `env production --context=… --ingress=traefik --managed= --web-hosts=`
+  (`RunKind::LinkServer`, `projects.link`). Then Address and Deploy follow.
+- Left:
+    1. Try it live: Link hello-world-desktop to `gcp-test-vps`, set the
+       address, Deploy. Needs the user's `./build` first.
+    2. If `production` already exists without a server, `env` keeps it as is
+       and links nothing; bind it via `cloud:configure production --context`
+       (not built) or handle it in the desktop.
+    3. `env:list --json` and the multi-environment section (the desktop is
+       still hardcoded to `production`).

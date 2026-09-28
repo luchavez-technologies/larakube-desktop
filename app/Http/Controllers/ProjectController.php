@@ -205,6 +205,7 @@ class ProjectController extends Controller
             'frameworks' => ProjectInspector::DEPLOYABLE,
             'runs' => Run::query()->where('subject', "project:{$project->id}")->latest('id')->limit(5)->get(['id', 'label', 'kind', 'status', 'created_at'])->all(),
             'editors' => $editors->available(),
+            'readyServers' => array_map(fn (array $stack): array => ['name' => $stack['name'], 'ip' => $stack['ip']], $servers),
             'scaffold' => $scaffold === null ? null : ['id' => $scaffold->id, 'status' => $scaffold->status, 'canRetry' => $this->canRetry($project, $scaffold)],
             'wizardFrameworks' => self::WIZARD_FRAMEWORKS,
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
@@ -245,6 +246,24 @@ class ProjectController extends Controller
         }
 
         return $this->run($runner, $project, RunKind::InitProject, 'Set up '.basename($project->path).' for LaraKube', ['init', "--framework={$framework}", '--fast', ...$extra]);
+    }
+
+    /**
+     * Creates the project's cloud environment bound to one of the user's ready
+     * servers: `env` with every wizard answer as a flag, so nothing prompts.
+     */
+    public function link(Request $request, Project $project, CliRunner $runner, StackCatalog $stacks): RedirectResponse
+    {
+        $name = $request->validate(['server' => ['required', 'string']])['server'];
+        $server = $stacks->find($name);
+
+        if ($server === null || $server['status'] !== 'ready' || ! is_string($server['context'])) {
+            return back()->withErrors(['server' => 'Choose one of your ready servers.']);
+        }
+
+        return $this->run($runner, $project, RunKind::LinkServer, "Link {$this->name($project)} to {$name}", [
+            'env', self::ENVIRONMENT, "--context={$server['context']}", '--ingress=traefik', '--managed=', '--web-hosts=',
+        ]);
     }
 
     public function host(Request $request, Project $project, CliRunner $runner): RedirectResponse

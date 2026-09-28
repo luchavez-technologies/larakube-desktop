@@ -20,6 +20,7 @@ import {
     host as setHost,
     index,
     init,
+    link,
     retry,
 } from '@/routes/projects';
 import { show as showRun } from '@/routes/runs';
@@ -43,6 +44,8 @@ const STATIC = ['vite', 'astro', 'docusaurus'];
 
 type Editor = { slug: string; label: string };
 
+type ReadyServer = { name: string; ip: string | null };
+
 export default function ShowProject({
     project,
     server,
@@ -53,6 +56,7 @@ export default function ShowProject({
     wizardFrameworks,
     email,
     laravelOptions,
+    readyServers,
 }: {
     project: Project;
     server: Server | null;
@@ -63,6 +67,7 @@ export default function ShowProject({
     wizardFrameworks: string[];
     email: string;
     laravelOptions?: NewAppQuestion[] | null;
+    readyServers: ReadyServer[];
 }) {
     const ready =
         project.initialized &&
@@ -193,6 +198,12 @@ export default function ShowProject({
                                 </p>
                             ) : (
                                 <div className="space-y-2">
+                                    {readyServers.length > 0 && (
+                                        <LinkServerForm
+                                            project={project}
+                                            servers={readyServers}
+                                        />
+                                    )}
                                     <Link
                                         href={
                                             createServer({
@@ -200,19 +211,19 @@ export default function ShowProject({
                                             }).url
                                         }
                                         className={buttonClass(
-                                            'secondary',
+                                            readyServers.length > 0
+                                                ? 'ghost'
+                                                : 'secondary',
                                             'sm',
                                             !project.initialized
                                                 ? 'pointer-events-none opacity-45'
                                                 : undefined,
                                         )}
                                     >
-                                        Create a server for this project
+                                        {readyServers.length > 0
+                                            ? 'Or create a new server'
+                                            : 'Create a server for this project'}
                                     </Link>
-                                    <p className="text-xs text-soft">
-                                        Linking an existing server is coming (it
-                                        needs a LaraKube CLI update).
-                                    </p>
                                 </div>
                             )}
                         </Step>
@@ -464,6 +475,55 @@ function InitForm({
                     <div className="h-10 animate-pulse rounded-lg bg-paper" />
                 ))}
         </form>
+    );
+}
+
+/** Binds the project's production environment to one of the user's ready servers. */
+function LinkServerForm({
+    project,
+    servers,
+}: {
+    project: Project;
+    servers: ReadyServer[];
+}) {
+    const [server, setServer] = useState(servers[0].name);
+
+    return (
+        <Form action={link(project.id)} className="space-y-1.5">
+            {({ errors, processing }) => (
+                <>
+                    <div className="flex items-center gap-2.5">
+                        <select
+                            name="server"
+                            value={server}
+                            onChange={(event) => setServer(event.target.value)}
+                            disabled={!project.initialized}
+                            className="rounded-lg border-0 bg-surface px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers disabled:opacity-45"
+                        >
+                            {servers.map((candidate) => (
+                                <option
+                                    key={candidate.name}
+                                    value={candidate.name}
+                                >
+                                    {candidate.name}
+                                    {candidate.ip ? ` · ${candidate.ip}` : ''}
+                                </option>
+                            ))}
+                        </select>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={!project.initialized || processing}
+                        >
+                            {processing ? 'Linking…' : 'Link'}
+                        </Button>
+                    </div>
+                    {errors.server && (
+                        <p className="text-xs text-accent">{errors.server}</p>
+                    )}
+                </>
+            )}
+        </Form>
     );
 }
 

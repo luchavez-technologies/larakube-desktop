@@ -15,6 +15,8 @@ enum RunKind: string
     /** A brand-new app scaffolded by one of the CLI's `*:new` commands. */
     case NewProject = 'new-project';
     case InitProject = 'init-project';
+    /** A cloud environment created with `env`, bound to an existing server. */
+    case LinkServer = 'link-server';
     case ConfigureHost = 'configure-host';
     case DeployApp = 'deploy-app';
 
