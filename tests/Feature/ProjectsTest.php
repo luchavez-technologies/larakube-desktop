@@ -286,3 +286,19 @@ test('a new Laravel app needs a LaraKube CLI that lists its options', function (
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('a new project can go straight into the home folder, the form\'s default', function () {
+    $sandbox = projectsSandbox();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'vite', 'parent' => $sandbox['home']])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => $cwd === $sandbox['home']);
+    expect(Project::sole()->path)->toBe("{$sandbox['home']}/blog");
+
+    // Adding the home folder itself as a project is still refused.
+    projectsPicker($sandbox['home']);
+    $this->post(route('projects.store'))->assertSessionHasErrors('path');
+
+    File::deleteDirectory($sandbox['home']);
+});

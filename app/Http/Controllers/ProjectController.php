@@ -81,7 +81,7 @@ class ProjectController extends Controller
             'laravelOptions' => Inertia::defer(fn (): ?array => $laravel->questions()),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'frameworks' => array_map(fn (array $scaffolder): array => ['label' => $scaffolder['label'], 'description' => $scaffolder['description']], self::SCAFFOLDERS),
-            'parent' => $this->insideHome($parent) && is_dir($parent) ? $parent : ToolLocator::home(),
+            'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
             'framework' => array_key_exists((string) $request->query('framework'), self::SCAFFOLDERS) ? (string) $request->query('framework') : 'laravel',
         ]);
@@ -96,7 +96,7 @@ class ProjectController extends Controller
             'framework' => (string) $request->input('framework', ''),
         ]);
 
-        if ($path !== null && ! $this->insideHome($path)) {
+        if ($path !== null && ! $this->insideHome($path, allowHome: true)) {
             return to_route('projects.create', $query)->withErrors(['parent' => 'Choose a folder inside your home folder.']);
         }
 
@@ -116,7 +116,7 @@ class ProjectController extends Controller
 
         $parent = realpath($input['parent']) ?: $input['parent'];
 
-        if (! is_dir($parent) || ! $this->insideHome($parent)) {
+        if (! is_dir($parent) || ! $this->insideHome($parent, allowHome: true)) {
             return back()->withErrors(['parent' => 'Choose a folder inside your home folder.']);
         }
 
@@ -221,11 +221,16 @@ class ProjectController extends Controller
         return $this->run($runner, $project, RunKind::DeployApp, "Deploy {$this->name($project)}", ['cloud:deploy', self::ENVIRONMENT]);
     }
 
-    private function insideHome(string $path): bool
+    /**
+     * Whether $path is under the home folder. $allowHome also accepts the home
+     * folder itself: fine to create an app in, not to add as a project.
+     */
+    private function insideHome(string $path, bool $allowHome = false): bool
     {
         $home = ToolLocator::home();
+        $resolved = realpath($path) ?: $path;
 
-        return $home !== '' && $path !== '' && str_starts_with(realpath($path) ?: $path, $home.'/');
+        return $home !== '' && $path !== '' && (str_starts_with($resolved, $home.'/') || ($allowHome && $resolved === $home));
     }
 
     private function name(Project $project): string

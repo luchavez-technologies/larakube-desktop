@@ -54,10 +54,16 @@ export default function CreateProject({
     }
 
     function pickFolder() {
-        router.post(chooseFolder().url, {
-            name: form.data.name,
-            framework: form.data.framework,
-        });
+        // Posts keep this page's state, so take the chosen folder from the
+        // response rather than relying on a remount.
+        router.post(
+            chooseFolder().url,
+            { name: form.data.name, framework: form.data.framework },
+            {
+                onSuccess: (page) =>
+                    form.setData('parent', String(page.props.parent)),
+            },
+        );
     }
 
     return (
