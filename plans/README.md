@@ -6,6 +6,9 @@ who never want a terminal: create cloud servers, install Cluster Tools, and
 a workshop of mostly-Windows students who will deploy Laravel, Statamic,
 WordPress, Next.js, Vite, Astro and Docusaurus apps.
 
+**Current goal:** every workshop framework created and deployed from the
+desktop before the workshop. See `plans/active/07-all-frameworks-for-workshop.md`.
+
 Read in this order:
 
 1. This file: what exists, how to run it, where things live.
