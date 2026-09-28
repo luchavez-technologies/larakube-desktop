@@ -30,6 +30,19 @@ build` (public/build is gitignored).
 2. Canary: merge `feat/desktop-spike` into `develop` and push.
 3. First stable: `git tag v0.0.1 && git push origin v0.0.1`.
 
+## CI traps already hit (fixed)
+
+- **`native:build` exits 0 even when Electron's build fails.** Always check
+  `nativephp/electron/dist` afterwards (the "Collect installers" step does).
+- **`#plugin` resolves to `nativephp/electron/electron-plugin/dist`,** a
+  gitignored output that `native:install` builds locally. CI runs `npm ci`
+  and `npm run plugin:build` in `nativephp/electron` first. This was
+  reproduced and verified with a fresh clone before pushing.
+- **Windows runners' PHP lacks `fileinfo` and `zip`.** setup-php lists its
+  extensions explicitly.
+- **CI's `vp check` covers the whole repo.** `nativephp/**` is excluded;
+  run `composer ci:check` before pushing.
+
 ## Known limits of these first builds
 
 - **Unsigned.** macOS: right-click → Open, or

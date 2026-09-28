@@ -104,6 +104,17 @@ jobs:
           echo "NATIVEPHP_UPDATER_ENABLED=false" >> .env
           npm ci
 
+      # #plugin in nativephp/electron resolves to electron-plugin/dist, a
+      # gitignored build output that native:install makes locally, so a fresh
+      # checkout has to compile it before native:build.
+      - name: Build the Electron plugin
+        shell: bash
+        working-directory: nativephp/electron
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm run plugin:build
+          test -f electron-plugin/dist/index.js
+
       - name: Build ${{ matrix.target }}-${{ matrix.arch }}
         shell: bash
         run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
