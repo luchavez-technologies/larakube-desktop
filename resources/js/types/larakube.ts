@@ -130,3 +130,22 @@ export type Project = {
     serverIp: string | null;
     deployable: boolean;
 };
+
+/** One question `larakube new` asks, from `larakube new:options --json`. */
+export type NewAppQuestion = {
+    key: string;
+    label: string;
+    multiple: boolean;
+    nullable: boolean;
+    default: string | null;
+    options: {
+        value: string;
+        label: string;
+        flag: string;
+        unavailableWith: string[];
+    }[];
+    conflicts?: string[][];
+    requiresFeature?: string;
+};
+
+export type NewAppAnswers = Record<string, string | string[] | null>;

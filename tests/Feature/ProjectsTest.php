@@ -4,6 +4,7 @@ use App\Enums\RunKind;
 use App\Models\Project;
 use App\Models\Run;
 use App\Services\FolderPicker;
+use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
@@ -162,7 +163,6 @@ test('a new project runs its framework\'s scaffolder in the chosen folder', func
 
     File::deleteDirectory($sandbox['home']);
 })->with([
-    'laravel' => ['laravel', ['new', 'blog', '--fast', '--no-plex']],
     'nextjs' => ['nextjs', ['nextjs:new', 'blog', '--fast', '--no-plex']],
     'vite' => ['vite', ['vite:new', 'blog', '--fast']],
     'astro' => ['astro', ['astro:new', 'blog', '--fast']],
@@ -203,6 +203,86 @@ test('choosing where to create a project keeps what was typed', function () {
             ->where('name', 'blog')
             ->where('framework', 'astro')
             ->has('frameworks', 5));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+function projectsLaravelOptions(bool $available = true): void
+{
+    $option = fn (string $value, array $unavailableWith = []): array => ['value' => $value, 'label' => ucfirst($value), 'flag' => "--{$value}", 'unavailableWith' => $unavailableWith];
+
+    Process::fake(['*new:options*' => $available
+        ? Process::result(output: json_encode(['success' => true, 'questions' => [
+            ['key' => 'server', 'label' => 'Server variation', 'multiple' => false, 'nullable' => false, 'default' => 'frankenphp', 'options' => [$option('fpm-nginx'), $option('frankenphp')]],
+            ['key' => 'frontend', 'label' => 'Frontend stack', 'multiple' => false, 'nullable' => true, 'default' => null, 'options' => [$option('react'), $option('vue')]],
+            ['key' => 'features', 'label' => 'Laravel features', 'multiple' => true, 'nullable' => false, 'default' => null, 'options' => [$option('queues'), $option('horizon'), $option('scout'), $option('octane', ['frankenphp'])], 'conflicts' => [['horizon', 'queues']]],
+            ['key' => 'search', 'label' => 'Search driver for Scout', 'multiple' => false, 'nullable' => false, 'default' => 'meilisearch', 'options' => [$option('meilisearch')], 'requiresFeature' => 'scout'],
+            ['key' => 'database', 'label' => 'Database', 'multiple' => false, 'nullable' => false, 'default' => 'mysql', 'options' => [$option('mysql'), $option('postgres'), $option('sqlite', ['frankenphp'])]],
+        ]]))
+        : Process::result(errorOutput: 'Command "new:options" is not defined.', exitCode: 1)]);
+}
+
+test('the Laravel form starts from the workshop defaults, not new --fast', function () {
+    projectsSandbox();
+    projectsLaravelOptions();
+
+    $questions = collect(app(LaravelOptions::class)->questions())->keyBy('key');
+
+    expect($questions['server']['default'])->toBe('fpm-nginx')
+        ->and($questions['database']['default'])->toBe('postgres')
+        ->and($questions['frontend']['default'])->toBe('react')
+        ->and($questions['features']['default'])->toBeNull();
+});
+
+test('a new Laravel app turns the form answers into new flags', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+    projectsLaravelOptions();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), [
+        'name' => 'blog', 'framework' => 'laravel', 'parent' => $parent, 'email' => 'dev@example.com',
+        'laravel' => ['server' => 'fpm-nginx', 'frontend' => 'react', 'features' => ['queues', 'octane'], 'database' => 'postgres'],
+    ])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'new', 'blog', '--fast', '--email=dev@example.com', '--fpm-nginx', '--react', '--queues', '--octane', '--postgres', '--no-interaction',
+    ] && $cwd === $parent);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a new Laravel app refuses answers the CLI would not offer', function (array $overrides, string $error) {
+    $sandbox = projectsSandbox();
+    projectsLaravelOptions();
+    ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), array_replace_recursive([
+        'name' => 'blog', 'framework' => 'laravel', 'parent' => dirname($sandbox['app']), 'email' => 'dev@example.com',
+        'laravel' => ['server' => 'frankenphp', 'frontend' => null, 'features' => [], 'database' => 'mysql'],
+    ], $overrides))->assertSessionHasErrors($error);
+
+    expect(Run::count())->toBe(0)->and(Project::count())->toBe(0);
+
+    File::deleteDirectory($sandbox['home']);
+})->with([
+    'SQLite on FrankenPHP' => [['laravel' => ['database' => 'sqlite']], 'laravel.database'],
+    'Octane named on FrankenPHP' => [['laravel' => ['features' => ['octane']]], 'laravel.features'],
+    'Horizon with Queues' => [['laravel' => ['features' => ['horizon', 'queues']]], 'laravel.features'],
+    'no database' => [['laravel' => ['database' => null]], 'laravel.database'],
+    'no email' => [['email' => ''], 'email'],
+]);
+
+test('a new Laravel app needs a LaraKube CLI that lists its options', function () {
+    $sandbox = projectsSandbox();
+    projectsLaravelOptions(available: false);
+    ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'laravel', 'parent' => dirname($sandbox['app']), 'email' => 'dev@example.com'])
+        ->assertSessionHasErrors('framework');
+
+    expect(Run::count())->toBe(0);
 
     File::deleteDirectory($sandbox['home']);
 });

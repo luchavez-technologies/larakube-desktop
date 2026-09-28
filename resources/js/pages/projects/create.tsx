@@ -1,10 +1,16 @@
-import { Link, router, useForm } from '@inertiajs/react';
+import { Deferred, Link, router, useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
+import { useEffect } from 'react';
 import Button, { buttonClass } from '@/components/button';
+import LaravelOptions, {
+    defaultAnswers,
+    reconcile,
+} from '@/components/laravel-options';
 import PageHeader from '@/components/page-header';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { chooseFolder, index, scaffold } from '@/routes/projects';
+import type { NewAppAnswers, NewAppQuestion } from '@/types/larakube';
 
 type Framework = { label: string; description: string };
 
@@ -13,13 +19,34 @@ export default function CreateProject({
     parent,
     name,
     framework,
+    email,
+    laravelOptions,
 }: {
     frameworks: Record<string, Framework>;
     parent: string;
     name: string;
     framework: string;
+    email: string;
+    laravelOptions?: NewAppQuestion[] | null;
 }) {
-    const form = useForm({ name, framework, parent });
+    const form = useForm<{
+        name: string;
+        framework: string;
+        parent: string;
+        email: string;
+        laravel: NewAppAnswers;
+    }>({ name, framework, parent, email, laravel: {} });
+    const isLaravel = form.data.framework === 'laravel';
+    const { setData } = form;
+
+    useEffect(() => {
+        if (laravelOptions) {
+            setData(
+                'laravel',
+                reconcile(laravelOptions, defaultAnswers(laravelOptions)),
+            );
+        }
+    }, [laravelOptions, setData]);
 
     function submit(event: FormEvent) {
         event.preventDefault();
@@ -129,6 +156,65 @@ export default function CreateProject({
                     </div>
                 </div>
 
+                {isLaravel && (
+                    <div className="mt-5 space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
+                        <p className="text-[13px] font-medium">
+                            Laravel options
+                        </p>
+                        <label className="block">
+                            <span className="mb-1.5 block text-xs font-medium text-soft">
+                                Your email
+                            </span>
+                            <input
+                                type="email"
+                                value={form.data.email}
+                                onChange={(event) =>
+                                    form.setData('email', event.target.value)
+                                }
+                                placeholder="you@example.com"
+                                spellCheck={false}
+                                className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-brand"
+                            />
+                            <span
+                                className={cn(
+                                    'mt-1 block text-xs',
+                                    form.errors.email
+                                        ? 'text-accent'
+                                        : 'text-soft',
+                                )}
+                            >
+                                {form.errors.email ??
+                                    "Let's Encrypt uses it for your site's SSL certificate. It needs a real mail domain."}
+                            </span>
+                        </label>
+                        <Deferred
+                            data="laravelOptions"
+                            fallback={
+                                <div className="h-16 animate-pulse rounded-lg bg-paper" />
+                            }
+                        >
+                            {laravelOptions ? (
+                                <LaravelOptions
+                                    questions={laravelOptions}
+                                    answers={form.data.laravel}
+                                    errors={
+                                        form.errors as Record<string, string>
+                                    }
+                                    onChange={(answers) =>
+                                        form.setData('laravel', answers)
+                                    }
+                                />
+                            ) : (
+                                <p className="text-sm text-warn">
+                                    This LaraKube CLI is too old to create
+                                    Laravel apps from here. Update it from
+                                    Setup, then come back.
+                                </p>
+                            )}
+                        </Deferred>
+                    </div>
+                )}
+
                 <div className="mt-5 flex items-center justify-between gap-4">
                     <p className="text-[13px] text-soft">
                         The first one takes a few minutes while the container
@@ -144,7 +230,11 @@ export default function CreateProject({
                         <Button
                             type="submit"
                             disabled={
-                                form.processing || form.data.name.trim() === ''
+                                form.processing ||
+                                form.data.name.trim() === '' ||
+                                (isLaravel &&
+                                    (!laravelOptions ||
+                                        form.data.email.trim() === ''))
                             }
                         >
                             {form.processing ? 'Starting…' : 'Create project'}

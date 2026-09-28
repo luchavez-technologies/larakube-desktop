@@ -7,11 +7,13 @@ use App\Models\Project;
 use App\Models\Run;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,16 +26,20 @@ class ProjectController extends Controller
 {
     public const ENVIRONMENT = 'production';
 
+    /** The Let's Encrypt email last used for a new Laravel app, prefilled next time. */
+    private const EMAIL_CACHE_KEY = 'desktop.new-app.email';
+
     /**
      * The apps the desktop can start from scratch, and the CLI command that
-     * scaffolds each. `--fast` takes each scaffolder's scripted defaults;
-     * `--no-plex` keeps a new app self-contained, so deploying it doesn't also
-     * need the Plex Commons on the server.
+     * scaffolds each. `--fast` takes each scaffolder's scripted defaults; a
+     * Laravel app adds the answers from its form (see LaravelOptions).
+     * `--no-plex` keeps a Next.js app self-contained, so deploying it doesn't
+     * also need the Plex Commons on the server.
      *
      * @var array<string, array{label: string, description: string, command: list<string>}>
      */
     public const SCAFFOLDERS = [
-        'laravel' => ['label' => 'Laravel', 'description' => 'A full PHP web app with a database.', 'command' => ['new', '--fast', '--no-plex']],
+        'laravel' => ['label' => 'Laravel', 'description' => 'A full PHP web app with a database.', 'command' => ['new', '--fast']],
         'nextjs' => ['label' => 'Next.js', 'description' => 'A React app with server rendering.', 'command' => ['nextjs:new', '--fast', '--no-plex']],
         'vite' => ['label' => 'Vite', 'description' => 'A React single-page app, served as static files.', 'command' => ['vite:new', '--fast']],
         'astro' => ['label' => 'Astro', 'description' => 'A content site, served as static files.', 'command' => ['astro:new', '--fast']],
@@ -66,11 +72,13 @@ class ProjectController extends Controller
         return to_route('projects.show', $project);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request, LaravelOptions $laravel): Response
     {
         $parent = (string) $request->query('parent', '');
 
         return Inertia::render('projects/create', [
+            'laravelOptions' => Inertia::defer(fn (): ?array => $laravel->questions()),
+            'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'frameworks' => array_map(fn (array $scaffolder): array => ['label' => $scaffolder['label'], 'description' => $scaffolder['description']], self::SCAFFOLDERS),
             'parent' => $this->insideHome($parent) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
@@ -94,7 +102,7 @@ class ProjectController extends Controller
         return to_route('projects.create', $query + array_filter(['parent' => $path === null ? null : (realpath($path) ?: $path)]));
     }
 
-    public function scaffold(Request $request, CliRunner $runner): RedirectResponse
+    public function scaffold(Request $request, CliRunner $runner, LaravelOptions $laravel): RedirectResponse
     {
         $input = $request->validate([
             'name' => ['required', 'string', 'max:50', 'regex:/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/', Rule::notIn(['console'])],
@@ -117,12 +125,31 @@ class ProjectController extends Controller
             return back()->withErrors(['name' => "{$input['name']} already exists in this folder."]);
         }
 
-        $project = Project::firstOrCreate(['path' => $path]);
         $scaffolder = self::SCAFFOLDERS[$input['framework']];
+        $extra = [];
+
+        if ($input['framework'] === 'laravel') {
+            if ($laravel->questions() === null) {
+                return back()->withErrors(['framework' => 'Update the LaraKube CLI from Setup to create Laravel apps.']);
+            }
+
+            $email = $request->validate(['email' => ['required', 'email']])['email'];
+            $answers = $request->input('laravel', []);
+            $resolved = $laravel->flags(is_array($answers) ? $answers : []);
+
+            if ($resolved['errors'] !== []) {
+                return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["laravel.{$key}" => $error])->all());
+            }
+
+            Cache::forever(self::EMAIL_CACHE_KEY, $email);
+            $extra = ["--email={$email}", ...$resolved['flags']];
+        }
+
+        $project = Project::firstOrCreate(['path' => $path]);
 
         $run = $runner->start(
             label: "Create {$scaffolder['label']} app {$input['name']}",
-            arguments: [$scaffolder['command'][0], $input['name'], ...array_slice($scaffolder['command'], 1)],
+            arguments: [$scaffolder['command'][0], $input['name'], ...array_slice($scaffolder['command'], 1), ...$extra],
             kind: RunKind::NewProject,
             subject: "project:{$project->id}",
             meta: ['project' => (string) $project->id],

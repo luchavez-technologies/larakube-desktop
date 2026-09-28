@@ -20,13 +20,23 @@ tls:show`, `feat(tool): add --registry-only to tool:list`. Before
       Without it, Desktop's "New project" for Laravel starts a local cluster,
       because `--no-interaction` answers the defaulted-yes prompt. Suggested
       message: `fix(new): only offer larakube up to an interactive run`.
+    - Also unstaged: `new:options --json` (new `app/Commands/NewOptionsCommand.php`
+        - `tests/Feature/NewOptionsCommandTest.php`), `new --email=`, and the
+          `new` forwarding filter no longer passes cache flags (`--redis`,
+          `--database`) or `--email` through to `laravel new`. Desktop's Laravel form
+          needs this build; with an older LaraKube CLI it refuses Laravel with an
+          "update the CLI" message. Suggested: `feat(new): add new:options and
+--email for headless new`.
     - After committing, the user runs `./build` so Desktop's DNS/SSL status
       and the fast Tools list work.
 2. Desktop work in progress: plan 01. Projects screens are built; see its Progress section for the remaining 4 items.
 3. **New project (scaffolding) is built but not tried live.** Projects → New
    project runs `new` (Laravel), `nextjs:new`, `vite:new`, `astro:new` or
-   `docs:new` with `--fast` in a chosen folder under `$HOME` (Laravel and
-   Next.js also get `--no-plex`). Try one of each on a machine with Docker
+   `docs:new` with `--fast` in a chosen folder under `$HOME` (Next.js also gets
+   `--no-plex`). Laravel has its own form built from `new:options --json`
+   (starter kit, database, email, plus Advanced), defaulting to React +
+   PostgreSQL + FPM/Nginx; PostgreSQL is the default to promote the Plex
+   Commons, so Laravel no longer passes `--no-plex`. Try one of each on a machine with Docker
    running. Statamic and WordPress are left out on purpose for now.
 
 ## Release status
