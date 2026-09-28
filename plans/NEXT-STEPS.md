@@ -19,6 +19,16 @@ tls:show`, `feat(tool): add --registry-only to tool:list`. Before
       and the fast Tools list work.
 2. Desktop work in progress: plan 01. Projects screens are built; see its Progress section for the remaining 4 items.
 
+## Release status
+
+- ✅ **First canary published (2026-09-28):** `0.0.1-canary.3` from
+  `9611bae` with 7 installers (macOS arm64/x64 dmg+zip, Windows setup.exe,
+  Linux AppImage+deb) via `.github/workflows/release.yml`. Unsigned, no
+  auto-update. Repo `luchavez-technologies/larakube-desktop` is **private**:
+  students can't download until it (or its releases) is public.
+- Next release step: `git tag v0.0.1 && git push origin v0.0.1` once the
+  installers are smoke-tested.
+
 ## Backlog, in order
 
 | #   | Plan                                                                             | Why now                                                                   |
