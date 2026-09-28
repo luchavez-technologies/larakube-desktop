@@ -129,6 +129,8 @@ export type Project = {
     webHost: string | null;
     serverIp: string | null;
     deployable: boolean;
+    /** The latest create run's status, on the Projects list only. */
+    scaffoldStatus?: RunStatus | null;
 };
 
 /** One question `larakube new` asks, from `larakube new:options --json`. */

@@ -1,8 +1,12 @@
-import { Form, Link, usePage } from '@inertiajs/react';
-import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { Form, Link, router, useForm, usePage } from '@inertiajs/react';
+import type { FormEvent, ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import LaravelOptions, {
+    defaultAnswers,
+    reconcile,
+} from '@/components/laravel-options';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -16,10 +20,17 @@ import {
     host as setHost,
     index,
     init,
+    retry,
 } from '@/routes/projects';
 import { show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
-import type { Project, RunStatus, Server } from '@/types/larakube';
+import type {
+    NewAppAnswers,
+    NewAppQuestion,
+    Project,
+    RunStatus,
+    Server,
+} from '@/types/larakube';
 
 type RecentRun = {
     id: number;
@@ -39,13 +50,19 @@ export default function ShowProject({
     runs,
     scaffold,
     editors,
+    wizardFrameworks,
+    email,
+    laravelOptions,
 }: {
     project: Project;
     server: Server | null;
     frameworks: Record<string, string>;
     runs: RecentRun[];
-    scaffold: { id: number; status: RunStatus } | null;
+    scaffold: { id: number; status: RunStatus; canRetry: boolean } | null;
     editors: Editor[];
+    wizardFrameworks: string[];
+    email: string;
+    laravelOptions?: NewAppQuestion[] | null;
 }) {
     const ready =
         project.initialized &&
@@ -118,6 +135,26 @@ export default function ShowProject({
                             </Link>
                         )}
                     </p>
+                    <div className="mt-3 flex items-center gap-2.5">
+                        {scaffold?.canRetry && (
+                            <Link
+                                href={retry(project.id).url}
+                                method="post"
+                                as="button"
+                                className={buttonClass('primary', 'sm')}
+                            >
+                                Try again
+                            </Link>
+                        )}
+                        <Link
+                            href={destroy(project.id).url}
+                            method="delete"
+                            as="button"
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            Remove
+                        </Link>
+                    </div>
                 </Card>
             ) : (
                 <div className="grid grid-cols-[1fr_320px] items-start gap-4.5">
@@ -137,6 +174,9 @@ export default function ShowProject({
                                 <InitForm
                                     project={project}
                                     frameworks={frameworks}
+                                    wizardFrameworks={wizardFrameworks}
+                                    email={email}
+                                    laravelOptions={laravelOptions}
                                 />
                             )}
                         </Step>
@@ -299,39 +339,131 @@ function Step({
 function InitForm({
     project,
     frameworks,
+    wizardFrameworks,
+    email,
+    laravelOptions,
 }: {
     project: Project;
     frameworks: Record<string, string>;
+    wizardFrameworks: string[];
+    email: string;
+    laravelOptions?: NewAppQuestion[] | null;
 }) {
-    const [framework, setFramework] = useState(
-        project.detectedFramework ?? 'laravel',
+    const form = useForm<{
+        framework: string;
+        email: string;
+        laravel: NewAppAnswers;
+    }>({
+        framework: project.detectedFramework ?? 'laravel',
+        email,
+        laravel: {},
+    });
+    const { setData } = form;
+    const needsEmail = wizardFrameworks.includes(form.data.framework);
+    const isLaravel = form.data.framework === 'laravel';
+    // An existing app's frontend is detected by the CLI, never asked.
+    const questions = useMemo(
+        () => laravelOptions?.filter((question) => question.key !== 'frontend'),
+        [laravelOptions],
     );
+    const errors = form.errors as Record<string, string>;
+
+    useEffect(() => {
+        if (isLaravel && laravelOptions === undefined) {
+            router.reload({ only: ['laravelOptions'] });
+        }
+    }, [isLaravel, laravelOptions]);
+
+    useEffect(() => {
+        if (questions) {
+            setData('laravel', reconcile(questions, defaultAnswers(questions)));
+        }
+    }, [questions, setData]);
+
+    function submit(event: FormEvent) {
+        event.preventDefault();
+        form.post(init(project.id).url);
+    }
 
     return (
-        <Form action={init(project.id)} className="flex items-center gap-2.5">
-            {({ processing }) => (
-                <>
-                    <select
-                        name="framework"
-                        value={framework}
-                        onChange={(event) => setFramework(event.target.value)}
-                        className="rounded-lg border-0 bg-surface px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                    >
-                        {Object.entries(frameworks).map(([value, label]) => (
-                            <option key={value} value={value}>
-                                {label}
-                                {value === project.detectedFramework
-                                    ? ' (detected)'
-                                    : ''}
-                            </option>
-                        ))}
-                    </select>
-                    <Button type="submit" size="sm" disabled={processing}>
-                        {processing ? 'Starting…' : 'Set up'}
-                    </Button>
-                </>
+        <form onSubmit={submit} className="space-y-3">
+            <div className="flex items-center gap-2.5">
+                <select
+                    value={form.data.framework}
+                    onChange={(event) =>
+                        setData('framework', event.target.value)
+                    }
+                    className="rounded-lg border-0 bg-surface px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                >
+                    {Object.entries(frameworks).map(([value, label]) => (
+                        <option key={value} value={value}>
+                            {label}
+                            {value === project.detectedFramework
+                                ? ' (detected)'
+                                : ''}
+                        </option>
+                    ))}
+                </select>
+                <Button
+                    type="submit"
+                    size="sm"
+                    disabled={
+                        form.processing ||
+                        (needsEmail && form.data.email.trim() === '') ||
+                        (isLaravel && !laravelOptions)
+                    }
+                >
+                    {form.processing ? 'Starting…' : 'Set up'}
+                </Button>
+            </div>
+            {errors.framework && (
+                <p className="text-xs text-accent">{errors.framework}</p>
             )}
-        </Form>
+            {needsEmail && (
+                <label className="block max-w-sm">
+                    <span className="mb-1 block text-xs font-medium text-soft">
+                        Your email
+                    </span>
+                    <input
+                        type="email"
+                        value={form.data.email}
+                        onChange={(event) =>
+                            setData('email', event.target.value)
+                        }
+                        placeholder="you@example.com"
+                        spellCheck={false}
+                        className="w-full rounded-lg border-0 px-3 py-1.5 text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                    />
+                    <span
+                        className={cn(
+                            'mt-1 block text-xs',
+                            errors.email ? 'text-accent' : 'text-soft',
+                        )}
+                    >
+                        {errors.email ??
+                            "For your site's SSL certificate. It needs a real mail domain."}
+                    </span>
+                </label>
+            )}
+            {isLaravel &&
+                (questions ? (
+                    <div className="space-y-3">
+                        <LaravelOptions
+                            questions={questions}
+                            answers={form.data.laravel}
+                            errors={errors}
+                            onChange={(answers) => setData('laravel', answers)}
+                        />
+                    </div>
+                ) : laravelOptions === null ? (
+                    <p className="text-xs text-warn">
+                        This LaraKube CLI is too old to set up Laravel apps from
+                        here. Update it from Setup.
+                    </p>
+                ) : (
+                    <div className="h-10 animate-pulse rounded-lg bg-paper" />
+                ))}
+        </form>
     );
 }
 

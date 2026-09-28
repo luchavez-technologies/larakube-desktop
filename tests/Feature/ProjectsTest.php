@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Enums\RunStatus;
 use App\Models\Project;
 use App\Models\Run;
 use App\Services\FolderPicker;
@@ -159,7 +160,7 @@ test('a new project runs its framework\'s scaffolder in the chosen folder', func
     $project = Project::sole();
     expect($project->path)->toBe("{$parent}/blog")
         ->and(Run::sole()->kind)->toBe(RunKind::NewProject)
-        ->and(Run::sole()->meta)->toBe(['project' => (string) $project->id]);
+        ->and(Run::sole()->meta)->toBe(['project' => (string) $project->id, 'arguments' => json_encode($arguments), 'cwd' => $parent]);
 
     File::deleteDirectory($sandbox['home']);
 })->with([
@@ -299,6 +300,83 @@ test('a new project can go straight into the home folder, the form\'s default', 
     // Adding the home folder itself as a project is still refused.
     projectsPicker($sandbox['home']);
     $this->post(route('projects.store'))->assertSessionHasErrors('path');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+/**
+ * A create run that ended with $status, for a project whose folder was never made.
+ *
+ * @param  array<string, string>|null  $meta
+ */
+function projectsFailedScaffold(string $parent, RunStatus $status = RunStatus::Failed, ?array $meta = null): Project
+{
+    $project = Project::create(['path' => "{$parent}/blog"]);
+    Run::create([
+        'label' => 'Create Vite app blog', 'kind' => RunKind::NewProject, 'subject' => "project:{$project->id}", 'status' => $status, 'command' => ['larakube'],
+        'meta' => $meta ?? ['project' => (string) $project->id, 'arguments' => json_encode(['vite:new', 'blog', '--fast']), 'cwd' => $parent],
+    ]);
+
+    return $project;
+}
+
+test('a failed create shows as such on the list and can be tried again with the same answers', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+    $project = projectsFailedScaffold($parent);
+    $fake = ChildProcess::fake();
+
+    $this->get(route('projects.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('projects.0.scaffoldStatus', RunStatus::Failed->value)->where('projects.0.exists', false));
+
+    $this->post(route('projects.retry', $project))->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, 'vite:new', 'blog', '--fast', '--no-interaction'] && $cwd === $parent);
+    expect(Run::query()->latest('id')->first()->status)->toBe(RunStatus::Running);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a create is not retried while running, once its folder exists, or without a record of what it ran', function (Closure $arrange) {
+    $sandbox = projectsSandbox();
+    $project = $arrange(dirname($sandbox['app']));
+    ChildProcess::fake();
+
+    $this->post(route('projects.retry', $project))->assertNotFound();
+
+    File::deleteDirectory($sandbox['home']);
+})->with([
+    'still running' => [fn (string $parent): Project => projectsFailedScaffold($parent, RunStatus::Running)],
+    'folder exists' => [function (string $parent): Project {
+        File::ensureDirectoryExists("{$parent}/blog");
+
+        return projectsFailedScaffold($parent);
+    }],
+    'nothing recorded' => [fn (string $parent): Project => projectsFailedScaffold($parent, meta: ['project' => '1'])],
+]);
+
+test('setting up a PHP app passes the email, and Laravel also its options minus the detected frontend', function () {
+    $sandbox = projectsSandbox();
+    projectsLaravelOptions();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.init', $project), ['framework' => 'statamic'])->assertSessionHasErrors('email');
+
+    $this->post(route('projects.init', $project), ['framework' => 'statamic', 'email' => 'dev@example.com'])->assertRedirect();
+    $this->post(route('projects.init', $project), [
+        'framework' => 'laravel', 'email' => 'dev@example.com',
+        'laravel' => ['server' => 'fpm-nginx', 'frontend' => 'vue', 'features' => [], 'database' => 'postgres'],
+    ])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    foreach ([
+        ['init', '--framework=statamic', '--fast', '--email=dev@example.com'],
+        ['init', '--framework=laravel', '--fast', '--email=dev@example.com', '--fpm-nginx', '--postgres'],
+    ] as $arguments) {
+        $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, ...$arguments, '--no-interaction']);
+    }
 
     File::deleteDirectory($sandbox['home']);
 });

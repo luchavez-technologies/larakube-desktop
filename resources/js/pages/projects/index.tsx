@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { buttonClass } from '@/components/button';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
+import type { Tone } from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { create, show, store } from '@/routes/projects';
 import type { Project } from '@/types/larakube';
@@ -60,26 +61,16 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
                                 <span className="truncate text-sm font-semibold">
                                     {project.name}
                                 </span>
-                                <StatusPill
-                                    tone={
-                                        project.webHost && project.serverIp
-                                            ? 'ok'
-                                            : project.initialized
-                                              ? 'warn'
-                                              : 'muted'
-                                    }
-                                >
-                                    {project.webHost && project.serverIp
-                                        ? 'Ready to deploy'
-                                        : project.initialized
-                                          ? 'Needs a server'
-                                          : 'Not set up'}
+                                <StatusPill tone={projectStatus(project)[1]}>
+                                    {projectStatus(project)[0]}
                                 </StatusPill>
                             </div>
                             <p className="mt-1 text-xs text-soft">
                                 {project.framework ??
                                     project.detectedFramework ??
-                                    'Unknown framework'}
+                                    (project.exists
+                                        ? 'Unknown framework'
+                                        : '—')}
                             </p>
                             <p className="mt-2 truncate font-mono text-[11px] text-faint">
                                 {project.path}
@@ -90,4 +81,21 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
             )}
         </AppLayout>
     );
+}
+
+/** A missing folder is explained by its create run: still going, failed, or gone. */
+function projectStatus(project: Project): [string, Tone] {
+    if (!project.exists) {
+        if (project.scaffoldStatus === 'running') return ['Creating…', 'busy'];
+        if (
+            project.scaffoldStatus === 'failed' ||
+            project.scaffoldStatus === 'cancelled'
+        )
+            return ["Couldn't be created", 'bad'];
+        return ['Folder missing', 'bad'];
+    }
+
+    if (project.webHost && project.serverIp) return ['Ready to deploy', 'ok'];
+    if (project.initialized) return ['Needs a server', 'warn'];
+    return ['Not set up', 'muted'];
 }

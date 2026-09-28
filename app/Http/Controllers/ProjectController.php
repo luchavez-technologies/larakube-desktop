@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Enums\RunStatus;
 use App\Models\Project;
 use App\Models\Run;
 use App\Services\EditorLauncher;
@@ -49,10 +50,22 @@ class ProjectController extends Controller
 
     public function __construct(private ProjectInspector $inspector) {}
 
+    /**
+     * The frameworks whose `init` runs the PHP wizard, which asks for a
+     * Let's Encrypt email. Laravel also takes the full options form.
+     */
+    public const WIZARD_FRAMEWORKS = ['laravel', 'statamic', 'wordpress'];
+
     public function index(): Response
     {
+        // The latest create run per project: keyBy keeps the last of each subject.
+        $scaffolds = Run::query()->where('kind', RunKind::NewProject)->orderBy('id')->get(['subject', 'status'])->keyBy('subject');
+
         return Inertia::render('projects/index', [
-            'projects' => Project::query()->latest('id')->get()->map(fn (Project $project): array => ['id' => $project->id] + $this->inspector->inspect($project->path))->all(),
+            'projects' => Project::query()->latest('id')->get()->map(fn (Project $project): array => [
+                'id' => $project->id,
+                'scaffoldStatus' => $scaffolds->get("project:{$project->id}")?->status,
+            ] + $this->inspector->inspect($project->path))->all(),
         ]);
     }
 
@@ -130,38 +143,52 @@ class ProjectController extends Controller
         $extra = [];
 
         if ($input['framework'] === 'laravel') {
-            if ($laravel->questions() === null) {
-                return back()->withErrors(['framework' => 'Update the LaraKube CLI from Setup to create Laravel apps.']);
+            $extra = $this->wizardFlags($request, $laravel, withOptions: true);
+
+            if ($extra instanceof RedirectResponse) {
+                return $extra;
             }
-
-            $email = $request->validate(['email' => ['required', 'email']])['email'];
-            $answers = $request->input('laravel', []);
-            $resolved = $laravel->flags(is_array($answers) ? $answers : []);
-
-            if ($resolved['errors'] !== []) {
-                return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["laravel.{$key}" => $error])->all());
-            }
-
-            Cache::forever(self::EMAIL_CACHE_KEY, $email);
-            $extra = ["--email={$email}", ...$resolved['flags']];
         }
 
         $project = Project::firstOrCreate(['path' => $path]);
+        $arguments = [$scaffolder['command'][0], $input['name'], ...array_slice($scaffolder['command'], 1), ...$extra];
 
+        // The arguments and folder are kept so a failed create can be retried as is.
         $run = $runner->start(
             label: "Create {$scaffolder['label']} app {$input['name']}",
-            arguments: [$scaffolder['command'][0], $input['name'], ...array_slice($scaffolder['command'], 1), ...$extra],
+            arguments: $arguments,
             kind: RunKind::NewProject,
             subject: "project:{$project->id}",
-            meta: ['project' => (string) $project->id],
+            meta: ['project' => (string) $project->id, 'arguments' => (string) json_encode($arguments), 'cwd' => $parent],
             cwd: $parent,
         );
 
         return to_route('runs.show', $run);
     }
 
-    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors): Response
+    /** Runs a failed or cancelled create again, with the same answers, if nothing was left behind. */
+    public function retry(Project $project, CliRunner $runner): RedirectResponse
     {
+        $last = $this->lastScaffold($project);
+
+        abort_unless($last !== null && $this->canRetry($project, $last), 404);
+
+        $run = $runner->start(
+            label: $last->label,
+            arguments: $this->recordedArguments($last),
+            kind: RunKind::NewProject,
+            subject: "project:{$project->id}",
+            meta: $last->meta ?? [],
+            cwd: $last->meta['cwd'] ?? '',
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel): Response
+    {
+        $scaffold = $this->lastScaffold($project);
+
         $inspection = $this->inspector->inspect($project->path);
         $servers = array_values(array_filter($stacks->all() ?? [], fn (array $stack): bool => $stack['status'] === 'ready'));
         $server = null;
@@ -178,7 +205,10 @@ class ProjectController extends Controller
             'frameworks' => ProjectInspector::DEPLOYABLE,
             'runs' => Run::query()->where('subject', "project:{$project->id}")->latest('id')->limit(5)->get(['id', 'label', 'kind', 'status', 'created_at'])->all(),
             'editors' => $editors->available(),
-            'scaffold' => Run::query()->where('subject', "project:{$project->id}")->where('kind', RunKind::NewProject)->latest('id')->first(['id', 'status']),
+            'scaffold' => $scaffold === null ? null : ['id' => $scaffold->id, 'status' => $scaffold->status, 'canRetry' => $this->canRetry($project, $scaffold)],
+            'wizardFrameworks' => self::WIZARD_FRAMEWORKS,
+            'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
+            'laravelOptions' => Inertia::optional(fn (): ?array => $laravel->questions()),
         ]);
     }
 
@@ -200,11 +230,21 @@ class ProjectController extends Controller
         return to_route('projects.index');
     }
 
-    public function init(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    public function init(Request $request, Project $project, CliRunner $runner, LaravelOptions $laravel): RedirectResponse
     {
         $framework = $request->validate(['framework' => ['required', Rule::in(array_keys(ProjectInspector::DEPLOYABLE))]])['framework'];
+        $extra = [];
 
-        return $this->run($runner, $project, RunKind::InitProject, 'Set up '.basename($project->path).' for LaraKube', ['init', "--framework={$framework}", '--fast']);
+        if (in_array($framework, self::WIZARD_FRAMEWORKS, true)) {
+            // An existing app's frontend is detected, never set from the form.
+            $extra = $this->wizardFlags($request, $laravel, withOptions: $framework === 'laravel', skip: ['frontend']);
+
+            if ($extra instanceof RedirectResponse) {
+                return $extra;
+            }
+        }
+
+        return $this->run($runner, $project, RunKind::InitProject, 'Set up '.basename($project->path).' for LaraKube', ['init', "--framework={$framework}", '--fast', ...$extra]);
     }
 
     public function host(Request $request, Project $project, CliRunner $runner): RedirectResponse
@@ -231,6 +271,67 @@ class ProjectController extends Controller
         $resolved = realpath($path) ?: $path;
 
         return $home !== '' && $path !== '' && (str_starts_with($resolved, $home.'/') || ($allowHome && $resolved === $home));
+    }
+
+    /**
+     * The wizard's answers as LaraKube CLI flags: the Let's Encrypt email and,
+     * with $withOptions, the Laravel options form (minus the $skip questions).
+     *
+     * @param  list<string>  $skip
+     * @return list<string>|RedirectResponse
+     */
+    private function wizardFlags(Request $request, LaravelOptions $laravel, bool $withOptions, array $skip = []): array|RedirectResponse
+    {
+        if ($withOptions && $laravel->questions() === null) {
+            return back()->withErrors(['framework' => 'Update the LaraKube CLI from Setup to set up Laravel apps.']);
+        }
+
+        $email = $request->validate(['email' => ['required', 'email']])['email'];
+        $flags = [];
+
+        if ($withOptions) {
+            $answers = $request->input('laravel', []);
+            $resolved = $laravel->flags(array_diff_key(is_array($answers) ? $answers : [], array_flip($skip)));
+
+            if ($resolved['errors'] !== []) {
+                return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["laravel.{$key}" => $error])->all());
+            }
+
+            $flags = $resolved['flags'];
+        }
+
+        Cache::forever(self::EMAIL_CACHE_KEY, $email);
+
+        return ["--email={$email}", ...$flags];
+    }
+
+    private function lastScaffold(Project $project): ?Run
+    {
+        return Run::query()->where('subject', "project:{$project->id}")->where('kind', RunKind::NewProject)->latest('id')->first();
+    }
+
+    /**
+     * A create can run again when it failed or was cancelled, recorded what it
+     * ran, and left no folder behind to collide with.
+     */
+    private function canRetry(Project $project, Run $run): bool
+    {
+        return in_array($run->status, [RunStatus::Failed, RunStatus::Cancelled], true)
+            && $this->recordedArguments($run) !== []
+            && is_dir($run->meta['cwd'] ?? '')
+            && ! file_exists($project->path);
+    }
+
+    /**
+     * What a create run ran, as recorded in its meta.
+     *
+     * @return list<string>
+     */
+    private function recordedArguments(Run $run): array
+    {
+        $decoded = json_decode($run->meta['arguments'] ?? '', true);
+
+        return is_array($decoded) ? array_values(array_filter($decoded, is_string(...))) : [];
     }
 
     private function name(Project $project): string
