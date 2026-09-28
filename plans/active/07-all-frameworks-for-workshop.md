@@ -24,6 +24,29 @@ the parent folder (create) or the project (init). Anything that prompts or
 needs a terminal fails there. That is the recurring bug class: look for
 `run --rm -it` and required prompts without a flag.
 
+## Blocker: linking a project to a server (do this before any deploy)
+
+A new or init'ed project has only the `local` environment. `cloud:deploy
+production` needs `environments.production` in `.larakube.json` and its
+target in `.larakube.local.json` (`environments.production.cloud`, ADR 0007).
+Today that target is only captured by an interactive `select()` in
+`ResolvesEnvironmentContext::promptCloudTarget()` ("How is 'production'
+reached?"), so a headless run from the desktop can't set it. Creating the
+env (`larakube env production`) also runs a wizard (ingress, managed
+services, hosts).
+
+Proposed LaraKube CLI work (no hidden flags: a real, answerable command):
+
+1. A headless way to bind an environment to an existing server, e.g.
+   `cloud:configure production --context=larakube-<ip>` answering the
+   "How is it reached?" prompt (via `RequiresFlagsWhenNonInteractive::flagOrPrompt`),
+   reusing `recordContextTarget()`, and creating the env with defaults
+   (`--ingress`, `--managed=` already exist) when it's missing.
+2. Desktop step 2: a server picker (ready stacks from `cloud:stacks`) that
+   runs it; the host step (`--only=hosts --web-hosts=`) and Deploy follow.
+3. Check `cloud:deploy production` runs headlessly end to end (sideload to a
+   single VPS) on `gcp-test-vps`.
+
 ## Checklist
 
 1. [x] User runs `./build`; retry the Laravel create (hello-world-desktop): worked.

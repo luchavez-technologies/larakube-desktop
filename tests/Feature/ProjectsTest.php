@@ -380,3 +380,14 @@ test('setting up a PHP app passes the email, and Laravel also its options minus 
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('a blueprint with no framework reads as Laravel, as the LaraKube CLI does', function () {
+    $sandbox = projectsSandbox();
+    File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'framework' => null, 'blueprints' => ['laravel']]));
+
+    expect(app(ProjectInspector::class)->inspect($sandbox['app']))
+        ->framework->toBe('laravel')
+        ->deployable->toBeTrue();
+
+    File::deleteDirectory($sandbox['home']);
+});

@@ -27,7 +27,8 @@ class ProjectInspector
     {
         $blueprint = $this->readJson("{$path}/.larakube.json");
         $local = $this->readJson("{$path}/.larakube.local.json");
-        $framework = is_string($blueprint['framework'] ?? null) ? $blueprint['framework'] : null;
+        // A blueprint with no framework is Laravel: the LaraKube CLI reads null that way.
+        $framework = is_string($blueprint['framework'] ?? null) ? $blueprint['framework'] : ($blueprint !== null ? 'laravel' : null);
         $host = $blueprint['environments'][$environment]['hosts']['web'] ?? null;
         $ip = $local['environments'][$environment]['cloud']['ip'] ?? null;
 
