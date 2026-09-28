@@ -22,14 +22,21 @@ LaraKube Cloud and Console relationships, workshop risks).
 
 ## Stack
 
-| | |
-|---|---|
-| Runtime | NativePHP Desktop **2.3.1** (Electron) with bundled static PHP 8.4 |
-| Backend | Laravel 13, Pest, Pint, Larastan |
-| Frontend | Inertia v3 + React 19 + Tailwind 4, Wayfinder route helpers, `vite-plus` (`vp`) for lint/format |
-| Fonts/colors | Geist / Geist Mono via the Vite font plugin (bunny, self-hosted at build), tokens in `resources/css/app.css` |
-| Design | Figma file `5lHxcb5oXNJGpCd4NotBw3`: "Foundations" page (tokens, components) and "Screens" page (Setup / Servers / Runs / Tools sections). Starter plan: 20 MCP calls/month, 3 pages/file. |
-| Database | SQLite. Dev runs use `database/nativephp.sqlite` (not `database.sqlite`). |
+|              |                                                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Runtime      | NativePHP Desktop **2.3.1** (Electron) with bundled static PHP 8.4                                                                                                                         |
+| Backend      | Laravel 13, Pest, Pint, Larastan                                                                                                                                                           |
+| Frontend     | Inertia v3 + React 19 + Tailwind 4, Wayfinder route helpers, `vite-plus` (`vp`) for lint/format                                                                                            |
+| Fonts/colors | Geist / Geist Mono via the Vite font plugin (bunny, self-hosted at build), tokens in `resources/css/app.css`                                                                               |
+| Design       | Figma file `5lHxcb5oXNJGpCd4NotBw3`: "Foundations" page (tokens, components) and "Screens" page (Setup / Servers / Runs / Tools sections). Starter plan: 20 MCP calls/month, 3 pages/file. |
+| Database     | SQLite. Dev runs use `database/nativephp.sqlite` (not `database.sqlite`).                                                                                                                  |
+
+## Before you push
+
+Run `composer ci:check`, the exact gate CI runs: `vp check` over the
+**whole** repo (not just `resources/js`), tsc, Pint, PHPStan and Pest.
+`nativephp/**` is NativePHP's regenerated Electron scaffold and is excluded
+from `vp` lint and format in `vite.config.ts`.
 
 ## Run it
 

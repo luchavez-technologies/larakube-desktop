@@ -3,6 +3,7 @@
 **Status:** Accepted (2026-09-28)
 
 ## Context
+
 Students deploy Laravel, Statamic, WordPress, Next.js, Vite, Astro and
 Docusaurus apps. These are exactly the `AppFramework::isDeployable()` set.
 `cloud:deploy` builds the image locally, then SSH-sideloads it (VPS) or
@@ -11,6 +12,7 @@ Actions) avoids a local container runtime but needs a GitHub account and
 login per student.
 
 ## Decision
+
 Build the deploy flow on local builds first (`cloud:deploy`). Setup checks
 for a container runtime: OrbStack/Docker Desktop on macOS, and Podman inside
 the LaraKube WSL distro on Windows. CI builds are a follow-up

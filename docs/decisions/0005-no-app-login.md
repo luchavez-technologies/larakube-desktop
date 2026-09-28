@@ -3,11 +3,13 @@
 **Status:** Accepted (2026-09-27)
 
 ## Context
+
 Real secrets (kubeconfig, SSH keys, provider CLI credentials) live on disk
 and are readable by anyone with the OS account. A login would add a server
 dependency and a workshop sign-up step without protecting them.
 
 ## Decision
+
 No login in the app. Cloud access uses the provider CLIs' own flows.
 Destructive actions need type-the-name confirmation. App-held tokens are
 passed per run and never stored. If storage is ever needed, use the OS

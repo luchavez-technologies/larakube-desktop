@@ -9,11 +9,12 @@ ad-hoc signed (`TeamIdentifier=not set`). NativePHP's notarize hook logs
 "appleId property is required" and skips notarization; that's harmless.
 
 ## How releases work (mirrors the CLI's ci.yml)
-| Trigger | Result |
-|---|---|
+
+| Trigger           | Result                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
 | push to `develop` | **Canary** prerelease: version `0.0.1-canary.<run_number>`, moving `canary` tag, release replaced each push |
-| push tag `v0.0.1` | **Stable** release `v0.0.1` (version = tag without `v`), immutable |
-| manual | `workflow_dispatch` (behaves like develop unless run on a tag) |
+| push tag `v0.0.1` | **Stable** release `v0.0.1` (version = tag without `v`), immutable                                          |
+| manual            | `workflow_dispatch` (behaves like develop unless run on a tag)                                              |
 
 Jobs: `checks` (composer setup + `composer ci:check`: Pest, `vp check`,
 `tsc`) → `build` matrix (macos-latest arm64 and x64, windows-latest x64,
@@ -23,12 +24,14 @@ ubuntu-latest x64) running `php artisan native:build <os> <arch>` → `publish`
 build` (public/build is gitignored).
 
 ## To turn it on
+
 1. Create the GitHub repo (e.g. `luchavez-technologies/larakube-desktop`), then
    `git remote add origin …`, push `main`, and create and push `develop`.
 2. Canary: merge `feat/desktop-spike` into `develop` and push.
 3. First stable: `git tag v0.0.1 && git push origin v0.0.1`.
 
 ## Known limits of these first builds
+
 - **Unsigned.** macOS: right-click → Open, or
   `xattr -dr com.apple.quarantine "/Applications/LaraKube Desktop.app"`.
   Windows SmartScreen: More info → Run anyway. The release notes say so.
@@ -38,6 +41,7 @@ build` (public/build is gitignored).
 - The app still needs the LaraKube CLI installed separately (install.sh or brew).
 
 ## Next: signing + updates
+
 - macOS: `NATIVEPHP_APPLE_ID`, `NATIVEPHP_APPLE_ID_PASS` (app-specific
   password), `NATIVEPHP_APPLE_TEAM_ID` as repo secrets on the mac build steps
   (Apple Developer account, $99/yr).
