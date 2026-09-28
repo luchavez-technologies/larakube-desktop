@@ -144,3 +144,65 @@ test('framework detection preselects the right deployable framework', function (
     'vite' => [['package.json' => '{"devDependencies":{"vite":"8"}}'], 'vite'],
     'unknown' => [['README.md' => ''], null],
 ]);
+
+test('a new project runs its framework\'s scaffolder in the chosen folder', function (string $framework, array $arguments) {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => $framework, 'parent' => $parent])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, ...$arguments, '--no-interaction'] && $cwd === $parent);
+
+    $project = Project::sole();
+    expect($project->path)->toBe("{$parent}/blog")
+        ->and(Run::sole()->kind)->toBe(RunKind::NewProject)
+        ->and(Run::sole()->meta)->toBe(['project' => (string) $project->id]);
+
+    File::deleteDirectory($sandbox['home']);
+})->with([
+    'laravel' => ['laravel', ['new', 'blog', '--fast', '--no-plex']],
+    'nextjs' => ['nextjs', ['nextjs:new', 'blog', '--fast', '--no-plex']],
+    'vite' => ['vite', ['vite:new', 'blog', '--fast']],
+    'astro' => ['astro', ['astro:new', 'blog', '--fast']],
+    'docusaurus' => ['docusaurus', ['docs:new', 'blog', '--fast']],
+]);
+
+test('a new project refuses bad names, taken folders and folders outside home', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+    ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), ['name' => 'My App', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
+    $this->post(route('projects.scaffold'), ['name' => 'console', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
+    $this->post(route('projects.scaffold'), ['name' => 'shop', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'statamic', 'parent' => $parent])->assertSessionHasErrors('framework');
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'vite', 'parent' => '/tmp'])->assertSessionHasErrors('parent');
+
+    expect(Project::count())->toBe(0)->and(Run::count())->toBe(0);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('choosing where to create a project keeps what was typed', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+
+    projectsPicker($parent);
+    $this->post(route('projects.choose-folder'), ['name' => 'blog', 'framework' => 'astro'])
+        ->assertRedirect(route('projects.create', ['name' => 'blog', 'framework' => 'astro', 'parent' => $parent]));
+
+    projectsPicker('/etc');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog'])->assertSessionHasErrors('parent');
+
+    $this->get(route('projects.create', ['parent' => $parent, 'name' => 'blog', 'framework' => 'astro']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/create')
+            ->where('parent', $parent)
+            ->where('name', 'blog')
+            ->where('framework', 'astro')
+            ->has('frameworks', 5));
+
+    File::deleteDirectory($sandbox['home']);
+});

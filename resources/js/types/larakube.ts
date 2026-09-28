@@ -31,6 +31,7 @@ export type RunKind =
     | 'remove-cluster-tool'
     | 'connect-domain'
     | 'enable-ssl'
+    | 'new-project'
     | 'init-project'
     | 'configure-host'
     | 'deploy-app';

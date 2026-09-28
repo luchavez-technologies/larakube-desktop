@@ -116,6 +116,16 @@ export default function ShowRun({ run }: { run: Run }) {
                                 View server
                             </Link>
                         )}
+                    {run.kind === 'new-project' &&
+                        run.status === 'succeeded' &&
+                        run.meta?.project && (
+                            <Link
+                                href={showProject(Number(run.meta.project)).url}
+                                className={buttonClass('primary')}
+                            >
+                                Open project
+                            </Link>
+                        )}
                     {!running && run.kind === 'destroy-server' && (
                         <Link
                             href={serversIndex().url}

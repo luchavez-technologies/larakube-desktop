@@ -15,9 +15,19 @@
       suggested messages are `feat(dns): …`, `feat(tls): add --json to
 tls:show`, `feat(tool): add --registry-only to tool:list`. Before
       committing in `cli/`, message any live peer Claude session.
+    - Also unstaged: `new` only offers `larakube up` when interactive
+      (`app/Commands/NewCommand.php` + `tests/Feature/NewCommandScriptedRunTest.php`).
+      Without it, Desktop's "New project" for Laravel starts a local cluster,
+      because `--no-interaction` answers the defaulted-yes prompt. Suggested
+      message: `fix(new): only offer larakube up to an interactive run`.
     - After committing, the user runs `./build` so Desktop's DNS/SSL status
       and the fast Tools list work.
 2. Desktop work in progress: plan 01. Projects screens are built; see its Progress section for the remaining 4 items.
+3. **New project (scaffolding) is built but not tried live.** Projects → New
+   project runs `new` (Laravel), `nextjs:new`, `vite:new`, `astro:new` or
+   `docs:new` with `--fast` in a chosen folder under `$HOME` (Laravel and
+   Next.js also get `--no-plex`). Try one of each on a machine with Docker
+   running. Statamic and WordPress are left out on purpose for now.
 
 ## Release status
 

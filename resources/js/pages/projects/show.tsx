@@ -33,11 +33,13 @@ export default function ShowProject({
     server,
     frameworks,
     runs,
+    scaffold,
 }: {
     project: Project;
     server: Server | null;
     frameworks: Record<string, string>;
     runs: RecentRun[];
+    scaffold: { id: number; status: RunStatus } | null;
 }) {
     const ready =
         project.initialized &&
@@ -78,11 +80,32 @@ export default function ShowProject({
                 }
             />
 
-            {!project.exists ? (
+            {!project.exists && scaffold?.status === 'running' ? (
+                <Card>
+                    <p className="text-sm">
+                        This app is still being created.{' '}
+                        <Link
+                            href={showRun(scaffold.id).url}
+                            className="font-medium text-brand hover:underline"
+                        >
+                            Watch its progress
+                        </Link>
+                    </p>
+                </Card>
+            ) : !project.exists ? (
                 <Card tone="error">
                     <p className="text-sm">
-                        This folder no longer exists. Remove the project, or
-                        move the folder back.
+                        {scaffold
+                            ? "This app couldn't be created. "
+                            : 'This folder no longer exists. Remove the project, or move the folder back.'}
+                        {scaffold && (
+                            <Link
+                                href={showRun(scaffold.id).url}
+                                className="font-medium underline"
+                            >
+                                See what went wrong
+                            </Link>
+                        )}
                     </p>
                 </Card>
             ) : (

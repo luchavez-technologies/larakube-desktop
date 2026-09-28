@@ -3,7 +3,7 @@ import { buttonClass } from '@/components/button';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
-import { show, store } from '@/routes/projects';
+import { create, show, store } from '@/routes/projects';
 import type { Project } from '@/types/larakube';
 
 export default function ProjectsIndex({ projects }: { projects: Project[] }) {
@@ -15,14 +15,22 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
                 title="Projects"
                 subtitle="Your app folders. Link one to a server and deploy it: Laravel, Statamic, WordPress, Next.js, Vite, Astro and Docusaurus."
                 actions={
-                    <Link
-                        href={store().url}
-                        method="post"
-                        as="button"
-                        className={buttonClass('primary')}
-                    >
-                        Add project
-                    </Link>
+                    <div className="flex items-center gap-2.5">
+                        <Link
+                            href={store().url}
+                            method="post"
+                            as="button"
+                            className={buttonClass('secondary')}
+                        >
+                            Add existing folder
+                        </Link>
+                        <Link
+                            href={create().url}
+                            className={buttonClass('primary')}
+                        >
+                            New project
+                        </Link>
+                    </div>
                 }
             />
             {errors.path && (
@@ -36,7 +44,8 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
                         No projects yet
                     </p>
                     <p className="mx-auto mt-1.5 max-w-sm text-sm text-soft">
-                        Choose the folder of an app you want to put online.
+                        Start a new Laravel, Next.js, Vite, Astro or Docusaurus
+                        app, or add the folder of one you already have.
                     </p>
                 </div>
             ) : (

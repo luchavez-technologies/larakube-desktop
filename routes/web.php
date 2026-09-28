@@ -28,6 +28,9 @@ Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->na
 
 Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
 Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+Route::get('/projects/create', [ProjectController::class, 'create'])->name('projects.create');
+Route::post('/projects/create/folder', [ProjectController::class, 'chooseFolder'])->name('projects.choose-folder');
+Route::post('/projects/create', [ProjectController::class, 'scaffold'])->name('projects.scaffold');
 Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
 Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');

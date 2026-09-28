@@ -12,6 +12,8 @@ enum RunKind: string
     case RemoveClusterTool = 'remove-cluster-tool';
     case ConnectDomain = 'connect-domain';
     case EnableSsl = 'enable-ssl';
+    /** A brand-new app scaffolded by one of the CLI's `*:new` commands. */
+    case NewProject = 'new-project';
     case InitProject = 'init-project';
     case ConfigureHost = 'configure-host';
     case DeployApp = 'deploy-app';
