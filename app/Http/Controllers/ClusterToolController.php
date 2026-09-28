@@ -38,11 +38,20 @@ class ClusterToolController extends Controller
         $stack = $this->readyServer($server);
         session(['tools.server' => $server]);
 
+        $context = (string) $stack['context'];
+        $last = $this->tools->lastVerified($context);
+
+        // A fresh verified list renders at once. Otherwise the last one (or,
+        // on a first visit, the registry) shows while the live check runs.
         return Inertia::render('tools/index', [
             'server' => $stack,
             'servers' => array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready')),
-            'registered' => Inertia::defer(fn (): ?array => $this->tools->registered((string) $stack['context']), 'registered'),
-            'tools' => Inertia::defer(fn (): ?array => $this->tools->forContext((string) $stack['context']), 'tools'),
+            'lastVerified' => $last['tools'] ?? null,
+            'checkedAt' => isset($last['checkedAt']) ? date(DATE_ATOM, $last['checkedAt']) : null,
+            ...($last === null ? ['registered' => Inertia::defer(fn (): ?array => $this->tools->registered($context), 'registered')] : []),
+            'tools' => $last !== null && $this->tools->isFresh($last)
+                ? $last['tools']
+                : Inertia::defer(fn (): ?array => $this->tools->forContext($context), 'tools'),
             'installing' => $this->installingTools($server),
         ]);
     }

@@ -8,12 +8,17 @@ use Illuminate\Support\Facades\Process;
 /**
  * Cluster Tools and their install state on one server, from
  * `larakube tool:list --json --context=…`. That call makes a couple of kubectl
- * round trips per tool (tens of seconds against a remote server), so results
- * are cached per context and dropped whenever an install or removal finishes.
+ * round trips per tool (tens of seconds against a remote server), so the last
+ * verified list is kept per context and only re-checked once it is older than
+ * FRESH_SECONDS, or when an install, a removal or Refresh marks it stale. A
+ * stale list is still shown while the new check runs.
  */
 class ToolCatalog
 {
-    public const TTL_SECONDS = 600;
+    public const FRESH_SECONDS = 1800;
+
+    /** How long the registry-only list, used before any verified list exists, is kept. */
+    private const REGISTERED_TTL_SECONDS = 600;
 
     public function __construct(private ToolLocator $locator) {}
 
@@ -22,7 +27,47 @@ class ToolCatalog
      */
     public function forContext(string $context): ?array
     {
-        return $this->remember($this->key($context), fn (): ?array => $this->load($context, registryOnly: false));
+        $last = $this->lastVerified($context);
+
+        if ($last !== null && $this->isFresh($last)) {
+            return $last['tools'];
+        }
+
+        $tools = $this->load($context, registryOnly: false);
+
+        if ($tools !== null) {
+            Cache::forever($this->key($context), ['tools' => $tools, 'checkedAt' => now()->getTimestamp()]);
+        }
+
+        return $tools;
+    }
+
+    /**
+     * The last verified list, however old, and when it was checked (null
+     * once marked stale).
+     *
+     * @return array{tools: list<array<string, mixed>>, checkedAt: int|null}|null
+     */
+    public function lastVerified(string $context): ?array
+    {
+        $cached = Cache::get($this->key($context));
+
+        if (! is_array($cached) || ! is_array($cached['tools'] ?? null) || ! array_is_list($cached['tools'])) {
+            return null;
+        }
+
+        /** @var list<array<string, mixed>> $tools */
+        $tools = $cached['tools'];
+
+        return ['tools' => $tools, 'checkedAt' => is_int($cached['checkedAt'] ?? null) ? $cached['checkedAt'] : null];
+    }
+
+    /**
+     * @param  array{tools: list<array<string, mixed>>, checkedAt: int|null}  $last
+     */
+    public function isFresh(array $last): bool
+    {
+        return $last['checkedAt'] !== null && now()->getTimestamp() - $last['checkedAt'] < self::FRESH_SECONDS;
     }
 
     /**
@@ -34,15 +79,7 @@ class ToolCatalog
      */
     public function registered(string $context): ?array
     {
-        return $this->remember($this->key($context).':registered', fn (): ?array => $this->load($context, registryOnly: true));
-    }
-
-    /**
-     * @param  callable(): (list<array<string, mixed>>|null)  $load
-     * @return list<array<string, mixed>>|null
-     */
-    private function remember(string $key, callable $load): ?array
-    {
+        $key = $this->key($context).':registered';
         $cached = Cache::get($key);
 
         if (is_array($cached) && array_is_list($cached)) {
@@ -50,10 +87,10 @@ class ToolCatalog
             return $cached;
         }
 
-        $tools = $load();
+        $tools = $this->load($context, registryOnly: true);
 
         if ($tools !== null) {
-            Cache::put($key, $tools, self::TTL_SECONDS);
+            Cache::put($key, $tools, self::REGISTERED_TTL_SECONDS);
         }
 
         return $tools;
@@ -83,19 +120,18 @@ class ToolCatalog
      */
     public function cached(string $context): ?array
     {
-        $cached = Cache::get($this->key($context));
-
-        if (! is_array($cached) || ! array_is_list($cached)) {
-            return null;
-        }
-
-        /** @var list<array<string, mixed>> $cached */
-        return $cached;
+        return $this->lastVerified($context)['tools'] ?? null;
     }
 
+    /** Marks the verified list stale so the next view re-checks, keeping it to show meanwhile. */
     public function forget(string $context): void
     {
-        Cache::forget($this->key($context));
+        $last = $this->lastVerified($context);
+
+        if ($last !== null) {
+            Cache::forever($this->key($context), ['tools' => $last['tools'], 'checkedAt' => null]);
+        }
+
         Cache::forget($this->key($context).':registered');
     }
 

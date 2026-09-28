@@ -1,5 +1,5 @@
 import { Form, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -18,6 +18,8 @@ type Props = {
     server: Server;
     servers: Server[];
     registered?: ClusterTool[] | null;
+    lastVerified: ClusterTool[] | null;
+    checkedAt: string | null;
     tools?: ClusterTool[] | null;
     installing: Record<string, number>;
 };
@@ -58,13 +60,26 @@ export default function ToolsIndex({
     server,
     servers,
     registered,
+    lastVerified,
+    checkedAt,
     tools: verifiedTools,
     installing,
 }: Props) {
-    // The registry answers in about a second; the live check can take half a
-    // minute. Draw from the registry, then swap in the verified list.
+    // The live check can take half a minute, so draw the last verified list
+    // (or, the first time, the registry) and swap in the new one when it lands.
     const verifying = verifiedTools === undefined;
-    const tools = verifiedTools ?? registered;
+    const tools = verifiedTools ?? lastVerified ?? registered;
+    // A check that lands during this visit is newer than the checkedAt prop.
+    const [seenTools, setSeenTools] = useState(verifiedTools);
+    const [landedAt, setLandedAt] = useState<string | null>(null);
+
+    if (seenTools !== verifiedTools) {
+        setSeenTools(verifiedTools);
+
+        if (seenTools === undefined && verifiedTools) {
+            setLandedAt(new Date().toISOString());
+        }
+    }
     const [installingTool, setInstallingTool] = useState<ClusterTool | null>(
         null,
     );
@@ -172,6 +187,8 @@ export default function ToolsIndex({
                             server={server.name}
                             verifying={verifying}
                             failed={verifiedTools === null}
+                            hasLastCheck={lastVerified !== null}
+                            checkedAt={landedAt ?? checkedAt}
                         />
                         <input
                             type="search"
@@ -260,11 +277,21 @@ function VerifyStatus({
     server,
     verifying,
     failed,
+    hasLastCheck,
+    checkedAt,
 }: {
     server: string;
     verifying: boolean;
     failed: boolean;
+    hasLastCheck: boolean;
+    checkedAt: string | null;
 }) {
+    // Re-checking a list we already have is quiet; only a first check, with
+    // nothing verified yet, gets the pill.
+    if (verifying && hasLastCheck) {
+        return <span className="text-xs text-soft">Checking for changes…</span>;
+    }
+
     if (verifying) {
         return (
             <StatusPill tone="busy">{`Verifying with ${server}…`}</StatusPill>
@@ -274,12 +301,37 @@ function VerifyStatus({
     if (failed) {
         return (
             <StatusPill tone="warn">
-                Couldn't verify, showing the registry
+                {hasLastCheck
+                    ? "Couldn't check, showing the last check"
+                    : "Couldn't verify, showing the registry"}
             </StatusPill>
         );
     }
 
-    return null;
+    return <CheckedAgo checkedAt={checkedAt} />;
+}
+
+/** "Checked 12 min ago", ticking while the page is open. */
+function CheckedAgo({ checkedAt }: { checkedAt: string | null }) {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+
+        return () => window.clearInterval(timer);
+    }, []);
+
+    if (checkedAt === null) {
+        return <span className="text-xs text-soft">Checked just now</span>;
+    }
+
+    const minutes = Math.floor((now - new Date(checkedAt).getTime()) / 60_000);
+
+    return (
+        <span className="text-xs text-soft">
+            {minutes < 1 ? 'Checked just now' : `Checked ${minutes} min ago`}
+        </span>
+    );
 }
 
 function ToolIcon({ tool }: { tool: ClusterTool }) {

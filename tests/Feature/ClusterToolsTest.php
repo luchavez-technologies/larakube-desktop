@@ -101,14 +101,61 @@ test('the fast registry list and the verified list are separate deferred props',
     File::deleteDirectory($bin);
 });
 
-test('forgetting a server drops both the registry list and the verified list', function () {
-    Cache::put('cluster-tools:ctx', [['tool' => 'sso']]);
+test('forgetting a server marks its verified list stale but keeps it to show meanwhile', function () {
+    Cache::forever('cluster-tools:ctx', ['tools' => [['tool' => 'sso']], 'checkedAt' => now()->getTimestamp()]);
     Cache::put('cluster-tools:ctx:registered', [['tool' => 'sso']]);
 
     app(ToolCatalog::class)->forget('ctx');
 
-    expect(Cache::has('cluster-tools:ctx'))->toBeFalse()
+    expect(app(ToolCatalog::class)->lastVerified('ctx'))->toBe(['tools' => [['tool' => 'sso']], 'checkedAt' => null])
         ->and(Cache::has('cluster-tools:ctx:registered'))->toBeFalse();
+});
+
+test('a fresh verified list renders at once, with no live check', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => clusterToolsRows(), 'checkedAt' => now()->subMinutes(5)->getTimestamp()]);
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('tools', 2)
+            ->has('lastVerified', 2)
+            ->missing('registered')
+            ->whereNot('checkedAt', null));
+
+    Process::assertNotRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'tool:list'));
+
+    File::deleteDirectory($bin);
+});
+
+test('an old verified list shows while the live check re-runs in the background', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => [clusterToolsRows()[0]], 'checkedAt' => now()->subSeconds(ToolCatalog::FRESH_SECONDS + 60)->getTimestamp()]);
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('lastVerified', 1)
+            ->missing('registered')
+            ->missing('tools')
+            ->loadDeferredProps('tools', fn (AssertableInertia $reload) => $reload->has('tools', 2)));
+
+    expect(app(ToolCatalog::class)->lastVerified('larakube-203.0.113.21')['tools'])->toHaveCount(2);
+
+    File::deleteDirectory($bin);
+});
+
+test('Refresh re-checks a fresh list', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => clusterToolsRows(), 'checkedAt' => now()->getTimestamp()]);
+
+    $this->post(route('servers.tools.refresh', 'workshop-demo'))->assertRedirect(route('servers.tools.index', 'workshop-demo'));
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('lastVerified', 2)->missing('tools'));
+
+    File::deleteDirectory($bin);
 });
 
 test('an unfinished server has no tools page', function () {
@@ -162,13 +209,13 @@ test('removing needs the tool name typed and only applies to installed tools', f
     File::deleteDirectory($bin);
 });
 
-test('a finished install drops that server\'s cached tool list', function () {
-    Cache::put('cluster-tools:larakube-203.0.113.21', clusterToolsRows());
+test('a finished install marks that server\'s tool list stale', function () {
+    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => clusterToolsRows(), 'checkedAt' => now()->getTimestamp()]);
     $run = Run::create(['label' => 'Install CRM', 'kind' => RunKind::InstallClusterTool, 'subject' => 'crm', 'meta' => ['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm'], 'command' => ['larakube']]);
 
     event(new ProcessExited($run->alias(), 0));
 
-    expect(Cache::has('cluster-tools:larakube-203.0.113.21'))->toBeFalse();
+    expect(app(ToolCatalog::class)->lastVerified('larakube-203.0.113.21')['checkedAt'])->toBeNull();
 });
 
 test('open hands https addresses to the default browser and rejects anything else', function () {
