@@ -165,7 +165,8 @@ return [
      * Define your own scripts to run before and after the build process.
      */
     'prebuild' => [
-        // 'npm run build',
+        // public/build is gitignored, so every packaged build compiles the frontend first.
+        'npm run build',
     ],
 
     'postbuild' => [

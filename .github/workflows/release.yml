@@ -1,0 +1,153 @@
+name: release
+
+# develop  → canary prerelease under the moving `canary` tag (replaced each push)
+# v* tag   → stable release (e.g. v0.0.1), immutable
+# Mirrors the LaraKube CLI's release flow.
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.target.outputs.version }}
+      tag: ${{ steps.target.outputs.tag }}
+      is_canary: ${{ steps.target.outputs.is_canary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Setup application
+        run: composer setup
+
+      - name: Tests, lint and types
+        run: composer ci:check
+
+      # electron-builder needs SemVer: stable = the tag without "v", canary =
+      # a prerelease of the next patch so it never outranks a real release.
+      - name: Release target
+        id: target
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "is_canary=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.1-canary.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "tag=canary" >> "$GITHUB_OUTPUT"
+            echo "is_canary=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: mac, arch: arm64 }
+          - { os: macos-latest, target: mac, arch: x64 }
+          - { os: windows-latest, target: win, arch: x64 }
+          - { os: ubuntu-latest, target: linux, arch: x64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      NATIVEPHP_APP_VERSION: ${{ needs.checks.outputs.version }}
+      # Auto-update needs signed macOS builds; off until plan 04 lands.
+      NATIVEPHP_UPDATER_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          composer install --no-interaction --prefer-dist
+          cp .env.example .env
+          php artisan key:generate
+          echo "NATIVEPHP_APP_VERSION=${NATIVEPHP_APP_VERSION}" >> .env
+          echo "NATIVEPHP_UPDATER_ENABLED=false" >> .env
+          npm ci
+
+      - name: Build ${{ matrix.target }}-${{ matrix.arch }}
+        shell: bash
+        run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p out
+          find nativephp/electron/dist -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} out/ \;
+          ls -la out
+          test -n "$(ls -A out)"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: larakube-desktop-${{ matrix.target }}-${{ matrix.arch }}
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: [checks, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # Canary re-points its moving tag and replaces its release, so there is
+      # always exactly one; a v* release is created once and never moved.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.checks.outputs.tag }}
+          VERSION: ${{ needs.checks.outputs.version }}
+          IS_CANARY: ${{ needs.checks.outputs.is_canary }}
+        run: |
+          set -e
+          printf 'LaraKube Desktop %s\n\nUnsigned build: on macOS, right-click the app and choose Open the first time (or run `xattr -dr com.apple.quarantine "/Applications/LaraKube Desktop.app"`). On Windows, choose More info → Run anyway.\n' "$VERSION" > notes.md
+          if [ "$IS_CANARY" = "true" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -f "$TAG" "$GITHUB_SHA"
+            git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
+            gh release delete "$TAG" --yes || true
+            gh release create "$TAG" artifacts/* --title "Canary $VERSION ($(git rev-parse --short "$GITHUB_SHA"))" --notes-file notes.md --prerelease
+          else
+            gh release create "$TAG" artifacts/* --title "LaraKube Desktop $TAG" --notes-file notes.md
+          fi

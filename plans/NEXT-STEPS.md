@@ -23,6 +23,7 @@
 
 | # | Plan | Why now |
 |---|---|---|
+| 04 | `active/04-packaging-signing-updates.md`: **release workflow (canary + v0.0.1)** | Workflow written; needs a GitHub remote. Top priority (user, 2026-09-28). |
 | 01 | `active/01-deploy-app-local-build.md`: Projects + Deploy | The workshop's core task. Decided: local builds first. |
 | 03 | `active/03-windows-wsl-spike.md`: Windows | Most workshop students are on Windows. Biggest risk. |
 | 02 | `active/02-ci-builds.md`: GitHub Actions deploys | Removes the container-runtime requirement. |
