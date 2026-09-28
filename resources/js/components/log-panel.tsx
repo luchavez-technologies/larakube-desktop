@@ -47,18 +47,23 @@ export default function LogPanel({
         // A redrawn line (carriage return) only shows its last state.
         .map((line) => line.split('\r').pop() ?? '')
         .filter((line) => !isBanner(line))
+        // Without a terminal a spinner prints every frame as a new line, often
+        // with blank lines between: keep only the last frame of the message.
+        .filter((line, index, all) => {
+            const message = spinnerless(line);
+
+            if (message === '') return true;
+
+            let next = index + 1;
+
+            while (next < all.length && all[next].trim() === '') next++;
+
+            return next === all.length || spinnerless(all[next]) !== message;
+        })
         .filter(
             (line, index, all) =>
                 line.trim() !== '' ||
                 (index > 0 && all[index - 1].trim() !== ''),
-        )
-        // Without a terminal a spinner prints every frame as a new line:
-        // keep only the last frame of a run of the same message.
-        .filter(
-            (line, index, all) =>
-                index === all.length - 1 ||
-                spinnerless(line) === '' ||
-                spinnerless(line) !== spinnerless(all[index + 1]),
         );
 
     useEffect(() => {
