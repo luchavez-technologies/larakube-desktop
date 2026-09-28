@@ -30,14 +30,22 @@ export type RunKind =
     | 'install-cluster-tool'
     | 'remove-cluster-tool'
     | 'connect-domain'
-    | 'enable-ssl';
+    | 'enable-ssl'
+    | 'init-project'
+    | 'configure-host'
+    | 'deploy-app';
 
 export type Run = {
     id: number;
     label: string;
     kind: RunKind | null;
     subject: string | null;
-    meta: { server?: string; context?: string; tool?: string } | null;
+    meta: {
+        server?: string;
+        context?: string;
+        tool?: string;
+        project?: string;
+    } | null;
     status: RunStatus;
     exitCode: number | null;
     output: string;
@@ -108,3 +116,16 @@ export function describeTool(label: string): {
 export function toolName(tool: Pick<ClusterTool, 'brand'>): string {
     return tool.brand.replace(/\s*\[[^\]]*\]$/, '');
 }
+
+export type Project = {
+    id: number;
+    path: string;
+    exists: boolean;
+    initialized: boolean;
+    name: string;
+    framework: string | null;
+    detectedFramework: string | null;
+    webHost: string | null;
+    serverIp: string | null;
+    deployable: boolean;
+};

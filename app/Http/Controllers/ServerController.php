@@ -6,11 +6,13 @@ use App\Enums\RunKind;
 use App\Http\Requests\CloudflareStepRequest;
 use App\Http\Requests\DestroyServerRequest;
 use App\Http\Requests\StoreServerRequest;
+use App\Models\Project;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,10 +25,13 @@ class ServerController extends Controller
         ]);
     }
 
-    public function create(ReadinessCheck $readiness): Response
+    public function create(Request $request, ReadinessCheck $readiness): Response
     {
+        $project = $request->integer('project') > 0 ? Project::find($request->integer('project')) : null;
+
         return Inertia::render('servers/create', [
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
+            'project' => $project ? ['id' => $project->id, 'name' => basename($project->path)] : null,
         ]);
     }
 
@@ -34,6 +39,7 @@ class ServerController extends Controller
     {
         $provider = $request->string('provider')->toString();
         $stackName = $request->string('stack_name')->toString();
+        $project = $request->filled('project_id') ? Project::find($request->integer('project_id')) : null;
 
         $run = $runner->start(
             label: "Create server {$stackName}",
@@ -45,10 +51,14 @@ class ServerController extends Controller
                 '--region='.$request->string('region'),
                 '--size='.$request->string('size'),
                 '--json',
+                // Inside a project, the environment argument binds it to the new server.
+                ...($project !== null ? [ProjectController::ENVIRONMENT] : []),
             ],
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::CreateServer,
             subject: $stackName,
+            meta: $project !== null ? ['project' => (string) $project->id] : [],
+            cwd: $project?->path,
         );
 
         return to_route('runs.show', $run);

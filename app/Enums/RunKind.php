@@ -12,6 +12,9 @@ enum RunKind: string
     case RemoveClusterTool = 'remove-cluster-tool';
     case ConnectDomain = 'connect-domain';
     case EnableSsl = 'enable-ssl';
+    case InitProject = 'init-project';
+    case ConfigureHost = 'configure-host';
+    case DeployApp = 'deploy-app';
 
     public function changesClusterTools(): bool
     {

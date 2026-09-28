@@ -8,6 +8,7 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
 import { readiness } from '@/routes';
+import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
 import { index as serversIndex, show as showServer } from '@/routes/servers';
 import { index as toolsIndex } from '@/routes/servers/tools';
@@ -16,6 +17,13 @@ import type { Run } from '@/types/larakube';
 /** Where this run came from, so its page always has a way back. */
 function backLink(run: Run): { href: string; label: string } {
     const server = run.meta?.server ?? null;
+
+    if (run.meta?.project) {
+        return {
+            href: showProject(Number(run.meta.project)).url,
+            label: 'Project',
+        };
+    }
 
     switch (run.kind) {
         case 'create-server':

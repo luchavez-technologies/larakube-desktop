@@ -17,7 +17,7 @@
      committing in `cli/`, message any live peer Claude session.
    - After committing, the user runs `./build` so Desktop's DNS/SSL status
      and the fast Tools list work.
-2. Desktop work in progress: see plan 01.
+2. Desktop work in progress: plan 01. Projects screens are built; see its Progress section for the remaining 4 items.
 
 ## Backlog, in order
 

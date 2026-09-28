@@ -13,8 +13,10 @@ const tokenProviders = ['do', 'hetzner'];
 
 export default function CreateServer({
     providers,
+    project,
 }: {
     providers?: Provider[] | null;
+    project: { id: number; name: string } | null;
 }) {
     return (
         <AppLayout title="Create a server">
@@ -22,6 +24,12 @@ export default function CreateServer({
                 title="Create a server"
                 subtitle="A single-node Kubernetes server (k3s), hardened and ready for Cluster Tools. Takes about 5 minutes and is billed by your provider."
             />
+            {project && (
+                <p className="mb-5 max-w-3xl rounded-lg bg-busy-tint px-3 py-2 text-sm text-busy">
+                    For project {project.name}: its production environment will
+                    be linked to this new server.
+                </p>
+            )}
             <Deferred
                 data="providers"
                 fallback={
@@ -29,7 +37,10 @@ export default function CreateServer({
                 }
             >
                 {providers ? (
-                    <ServerForm providers={providers} />
+                    <ServerForm
+                        providers={providers}
+                        projectId={project?.id ?? null}
+                    />
                 ) : (
                     <p className="text-sm text-soft">
                         The LaraKube CLI isn't ready yet. Finish Setup first.
@@ -40,7 +51,13 @@ export default function CreateServer({
     );
 }
 
-function ServerForm({ providers }: { providers: Provider[] }) {
+function ServerForm({
+    providers,
+    projectId,
+}: {
+    providers: Provider[];
+    projectId: number | null;
+}) {
     const initial =
         providers.find((provider) => provider.credentials.ready) ??
         providers[0];
@@ -50,6 +67,7 @@ function ServerForm({ providers }: { providers: Provider[] }) {
         region: initial.defaultRegion,
         size: initial.defaultVpsSize,
         api_token: '',
+        project_id: projectId,
     });
 
     const provider =

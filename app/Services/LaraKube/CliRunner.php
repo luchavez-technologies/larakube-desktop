@@ -19,9 +19,10 @@ class CliRunner
     /**
      * @param  list<string>  $arguments  CLI arguments after the binary, without secrets
      * @param  array<string, string>  $secretEnvironment  credentials passed by env, never stored on the Run
-     * @param  array<string, string>  $meta  what the run acts on (server, context, tool), for the UI and cache invalidation
+     * @param  array<string, string>  $meta  what the run acts on (server, context, tool, project), for the UI and cache invalidation
+     * @param  string|null  $cwd  a project folder, for commands that act on the project in the current directory
      */
-    public function start(string $label, array $arguments, array $secretEnvironment = [], ?RunKind $kind = null, ?string $subject = null, array $meta = []): Run
+    public function start(string $label, array $arguments, array $secretEnvironment = [], ?RunKind $kind = null, ?string $subject = null, array $meta = [], ?string $cwd = null): Run
     {
         $cli = $this->locator->find('larakube');
 
@@ -44,7 +45,7 @@ class CliRunner
         ChildProcess::start(
             cmd: $isolated['command'],
             alias: $run->alias(),
-            cwd: storage_path('app'),
+            cwd: $cwd ?? storage_path('app'),
             env: $isolated['environment'],
         );
 

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import LogoMark from '@/components/logo-mark';
 import { cn } from '@/lib/utils';
 import { readiness, tools } from '@/routes';
+import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
 
@@ -31,6 +32,14 @@ const navigation: NavItem[] = [
         active: (url) => url.startsWith('/servers') && !url.includes('/tools'),
         accent: 'bg-servers',
         glyph: '↑',
+    },
+    {
+        label: 'Projects',
+        description: 'Deploy your apps',
+        href: projectsIndex().url,
+        active: (url) => url.startsWith('/projects'),
+        accent: 'bg-brand',
+        glyph: '▲',
     },
     {
         label: 'Tools',

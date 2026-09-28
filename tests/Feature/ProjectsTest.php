@@ -1,0 +1,146 @@
+<?php
+
+use App\Enums\RunKind;
+use App\Models\Project;
+use App\Models\Run;
+use App\Services\FolderPicker;
+use App\Services\LaraKube\ProjectInspector;
+use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
+use Inertia\Testing\AssertableInertia;
+use Native\Desktop\Facades\ChildProcess;
+
+/**
+ * A fake HOME holding a fake larakube and an app folder, so projects pass
+ * the "inside your home folder" check.
+ *
+ * @return array{home: string, bin: string, app: string}
+ */
+function projectsSandbox(): array
+{
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    $bin = "{$home}/bin";
+    $app = "{$home}/code/shop";
+    File::ensureDirectoryExists($bin);
+    File::ensureDirectoryExists($app);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    $_SERVER['HOME'] = realpath($home);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    return ['home' => realpath($home), 'bin' => $bin, 'app' => realpath($app)];
+}
+
+function projectsPicker(?string $path): void
+{
+    app()->instance(FolderPicker::class, new class($path) extends FolderPicker
+    {
+        public function __construct(private ?string $path) {}
+
+        public function pick(string $title): ?string
+        {
+            return $this->path;
+        }
+    });
+}
+
+function projectsStacks(): void
+{
+    Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+        ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+    ]]))]);
+}
+
+test('adding a project takes a folder inside the home folder only', function () {
+    $sandbox = projectsSandbox();
+
+    projectsPicker('/etc');
+    $this->post(route('projects.store'))->assertSessionHasErrors('path');
+    expect(Project::count())->toBe(0);
+
+    projectsPicker($sandbox['app']);
+    $this->post(route('projects.store'))->assertRedirect(route('projects.show', Project::sole()));
+    expect(Project::sole()->path)->toBe($sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a project page reads its framework, host and bound server from the .larakube files', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'framework' => 'astro', 'environments' => ['production' => ['hosts' => ['web' => 'shop.example.com']]]]));
+    File::put("{$sandbox['app']}/.larakube.local.json", json_encode(['environments' => ['production' => ['cloud' => ['ip' => '203.0.113.21']]]]));
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->get(route('projects.show', $project))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->where('project.framework', 'astro')
+            ->where('project.webHost', 'shop.example.com')
+            ->where('project.deployable', true)
+            ->where('server.name', 'workshop-demo'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('set up, address and deploy run the CLI inside the project folder', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.init', $project), ['framework' => 'rails'])->assertSessionHasErrors('framework');
+    $this->post(route('projects.init', $project), ['framework' => 'vite'])->assertRedirect();
+    $this->post(route('projects.host', $project), ['host' => 'https://shop.example.com'])->assertSessionHasErrors('host');
+    $this->post(route('projects.host', $project), ['host' => 'shop.example.com'])->assertRedirect();
+    $this->post(route('projects.deploy', $project))->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    foreach ([
+        ['init', '--framework=vite', '--fast'],
+        ['cloud:configure', 'production', '--only=hosts', '--web-hosts=shop.example.com'],
+        ['cloud:deploy', 'production'],
+    ] as $arguments) {
+        $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, ...$arguments, '--no-interaction'] && $cwd === $sandbox['app']);
+    }
+
+    expect(Run::pluck('kind')->all())->toBe([RunKind::InitProject, RunKind::ConfigureHost, RunKind::DeployApp])
+        ->and(Run::first()->subject)->toBe("project:{$project->id}");
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('creating a server for a project binds its production environment', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), ['provider' => 'do', 'stack_name' => 'shop-server', 'region' => 'sgp1', 'size' => 's-1vcpu-2gb', 'api_token' => 't', 'project_id' => $project->id])
+        ->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => end($cmd) === '--no-interaction'
+        && $cmd[count($cmd) - 2] === 'production'
+        && $cwd === $sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('framework detection preselects the right deployable framework', function (array $files, ?string $expected) {
+    $sandbox = projectsSandbox();
+    foreach ($files as $name => $contents) {
+        File::put("{$sandbox['app']}/{$name}", $contents);
+    }
+
+    expect(app(ProjectInspector::class)->detect($sandbox['app']))->toBe($expected);
+
+    File::deleteDirectory($sandbox['home']);
+})->with([
+    'laravel' => [['artisan' => '', 'composer.json' => '{"require":{"laravel/framework":"^13"}}'], 'laravel'],
+    'statamic' => [['artisan' => '', 'composer.json' => '{"require":{"statamic/cms":"^6"}}'], 'statamic'],
+    'wordpress' => [['wp-config-sample.php' => ''], 'wordpress'],
+    'nextjs' => [['package.json' => '{"dependencies":{"next":"16"}}'], 'nextjs'],
+    'docusaurus' => [['package.json' => '{"dependencies":{"@docusaurus/core":"3"}}'], 'docusaurus'],
+    'astro' => [['package.json' => '{"dependencies":{"astro":"5"}}'], 'astro'],
+    'vite' => [['package.json' => '{"devDependencies":{"vite":"8"}}'], 'vite'],
+    'unknown' => [['README.md' => ''], null],
+]);

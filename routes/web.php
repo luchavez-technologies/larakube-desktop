@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ClusterToolController;
 use App\Http\Controllers\OpenExternalController;
+use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
@@ -24,6 +25,14 @@ Route::get('/servers/{server}', [ServerController::class, 'show'])->name('server
 Route::delete('/servers/{server}', [ServerController::class, 'destroy'])->name('servers.destroy');
 Route::post('/servers/{server}/dns', [ServerController::class, 'connectDomain'])->name('servers.dns');
 Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->name('servers.tls');
+
+Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
+Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
+Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');
+Route::post('/projects/{project}/host', [ProjectController::class, 'host'])->name('projects.host');
+Route::post('/projects/{project}/deploy', [ProjectController::class, 'deploy'])->name('projects.deploy');
 
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
 Route::get('/servers/{server}/tools', [ClusterToolController::class, 'index'])->name('servers.tools.index');

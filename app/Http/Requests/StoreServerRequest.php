@@ -34,6 +34,7 @@ class StoreServerRequest extends FormRequest
             'region' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9-]+$/'],
             'size' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9.-]+$/'],
             'api_token' => ['nullable', 'string', 'max:200'],
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
         ];
     }
 

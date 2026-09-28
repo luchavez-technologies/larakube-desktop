@@ -1,6 +1,30 @@
 # Plan 01 — Projects + Deploy an app (local build)
 
 **Status:** In progress (2026-09-28). The decision is option A in ADR 0008.
+
+## Progress
+- ✅ **Built (commit after 242fe55):** Projects section (sidebar), `projects`
+  table (path only; everything else is read from `.larakube.json` /
+  `.larakube.local.json` by `ProjectInspector`), folder picker (restricted to
+  $HOME), framework detection for the 7 deployable frameworks, project page
+  with steps **Set up → Server → Address → Deploy**. `CliRunner::start()`
+  has a `cwd`. RunKinds `init-project`, `configure-host`, `deploy-app`.
+  "Create a server for this project" runs `cloud:create … production`
+  inside the folder, which binds the env. Project runs link back to their
+  project. 12 new tests (`tests/Feature/ProjectsTest.php`).
+- ⏳ **Not verified live:** `init --framework=X --fast` fully headless,
+  `cloud:configure --only=hosts` headless, `cloud:deploy` from the app.
+  Try each on a throwaway app + `gcp-test-vps`.
+- ❌ **Still to do:**
+  1. Readiness "Container runtime" check (docker/podman + `info`).
+  2. Deploy stepper (cloud:deploy messages), like `run-steps.tsx`.
+  3. Link an EXISTING server. CLI gap: `cloud:create <env>` inside a project
+     with no expected stack **defaults to creating a new server** headless
+     (the attach `confirm()` defaults to false). Needs a real CLI command, for
+     example `cloud:attach <env> --stack=<name>`. Don't emulate by writing
+     `.larakube.local.json` from the app.
+  4. Static sites need Plex Commons on the server (`plex:init`). Surface
+     that on the project page before Deploy.
 **Goal:** a workshop student opens an app folder, links it to a server
 they created in the app, clicks Deploy, and gets a live URL, for all seven
 `AppFramework::isDeployable()` frameworks: Laravel, Statamic, WordPress,
