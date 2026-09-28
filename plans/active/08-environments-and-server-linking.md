@@ -85,3 +85,8 @@ Students need one environment (`production`) on the shared workshop server,
 so the minimum slice is: CLI steps 1, 2 and 5, and the desktop's
 Add environment dialog + Deploy for that environment. The full multi-env
 list can follow.
+
+## Progress
+
+- Done (cli `269d8a1`): `env --context/--ingress/--managed/--web-hosts`; headless `env` without `--context` errors instead of guessing; `cloud:deploy` skips `Proceed?` under `--no-interaction`.
+- Left: a `--web-host` flag for `PromptsForHosts` (the web host prompt is still interactive), `env:list --json`, the desktop Environments section + Add environment dialog, and a real deploy on `gcp-test-vps`.
