@@ -121,3 +121,15 @@ test('a run that stops for a missing flag explains which one', function () {
     expect($run->status)->toBe(RunStatus::Failed)
         ->and($run->result['error'])->toBe('The CLI needs --group: a stable name for this multi-zone instance (one.example, two.example).');
 });
+
+test('a run that crashes quotes the CLI\'s exception message', function () {
+    $run = runLifecycleRun(json: false);
+
+    event(new ErrorReceived($run->alias(), "\n\n\nIn Interactivity.php line 32:\n\n  Required.\n\n"));
+    event(new ProcessExited($run->alias(), 1));
+
+    $run->refresh();
+
+    expect($run->status)->toBe(RunStatus::Failed)
+        ->and($run->result['error'])->toBe('The LaraKube CLI stopped with: Required.');
+});

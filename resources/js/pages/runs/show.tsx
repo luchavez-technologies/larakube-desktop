@@ -173,8 +173,8 @@ export default function ShowRun({ run }: { run: Run }) {
                 <LogPanel
                     output={run.output}
                     placeholder={running ? 'Starting…' : 'No output.'}
-                    className="h-[26rem]"
                     follow={running}
+                    fill
                 />
             ) : (
                 <button

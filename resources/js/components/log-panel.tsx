@@ -25,17 +25,43 @@ export default function LogPanel({
     placeholder,
     className,
     follow = true,
+    fill = false,
 }: {
     output: string;
     placeholder: string;
     className?: string;
     follow?: boolean;
+    /** Grow to the bottom of the window instead of a fixed height. */
+    fill?: boolean;
 }) {
     const ref = useRef<HTMLDivElement>(null);
+    // Spinners and section breaks leave runs of blank lines; keep one.
     const lines = output
         .replace(/\s+$/, '')
         .split('\n')
-        .filter((line) => !isBanner(line));
+        .filter((line) => !isBanner(line))
+        .filter(
+            (line, index, all) =>
+                line.trim() !== '' ||
+                (index > 0 && all[index - 1].trim() !== ''),
+        );
+
+    useEffect(() => {
+        const panel = ref.current;
+
+        if (!fill || !panel) return;
+
+        // Cards above the panel come and go as a run finishes, so re-measure.
+        const size = () => {
+            const top = panel.getBoundingClientRect().top + window.scrollY;
+            panel.style.height = `${Math.max(256, window.innerHeight - top - 32)}px`;
+        };
+
+        size();
+        window.addEventListener('resize', size);
+
+        return () => window.removeEventListener('resize', size);
+    }, [fill, output]);
 
     useEffect(() => {
         if (follow) ref.current?.scrollTo({ top: ref.current.scrollHeight });

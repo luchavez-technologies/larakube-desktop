@@ -38,7 +38,9 @@ class RecordRunOutput
             return;
         }
 
-        $result = $this->decodeResult($run->stdout) ?? $this->missingFlagResult($run->output);
+        $result = $this->decodeResult($run->stdout)
+            ?? $this->missingFlagResult($run->output)
+            ?? ($event->code !== 0 ? $this->exceptionResult($run->output) : null);
 
         $status = match (true) {
             $run->status === RunStatus::Cancelled => RunStatus::Cancelled,
@@ -66,6 +68,23 @@ class RecordRunOutput
         if ($context !== null && $run->kind === RunKind::EnableSsl) {
             app(ClusterStatus::class)->forgetTls($context);
         }
+    }
+
+    /**
+     * The message of an uncaught exception, from the block Symfony Console
+     * prints for it ("In File.php line 32:" then the indented message).
+     *
+     * @return array{success: false, error: string}|null
+     */
+    private function exceptionResult(string $output): ?array
+    {
+        if (preg_match_all('/^In \S+ line \d+:[ \t]*\R(?:[ \t]*\R)*((?:[ \t]+\S[^\r\n]*(?:\R|$))+)/m', $output, $matches) < 1) {
+            return null;
+        }
+
+        $message = trim((string) preg_replace('/\s+/', ' ', (string) end($matches[1])));
+
+        return $message === '' ? null : ['success' => false, 'error' => "The LaraKube CLI stopped with: {$message}"];
     }
 
     /**
