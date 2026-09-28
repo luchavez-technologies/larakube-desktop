@@ -35,6 +35,7 @@ Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('pro
 Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');
 Route::post('/projects/{project}/host', [ProjectController::class, 'host'])->name('projects.host');
+Route::post('/projects/{project}/editor', [ProjectController::class, 'openInEditor'])->name('projects.editor');
 Route::post('/projects/{project}/deploy', [ProjectController::class, 'deploy'])->name('projects.deploy');
 
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');

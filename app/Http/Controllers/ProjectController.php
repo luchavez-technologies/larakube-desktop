@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Models\Project;
 use App\Models\Run;
+use App\Services\EditorLauncher;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\LaravelOptions;
@@ -159,7 +160,7 @@ class ProjectController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function show(Project $project, StackCatalog $stacks): Response
+    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors): Response
     {
         $inspection = $this->inspector->inspect($project->path);
         $servers = array_values(array_filter($stacks->all() ?? [], fn (array $stack): bool => $stack['status'] === 'ready'));
@@ -176,8 +177,20 @@ class ProjectController extends Controller
             'server' => $server,
             'frameworks' => ProjectInspector::DEPLOYABLE,
             'runs' => Run::query()->where('subject', "project:{$project->id}")->latest('id')->limit(5)->get(['id', 'label', 'kind', 'status', 'created_at'])->all(),
+            'editors' => $editors->available(),
             'scaffold' => Run::query()->where('subject', "project:{$project->id}")->where('kind', RunKind::NewProject)->latest('id')->first(['id', 'status']),
         ]);
+    }
+
+    public function openInEditor(Request $request, Project $project, EditorLauncher $editors): RedirectResponse
+    {
+        $editor = $request->validate(['editor' => ['required', Rule::in(array_keys(EditorLauncher::EDITORS))]])['editor'];
+
+        if (! $editors->open($editor, $project->path)) {
+            return back()->withErrors(['editor' => EditorLauncher::EDITORS[$editor]['label']." couldn't open this folder."]);
+        }
+
+        return back();
     }
 
     public function destroy(Project $project): RedirectResponse

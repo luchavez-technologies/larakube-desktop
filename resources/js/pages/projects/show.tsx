@@ -1,4 +1,4 @@
-import { Form, Link } from '@inertiajs/react';
+import { Form, Link, usePage } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
@@ -7,10 +7,12 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
+import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import {
     deploy,
     destroy,
+    editor as openEditor,
     host as setHost,
     index,
     init,
@@ -28,18 +30,22 @@ type RecentRun = {
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
 
+type Editor = { slug: string; label: string };
+
 export default function ShowProject({
     project,
     server,
     frameworks,
     runs,
     scaffold,
+    editors,
 }: {
     project: Project;
     server: Server | null;
     frameworks: Record<string, string>;
     runs: RecentRun[];
     scaffold: { id: number; status: RunStatus } | null;
+    editors: Editor[];
 }) {
     const ready =
         project.initialized &&
@@ -66,17 +72,22 @@ export default function ShowProject({
                 }
                 meta={<span>{project.path}</span>}
                 actions={
-                    project.webHost && (
-                        <Link
-                            href={open().url}
-                            method="post"
-                            data={{ url: `https://${project.webHost}` }}
-                            as="button"
-                            className={buttonClass('secondary')}
-                        >
-                            Open site
-                        </Link>
-                    )
+                    <div className="flex items-center gap-2.5">
+                        {project.exists && (
+                            <EditorMenu project={project} editors={editors} />
+                        )}
+                        {project.webHost && (
+                            <Link
+                                href={open().url}
+                                method="post"
+                                data={{ url: `https://${project.webHost}` }}
+                                as="button"
+                                className={buttonClass('secondary')}
+                            >
+                                Open site
+                            </Link>
+                        )}
+                    </div>
                 }
             />
 
@@ -380,5 +391,71 @@ function HostForm({
                 </>
             )}
         </Form>
+    );
+}
+
+/** Opens the project folder in a code editor found on this machine. */
+function EditorMenu({
+    project,
+    editors,
+}: {
+    project: Project;
+    editors: Editor[];
+}) {
+    const { errors } = usePage().props as { errors: Record<string, string> };
+
+    if (editors.length === 0) {
+        return null;
+    }
+
+    const link = (editor: Editor, className: string, label: string) => (
+        <Link
+            key={editor.slug}
+            href={openEditor(project.id).url}
+            method="post"
+            data={{ editor: editor.slug }}
+            as="button"
+            preserveScroll
+            className={className}
+        >
+            {label}
+        </Link>
+    );
+
+    return (
+        <div className="relative">
+            {editors.length === 1 ? (
+                link(
+                    editors[0],
+                    buttonClass('secondary'),
+                    `Open in ${editors[0].label}`,
+                )
+            ) : (
+                <details className="group">
+                    <summary
+                        className={cn(
+                            buttonClass('secondary'),
+                            'cursor-pointer list-none',
+                        )}
+                    >
+                        Open in editor ▾
+                    </summary>
+                    <div className="absolute right-0 z-10 mt-1.5 w-44 rounded-xl bg-surface p-1 shadow-lg ring-1 ring-line">
+                        {editors.map((editor) =>
+                            link(
+                                editor,
+                                'block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-paper',
+                                editor.label,
+                            ),
+                        )}
+                    </div>
+                </details>
+            )}
+            {errors.editor && (
+                <p className="absolute right-0 mt-1.5 w-56 text-right text-xs text-accent">
+                    {errors.editor}
+                </p>
+            )}
+        </div>
     );
 }
