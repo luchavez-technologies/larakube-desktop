@@ -1,6 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import type { ReactNode } from 'react';
-import LogoMark from '@/components/logo-mark';
 import { cn } from '@/lib/utils';
 import { readiness, tools } from '@/routes';
 import { index as projectsIndex } from '@/routes/projects';
@@ -74,7 +73,7 @@ export default function AppLayout({
             <Head title={title} />
             <aside className="sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
                 <div className="mb-5 flex items-center gap-2.5 px-2.5">
-                    <LogoMark />
+                    <img src="/icon.png" alt="" className="size-8" />
                     <span className="text-[15px] font-semibold">LaraKube</span>
                 </div>
                 <nav className="flex flex-col gap-1">
