@@ -8,6 +8,8 @@ WordPress, Next.js, Vite, Astro and Docusaurus apps.
 
 **Current goal:** every workshop framework created and deployed from the
 desktop before the workshop. See `plans/active/07-all-frameworks-for-workshop.md`.
+Both workstreams (this one and the CLI's canonical resource naming) are
+summarized in `cli/plans/active/handoff-workshop-and-naming.md`.
 
 Read in this order:
 
