@@ -92,3 +92,5 @@ LaraKube CLI (`cli/`, branch `develop`):
 - `composer ci:check` in `desktop/` before committing; the `cli/` pre-commit
   hook runs the full suite (commit with `git commit --only -- <paths>`).
 - Secrets go to the CLI by environment variable, never argv.
+
+**Blocking every deploy:** `plans/active/08-environments-and-server-linking.md` (make `larakube env` headless, multi-environment project page).

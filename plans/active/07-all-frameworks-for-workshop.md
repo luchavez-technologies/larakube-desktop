@@ -26,6 +26,10 @@ needs a terminal fails there. That is the recurring bug class: look for
 
 ## Blocker: linking a project to a server (do this before any deploy)
 
+**Superseded by `08-environments-and-server-linking.md`:** use `env <name>`
+(the command that creates environments), not `cloud:configure`, and make the
+desktop multi-environment. The notes below are the original analysis.
+
 A new or init'ed project has only the `local` environment. `cloud:deploy
 production` needs `environments.production` in `.larakube.json` and its
 target in `.larakube.local.json` (`environments.production.cloud`, ADR 0007).
