@@ -1,4 +1,4 @@
-import { Deferred, Form, Link, router } from '@inertiajs/react';
+import { Form, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
@@ -17,6 +17,7 @@ import type { ClusterTool, Server } from '@/types/larakube';
 type Props = {
     server: Server;
     servers: Server[];
+    registered?: ClusterTool[] | null;
     tools?: ClusterTool[] | null;
     installing: Record<string, number>;
 };
@@ -56,9 +57,14 @@ function detailUrl(server: Server, tool: ClusterTool): string {
 export default function ToolsIndex({
     server,
     servers,
-    tools,
+    registered,
+    tools: verifiedTools,
     installing,
 }: Props) {
+    // The registry answers in about a second; the live check can take half a
+    // minute. Draw from the registry, then swap in the verified list.
+    const verifying = verifiedTools === undefined;
+    const tools = verifiedTools ?? registered;
     const [installingTool, setInstallingTool] = useState<ClusterTool | null>(
         null,
     );
@@ -116,99 +122,99 @@ export default function ToolsIndex({
                 </div>
             </header>
 
-            <Deferred data="tools" fallback={<Loading server={server.name} />}>
-                {tools ? (
-                    <>
-                        <div className="mb-5 flex items-center justify-between gap-4">
-                            <div
-                                className="flex rounded-lg bg-badge p-0.5"
-                                role="tablist"
-                            >
-                                {(
+            {tools === undefined ? (
+                <Loading server={server.name} />
+            ) : tools ? (
+                <>
+                    <div className="mb-5 flex items-center justify-between gap-4">
+                        <div
+                            className="flex rounded-lg bg-badge p-0.5"
+                            role="tablist"
+                        >
+                            {(
+                                [
                                     [
-                                        [
-                                            'all',
-                                            'All',
-                                            installedAll.length +
-                                                availableAll.length,
-                                        ],
-                                        [
-                                            'installed',
-                                            'Installed',
-                                            installedAll.length,
-                                        ],
-                                        [
-                                            'available',
-                                            'Available',
+                                        'all',
+                                        'All',
+                                        installedAll.length +
                                             availableAll.length,
-                                        ],
-                                    ] as const
-                                ).map(([value, label, count]) => (
-                                    <button
-                                        key={value}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={filter === value}
-                                        onClick={() => setFilter(value)}
-                                        className={
-                                            filter === value
-                                                ? 'rounded-md bg-surface px-3 py-1.5 text-[13px] font-medium shadow-sm'
-                                                : 'rounded-md px-3 py-1.5 text-[13px] text-soft hover:text-ink'
-                                        }
-                                    >
-                                        {label}{' '}
-                                        <span className="text-faint">
-                                            {count}
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
-                            <input
-                                type="search"
-                                value={query}
-                                onChange={(event) =>
-                                    setQuery(event.target.value)
-                                }
-                                placeholder="Search tools"
-                                className="w-64 rounded-lg border-0 bg-surface px-3 py-2 text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
-                            />
+                                    ],
+                                    [
+                                        'installed',
+                                        'Installed',
+                                        installedAll.length,
+                                    ],
+                                    [
+                                        'available',
+                                        'Available',
+                                        availableAll.length,
+                                    ],
+                                ] as const
+                            ).map(([value, label, count]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={filter === value}
+                                    onClick={() => setFilter(value)}
+                                    className={
+                                        filter === value
+                                            ? 'rounded-md bg-surface px-3 py-1.5 text-[13px] font-medium shadow-sm'
+                                            : 'rounded-md px-3 py-1.5 text-[13px] text-soft hover:text-ink'
+                                    }
+                                >
+                                    {label}{' '}
+                                    <span className="text-faint">{count}</span>
+                                </button>
+                            ))}
                         </div>
-                        {filter !== 'available' && (
-                            <Section
-                                title={`Installed on ${server.name}`}
-                                count={installed.length}
-                            >
-                                {installed.map((tool) => (
-                                    <InstalledCard
-                                        key={`${tool.tool}-${tool.instance}`}
-                                        server={server}
-                                        tool={tool}
-                                    />
-                                ))}
-                            </Section>
-                        )}
-                        {filter !== 'installed' && (
-                            <Section title="Available" count={available.length}>
-                                {available.map((tool) => (
-                                    <AvailableCard
-                                        key={tool.tool}
-                                        tool={tool}
-                                        runId={installing[tool.tool]}
-                                        onInstall={() =>
-                                            setInstallingTool(tool)
-                                        }
-                                    />
-                                ))}
-                            </Section>
-                        )}
-                    </>
-                ) : (
-                    <p className="text-sm text-soft">
-                        Couldn't read Cluster Tools from {server.name}. Check
-                        that the server is reachable, then Refresh.
-                    </p>
-                )}
-            </Deferred>
+                        <VerifyStatus
+                            server={server.name}
+                            verifying={verifying}
+                            failed={verifiedTools === null}
+                        />
+                        <input
+                            type="search"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Search tools"
+                            className="w-64 rounded-lg border-0 bg-surface px-3 py-2 text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
+                        />
+                    </div>
+                    {filter !== 'available' && (
+                        <Section
+                            title={`Installed on ${server.name}`}
+                            count={installed.length}
+                        >
+                            {installed.map((tool) => (
+                                <InstalledCard
+                                    key={`${tool.tool}-${tool.instance}`}
+                                    server={server}
+                                    tool={tool}
+                                />
+                            ))}
+                        </Section>
+                    )}
+                    {filter !== 'installed' && (
+                        <Section title="Available" count={available.length}>
+                            {available.map((tool) => (
+                                <AvailableCard
+                                    key={tool.tool}
+                                    tool={tool}
+                                    runId={installing[tool.tool]}
+                                    disabled={verifying}
+                                    onInstall={() => setInstallingTool(tool)}
+                                />
+                            ))}
+                        </Section>
+                    )}
+                </>
+            ) : (
+                <p className="text-sm text-soft">
+                    Couldn't read Cluster Tools from {server.name}. Check that
+                    the server is reachable, then Refresh.
+                </p>
+            )}
 
             {installingTool && tools && (
                 <InstallDialog
@@ -247,6 +253,33 @@ function Section({
             )}
         </section>
     );
+}
+
+/** Until the live check lands, the list comes from the registry and may be incomplete. */
+function VerifyStatus({
+    server,
+    verifying,
+    failed,
+}: {
+    server: string;
+    verifying: boolean;
+    failed: boolean;
+}) {
+    if (verifying) {
+        return (
+            <StatusPill tone="busy">{`Verifying with ${server}…`}</StatusPill>
+        );
+    }
+
+    if (failed) {
+        return (
+            <StatusPill tone="warn">
+                Couldn't verify, showing the registry
+            </StatusPill>
+        );
+    }
+
+    return null;
 }
 
 function ToolIcon({ tool }: { tool: ClusterTool }) {
@@ -343,10 +376,12 @@ function InstalledCard({
 function AvailableCard({
     tool,
     runId,
+    disabled,
     onInstall,
 }: {
     tool: ClusterTool;
     runId?: number;
+    disabled: boolean;
     onInstall: () => void;
 }) {
     const { summary } = describeTool(tool.label);
@@ -364,7 +399,17 @@ function AvailableCard({
                             <StatusPill tone="busy">Installing…</StatusPill>
                         </Link>
                     ) : (
-                        <Button variant="dark" size="sm" onClick={onInstall}>
+                        <Button
+                            variant="dark"
+                            size="sm"
+                            disabled={disabled}
+                            title={
+                                disabled
+                                    ? 'Available after verifying the server'
+                                    : undefined
+                            }
+                            onClick={onInstall}
+                        >
                             Install
                         </Button>
                     )

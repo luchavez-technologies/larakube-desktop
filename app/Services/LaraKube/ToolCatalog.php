@@ -22,17 +22,38 @@ class ToolCatalog
      */
     public function forContext(string $context): ?array
     {
-        $cached = Cache::get($this->key($context));
+        return $this->remember($this->key($context), fn (): ?array => $this->load($context, registryOnly: false));
+    }
+
+    /**
+     * The same rows from the tool registry alone (about a second): enough to
+     * draw the page while forContext() verifies against the live cluster.
+     * Unverified: a tool installed outside the registry shows as available.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function registered(string $context): ?array
+    {
+        return $this->remember($this->key($context).':registered', fn (): ?array => $this->load($context, registryOnly: true));
+    }
+
+    /**
+     * @param  callable(): (list<array<string, mixed>>|null)  $load
+     * @return list<array<string, mixed>>|null
+     */
+    private function remember(string $key, callable $load): ?array
+    {
+        $cached = Cache::get($key);
 
         if (is_array($cached) && array_is_list($cached)) {
             /** @var list<array<string, mixed>> $cached */
             return $cached;
         }
 
-        $tools = $this->load($context);
+        $tools = $load();
 
         if ($tools !== null) {
-            Cache::put($this->key($context), $tools, self::TTL_SECONDS);
+            Cache::put($key, $tools, self::TTL_SECONDS);
         }
 
         return $tools;
@@ -75,12 +96,13 @@ class ToolCatalog
     public function forget(string $context): void
     {
         Cache::forget($this->key($context));
+        Cache::forget($this->key($context).':registered');
     }
 
     /**
      * @return list<array<string, mixed>>|null
      */
-    private function load(string $context): ?array
+    private function load(string $context, bool $registryOnly): ?array
     {
         $cli = $this->locator->find('larakube');
 
@@ -91,7 +113,7 @@ class ToolCatalog
         // Longer than PHP's default 30s request limit: a remote cluster alone takes about that long.
         set_time_limit(240);
 
-        $isolated = $this->locator->isolate([$cli, 'tool:list', "--context={$context}", '--json', '--no-interaction']);
+        $isolated = $this->locator->isolate([$cli, 'tool:list', "--context={$context}", ...($registryOnly ? ['--registry-only'] : []), '--json', '--no-interaction']);
         $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
         $decoded = json_decode(trim($result->output()), true);
 

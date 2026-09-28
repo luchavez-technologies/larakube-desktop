@@ -41,7 +41,8 @@ class ClusterToolController extends Controller
         return Inertia::render('tools/index', [
             'server' => $stack,
             'servers' => array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready')),
-            'tools' => Inertia::defer(fn (): ?array => $this->tools->forContext((string) $stack['context'])),
+            'registered' => Inertia::defer(fn (): ?array => $this->tools->registered((string) $stack['context']), 'registered'),
+            'tools' => Inertia::defer(fn (): ?array => $this->tools->forContext((string) $stack['context']), 'tools'),
             'installing' => $this->installingTools($server),
         ]);
     }

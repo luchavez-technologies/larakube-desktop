@@ -1,6 +1,6 @@
 import { Link, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import Button, { buttonClass } from '@/components/button';
+import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import LogPanel from '@/components/log-panel';
 import RunSteps from '@/components/run-steps';
@@ -201,17 +201,39 @@ function CreatedCard({ run }: { run: Run }) {
                 ))}
             </dl>
             <p className="mt-4 text-[13px] text-soft">
-                Connecting a domain and automatic SSL certificates need your
-                input, so they were skipped. Both are coming to the server page.
+                Connecting a domain and automatic SSL certificates need a
+                Cloudflare token, so they were skipped. Set them up now, or
+                later from the server page.
             </p>
-            <div className="mt-3 flex gap-2.5">
-                <Button variant="secondary" size="sm" disabled>
-                    Connect a domain
-                </Button>
-                <Button variant="secondary" size="sm" disabled>
-                    Automatic SSL certificates
-                </Button>
-            </div>
+            {run.subject && (
+                <div className="mt-3 flex gap-2.5">
+                    <Link
+                        href={
+                            showServer(run.subject, {
+                                query: { step: 'domain' },
+                            }).url
+                        }
+                        className={buttonClass('secondary', 'sm')}
+                    >
+                        Connect a domain
+                    </Link>
+                    <Link
+                        href={
+                            showServer(run.subject, { query: { step: 'ssl' } })
+                                .url
+                        }
+                        className={buttonClass('secondary', 'sm')}
+                    >
+                        Automatic SSL certificates
+                    </Link>
+                    <Link
+                        href={toolsIndex(run.subject).url}
+                        className={buttonClass('primary', 'sm')}
+                    >
+                        Install Cluster Tools
+                    </Link>
+                </div>
+            )}
         </Card>
     );
 }

@@ -1,4 +1,4 @@
-import { Deferred, Form, Link } from '@inertiajs/react';
+import { Deferred, Form, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -30,7 +30,15 @@ export default function ShowServer({
     dns?: DnsGroup[] | null;
     tls?: TlsReport | null;
 }) {
-    const [dialog, setDialog] = useState<Dialog>(null);
+    const { url } = usePage();
+    const [dialog, setDialog] = useState<Dialog>(() => {
+        // "?step=domain|ssl" opens that dialog, e.g. from a finished create run.
+        const step = new URLSearchParams(url.split('?')[1] ?? '').get('step');
+        return server.status === 'ready' &&
+            (step === 'domain' || step === 'ssl')
+            ? step
+            : null;
+    });
     const [label, tone] = serverStatus[server.status];
     const ready = server.status === 'ready';
 

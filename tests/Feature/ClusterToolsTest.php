@@ -77,9 +77,38 @@ test('the tools list comes from tool:list for the server context and is cached',
 
     app(ToolCatalog::class)->forContext('larakube-203.0.113.21');
 
-    Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'tool:list') && str_contains(implode(' ', (array) $process->command), '--context=larakube-203.0.113.21'), 1);
+    $ranToolList = fn (bool $registryOnly) => fn ($process) => str_contains(implode(' ', (array) $process->command), 'tool:list')
+        && str_contains(implode(' ', (array) $process->command), '--context=larakube-203.0.113.21')
+        && str_contains(implode(' ', (array) $process->command), '--registry-only') === $registryOnly;
+
+    // One fast registry read, one full verification, then both come from cache.
+    Process::assertRanTimes($ranToolList(true), 1);
+    Process::assertRanTimes($ranToolList(false), 1);
 
     File::deleteDirectory($bin);
+});
+
+test('the fast registry list and the verified list are separate deferred props', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('registered')
+            ->missing('tools')
+            ->loadDeferredProps('registered', fn (AssertableInertia $reload) => $reload->has('registered', 2)->missing('tools')));
+
+    File::deleteDirectory($bin);
+});
+
+test('forgetting a server drops both the registry list and the verified list', function () {
+    Cache::put('cluster-tools:ctx', [['tool' => 'sso']]);
+    Cache::put('cluster-tools:ctx:registered', [['tool' => 'sso']]);
+
+    app(ToolCatalog::class)->forget('ctx');
+
+    expect(Cache::has('cluster-tools:ctx'))->toBeFalse()
+        ->and(Cache::has('cluster-tools:ctx:registered'))->toBeFalse();
 });
 
 test('an unfinished server has no tools page', function () {
