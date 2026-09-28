@@ -11,6 +11,11 @@ function toneFor(line: string): string {
     return 'text-term-text';
 }
 
+/** A line minus leading spinner glyphs (dots, braille, bars), so its frames compare equal. */
+function spinnerless(line: string): string {
+    return line.replace(/^[\s·:.‥…⠁-⣿|/\\-]+/u, '').trim();
+}
+
 /** The CLI's ASCII-art banner, tagline and platform line, printed whenever it isn't in --json mode. */
 function isBanner(line: string): boolean {
     return (
@@ -39,11 +44,21 @@ export default function LogPanel({
     const lines = output
         .replace(/\s+$/, '')
         .split('\n')
+        // A redrawn line (carriage return) only shows its last state.
+        .map((line) => line.split('\r').pop() ?? '')
         .filter((line) => !isBanner(line))
         .filter(
             (line, index, all) =>
                 line.trim() !== '' ||
                 (index > 0 && all[index - 1].trim() !== ''),
+        )
+        // Without a terminal a spinner prints every frame as a new line:
+        // keep only the last frame of a run of the same message.
+        .filter(
+            (line, index, all) =>
+                index === all.length - 1 ||
+                spinnerless(line) === '' ||
+                spinnerless(line) !== spinnerless(all[index + 1]),
         );
 
     useEffect(() => {
