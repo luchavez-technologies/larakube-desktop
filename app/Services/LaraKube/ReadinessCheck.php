@@ -15,7 +15,7 @@ class ReadinessCheck
      * @var array<string, array{label: string, purpose: string, required: bool, versionArgs: list<string>, installable: bool}>
      */
     public const TOOLS = [
-        'larakube' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs every action in this app.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => false],
+        'larakube' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs every action in this app.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true],
         'kubectl' => ['label' => 'kubectl', 'purpose' => 'Talks to your Kubernetes clusters.', 'required' => true, 'versionArgs' => ['version', '--client'], 'installable' => true],
         'tofu' => ['label' => 'OpenTofu', 'purpose' => 'Provisions new cloud servers.', 'required' => true, 'versionArgs' => ['version'], 'installable' => true],
         'aws' => ['label' => 'AWS CLI', 'purpose' => 'Needed for Amazon Web Services servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
@@ -25,7 +25,7 @@ class ReadinessCheck
         'podman' => ['label' => 'Podman', 'purpose' => 'Builds your apps to deploy them, instead of Docker.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false],
     ];
 
-    public const CLI_INSTALL_COMMAND = 'curl -fsSL https://cli.larakube.app/install.sh | bash';
+    public const CLI_INSTALL_COMMAND = 'curl -fsSL https://cli.larakube.app/install.sh | bash -s -- --canary';
 
     public function __construct(private ToolLocator $locator) {}
 

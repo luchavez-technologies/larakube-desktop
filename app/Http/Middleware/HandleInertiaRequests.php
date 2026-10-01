@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\LaraKube\GlobalSettings;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -38,6 +39,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'hideProjects' => app(GlobalSettings::class)->hideProjects(),
             'auth' => [
                 'user' => $request->user(),
             ],

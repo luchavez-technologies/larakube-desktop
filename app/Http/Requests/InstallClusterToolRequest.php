@@ -19,6 +19,7 @@ class InstallClusterToolRequest extends FormRequest
     {
         return [
             'domain' => ['required', 'string', 'max:200', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
+            'admin_email' => ['nullable', 'string', 'email', 'max:255'],
             'wire_sso' => ['boolean'],
             'wire_mail' => ['boolean'],
         ];

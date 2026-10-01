@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Models\Project;
 use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Cache;
@@ -72,10 +73,46 @@ test('a server page shows that server, and an unknown one is a 404', function ()
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('servers/show')
-            ->where('server.ip', '203.0.113.21'));
+            ->where('server.ip', '203.0.113.21')
+            ->has('projects'));
 
     $this->get(route('servers.show', 'nope'))->assertNotFound();
 
+    File::deleteDirectory($bin);
+});
+
+test('a server page lists projects bound to that server', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+
+    $projectDir = storage_path('framework/testing/project-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($projectDir);
+    File::put("{$projectDir}/.larakube.json", json_encode([
+        'name' => 'acme-app',
+        'framework' => 'laravel',
+        'environments' => [
+            'production' => ['hosts' => ['web' => 'acme.example.com']],
+        ],
+    ]));
+    File::put("{$projectDir}/.larakube.local.json", json_encode([
+        'environments' => [
+            'production' => [
+                'cloud' => ['ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21'],
+            ],
+        ],
+    ]));
+
+    Project::create(['path' => $projectDir]);
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('servers/show')
+            ->has('projects', 1)
+            ->where('projects.0.name', 'acme-app')
+            ->where('projects.0.serverIp', '203.0.113.21'));
+
+    File::deleteDirectory($projectDir);
     File::deleteDirectory($bin);
 });
 
@@ -121,7 +158,11 @@ test('activity lists runs newest first', function () {
             ->component('runs/index')
             ->where('runs.0.label', 'Destroy server one')
             ->where('runs.0.kind', 'destroy-server')
-            ->where('runs.1.label', 'Create server one'));
+            ->where('runs.0.targetType', 'server')
+            ->where('runs.0.targetName', 'one')
+            ->where('runs.1.label', 'Create server one')
+            ->where('runs.1.targetType', 'server')
+            ->where('runs.1.targetName', 'one'));
 });
 
 test('Connect a domain runs dns:init against the server with the token in the environment only', function () {

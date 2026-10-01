@@ -97,20 +97,29 @@ class ToolCatalog
     }
 
     /**
-     * One tool row. A tool can run several instances on a server (one per
-     * host); $instance picks one, and '' is the default instance.
+     * One tool row. Tools are identified by their host (the instance identity).
+     * $domainOrHost matches either the entry's host or its internal slug fallback.
+     * Empty string returns the default/fallback row.
      *
      * @return array<string, mixed>|null
      */
-    public function find(string $context, string $tool, string $instance = ''): ?array
+    public function find(string $context, string $tool, string $domainOrHost = ''): ?array
     {
-        foreach ($this->forContext($context) ?? [] as $row) {
-            if (($row['tool'] ?? null) === $tool && ($row['instance'] ?? '') === $instance) {
-                return $row;
+        $fallback = null;
+        $rows = $this->cached($context) ?? $this->forContext($context) ?? $this->registered($context) ?? [];
+
+        foreach ($rows as $row) {
+            if (($row['tool'] ?? null) === $tool) {
+                if ($domainOrHost !== '') {
+                    if (($row['host'] ?? '') === $domainOrHost || ($row['instance'] ?? '') === $domainOrHost) {
+                        return $row;
+                    }
+                }
+                $fallback ??= $row;
             }
         }
 
-        return null;
+        return $domainOrHost === '' ? $fallback : null;
     }
 
     /**

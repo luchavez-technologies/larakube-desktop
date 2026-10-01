@@ -81,6 +81,7 @@ test('a project page reads its framework, host and bound server from the .laraku
             ->where('project.framework', 'astro')
             ->where('project.webHost', 'shop.example.com')
             ->where('project.deployable', true)
+            ->where('project.environments.production.serverName', 'workshop-demo')
             ->where('server.name', 'workshop-demo'));
 
     File::deleteDirectory($sandbox['home']);
@@ -100,7 +101,7 @@ test('set up, address and deploy run the CLI inside the project folder', functio
     $bin = "{$sandbox['bin']}/larakube";
     foreach ([
         ['init', '--framework=vite', '--fast'],
-        ['cloud:configure', 'production', '--only=hosts', '--web-hosts=shop.example.com'],
+        ['cloud:configure', 'production', '--only=hosts', '--web-host=shop.example.com'],
         ['cloud:deploy', 'production'],
     ] as $arguments) {
         $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, ...$arguments, '--no-interaction'] && $cwd === $sandbox['app']);
@@ -108,6 +109,38 @@ test('set up, address and deploy run the CLI inside the project folder', functio
 
     expect(Run::pluck('kind')->all())->toBe([RunKind::InitProject, RunKind::ConfigureHost, RunKind::DeployApp])
         ->and(Run::first()->subject)->toBe("project:{$project->id}");
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('multi-environment server linking, host configuration, and deployment', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.link', $project), ['server' => 'workshop-demo', 'environment' => 'staging'])->assertRedirect();
+    $this->post(route('projects.host', $project), ['host' => 'staging.example.com', 'environment' => 'staging'])->assertRedirect();
+    $this->post(route('projects.deploy', $project), ['environment' => 'staging'])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    foreach ([
+        ['env', 'staging', '--context=larakube-203.0.113.21', '--ingress=traefik', '--managed=', '--web-hosts='],
+        ['cloud:configure', 'staging', '--only=hosts', '--web-host=staging.example.com'],
+        ['cloud:deploy', 'staging'],
+    ] as $arguments) {
+        $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, ...$arguments, '--no-interaction'] && $cwd === $sandbox['app']);
+    }
+
+    expect(Run::where('subject', "project:{$project->id}")->get()->pluck('meta.environment')->all())
+        ->toBe(['staging', 'staging', 'staging']);
+
+    $this->get(route('projects.show', $project))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->has('runs', 3)
+            ->where('runs.0.environment', 'staging')
+        );
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -178,7 +211,7 @@ test('a new project refuses bad names, taken folders and folders outside home', 
     $this->post(route('projects.scaffold'), ['name' => 'My App', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
     $this->post(route('projects.scaffold'), ['name' => 'console', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
     $this->post(route('projects.scaffold'), ['name' => 'shop', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'statamic', 'parent' => $parent])->assertSessionHasErrors('framework');
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'rails', 'parent' => $parent])->assertSessionHasErrors('framework');
     $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'vite', 'parent' => '/tmp'])->assertSessionHasErrors('parent');
 
     expect(Project::count())->toBe(0)->and(Run::count())->toBe(0);
@@ -203,7 +236,7 @@ test('choosing where to create a project keeps what was typed', function () {
             ->where('parent', $parent)
             ->where('name', 'blog')
             ->where('framework', 'astro')
-            ->has('frameworks', 5));
+            ->has('frameworks', 16));
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -406,6 +439,122 @@ test('linking a ready server creates the production environment on it, with no p
         $bin, 'env', 'production', '--context=larakube-203.0.113.21', '--ingress=traefik', '--managed=', '--web-hosts=', '--no-interaction',
     ] && $cwd === $sandbox['app']);
     expect(Run::sole()->kind)->toBe(RunKind::LinkServer);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project lifecycle commands dispatch correctly for local and custom environments', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('projects.up', $project))->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'up', 'local', '--no-console', '--no-test', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    $this->post(route('projects.down', $project))->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'down', 'local', '--force', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    $this->post(route('projects.start', $project))->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'start', 'local', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    $this->post(route('projects.stop', $project))->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'stop', 'local', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('tld endpoint can pin and clear project localTld in blueprint', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'localTld' => null]));
+
+    $this->post(route('projects.tld', $project), ['tld' => 'test'])->assertRedirect();
+    $saved = json_decode((string) file_get_contents("{$sandbox['app']}/.larakube.json"), true);
+    expect($saved['localTld'])->toBe('test');
+
+    $this->post(route('projects.tld', $project), ['tld' => ''])->assertRedirect();
+    $cleared = json_decode((string) file_get_contents("{$sandbox['app']}/.larakube.json"), true);
+    expect($cleared['localTld'])->toBeNull();
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('linking a server supports custom environments like staging', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.link', $project), [
+        'server' => 'workshop-demo',
+        'environment' => 'staging',
+    ])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'env', 'staging', '--context=larakube-203.0.113.21', '--ingress=traefik', '--managed=', '--web-hosts=', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('frameworks are categorized and emdash is marked coming soon', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+
+    $this->get(route('projects.create', ['parent' => $parent]))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/create')
+            ->where('frameworks.statamic.category', 'cms')
+            ->where('frameworks.wordpress.category', 'cms')
+            ->where('frameworks.emdash.category', 'cms')
+            ->where('frameworks.emdash.comingSoon', true)
+            ->where('frameworks.statamic.comingSoon', false)
+            ->where('frameworks.laravel.category', 'fullstack')
+            ->where('frameworks.vite.category', 'frontend')
+            ->where('frameworks.docusaurus.category', 'docs'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a coming soon framework cannot be scaffolded', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+
+    $this->post(route('projects.scaffold'), [
+        'name' => 'my-emdash-blog',
+        'framework' => 'emdash',
+        'parent' => $parent,
+    ])->assertSessionHasErrors(['framework']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('scaffolding Statamic passes super user email when provided', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), [
+        'name' => 'my-statamic-site',
+        'framework' => 'statamic',
+        'parent' => $parent,
+        'email' => 'admin@example.com',
+    ])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'statamic:new', 'my-statamic-site', '--fast', '--no-plex', '--email=admin@example.com', '--no-interaction',
+    ]);
 
     File::deleteDirectory($sandbox['home']);
 });

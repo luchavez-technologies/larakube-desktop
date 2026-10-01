@@ -21,6 +21,8 @@ class RemoveClusterToolRequest extends FormRequest
     {
         return [
             'confirm' => ['required', 'string', 'in:'.$this->route('tool')],
+            'domain' => ['nullable', 'string', 'max:253'],
+            'host' => ['nullable', 'string', 'max:253'],
             'instance' => ['nullable', 'string', 'max:120'],
         ];
     }

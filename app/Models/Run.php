@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -18,6 +19,14 @@ use InvalidArgumentException;
  * @property string $label
  * @property RunKind|null $kind
  * @property string|null $subject
+ * @property string|null $target_type
+ * @property string|null $target_name
+ * @property int|null $project_id
+ * @property string|null $project_name
+ * @property string|null $environment
+ * @property string|null $server_name
+ * @property string|null $context
+ * @property string|null $tool
  * @property array<string, string>|null $meta
  * @property list<string> $command
  * @property RunStatus $status
@@ -27,10 +36,39 @@ use InvalidArgumentException;
  * @property array<string, mixed>|null $result
  * @property CarbonImmutable|null $finished_at
  * @property CarbonImmutable|null $created_at
+ * @property Project|null $project
  */
 class Run extends Model
 {
-    protected $fillable = ['label', 'kind', 'subject', 'meta', 'command', 'status', 'exit_code', 'output', 'stdout', 'result', 'finished_at'];
+    protected $fillable = [
+        'label',
+        'kind',
+        'subject',
+        'target_type',
+        'target_name',
+        'project_id',
+        'project_name',
+        'environment',
+        'server_name',
+        'context',
+        'tool',
+        'meta',
+        'command',
+        'status',
+        'exit_code',
+        'output',
+        'stdout',
+        'result',
+        'finished_at',
+    ];
+
+    /**
+     * @return BelongsTo<Project, $this>
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
 
     protected $attributes = [
         'status' => 'running',

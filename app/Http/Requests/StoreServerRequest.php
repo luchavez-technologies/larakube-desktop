@@ -34,6 +34,8 @@ class StoreServerRequest extends FormRequest
             'region' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9-]+$/'],
             'size' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9.-]+$/'],
             'api_token' => ['nullable', 'string', 'max:200'],
+            'aws_access_key_id' => ['nullable', 'string', 'max:100'],
+            'aws_secret_access_key' => ['nullable', 'string', 'max:200'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
         ];
     }
@@ -53,7 +55,29 @@ class StoreServerRequest extends FormRequest
      */
     public function secretEnvironment(): array
     {
-        $variable = self::TOKEN_ENVIRONMENT[$this->string('provider')->toString()] ?? null;
+        $provider = $this->string('provider')->toString();
+
+        if ($provider === 'aws') {
+            $env = [];
+            $key = trim((string) $this->input('aws_access_key_id'));
+            $secret = trim((string) $this->input('aws_secret_access_key'));
+            $region = trim((string) $this->input('region'));
+
+            if ($key !== '') {
+                $env['AWS_ACCESS_KEY_ID'] = $key;
+            }
+            if ($secret !== '') {
+                $env['AWS_SECRET_ACCESS_KEY'] = $secret;
+            }
+            if ($region !== '') {
+                $env['AWS_DEFAULT_REGION'] = $region;
+                $env['AWS_REGION'] = $region;
+            }
+
+            return $env;
+        }
+
+        $variable = self::TOKEN_ENVIRONMENT[$provider] ?? null;
         $token = trim((string) $this->input('api_token'));
 
         return $variable !== null && $token !== '' ? [$variable => $token] : [];

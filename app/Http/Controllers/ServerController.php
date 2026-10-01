@@ -9,8 +9,10 @@ use App\Http\Requests\StoreServerRequest;
 use App\Models\Project;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
+use App\Services\LaraKube\ToolCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -59,23 +61,72 @@ class ServerController extends Controller
             subject: $stackName,
             meta: $project !== null ? ['project' => (string) $project->id] : [],
             cwd: $project?->path,
+            targetType: 'server',
+            targetName: $stackName,
+            projectId: $project?->id,
+            projectName: $project !== null ? basename($project->path) : null,
+            environment: $project !== null ? ProjectController::ENVIRONMENT : 'production',
+            serverName: $stackName,
         );
 
         return to_route('runs.show', $run);
     }
 
-    public function show(string $server, StackCatalog $catalog, ClusterStatus $status): Response
-    {
+    public function show(
+        string $server,
+        StackCatalog $catalog,
+        ClusterStatus $status,
+        ProjectInspector $inspector,
+        ToolCatalog $toolCatalog,
+    ): Response {
         $stack = $catalog->find($server);
 
         abort_if($stack === null, 404);
 
         $context = $stack['status'] === 'ready' ? $stack['context'] : null;
 
+        $projects = Project::query()->get()->filter(function (Project $p) use ($inspector, $stack): bool {
+            $inspection = $inspector->inspect($p->path);
+
+            if ($stack['ip'] !== null && $inspection['serverIp'] === $stack['ip']) {
+                return true;
+            }
+
+            if ($stack['context'] !== null && ($inspection['serverContext'] ?? null) === $stack['context']) {
+                return true;
+            }
+
+            foreach ($inspection['environments'] as $env) {
+                if ($stack['ip'] !== null && ($env['serverIp'] ?? null) === $stack['ip']) {
+                    return true;
+                }
+                if ($stack['context'] !== null && ($env['serverContext'] ?? null) === $stack['context']) {
+                    return true;
+                }
+            }
+
+            return false;
+        })->values()->map(function (Project $p) use ($inspector): array {
+            $inspection = $inspector->inspect($p->path);
+
+            return ['id' => $p->id] + $inspection;
+        })->all();
+
+        $lastTools = $context !== null ? $toolCatalog->lastVerified($context) : null;
+
         return Inertia::render('servers/show', [
             'server' => $stack,
+            'projects' => $projects,
+            'lastVerifiedTools' => $lastTools['tools'] ?? null,
+            'tools' => $context !== null
+                ? ($lastTools !== null && $toolCatalog->isFresh($lastTools)
+                    ? $lastTools['tools']
+                    : Inertia::defer(fn (): ?array => $toolCatalog->forContext($context), 'tools'))
+                : null,
             'dns' => Inertia::defer(fn (): ?array => $context !== null ? $status->dns($context) : null, 'dns'),
             'tls' => Inertia::defer(fn (): ?array => $context !== null ? $status->tls($context) : null, 'tls'),
+            'plex' => Inertia::defer(fn (): ?array => $context !== null ? $status->plex($context) : null, 'plex'),
+            'clusterUsers' => Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
         ]);
     }
 
@@ -90,6 +141,10 @@ class ServerController extends Controller
             kind: RunKind::ConnectDomain,
             subject: $server,
             meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
         );
 
         return to_route('runs.show', $run);
@@ -106,6 +161,10 @@ class ServerController extends Controller
             kind: RunKind::EnableSsl,
             subject: $server,
             meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
         );
 
         return to_route('runs.show', $run);
@@ -129,6 +188,9 @@ class ServerController extends Controller
             arguments: ['cloud:destroy', $server, '--force'],
             kind: RunKind::DestroyServer,
             subject: $server,
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
         );
 
         return to_route('runs.show', $run);

@@ -6,14 +6,20 @@ use Illuminate\Support\Facades\Process;
 
 /**
  * The servers this machine created, read from `larakube cloud:stacks --json`:
- * registered stacks plus unfinished setups an interrupted create left behind.
+ * registered stacks plus unfinished setups an interrupted create left behind,
+ * plus automatically discovered clusters from ~/.kube/config.
  */
 class StackCatalog
 {
-    public function __construct(private ToolLocator $locator) {}
+    public function __construct(
+        private ToolLocator $locator,
+        private ?KubeconfigDiscovery $discovery = null,
+    ) {
+        $this->discovery ??= new KubeconfigDiscovery($this->locator);
+    }
 
     /**
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, account: ?string, projectId: ?string, status: string}>|null
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string, isCurrent?: bool}>|null
      */
     public function all(): ?array
     {
@@ -33,11 +39,37 @@ class StackCatalog
             return null;
         }
 
-        return array_values($decoded['stacks']);
+        $stacks = array_values($decoded['stacks']);
+
+        // Auto-discover non-stack contexts from local ~/.kube/config
+        $registeredContexts = array_values(array_filter(array_column($stacks, 'context')));
+        $discovered = $this->discovery->discover($registeredContexts);
+
+        return [...$stacks, ...$discovered];
     }
 
     /**
-     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, account: ?string, projectId: ?string, status: string}|null
+     * Return only registered cloud stacks provisioned via LaraKube.
+     *
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string}>
+     */
+    public function cloudStacks(): array
+    {
+        return array_values(array_filter($this->all() ?? [], fn (array $s): bool => $s['kind'] !== 'discovered'));
+    }
+
+    /**
+     * Return only discovered clusters from ~/.kube/config.
+     *
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string}>
+     */
+    public function discoveredClusters(): array
+    {
+        return array_values(array_filter($this->all() ?? [], fn (array $s): bool => $s['kind'] === 'discovered'));
+    }
+
+    /**
+     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string}|null
      */
     public function find(string $name): ?array
     {

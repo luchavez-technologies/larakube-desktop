@@ -1,5 +1,6 @@
-import { Deferred, Link, useForm } from '@inertiajs/react';
-import type { FormEvent, ReactNode } from 'react';
+import { Deferred, Link, router, useForm } from '@inertiajs/react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { ExternalLink, RefreshCw } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import PageHeader from '@/components/page-header';
@@ -67,16 +68,23 @@ function ServerForm({
         region: initial.defaultRegion,
         size: initial.defaultVpsSize,
         api_token: '',
+        aws_access_key_id: '',
+        aws_secret_access_key: '',
         project_id: projectId,
     });
+
+    const [isGcpLoggingIn, setIsGcpLoggingIn] = useState(false);
 
     const provider =
         providers.find((candidate) => candidate.slug === form.data.provider) ??
         initial;
+
     const needsToken =
         tokenProviders.includes(provider.slug) && !provider.credentials.ready;
-    const blocked =
-        !tokenProviders.includes(provider.slug) && !provider.credentials.ready;
+    const needsAwsKeys = provider.slug === 'aws' && !provider.credentials.ready;
+    const needsGcpLogin =
+        provider.slug === 'gcp' && !provider.credentials.ready;
+
     const size = provider.vpsSizes.find(
         (option) => option.value === form.data.size,
     );
@@ -89,6 +97,8 @@ function ServerForm({
             region: next.defaultRegion,
             size: next.defaultVpsSize,
             api_token: '',
+            aws_access_key_id: '',
+            aws_secret_access_key: '',
         });
     }
 
@@ -126,11 +136,38 @@ function ServerForm({
                     </button>
                 ))}
             </div>
-            {blocked && (
-                <p className="mt-3 rounded-lg bg-warn-tint px-3 py-2 text-sm text-warn">
-                    {provider.credentials.hint} Log in from Setup, then come
-                    back.
-                </p>
+
+            {needsGcpLogin && (
+                <div className="mt-3 flex items-center justify-between rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
+                    <span>
+                        {provider.credentials.hint} Authorize with Google to
+                        continue.
+                    </span>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                            setIsGcpLoggingIn(true);
+                            router.post(
+                                '/setup/cloud/gcp/login',
+                                {},
+                                {
+                                    onFinish: () => setIsGcpLoggingIn(false),
+                                },
+                            );
+                        }}
+                        disabled={isGcpLoggingIn}
+                        className="shrink-0 gap-1.5"
+                    >
+                        {isGcpLoggingIn ? (
+                            <RefreshCw className="size-3.5 animate-spin" />
+                        ) : (
+                            <ExternalLink className="size-3.5" />
+                        )}
+                        <span>Sign in with Google</span>
+                    </Button>
+                </div>
             )}
 
             <div className="mt-5 space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
@@ -150,6 +187,7 @@ function ServerForm({
                         className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
                     />
                 </Field>
+
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Region" error={form.errors.region}>
                         <Select
@@ -166,6 +204,7 @@ function ServerForm({
                         />
                     </Field>
                 </div>
+
                 {needsToken && (
                     <Field
                         label={`${provider.label} API token`}
@@ -181,6 +220,49 @@ function ServerForm({
                             className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
                         />
                     </Field>
+                )}
+
+                {needsAwsKeys && (
+                    <div className="space-y-4 border-t border-line/60 pt-3">
+                        <p className="text-xs text-soft">
+                            Enter your AWS IAM credentials for this server
+                            deployment.
+                        </p>
+                        <Field
+                            label="AWS Access Key ID"
+                            error={form.errors.aws_access_key_id}
+                        >
+                            <input
+                                type="text"
+                                placeholder="AKIAIOSFODNN7EXAMPLE"
+                                value={form.data.aws_access_key_id}
+                                onChange={(event) =>
+                                    form.setData(
+                                        'aws_access_key_id',
+                                        event.target.value,
+                                    )
+                                }
+                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                            />
+                        </Field>
+                        <Field
+                            label="AWS Secret Access Key"
+                            error={form.errors.aws_secret_access_key}
+                        >
+                            <input
+                                type="password"
+                                placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                value={form.data.aws_secret_access_key}
+                                onChange={(event) =>
+                                    form.setData(
+                                        'aws_secret_access_key',
+                                        event.target.value,
+                                    )
+                                }
+                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                            />
+                        </Field>
+                    </div>
                 )}
             </div>
 
@@ -198,9 +280,13 @@ function ServerForm({
                         type="submit"
                         disabled={
                             form.processing ||
-                            blocked ||
+                            needsGcpLogin ||
                             form.data.stack_name.trim() === '' ||
-                            (needsToken && form.data.api_token.trim() === '')
+                            (needsToken && form.data.api_token.trim() === '') ||
+                            (needsAwsKeys &&
+                                (form.data.aws_access_key_id.trim() === '' ||
+                                    form.data.aws_secret_access_key.trim() ===
+                                        ''))
                         }
                     >
                         {form.processing ? 'Starting…' : 'Create server'}
@@ -229,7 +315,7 @@ function Field({
             </span>
             {children}
             {error ? (
-                <span className="mt-1 block text-xs text-accent">{error}</span>
+                <span className="text-bad mt-1 block text-xs">{error}</span>
             ) : (
                 hint && (
                     <span className="mt-1 block text-xs text-soft">{hint}</span>
@@ -252,7 +338,7 @@ function Select({
         <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="w-full rounded-lg border-0 bg-surface px-3 py-2 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+            className="w-full rounded-lg border-0 bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
         >
             {options.map((option) => (
                 <option key={option.value} value={option.value}>

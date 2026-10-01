@@ -7,10 +7,17 @@ import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
+import ToolLogo from '@/components/tool-logo';
 import AppLayout from '@/layouts/app-layout';
 import { open } from '@/routes';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
-import { describeTool, toolName } from '@/types/larakube';
+import {
+    describeTool,
+    toolName,
+    toolTagline,
+    toolCategories,
+    categoryLabel,
+} from '@/types/larakube';
 import type { ClusterTool, Server, Wiring } from '@/types/larakube';
 
 const wiringLabels: Record<string, [string, Tone]> = {
@@ -36,8 +43,9 @@ export default function ShowTool({
     tool: ClusterTool;
 }) {
     const [removing, setRemoving] = useState(false);
-    const { summary, engine } = describeTool(tool.label);
     const name = toolName(tool);
+    const tagline = toolTagline(tool);
+    const cats = toolCategories(tool);
     const url = tool.url?.split(' ')[0] ?? null;
     const integrations = (
         [
@@ -61,13 +69,23 @@ export default function ShowTool({
                 ← Tools on {server.name}
             </Link>
             <PageHeader
-                title={name}
+                title={
+                    <span className="flex items-center gap-3">
+                        <ToolLogo tool={tool} size="md" />
+                        <span>{name}</span>
+                    </span>
+                }
                 badge={
                     <StatusPill tone={tool.installed ? 'ok' : 'muted'}>
                         {tool.installed ? 'Installed' : 'Not installed'}
                     </StatusPill>
                 }
-                meta={[engine, tool.host, `on ${server.name}`]
+                meta={[
+                    tagline,
+                    tool.host,
+                    `on ${server.name}`,
+                    ...cats.map((c) => categoryLabel(c)),
+                ]
                     .filter(Boolean)
                     .map((part) => (
                         <span key={part}>{part}</span>
@@ -87,35 +105,87 @@ export default function ShowTool({
                     )
                 }
             />
-            <p className="-mt-2 mb-5 text-sm text-soft">{summary}</p>
 
             {tool.installed ? (
-                <div className="grid grid-cols-2 items-start gap-4.5">
-                    <Card label="Access">
-                        {url && (
-                            <ListRow action={<CopyButton value={url} />}>
-                                <TwoLine title="Address" detail={url} mono />
-                            </ListRow>
-                        )}
-                        <ListRow>
-                            <TwoLine
-                                title="Namespace"
-                                detail={tool.namespace}
-                                mono
-                            />
-                        </ListRow>
-                        {tool.installedAt && (
+                <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+                    <div className="space-y-5">
+                        <Card label="Access">
+                            {url && (
+                                <ListRow action={<CopyButton value={url} />}>
+                                    <TwoLine
+                                        title="Address"
+                                        detail={url}
+                                        mono
+                                    />
+                                </ListRow>
+                            )}
                             <ListRow>
                                 <TwoLine
-                                    title="Installed"
-                                    detail={new Date(
-                                        tool.installedAt,
-                                    ).toLocaleString()}
+                                    title="Namespace"
+                                    detail={tool.namespace}
+                                    mono
                                 />
                             </ListRow>
+                            {tool.installedAt && (
+                                <ListRow>
+                                    <TwoLine
+                                        title="Installed"
+                                        detail={new Date(
+                                            tool.installedAt,
+                                        ).toLocaleString()}
+                                    />
+                                </ListRow>
+                            )}
+                        </Card>
+
+                        {tool.components && tool.components.length > 1 && (
+                            <Card
+                                label={`Components & Workloads (${tool.components.length})`}
+                            >
+                                {tool.components.map((comp) => (
+                                    <ListRow
+                                        key={comp.key}
+                                        action={
+                                            <div className="flex items-center gap-2">
+                                                <StatusPill
+                                                    tone={
+                                                        comp.role === 'primary'
+                                                            ? 'ok'
+                                                            : 'muted'
+                                                    }
+                                                >
+                                                    {comp.role}
+                                                </StatusPill>
+                                                {comp.backup && (
+                                                    <span className="rounded border border-brand/20 bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                                                        Backed up
+                                                    </span>
+                                                )}
+                                            </div>
+                                        }
+                                    >
+                                        <div className="py-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[13px] font-semibold text-ink">
+                                                    {comp.label}
+                                                </span>
+                                                <span className="font-mono text-xs text-soft">
+                                                    {comp.deployment}
+                                                </span>
+                                            </div>
+                                            {comp.description && (
+                                                <p className="mt-0.5 text-xs text-soft">
+                                                    {comp.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </ListRow>
+                                ))}
+                            </Card>
                         )}
-                    </Card>
-                    <div className="flex flex-col gap-4.5">
+                    </div>
+
+                    <div className="space-y-5">
                         {integrations.length > 0 && (
                             <Card label="Integrations">
                                 {integrations.map(([title, detail, value]) => (
@@ -209,6 +279,9 @@ function RemoveForm({
         >
             {({ errors, processing }) => (
                 <>
+                    {tool.host && (
+                        <input type="hidden" name="domain" value={tool.host} />
+                    )}
                     <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-soft">
                             Type {tool.tool} to confirm

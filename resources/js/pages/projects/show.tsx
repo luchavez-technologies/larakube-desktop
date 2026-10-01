@@ -1,12 +1,36 @@
-import { Form, Link, router, useForm, usePage } from '@inertiajs/react';
+import {
+    Form,
+    Link,
+    router,
+    useForm,
+    usePage,
+    usePoll,
+} from '@inertiajs/react';
 import type { FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import {
+    Trash2,
+    Play,
+    Square,
+    ExternalLink,
+    Plus,
+    ArrowRight,
+    Terminal,
+    ChevronDown,
+    ChevronUp,
+    MoreHorizontal,
+    Laptop,
+    Cloud,
+    X,
+    Server as ServerIcon,
+} from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import LaravelOptions, {
     defaultAnswers,
     reconcile,
 } from '@/components/laravel-options';
+import LogPanel from '@/components/log-panel';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -16,19 +40,26 @@ import { open } from '@/routes';
 import {
     deploy,
     destroy,
+    down,
     editor as openEditor,
     host as setHost,
     index,
     init,
     link,
     retry,
+    start as startLifecycle,
+    stop as stopLifecycle,
+    tld as setProjectTld,
+    up,
 } from '@/routes/projects';
-import { show as showRun } from '@/routes/runs';
+import { join as joinPlex, leave as leavePlex } from '@/routes/projects/plex';
+import { cancel, show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
 import type {
     NewAppAnswers,
     NewAppQuestion,
     Project,
+    ProjectEnvironment,
     RunStatus,
     Server,
 } from '@/types/larakube';
@@ -36,8 +67,21 @@ import type {
 type RecentRun = {
     id: number;
     label: string;
+    kind?: string;
     status: RunStatus;
     created_at: string;
+    environment?: string | null;
+};
+
+type ProjectRun = {
+    id: number;
+    label: string;
+    kind: string | null;
+    status: RunStatus;
+    output: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    environment?: string | null;
 };
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
@@ -51,6 +95,7 @@ export default function ShowProject({
     server,
     frameworks,
     runs,
+    latestRun,
     scaffold,
     editors,
     wizardFrameworks,
@@ -62,6 +107,7 @@ export default function ShowProject({
     server: Server | null;
     frameworks: Record<string, string>;
     runs: RecentRun[];
+    latestRun: ProjectRun | null;
     scaffold: { id: number; status: RunStatus; canRetry: boolean } | null;
     editors: Editor[];
     wizardFrameworks: string[];
@@ -69,11 +115,128 @@ export default function ShowProject({
     laravelOptions?: NewAppQuestion[] | null;
     readyServers: ReadyServer[];
 }) {
-    const ready =
-        project.initialized &&
-        project.deployable &&
-        server !== null &&
-        project.webHost !== null;
+    const isRunning =
+        runs.some((r) => r.status === 'running') ||
+        latestRun?.status === 'running';
+
+    const { start, stop } = usePoll(
+        1000,
+        { only: ['runs', 'latestRun', 'project', 'server'] },
+        { autoStart: isRunning },
+    );
+
+    useEffect(() => {
+        if (isRunning) {
+            start();
+        } else {
+            stop();
+        }
+    }, [isRunning, start, stop]);
+
+    // Cloud environments: non-local environments configured in the project
+    const cloudEnvs = useMemo(
+        () =>
+            Object.values(project.environments ?? {}).filter((e) => !e.isLocal),
+        [project.environments],
+    );
+
+    // Primary environment switcher state: 'local' | '<cloud-env-name>'
+    const [activeEnv, setActiveEnv] = useState<string>('local');
+    const [deployModalOpen, setDeployModalOpen] = useState(false);
+    const [addEnvModalOpen, setAddEnvModalOpen] = useState(false);
+
+    // Active cloud environment config when viewing cloud tabs
+    const activeCloudEnvName =
+        activeEnv === 'local'
+            ? (cloudEnvs[0]?.name ?? 'production')
+            : activeEnv;
+
+    const activeEnvConfig = useMemo<ProjectEnvironment>(() => {
+        if (activeEnv === 'local') {
+            return (
+                project.environments?.['local'] ?? {
+                    name: 'local',
+                    isLocal: true,
+                    webHost: `${project.name}.${project.effectiveTld || project.localTld || project.globalTld || 'test'}`,
+                    serverIp: null,
+                    serverName: 'Local Dev Cluster',
+                    plex: project.environments?.['local']?.plex ?? [],
+                    managed: [],
+                }
+            );
+        }
+        return (
+            project.environments?.[activeEnv] ?? {
+                name: activeEnv,
+                isLocal: false,
+                webHost:
+                    activeEnv === 'production' ? project.webHost : null,
+                serverIp: server?.ip ?? null,
+                serverName: server?.name ?? null,
+                plex: [],
+                managed: [],
+            }
+        );
+    }, [activeEnv, project, server]);
+
+    const activeServer = useMemo(() => {
+        if (activeEnv === 'local') return null;
+        if (activeEnvConfig?.serverName) {
+            const found = readyServers.find(
+                (s) => s.name === activeEnvConfig.serverName,
+            );
+            if (found) return found;
+        }
+        if (activeEnvConfig?.serverIp) {
+            const found = readyServers.find(
+                (s) => s.ip === activeEnvConfig.serverIp,
+            );
+            if (found) return found;
+            return {
+                name: activeEnvConfig.serverName ?? activeEnvConfig.serverIp,
+                ip: activeEnvConfig.serverIp,
+            };
+        }
+        if (activeEnv === 'production' && server) {
+            return server;
+        }
+        return null;
+    }, [activeEnvConfig, activeEnv, server, readyServers]);
+
+    const activeHost =
+        activeEnvConfig?.webHost ??
+        (activeEnv === 'production' ? project.webHost : null);
+
+    const activeTerminalRun = useMemo(() => {
+        if (!latestRun) return null;
+        if (latestRun.status === 'running') return latestRun;
+        const runEnv = latestRun.environment?.toLowerCase();
+        if (activeEnv === 'local') {
+            const isLocal =
+                !runEnv ||
+                runEnv === 'local' ||
+                [
+                    'up-project',
+                    'down-project',
+                    'start-project',
+                    'stop-project',
+                    'init-project',
+                    'new-project',
+                ].includes(latestRun.kind ?? '');
+            return isLocal ? latestRun : null;
+        }
+        const isThisCloudEnv =
+            runEnv === activeEnv.toLowerCase() ||
+            latestRun.label
+                .toLowerCase()
+                .includes(`(${activeEnv.toLowerCase()})`) ||
+            (!latestRun.label.includes('(') &&
+                activeEnv.toLowerCase() === 'production' &&
+                ['deploy-app', 'link-server', 'configure-host'].includes(
+                    latestRun.kind ?? '',
+                ));
+        return isThisCloudEnv ? latestRun : null;
+    }, [latestRun, activeEnv]);
 
     return (
         <AppLayout title={project.name}>
@@ -98,33 +261,32 @@ export default function ShowProject({
                         {project.exists && (
                             <EditorMenu project={project} editors={editors} />
                         )}
-                        {project.webHost && (
-                            <Link
-                                href={open().url}
-                                method="post"
-                                data={{ url: `https://${project.webHost}` }}
-                                as="button"
-                                className={buttonClass('secondary')}
-                            >
-                                Open site
-                            </Link>
-                        )}
+                        <ProjectOptionsMenu project={project} />
                     </div>
                 }
             />
 
             {!project.exists && scaffold?.status === 'running' ? (
-                <Card>
-                    <p className="text-sm">
-                        This app is still being created.{' '}
-                        <Link
-                            href={showRun(scaffold.id).url}
-                            className="font-medium text-brand hover:underline"
-                        >
-                            Watch its progress
-                        </Link>
-                    </p>
-                </Card>
+                <div className="grid items-start gap-6 lg:grid-cols-12">
+                    <div className="lg:col-span-5">
+                        <Card>
+                            <div className="flex items-center gap-2.5">
+                                <span className="size-2 animate-ping rounded-full bg-brand" />
+                                <p className="text-sm font-semibold text-ink">
+                                    Creating application…
+                                </p>
+                            </div>
+                            <p className="mt-2 text-xs leading-relaxed text-soft">
+                                LaraKube is provisioning your app container and
+                                installing dependencies. Live terminal output is
+                                streaming on the right.
+                            </p>
+                        </Card>
+                    </div>
+                    <div className="lg:col-span-7">
+                        {latestRun && <ProjectTerminalCard run={latestRun} />}
+                    </div>
+                </div>
             ) : !project.exists ? (
                 <Card tone="error">
                     <p className="text-sm">
@@ -162,150 +324,1109 @@ export default function ShowProject({
                     </div>
                 </Card>
             ) : (
-                <div className="grid grid-cols-[1fr_320px] items-start gap-4.5">
-                    <Card label="Put it online">
-                        <Step
-                            number={1}
-                            title="Set up for LaraKube"
-                            done={project.initialized}
-                        >
-                            {project.initialized ? (
-                                <p className="text-xs text-soft">
-                                    {project.deployable
-                                        ? 'Ready.'
-                                        : `LaraKube can't deploy ${project.framework ?? 'this framework'} yet.`}
-                                </p>
-                            ) : (
-                                <InitForm
-                                    project={project}
-                                    frameworks={frameworks}
-                                    wizardFrameworks={wizardFrameworks}
-                                    email={email}
-                                    laravelOptions={laravelOptions}
-                                />
-                            )}
-                        </Step>
-                        <Step number={2} title="Server" done={server !== null}>
-                            {server ? (
-                                <p className="text-xs text-soft">
-                                    <Link
-                                        href={showServer(server.name).url}
-                                        className="font-medium text-ink hover:underline"
-                                    >
-                                        {server.name}
-                                    </Link>{' '}
-                                    · {server.ip}
-                                </p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {readyServers.length > 0 && (
-                                        <LinkServerForm
+                <div className="space-y-5">
+                    {/* Top-Level Environment Switcher Bar */}
+                    <EnvironmentSwitchBar
+                        activeEnv={activeEnv}
+                        onSelectEnv={setActiveEnv}
+                        cloudEnvs={cloudEnvs}
+                        readyServers={readyServers}
+                        onAddEnv={() => setAddEnvModalOpen(true)}
+                        runs={runs}
+                        project={project}
+                        onDeployClick={() => setDeployModalOpen(true)}
+                    />
+
+                    {/* Main Layout Grid */}
+                    <div className="grid grid-cols-[1fr_360px] items-start gap-5">
+                        {/* Main Column (Left): Segregated by Environment */}
+                        <div className="flex flex-col gap-5">
+                            {activeEnv === 'local' ? (
+                                <>
+                                    {project.initialized && (
+                                        <LocalClusterCard
                                             project={project}
-                                            servers={readyServers}
+                                            runs={runs}
                                         />
                                     )}
-                                    <Link
-                                        href={
-                                            createServer({
-                                                query: { project: project.id },
-                                            }).url
-                                        }
-                                        className={buttonClass(
-                                            readyServers.length > 0
-                                                ? 'ghost'
-                                                : 'secondary',
-                                            'sm',
-                                            !project.initialized
-                                                ? 'pointer-events-none opacity-45'
-                                                : undefined,
-                                        )}
-                                    >
-                                        {readyServers.length > 0
-                                            ? 'Or create a new server'
-                                            : 'Create a server for this project'}
-                                    </Link>
-                                </div>
-                            )}
-                        </Step>
-                        <Step
-                            number={3}
-                            title="Address"
-                            done={project.webHost !== null}
-                        >
-                            <HostForm
-                                project={project}
-                                serverIp={server?.ip ?? null}
-                                disabled={!project.initialized}
-                            />
-                        </Step>
-                        <Step number={4} title="Deploy" done={false} last>
-                            <Form action={deploy(project.id)}>
-                                {({ processing }) => (
-                                    <div className="space-y-2">
-                                        <Button
-                                            type="submit"
-                                            disabled={!ready || processing}
-                                        >
-                                            {processing
-                                                ? 'Starting…'
-                                                : 'Deploy'}
-                                        </Button>
-                                        <p className="text-xs text-soft">
-                                            {project.framework &&
-                                            STATIC.includes(project.framework)
-                                                ? 'Builds the site on this computer and publishes it to the server. Needs Plex Commons on the server.'
-                                                : 'Builds the app image on this computer (needs Docker or Podman) and ships it to the server.'}
-                                        </p>
-                                    </div>
-                                )}
-                            </Form>
-                        </Step>
-                    </Card>
 
-                    <div className="flex flex-col gap-4.5">
-                        <Card label="Recent runs">
-                            {runs.length === 0 ? (
-                                <p className="py-2 text-xs text-soft">
-                                    Nothing yet.
-                                </p>
+                                    <EnvironmentBackingServicesCard
+                                        project={project}
+                                        currentEnv={activeEnvConfig}
+                                    />
+                                </>
                             ) : (
-                                runs.map((run) => {
-                                    const [label, tone] = runStatus[run.status];
-                                    return (
-                                        <Link
-                                            key={run.id}
-                                            href={showRun(run.id).url}
-                                            className="flex items-center justify-between gap-3 border-t border-line py-2 first:border-t-0"
-                                        >
-                                            <span className="truncate text-[13px]">
-                                                {run.label}
-                                            </span>
-                                            <StatusPill tone={tone}>
-                                                {label}
-                                            </StatusPill>
-                                        </Link>
-                                    );
-                                })
+                                <>
+                                    <CloudEnvironmentOverviewCard
+                                        project={project}
+                                        activeEnv={activeEnv}
+                                        activeEnvConfig={activeEnvConfig}
+                                        activeServer={activeServer}
+                                        activeHost={activeHost}
+                                        readyServers={readyServers}
+                                        runs={runs}
+                                        onOpenDeploy={() =>
+                                            setDeployModalOpen(true)
+                                        }
+                                    />
+
+                                    <EnvironmentBackingServicesCard
+                                        project={project}
+                                        currentEnv={activeEnvConfig}
+                                    />
+                                </>
                             )}
-                        </Card>
-                        <Card>
-                            <Link
-                                href={destroy(project.id).url}
-                                method="delete"
-                                as="button"
-                                className={buttonClass('ghost', 'sm')}
-                            >
-                                Remove from LaraKube Desktop
-                            </Link>
-                            <p className="mt-1 text-xs text-soft">
-                                Only forgets the project here. Your files and
-                                servers stay.
-                            </p>
-                        </Card>
+
+                            {activeTerminalRun && (
+                                <ProjectTerminalCard run={activeTerminalRun} />
+                            )}
+                        </div>
+
+                        {/* Sidebar Column (Right): Activity, Settings */}
+                        <div className="flex flex-col gap-5">
+                            <RecentRunsCard runs={runs} activeEnv={activeEnv} />
+                            <ProjectSettingsCard project={project} />
+                        </div>
                     </div>
+
+                    {/* Deploy Modal Popup */}
+                    <DeployDialog
+                        open={deployModalOpen}
+                        onClose={() => setDeployModalOpen(false)}
+                        project={project}
+                        server={server}
+                        activeEnv={activeCloudEnvName}
+                        activeServer={activeServer}
+                        activeHost={activeHost}
+                        frameworks={frameworks}
+                        runs={runs}
+                        latestRun={latestRun}
+                        wizardFrameworks={wizardFrameworks}
+                        email={email}
+                        laravelOptions={laravelOptions}
+                        readyServers={readyServers}
+                    />
+
+                    {/* Add Environment Modal Popup */}
+                    <AddEnvironmentDialog
+                        open={addEnvModalOpen}
+                        onClose={() => setAddEnvModalOpen(false)}
+                        project={project}
+                        readyServers={readyServers}
+                        onCreated={(newEnv) => setActiveEnv(newEnv)}
+                    />
                 </div>
             )}
         </AppLayout>
+    );
+}
+
+/** Top navigation bar for toggling between Local Dev and Cloud Environments */
+function EnvironmentSwitchBar({
+    activeEnv,
+    onSelectEnv,
+    cloudEnvs,
+    onAddEnv,
+    runs,
+    project,
+    onDeployClick,
+}: {
+    activeEnv: string;
+    onSelectEnv: (env: string) => void;
+    cloudEnvs: ProjectEnvironment[];
+    readyServers: ReadyServer[];
+    onAddEnv: () => void;
+    runs: RecentRun[];
+    project: Project;
+    onDeployClick: () => void;
+}) {
+    const isLocalActive = activeEnv === 'local';
+    const isLocalRunning = runs.some(
+        (r) =>
+            [
+                'up-project',
+                'down-project',
+                'start-project',
+                'stop-project',
+            ].includes(r.kind ?? '') && r.status === 'running',
+    );
+
+    const effectiveTld =
+        project.effectiveTld || project.localTld || project.globalTld || 'test';
+    const localDomain = `${project.name}.${effectiveTld}`;
+
+    // Target cloud environments to render (defaults to production if none configured)
+    const envsToRender =
+        cloudEnvs.length > 0
+            ? cloudEnvs
+            : [
+                  {
+                      name: 'production',
+                      isLocal: false,
+                      webHost: project.webHost,
+                      serverIp: project.serverIp,
+                      serverName: null,
+                  },
+              ];
+
+    const activeDeploy = runs.find(
+        (r) =>
+            r.kind === 'deploy-app' &&
+            r.status === 'running' &&
+            (r.label.includes(`(${activeEnv})`) ||
+                (!r.label.includes('(') && activeEnv === 'production')),
+    );
+
+    return (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-paper/60 p-1.5 shadow-2xs backdrop-blur-xs">
+            {/* Tabs List */}
+            <div className="flex flex-wrap items-center gap-1.5">
+                {/* Local Dev Tab */}
+                <button
+                    type="button"
+                    onClick={() => onSelectEnv('local')}
+                    className={cn(
+                        'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
+                        isLocalActive
+                            ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
+                            : 'text-soft hover:bg-paper hover:text-ink',
+                    )}
+                >
+                    <Laptop className="size-3.5 text-brand" />
+                    <span>Local Dev</span>
+                    {isLocalRunning && (
+                        <span className="size-2 animate-ping rounded-full bg-brand" />
+                    )}
+                </button>
+
+                <div className="mx-1 h-5 w-px bg-line shrink-0" />
+
+                {/* Cloud Environment Tabs */}
+                {envsToRender.map((env) => {
+                    const isSelected = activeEnv === env.name;
+                    const isRunning = runs.some(
+                        (r) =>
+                            r.kind === 'deploy-app' &&
+                            r.status === 'running' &&
+                            (r.label.includes(`(${env.name})`) ||
+                                (!r.label.includes('(') &&
+                                    env.name === 'production')),
+                    );
+                    return (
+                        <button
+                            key={env.name}
+                            type="button"
+                            onClick={() => onSelectEnv(env.name)}
+                            className={cn(
+                                'flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all',
+                                isSelected
+                                    ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
+                                    : 'text-soft hover:bg-paper hover:text-ink',
+                            )}
+                        >
+                            <Cloud className="size-3.5 text-sky-500" />
+                            <span className="uppercase">{env.name}</span>
+                            {env.serverName && (
+                                <span className="rounded bg-line/60 px-1 text-[10px] font-normal text-soft">
+                                    {env.serverName}
+                                </span>
+                            )}
+                            {isRunning && (
+                                <span className="size-2 animate-ping rounded-full bg-brand" />
+                            )}
+                        </button>
+                    );
+                })}
+
+                {/* Add Environment Button */}
+                <button
+                    type="button"
+                    onClick={onAddEnv}
+                    className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-medium text-soft transition-colors hover:bg-paper hover:text-ink"
+                    title="Add a new cloud environment overlay"
+                >
+                    <Plus className="size-3.5" />
+                    <span>Add</span>
+                </button>
+            </div>
+
+            {/* Contextual Action on the Right */}
+            <div className="flex items-center gap-2 pr-1">
+                {isLocalActive ? (
+                    <Link
+                        href={open().url}
+                        method="post"
+                        data={{ url: `https://${localDomain}` }}
+                        as="button"
+                        className={cn(buttonClass('secondary', 'sm'), 'gap-1.5')}
+                        title="Open local application in browser"
+                    >
+                        <span>Open local site</span>
+                        <ExternalLink className="size-3" />
+                    </Link>
+                ) : (
+                    <div className="flex items-center gap-2">
+                        {activeDeploy && (
+                            <StatusPill tone="busy">
+                                {`Deploying (${activeEnv})`}
+                            </StatusPill>
+                        )}
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={onDeployClick}
+                            className="gap-1.5 shadow-2xs"
+                        >
+                            <Play className="size-3 fill-current" />
+                            <span>Deploy to {activeEnv.toUpperCase()}</span>
+                        </Button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/** Focused dashboard card for a cloud environment (e.g. Staging, Production) */
+function CloudEnvironmentOverviewCard({
+    project,
+    activeEnv,
+    activeServer,
+    activeHost,
+    readyServers,
+    runs,
+    onOpenDeploy,
+}: {
+    project: Project;
+    activeEnv: string;
+    activeEnvConfig?: ProjectEnvironment;
+    activeServer: ReadyServer | Server | null;
+    activeHost: string | null;
+    readyServers: ReadyServer[];
+    runs: RecentRun[];
+    onOpenDeploy: () => void;
+}) {
+    const [showSwitchServer, setShowSwitchServer] = useState(false);
+    const [showEditHost, setShowEditHost] = useState(false);
+
+    const activeDeploy = runs.find(
+        (run) =>
+            run.kind === 'deploy-app' &&
+            run.status === 'running' &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const hasSucceededDeploy = runs.some(
+        (run) =>
+            run.kind === 'deploy-app' &&
+            run.status === 'succeeded' &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const headerPill = activeDeploy ? (
+        <StatusPill tone="busy">{`Deploying (${activeEnv})`}</StatusPill>
+    ) : hasSucceededDeploy ? (
+        <StatusPill tone="ok">
+            {activeServer?.name
+                ? `Deployed · ${activeServer.name}`
+                : `Deployed (${activeEnv})`}
+        </StatusPill>
+    ) : activeServer ? (
+        <StatusPill tone="muted">{`Server: ${activeServer.name}`}</StatusPill>
+    ) : (
+        <StatusPill tone="muted">Not deployed</StatusPill>
+    );
+
+    return (
+        <Card
+            label={`Cloud Environment · ${activeEnv.toUpperCase()}`}
+            action={headerPill}
+        >
+            <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                    {/* Server Details */}
+                    <div className="rounded-xl border border-line bg-paper/60 p-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                                Target Server
+                            </span>
+                            {readyServers.length > 1 && activeServer && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setShowSwitchServer(!showSwitchServer)
+                                    }
+                                    className="text-[11px] text-brand hover:underline"
+                                >
+                                    {showSwitchServer ? 'Cancel' : 'Change'}
+                                </button>
+                            )}
+                        </div>
+
+                        {activeServer ? (
+                            <div className="mt-2 flex items-center justify-between">
+                                <div>
+                                    <Link
+                                        href={showServer(activeServer.name).url}
+                                        className="flex items-center gap-1.5 text-xs font-semibold text-ink hover:underline"
+                                    >
+                                        <ServerIcon className="size-3.5 text-brand" />
+                                        <span>{activeServer.name}</span>
+                                    </Link>
+                                    <p className="mt-0.5 font-mono text-[11px] text-soft">
+                                        {activeServer.ip ?? 'No public IP'}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-2 text-xs text-soft">
+                                <span>No server linked yet. </span>
+                                <button
+                                    type="button"
+                                    onClick={onOpenDeploy}
+                                    className="font-medium text-brand hover:underline"
+                                >
+                                    Link server
+                                </button>
+                            </div>
+                        )}
+
+                        {showSwitchServer && (
+                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2">
+                                <p className="mb-1.5 text-[11px] font-medium text-ink">
+                                    Rebind {activeEnv} to:
+                                </p>
+                                <LinkServerForm
+                                    project={project}
+                                    servers={readyServers}
+                                    environment={activeEnv}
+                                    onSuccess={() => setShowSwitchServer(false)}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Public Address Details */}
+                    <div className="rounded-xl border border-line bg-paper/60 p-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                                Public Address
+                            </span>
+                            {activeHost && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditHost(!showEditHost)}
+                                    className="text-[11px] text-soft hover:text-ink"
+                                >
+                                    {showEditHost ? 'Cancel' : 'Edit'}
+                                </button>
+                            )}
+                        </div>
+
+                        {activeHost ? (
+                            <div className="mt-2 flex items-center justify-between">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="truncate font-mono text-xs font-semibold text-ink">
+                                            https://{activeHost}
+                                        </span>
+                                        <Link
+                                            href={open().url}
+                                            method="post"
+                                            data={{
+                                                url: `https://${activeHost}`,
+                                            }}
+                                            as="button"
+                                            className="shrink-0 text-brand hover:underline"
+                                            title="Visit public URL"
+                                        >
+                                            <ExternalLink className="size-3" />
+                                        </Link>
+                                    </div>
+                                    <p className="mt-0.5 text-[11px] text-soft">
+                                        Traefik Ingress SSL
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-2 text-xs text-soft">
+                                <span>No domain configured. </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditHost(true)}
+                                    className="font-medium text-brand hover:underline"
+                                >
+                                    Configure domain
+                                </button>
+                            </div>
+                        )}
+
+                        {showEditHost && (
+                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2">
+                                <HostForm
+                                    project={project}
+                                    serverIp={activeServer?.ip ?? null}
+                                    disabled={!project.initialized}
+                                    environment={activeEnv}
+                                    currentHost={activeHost}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Deploy Action Banner */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+                    <p className="text-xs text-soft">
+                        {activeDeploy
+                            ? 'Building and shipping app containers to cluster…'
+                            : hasSucceededDeploy
+                              ? `Last deployment to ${activeServer?.name ?? 'server'} succeeded.`
+                              : activeServer
+                                ? `Ready to deploy to ${activeServer.name}. Click Deploy to ship.`
+                                : 'Configure server and host to ship this environment.'}
+                    </p>
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={onOpenDeploy}
+                        className="gap-1.5"
+                    >
+                        <Play className="size-3.5 fill-current" />
+                        <span>
+                            {hasSucceededDeploy
+                                ? `Deploy ${activeEnv.toUpperCase()} again`
+                                : `Deploy to ${activeEnv.toUpperCase()}`}
+                        </span>
+                    </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+/** Segregated backing services card (Database, Cache, Storage, and Plex Commons) */
+function EnvironmentBackingServicesCard({
+    project,
+    currentEnv,
+}: {
+    project: Project;
+    currentEnv: ProjectEnvironment;
+}) {
+    const db = getDbProvider(project, currentEnv);
+    const cache = getCacheProvider(project, currentEnv);
+    const storage = getStorageProvider(project, currentEnv);
+    const hasPlex = (currentEnv.plex?.length ?? 0) > 0;
+
+    return (
+        <Card
+            label={`Backing Services · ${currentEnv.name.toUpperCase()}`}
+            action={
+                hasPlex ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-tools-tint px-2 py-0.5 font-mono text-[11px] font-medium text-tools ring-1 ring-tools/20">
+                        🟣 Plex Commons Active
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center gap-1 rounded bg-line/60 px-2 py-0.5 font-mono text-[11px] text-soft">
+                        Standalone Services
+                    </span>
+                )
+            }
+        >
+            <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {/* Database */}
+                    <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
+                        <div>
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                                Database
+                            </span>
+                            <div className="mt-1 text-xs font-semibold text-ink">
+                                {db.label}
+                            </div>
+                        </div>
+                        <div className="mt-3">{renderBadge(db)}</div>
+                    </div>
+
+                    {/* Cache & Queues */}
+                    <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
+                        <div>
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                                Cache &amp; Queues
+                            </span>
+                            <div className="mt-1 text-xs font-semibold text-ink">
+                                {cache.label}
+                            </div>
+                        </div>
+                        <div className="mt-3">{renderBadge(cache)}</div>
+                    </div>
+
+                    {/* Object Storage */}
+                    <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
+                        <div>
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                                Object Storage
+                            </span>
+                            <div className="mt-1 text-xs font-semibold text-ink">
+                                {storage.label}
+                            </div>
+                        </div>
+                        <div className="mt-3">{renderBadge(storage)}</div>
+                    </div>
+                </div>
+
+                {/* Plex Commons Status & Action Banner */}
+                <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-tools-tint text-base">
+                            🟣
+                        </span>
+                        <div>
+                            <p className="text-xs font-semibold text-ink">
+                                {hasPlex
+                                    ? `Connected to Plex Commons (${currentEnv.name})`
+                                    : `Plex Commons (${currentEnv.name})`}
+                            </p>
+                            <p className="text-[11px] text-soft">
+                                {hasPlex
+                                    ? 'Shares cluster-wide PostgreSQL, Redis, and MinIO instances to conserve CPU and RAM.'
+                                    : 'Connect this environment to Plex Commons to share cluster-wide services.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="shrink-0">
+                        {hasPlex ? (
+                            <Link
+                                href={leavePlex(project.id).url}
+                                method="post"
+                                data={{ environment: currentEnv.name }}
+                                as="button"
+                                className={cn(
+                                    buttonClass('danger', 'sm'),
+                                    'h-7 px-2.5 text-xs',
+                                )}
+                                title={`Disconnect ${currentEnv.name} from Plex Commons`}
+                            >
+                                Disconnect Commons
+                            </Link>
+                        ) : (
+                            <Link
+                                href={joinPlex(project.id).url}
+                                method="post"
+                                data={{ environment: currentEnv.name }}
+                                as="button"
+                                className={cn(
+                                    buttonClass('tools', 'sm'),
+                                    'h-7 px-2.5 text-xs',
+                                )}
+                                title={`Join ${currentEnv.name} to Plex Commons`}
+                            >
+                                Join Commons
+                            </Link>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+/** Deployment wizard presented as a clean pop-up modal dialog */
+function DeployDialog({
+    open,
+    onClose,
+    project,
+    server,
+    activeEnv,
+    activeServer,
+    activeHost,
+    frameworks,
+    runs,
+    latestRun,
+    wizardFrameworks,
+    email,
+    laravelOptions,
+    readyServers,
+}: {
+    open: boolean;
+    onClose: () => void;
+    project: Project;
+    server: Server | null;
+    activeEnv: string;
+    activeServer: ReadyServer | Server | null;
+    activeHost: string | null;
+    frameworks: Record<string, string>;
+    runs: RecentRun[];
+    latestRun: ProjectRun | null;
+    wizardFrameworks: string[];
+    email: string;
+    laravelOptions?: NewAppQuestion[] | null;
+    readyServers: ReadyServer[];
+}) {
+    const [showSwitchServer, setShowSwitchServer] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        if (open) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open, onClose]);
+
+    if (!open) return null;
+
+    const ready =
+        project.initialized &&
+        project.deployable &&
+        activeServer !== null &&
+        Boolean(activeHost);
+
+    const activeDeploy = runs.find(
+        (run) =>
+            run.kind === 'deploy-app' &&
+            run.status === 'running' &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const hasSucceededDeploy = runs.some(
+        (run) =>
+            run.kind === 'deploy-app' &&
+            run.status === 'succeeded' &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="deploy-dialog-title"
+                className="custom-scrollbar max-h-[90vh] w-full max-w-[620px] overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl ring-1 ring-line"
+            >
+                <div className="mb-4 flex items-center justify-between border-b border-line pb-4">
+                    <div>
+                        <h3
+                            id="deploy-dialog-title"
+                            className="text-base font-semibold text-ink"
+                        >
+                            Deploy to {activeEnv.toUpperCase()}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Configure server, public address, and ship your
+                            container image.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg p-1.5 text-soft transition-colors hover:bg-paper hover:text-ink"
+                        title="Close dialog"
+                    >
+                        <X className="size-4" />
+                    </button>
+                </div>
+
+                <div className="space-y-0">
+                    <Step
+                        number={1}
+                        title="Set up for LaraKube"
+                        done={project.initialized}
+                    >
+                        {project.initialized ? (
+                            <p className="text-xs text-soft">
+                                {project.deployable
+                                    ? 'Ready.'
+                                    : `LaraKube can't deploy ${project.framework ?? 'this framework'} yet.`}
+                            </p>
+                        ) : (
+                            <InitForm
+                                project={project}
+                                frameworks={frameworks}
+                                wizardFrameworks={wizardFrameworks}
+                                email={email}
+                                laravelOptions={laravelOptions}
+                            />
+                        )}
+                        {latestRun?.kind === 'init-project' && (
+                            <p
+                                className={cn(
+                                    'mt-2 text-xs',
+                                    latestRun.status === 'succeeded'
+                                        ? 'font-medium text-ok'
+                                        : latestRun.status === 'running'
+                                          ? 'animate-pulse font-medium text-brand'
+                                          : 'text-accent',
+                                )}
+                            >
+                                {latestRun.status === 'succeeded' &&
+                                    '✓ Framework initialized.'}
+                                {latestRun.status === 'running' &&
+                                    'Setting up for LaraKube…'}
+                                {latestRun.status === 'failed' &&
+                                    'Failed to set up project.'}
+                            </p>
+                        )}
+                    </Step>
+
+                    <Step
+                        number={2}
+                        title={`Server (${activeEnv.toUpperCase()})`}
+                        done={activeServer !== null}
+                    >
+                        {activeServer ? (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-soft">
+                                        <Link
+                                            href={
+                                                showServer(activeServer.name).url
+                                            }
+                                            className="font-medium text-ink hover:underline"
+                                        >
+                                            {activeServer.name}
+                                        </Link>{' '}
+                                        · {activeServer.ip}
+                                    </p>
+                                    {readyServers.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setShowSwitchServer(
+                                                    !showSwitchServer,
+                                                )
+                                            }
+                                            className="text-[11px] text-brand hover:underline"
+                                        >
+                                            {showSwitchServer
+                                                ? 'Cancel'
+                                                : 'Change server'}
+                                        </button>
+                                    )}
+                                </div>
+                                {showSwitchServer && (
+                                    <div className="rounded-lg border border-line bg-paper p-2.5">
+                                        <p className="mb-2 text-xs font-medium text-ink">
+                                            Rebind {activeEnv} to a different
+                                            server:
+                                        </p>
+                                        <LinkServerForm
+                                            project={project}
+                                            servers={readyServers}
+                                            environment={activeEnv}
+                                            onSuccess={() =>
+                                                setShowSwitchServer(false)
+                                            }
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {readyServers.length > 0 && (
+                                    <LinkServerForm
+                                        project={project}
+                                        servers={readyServers}
+                                        environment={activeEnv}
+                                    />
+                                )}
+                                <Link
+                                    href={
+                                        createServer({
+                                            query: {
+                                                project: project.id,
+                                            },
+                                        }).url
+                                    }
+                                    className={buttonClass(
+                                        readyServers.length > 0
+                                            ? 'ghost'
+                                            : 'secondary',
+                                        'sm',
+                                        !project.initialized
+                                            ? 'pointer-events-none opacity-45'
+                                            : undefined,
+                                    )}
+                                >
+                                    {readyServers.length > 0
+                                        ? 'Or create a new server'
+                                        : 'Create a server for this project'}
+                                </Link>
+                            </div>
+                        )}
+                        {latestRun?.kind === 'link-server' && (
+                            <p
+                                className={cn(
+                                    'mt-2 text-xs',
+                                    latestRun.status === 'succeeded'
+                                        ? 'font-medium text-ok'
+                                        : latestRun.status === 'running'
+                                          ? 'animate-pulse font-medium text-brand'
+                                          : 'text-accent',
+                                )}
+                            >
+                                {latestRun.status === 'succeeded' &&
+                                    '✓ Server linked.'}
+                                {latestRun.status === 'running' &&
+                                    'Linking to server…'}
+                                {latestRun.status === 'failed' &&
+                                    'Failed to link server.'}
+                            </p>
+                        )}
+                    </Step>
+
+                    <Step
+                        number={3}
+                        title={`Address (${activeEnv.toUpperCase()})`}
+                        done={Boolean(activeHost)}
+                    >
+                        <HostForm
+                            project={project}
+                            serverIp={activeServer?.ip ?? null}
+                            disabled={!project.initialized}
+                            environment={activeEnv}
+                            currentHost={activeHost}
+                        />
+                        {latestRun?.kind === 'configure-host' && (
+                            <p
+                                className={cn(
+                                    'mt-2 text-xs',
+                                    latestRun.status === 'succeeded'
+                                        ? 'font-medium text-ok'
+                                        : latestRun.status === 'running'
+                                          ? 'animate-pulse font-medium text-brand'
+                                          : 'text-accent',
+                                )}
+                            >
+                                {latestRun.status === 'succeeded' &&
+                                    `✓ Hosts saved for ${activeEnv}.`}
+                                {latestRun.status === 'running' &&
+                                    'Configuring hosts…'}
+                                {latestRun.status === 'failed' &&
+                                    'Failed to save hosts.'}
+                            </p>
+                        )}
+                    </Step>
+
+                    <Step
+                        number={4}
+                        title={`Deploy (${activeEnv.toUpperCase()})`}
+                        done={hasSucceededDeploy}
+                        last
+                    >
+                        <Form action={deploy(project.id)}>
+                            {({ processing }) => (
+                                <div className="space-y-2">
+                                    <input
+                                        type="hidden"
+                                        name="environment"
+                                        value={activeEnv}
+                                    />
+                                    <div className="flex items-center gap-3">
+                                        <Button
+                                            type="submit"
+                                            disabled={
+                                                !ready ||
+                                                processing ||
+                                                Boolean(activeDeploy)
+                                            }
+                                        >
+                                            <Play className="size-3.5 fill-current" />
+                                            <span>
+                                                {processing
+                                                    ? 'Starting…'
+                                                    : activeDeploy
+                                                      ? 'Deploying…'
+                                                      : hasSucceededDeploy
+                                                        ? `Deploy ${activeEnv} again`
+                                                        : `Deploy to ${activeEnv}`}
+                                            </span>
+                                        </Button>
+                                        {activeDeploy && (
+                                            <Link
+                                                href={
+                                                    showRun(activeDeploy.id).url
+                                                }
+                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
+                                            >
+                                                <span className="size-2 animate-ping rounded-full bg-brand" />
+                                                <span>View live progress</span>
+                                                <ArrowRight className="size-3" />
+                                            </Link>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-soft">
+                                        {project.framework &&
+                                        STATIC.includes(project.framework)
+                                            ? `Builds the site on this computer and publishes it to ${activeServer?.name ?? 'the server'}. Needs Plex Commons on the server.`
+                                            : `Builds the app image on this computer (needs Docker or Podman) and ships it to ${activeServer?.name ?? 'the server'} (${activeEnv}).`}
+                                    </p>
+                                </div>
+                            )}
+                        </Form>
+                    </Step>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** Modal dialog for adding a new cloud environment */
+function AddEnvironmentDialog({
+    open,
+    onClose,
+    project,
+    readyServers,
+    onCreated,
+}: {
+    open: boolean;
+    onClose: () => void;
+    project: Project;
+    readyServers: ReadyServer[];
+    onCreated?: (envName: string) => void;
+}) {
+    const [name, setName] = useState('');
+    const [server, setServer] = useState(readyServers[0]?.name ?? '');
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        if (open) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open, onClose]);
+
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="add-env-dialog-title"
+                className="w-full max-w-[480px] rounded-2xl bg-surface p-6 shadow-2xl ring-1 ring-line"
+            >
+                <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
+                    <div>
+                        <h3
+                            id="add-env-dialog-title"
+                            className="text-base font-semibold text-ink"
+                        >
+                            Add Cloud Environment
+                        </h3>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Create an environment overlay and bind it to a
+                            server.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg p-1.5 text-soft transition-colors hover:bg-paper hover:text-ink"
+                        title="Close dialog"
+                    >
+                        <X className="size-4" />
+                    </button>
+                </div>
+
+                <Form
+                    action={link(project.id)}
+                    className="space-y-4"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <div>
+                                <label className="mb-1.5 block text-xs font-medium text-ink">
+                                    Environment Name
+                                </label>
+                                <input
+                                    name="environment"
+                                    value={name}
+                                    onChange={(e) =>
+                                        setName(
+                                            e.target.value
+                                                .toLowerCase()
+                                                .replace(/[^a-z0-9_-]/g, ''),
+                                        )
+                                    }
+                                    placeholder="staging, qa, uat"
+                                    spellCheck={false}
+                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                                {errors.environment && (
+                                    <p className="mt-1 text-xs text-accent">
+                                        {errors.environment}
+                                    </p>
+                                )}
+                                <p className="mt-1 text-[11px] text-soft">
+                                    Lowercase letters, numbers, hyphens, and
+                                    underscores only.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="mb-1.5 block text-xs font-medium text-ink">
+                                    Target Server
+                                </label>
+                                <select
+                                    name="server"
+                                    value={server}
+                                    onChange={(e) => setServer(e.target.value)}
+                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                >
+                                    {readyServers.map((s) => (
+                                        <option key={s.name} value={s.name}>
+                                            {s.name} {s.ip ? `· ${s.ip}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.server && (
+                                    <p className="mt-1 text-xs text-accent">
+                                        {errors.server}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2.5 border-t border-line pt-3">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onClose}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={
+                                        name.trim() === '' ||
+                                        processing ||
+                                        readyServers.length === 0
+                                    }
+                                >
+                                    {processing
+                                        ? 'Creating…'
+                                        : 'Create Environment'}
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </Form>
+            </div>
+        </div>
     );
 }
 
@@ -372,7 +1493,6 @@ function InitForm({
     const { setData } = form;
     const needsEmail = wizardFrameworks.includes(form.data.framework);
     const isLaravel = form.data.framework === 'laravel';
-    // An existing app's frontend is detected by the CLI, never asked.
     const questions = useMemo(
         () => laravelOptions?.filter((question) => question.key !== 'frontend'),
         [laravelOptions],
@@ -478,20 +1598,29 @@ function InitForm({
     );
 }
 
-/** Binds the project's production environment to one of the user's ready servers. */
+/** Binds the project's cloud environment to one of the user's ready servers. */
 function LinkServerForm({
     project,
     servers,
+    environment = 'production',
+    onSuccess,
 }: {
     project: Project;
     servers: ReadyServer[];
+    environment?: string;
+    onSuccess?: () => void;
 }) {
-    const [server, setServer] = useState(servers[0].name);
+    const [server, setServer] = useState(servers[0]?.name ?? '');
 
     return (
         <Form action={link(project.id)} className="space-y-1.5">
             {({ errors, processing }) => (
                 <>
+                    <input
+                        type="hidden"
+                        name="environment"
+                        value={environment}
+                    />
                     <div className="flex items-center gap-2.5">
                         <select
                             name="server"
@@ -513,7 +1642,11 @@ function LinkServerForm({
                         <Button
                             type="submit"
                             size="sm"
-                            disabled={!project.initialized || processing}
+                            disabled={
+                                !project.initialized ||
+                                processing ||
+                                servers.length === 0
+                            }
                         >
                             {processing ? 'Linking…' : 'Link'}
                         </Button>
@@ -531,17 +1664,30 @@ function HostForm({
     project,
     serverIp,
     disabled,
+    environment = 'production',
+    currentHost,
 }: {
     project: Project;
     serverIp: string | null;
     disabled: boolean;
+    environment?: string;
+    currentHost?: string | null;
 }) {
-    const [value, setValue] = useState(project.webHost ?? '');
+    const [value, setValue] = useState(currentHost ?? project.webHost ?? '');
+
+    useEffect(() => {
+        setValue(currentHost ?? '');
+    }, [currentHost]);
 
     return (
         <Form action={setHost(project.id)} className="space-y-1.5">
             {({ errors, processing }) => (
                 <>
+                    <input
+                        type="hidden"
+                        name="environment"
+                        value={environment}
+                    />
                     <div className="flex items-center gap-2.5">
                         <input
                             name="host"
@@ -551,7 +1697,11 @@ function HostForm({
                                     event.target.value.trim().toLowerCase(),
                                 )
                             }
-                            placeholder="app.example.com"
+                            placeholder={
+                                environment === 'production'
+                                    ? 'app.example.com'
+                                    : `${environment}.example.com`
+                            }
                             disabled={disabled}
                             spellCheck={false}
                             className="w-72 rounded-lg border-0 px-3 py-1.5 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers disabled:opacity-45"
@@ -564,7 +1714,7 @@ function HostForm({
                                 disabled ||
                                 processing ||
                                 value === '' ||
-                                value === project.webHost
+                                value === (currentHost ?? '')
                             }
                         >
                             {processing ? 'Saving…' : 'Save'}
@@ -649,5 +1799,561 @@ function EditorMenu({
                 </p>
             )}
         </div>
+    );
+}
+
+function ProjectOptionsMenu({ project }: { project: Project }) {
+    return (
+        <details className="group relative">
+            <summary
+                className={cn(
+                    buttonClass('secondary'),
+                    'cursor-pointer list-none px-2.5',
+                )}
+                title="More options"
+            >
+                <MoreHorizontal className="size-4" />
+            </summary>
+            <div className="absolute right-0 z-20 mt-1.5 w-56 rounded-xl bg-surface p-1 shadow-lg ring-1 ring-line">
+                <Link
+                    href={destroy(project.id).url}
+                    method="delete"
+                    as="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-accent transition-colors hover:bg-paper"
+                >
+                    <Trash2 className="size-3.5" />
+                    <span>Remove from Desktop</span>
+                </Link>
+            </div>
+        </details>
+    );
+}
+
+function LocalClusterCard({
+    project,
+    runs,
+}: {
+    project: Project;
+    runs: RecentRun[];
+}) {
+    const activeLifecycle = runs.find(
+        (run) =>
+            [
+                'up-project',
+                'down-project',
+                'start-project',
+                'stop-project',
+            ].includes(run.kind ?? '') && run.status === 'running',
+    );
+    const effectiveTld =
+        project.effectiveTld || project.localTld || project.globalTld || 'test';
+    const domain = `${project.name}.${effectiveTld}`;
+
+    return (
+        <Card label="Local Development">
+            <div className="space-y-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-medium">
+                                https://{domain}
+                            </span>
+                            <Link
+                                href={open().url}
+                                method="post"
+                                data={{ url: `https://${domain}` }}
+                                as="button"
+                                className="text-xs text-brand hover:underline"
+                            >
+                                Open ↗
+                            </Link>
+                        </div>
+                        <p className="text-xs text-soft">
+                            Local cluster address (Traefik SSL)
+                        </p>
+                    </div>
+                    {activeLifecycle && (
+                        <Link
+                            href={showRun(activeLifecycle.id).url}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
+                        >
+                            <span className="size-2 animate-ping rounded-full bg-brand" />
+                            {activeLifecycle.label}…
+                        </Link>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                    <Form action={up(project.id)}>
+                        {({ processing }) => (
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={
+                                    Boolean(activeLifecycle) || processing
+                                }
+                            >
+                                {processing ? 'Starting…' : 'Up / Rebuild'}
+                            </Button>
+                        )}
+                    </Form>
+                    <Form action={startLifecycle(project.id)}>
+                        {({ processing }) => (
+                            <Button
+                                type="submit"
+                                variant="secondary"
+                                size="sm"
+                                disabled={
+                                    Boolean(activeLifecycle) || processing
+                                }
+                            >
+                                Resume
+                            </Button>
+                        )}
+                    </Form>
+                    <Form action={stopLifecycle(project.id)}>
+                        {({ processing }) => (
+                            <Button
+                                type="submit"
+                                variant="secondary"
+                                size="sm"
+                                disabled={
+                                    Boolean(activeLifecycle) || processing
+                                }
+                            >
+                                Pause
+                            </Button>
+                        )}
+                    </Form>
+                    <Form action={down(project.id)}>
+                        {({ processing }) => (
+                            <Button
+                                type="submit"
+                                variant="ghost"
+                                size="sm"
+                                disabled={
+                                    Boolean(activeLifecycle) || processing
+                                }
+                            >
+                                Down
+                            </Button>
+                        )}
+                    </Form>
+                </div>
+
+                <div className="border-t border-line pt-2.5">
+                    <ProjectTldForm project={project} />
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+function ProjectTldForm({ project }: { project: Project }) {
+    const [tldValue, setTldValue] = useState(project.localTld ?? '');
+
+    return (
+        <Form
+            action={setProjectTld(project.id)}
+            className="flex items-center gap-2 text-xs"
+        >
+            {({ processing }) => (
+                <>
+                    <span className="text-soft">TLD override:</span>
+                    <select
+                        name="tld"
+                        value={tldValue}
+                        onChange={(e) => setTldValue(e.target.value)}
+                        className="rounded border border-line bg-surface px-2 py-0.5 text-xs text-ink outline-none"
+                    >
+                        <option value="">
+                            Default (.
+                            {project.globalTld || 'test'})
+                        </option>
+                        <option value="test">.test</option>
+                        <option value="kube">.kube</option>
+                        <option value="localhost">.localhost</option>
+                        <option value="local">.local</option>
+                        <option value="internal">.internal</option>
+                    </select>
+                    <Button
+                        type="submit"
+                        variant="secondary"
+                        size="sm"
+                        disabled={
+                            processing || tldValue === (project.localTld ?? '')
+                        }
+                    >
+                        {processing ? 'Saving…' : 'Save'}
+                    </Button>
+                </>
+            )}
+        </Form>
+    );
+}
+
+function RecentRunsCard({
+    runs,
+    activeEnv,
+}: {
+    runs: RecentRun[];
+    activeEnv: string;
+}) {
+    const [filterByEnv, setFilterByEnv] = useState(true);
+
+    const filteredRuns = useMemo(() => {
+        if (!filterByEnv) return runs;
+        return runs.filter((run) => {
+            const runEnv = run.environment?.toLowerCase();
+            if (runEnv) {
+                return runEnv === activeEnv.toLowerCase();
+            }
+
+            if (activeEnv === 'local') {
+                return (
+                    !runEnv ||
+                    runEnv === 'local' ||
+                    [
+                        'up-project',
+                        'down-project',
+                        'start-project',
+                        'stop-project',
+                        'init-project',
+                        'new-project',
+                    ].includes(run.kind ?? '')
+                );
+            }
+            return (
+                runEnv === activeEnv.toLowerCase() ||
+                run.label
+                    .toLowerCase()
+                    .includes(`(${activeEnv.toLowerCase()})`) ||
+                (!run.label.includes('(') &&
+                    activeEnv.toLowerCase() === 'production' &&
+                    ['deploy-app', 'link-server', 'configure-host'].includes(
+                        run.kind ?? '',
+                    ))
+            );
+        });
+    }, [runs, activeEnv, filterByEnv]);
+
+    return (
+        <Card
+            label={
+                filterByEnv
+                    ? `Recent runs · ${activeEnv.toUpperCase()}`
+                    : 'Recent runs (All)'
+            }
+            action={
+                <button
+                    type="button"
+                    onClick={() => setFilterByEnv(!filterByEnv)}
+                    className="cursor-pointer text-[11px] text-soft transition-colors hover:text-ink"
+                    title={
+                        filterByEnv
+                            ? 'Show all project runs'
+                            : `Filter runs for ${activeEnv}`
+                    }
+                >
+                    {filterByEnv ? 'Show all' : `Filter ${activeEnv}`}
+                </button>
+            }
+        >
+            {filteredRuns.length === 0 ? (
+                <p className="py-2 text-xs text-soft">
+                    {filterByEnv
+                        ? `No recent runs for ${activeEnv}.`
+                        : 'Nothing yet.'}
+                </p>
+            ) : (
+                filteredRuns.map((run) => {
+                    const [label, tone] = runStatus[run.status];
+                    return (
+                        <Link
+                            key={run.id}
+                            href={showRun(run.id).url}
+                            className="-mx-1 flex items-center justify-between gap-3 rounded border-t border-line px-1 py-2 transition-colors first:border-t-0 hover:bg-paper"
+                        >
+                            <span className="truncate text-[13px]">
+                                {run.label}
+                            </span>
+                            <StatusPill tone={tone}>{label}</StatusPill>
+                        </Link>
+                    );
+                })
+            )}
+        </Card>
+    );
+}
+
+function ProjectSettingsCard({ project }: { project: Project }) {
+    return (
+        <Card label="Project Settings">
+            <div className="space-y-2">
+                <Link
+                    href={destroy(project.id).url}
+                    method="delete"
+                    as="button"
+                    className={buttonClass(
+                        'danger',
+                        'sm',
+                        'w-full justify-center gap-1.5',
+                    )}
+                >
+                    <Trash2 className="size-3.5" />
+                    <span>Remove from LaraKube Desktop</span>
+                </Link>
+                <p className="text-center text-xs leading-relaxed text-soft">
+                    Only forgets the project in Desktop. Your local files,
+                    database, and cloud servers stay untouched.
+                </p>
+            </div>
+        </Card>
+    );
+}
+
+function ProjectTerminalCard({ run }: { run: ProjectRun }) {
+    const running = run.status === 'running';
+    const [label, tone] = runStatus[run.status];
+    const [collapsed, setCollapsed] = useState(false);
+
+    useEffect(() => {
+        if (running) {
+            setCollapsed(false);
+        }
+    }, [running, run.id]);
+
+    return (
+        <Card>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="relative flex size-6 shrink-0 items-center justify-center rounded-lg bg-term text-white shadow-2xs">
+                        <Terminal className="size-3 text-brand" />
+                        {running && (
+                            <span className="absolute -top-0.5 -right-0.5 size-2 animate-ping rounded-full bg-brand" />
+                        )}
+                    </span>
+                    <span
+                        className="truncate text-xs font-semibold text-ink"
+                        title={run.label}
+                    >
+                        {run.label}
+                    </span>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2.5">
+                    <StatusPill tone={tone}>{label}</StatusPill>
+                    {running && (
+                        <Link
+                            href={cancel(run.id).url}
+                            method="post"
+                            as="button"
+                            className="text-xs font-medium text-accent hover:underline"
+                        >
+                            Cancel
+                        </Link>
+                    )}
+                    <Link
+                        href={showRun(run.id).url}
+                        className="inline-flex items-center gap-1 text-xs text-soft hover:text-ink hover:underline"
+                        title="View in Activity"
+                    >
+                        <span>Activity</span>
+                        <ExternalLink className="size-3" />
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setCollapsed(!collapsed)}
+                        className="ml-1 inline-flex cursor-pointer items-center gap-1 text-xs text-soft transition-colors hover:text-ink"
+                        title={
+                            collapsed
+                                ? 'Expand terminal output'
+                                : 'Collapse terminal output'
+                        }
+                    >
+                        <span>{collapsed ? 'Expand' : 'Collapse'}</span>
+                        {collapsed ? (
+                            <ChevronDown className="size-3" />
+                        ) : (
+                            <ChevronUp className="size-3" />
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            {!collapsed && (
+                <div className="pt-3">
+                    <LogPanel
+                        output={run.output}
+                        placeholder={
+                            running ? 'Running command…' : 'No output recorded.'
+                        }
+                        follow={running}
+                        className="h-72 max-h-96 min-h-[160px]"
+                    />
+                </div>
+            )}
+        </Card>
+    );
+}
+
+function getDbProvider(project: Project, env: ProjectEnvironment) {
+    const db = project.database ?? 'database';
+    if (db.toLowerCase() === 'sqlite') {
+        return {
+            label: 'SQLite (Local File)',
+            badge: '📄 SQLite',
+            tone: 'default',
+        };
+    }
+    const isPlex =
+        env.plex?.includes('postgres') ||
+        env.plex?.includes('mysql') ||
+        env.plex?.includes('database') ||
+        (project.database ? env.plex?.includes(project.database) : false);
+    if (isPlex) {
+        return {
+            label: `Plex Commons (${db})`,
+            badge: `🟣 Plex ${db}`,
+            tone: 'plex',
+        };
+    }
+    const isManaged =
+        env.managed?.includes('postgres') ||
+        env.managed?.includes('mysql') ||
+        env.managed?.includes('database') ||
+        (project.database ? env.managed?.includes(project.database) : false);
+    if (isManaged) {
+        return {
+            label: `Cloud Managed (${db.toUpperCase()})`,
+            badge: `☁️ Cloud ${db}`,
+            tone: 'cloud',
+        };
+    }
+    if (project.database) {
+        return {
+            label: `In-Cluster Pod (${db})`,
+            badge: `📦 Pod (${db})`,
+            tone: 'pod',
+        };
+    }
+    return { label: 'None', badge: '—', tone: 'none' };
+}
+
+function getCacheProvider(project: Project, env: ProjectEnvironment) {
+    const isPlex =
+        env.plex?.includes('redis') ||
+        env.plex?.includes('cache') ||
+        env.plex?.includes('valkey');
+    if (isPlex) {
+        return {
+            label: 'Plex Commons (Redis)',
+            badge: '🟣 Plex Redis',
+            tone: 'plex',
+        };
+    }
+    const isManaged =
+        env.managed?.includes('redis') ||
+        env.managed?.includes('cache') ||
+        env.managed?.includes('valkey');
+    if (isManaged) {
+        return {
+            label: 'Cloud Managed (Redis)',
+            badge: '☁️ Cloud Redis',
+            tone: 'cloud',
+        };
+    }
+    if (project.cacheDriver === 'redis') {
+        return {
+            label: 'In-Cluster Pod (Redis)',
+            badge: '📦 Pod (Redis)',
+            tone: 'pod',
+        };
+    }
+    return {
+        label: 'Local File / Array',
+        badge: '📄 File / Array',
+        tone: 'default',
+    };
+}
+
+function getStorageProvider(project: Project, env: ProjectEnvironment) {
+    const isPlex =
+        env.plex?.includes('minio') ||
+        env.plex?.includes('s3') ||
+        env.plex?.includes('storage');
+    if (isPlex) {
+        return {
+            label: 'Plex Commons (MinIO S3)',
+            badge: '🟣 Plex MinIO',
+            tone: 'plex',
+        };
+    }
+    const isManaged =
+        env.managed?.includes('minio') ||
+        env.managed?.includes('s3') ||
+        env.managed?.includes('storage');
+    if (isManaged) {
+        return {
+            label: 'Cloud Managed (AWS S3 / R2)',
+            badge: '☁️ Cloud S3',
+            tone: 'cloud',
+        };
+    }
+    if (project.objectStorage === 'minio') {
+        return {
+            label: 'In-Cluster Pod (MinIO)',
+            badge: '📦 Pod (MinIO)',
+            tone: 'pod',
+        };
+    }
+    return {
+        label: 'Local Disk PVC',
+        badge: '📁 Local Disk',
+        tone: 'default',
+    };
+}
+
+function renderBadge(item: { badge: string; label: string; tone: string }) {
+    if (item.tone === 'none') {
+        return <span className="text-xs text-faint">—</span>;
+    }
+    if (item.tone === 'plex') {
+        return (
+            <span
+                className="inline-flex items-center gap-1 rounded bg-tools-tint px-2 py-0.5 font-mono text-[11px] font-medium text-tools ring-1 ring-tools/20"
+                title={item.label}
+            >
+                {item.badge}
+            </span>
+        );
+    }
+    if (item.tone === 'cloud') {
+        return (
+            <span
+                className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 font-mono text-[11px] font-medium text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800"
+                title={item.label}
+            >
+                {item.badge}
+            </span>
+        );
+    }
+    if (item.tone === 'pod') {
+        return (
+            <span
+                className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 font-mono text-[11px] text-ink ring-1 ring-line"
+                title={item.label}
+            >
+                {item.badge}
+            </span>
+        );
+    }
+    return (
+        <span
+            className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 font-mono text-[11px] text-soft ring-1 ring-line"
+            title={item.label}
+        >
+            {item.badge}
+        </span>
     );
 }

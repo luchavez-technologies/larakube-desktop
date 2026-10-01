@@ -8,8 +8,12 @@ use App\Http\Requests\InstallClusterToolRequest;
 use App\Http\Requests\RemoveClusterToolRequest;
 use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
+use App\Services\LaraKube\ToolLocator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -33,7 +37,7 @@ class ClusterToolController extends Controller
         return $names === [] ? to_route('servers.index') : to_route('servers.tools.index', $names[0]);
     }
 
-    public function index(string $server): Response
+    public function index(string $server, ClusterStatus $status): Response
     {
         $stack = $this->readyServer($server);
         session(['tools.server' => $server]);
@@ -53,13 +57,34 @@ class ClusterToolController extends Controller
                 ? $last['tools']
                 : Inertia::defer(fn (): ?array => $this->tools->forContext($context), 'tools'),
             'installing' => $this->installingTools($server),
+            'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
+            'domains' => Inertia::defer(fn (): array => $status->domains($context), 'domains'),
         ]);
+    }
+
+    public function checkDns(Request $request, string $server, ClusterStatus $status): JsonResponse
+    {
+        $stack = $this->readyServer($server);
+        $domain = $request->string('domain')->trim()->lower()->toString();
+        $serverIp = $stack['ip'] ?? null;
+
+        if ($domain === '' || $serverIp === null) {
+            return response()->json([
+                'matches' => false,
+                'resolvedIp' => null,
+                'serverIp' => $serverIp ?? '',
+                'isWildcard' => false,
+            ]);
+        }
+
+        return response()->json($status->checkDns($domain, $serverIp));
     }
 
     public function show(Request $request, string $server, string $tool): Response
     {
         $stack = $this->readyServer($server);
-        $row = $this->tools->find((string) $stack['context'], $tool, $request->string('instance')->toString());
+        $domain = $request->string('domain')->toString() ?: $request->string('host')->toString() ?: $request->string('instance')->toString();
+        $row = $this->tools->find((string) $stack['context'], $tool, $domain);
 
         abort_if($row === null, 404);
 
@@ -77,20 +102,49 @@ class ClusterToolController extends Controller
 
         abort_if($row === null, 404);
 
+        $domain = $request->string('domain')->trim()->lower()->toString();
+
+        $adminEmail = $request->string('admin_email')->trim()->toString();
+        $needsAdminEmail = (bool) ($row['requiresAdminEmail'] ?? false) || in_array($tool, [
+            'pocketbase', 'directus', 'data', 'sso', 'zitadel', 'mail', 'stalwart', 'notes',
+            'outline', 'support', 'chatwoot', 'errors', 'glitchtip', 'metabase', 'git',
+            'forgejo', 'design', 'penpot', 'vpn', 'netbird',
+        ], true);
+
+        if ($adminEmail === '' && $needsAdminEmail) {
+            $adminEmail = is_string($stack['account'] ?? null) && str_contains((string) $stack['account'], '@')
+                ? (string) $stack['account']
+                : "admin@{$domain}";
+        }
+
+        $displayName = $this->displayName($row);
+        $label = 'Install '.$displayName." on {$server}";
+
         $run = app(CliRunner::class)->start(
-            label: 'Install '.$this->displayName($row)." on {$server}",
+            label: $label,
             arguments: [
                 'tool:add',
                 "--tool={$tool}",
                 "--context={$context}",
-                '--domain='.$request->string('domain'),
+                "--domain={$domain}",
+                ...($adminEmail !== '' ? ["--admin-email={$adminEmail}"] : []),
                 $request->boolean('wire_sso') ? '--wire-sso' : '--no-wire-sso',
                 $request->boolean('wire_mail') ? '--wire-mail' : '--no-wire-mail',
                 '--force',
             ],
             kind: RunKind::InstallClusterTool,
             subject: $tool,
-            meta: ['server' => $server, 'context' => $context, 'tool' => $tool],
+            meta: [
+                'server' => $server,
+                'context' => $context,
+                'tool' => $tool,
+                ...($adminEmail !== '' ? ['admin_email' => $adminEmail] : []),
+            ],
+            targetType: 'tool',
+            targetName: $displayName,
+            serverName: $server,
+            context: $context,
+            tool: $tool,
         );
 
         return to_route('runs.show', $run);
@@ -100,27 +154,38 @@ class ClusterToolController extends Controller
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
-        $row = $this->tools->find($context, $tool, $request->string('instance')->toString());
+        $domain = $request->string('domain')->toString() ?: $request->string('host')->toString() ?: $request->string('instance')->toString();
+        $row = $this->tools->find($context, $tool, $domain);
 
         abort_if($row === null || ! $row['installed'], 404);
 
         // The host is an instance's identity, so --domain removes exactly this one.
         $host = is_string($row['host'] ?? null) && $row['host'] !== '' ? $row['host'] : null;
+        $displayName = $this->displayName($row);
 
         $run = app(CliRunner::class)->start(
-            label: 'Remove '.$this->displayName($row)." from {$server}",
+            label: 'Remove '.$displayName." from {$server}",
             arguments: ["{$tool}:remove", 'production', "--context={$context}", ...($host !== null ? ["--domain={$host}"] : []), '--force'],
             kind: RunKind::RemoveClusterTool,
             subject: $tool,
             meta: ['server' => $server, 'context' => $context, 'tool' => $tool],
+            targetType: 'tool',
+            targetName: $displayName,
+            serverName: $server,
+            context: $context,
+            tool: $tool,
         );
 
         return to_route('runs.show', $run);
     }
 
-    public function refresh(string $server): RedirectResponse
+    public function refresh(string $server, ClusterStatus $status): RedirectResponse
     {
-        $this->tools->forget((string) $this->readyServer($server)['context']);
+        $context = (string) $this->readyServer($server)['context'];
+        $this->tools->forget($context);
+        $status->forgetDomains($context);
+        $status->forgetDns($context);
+        $status->forgetTls($context);
 
         return to_route('servers.tools.index', $server);
     }
@@ -157,9 +222,9 @@ class ClusterToolController extends Controller
         return Run::query()
             ->where('kind', RunKind::InstallClusterTool)
             ->where('status', RunStatus::Running)
+            ->where(fn ($q) => $q->where('server_name', $server)->orWhere('meta->server', $server))
             ->get()
-            ->filter(fn (Run $run): bool => ($run->meta['server'] ?? null) === $server)
-            ->mapWithKeys(fn (Run $run): array => [(string) $run->subject => $run->id])
+            ->mapWithKeys(fn (Run $run): array => [(string) ($run->tool ?? $run->subject) => $run->id])
             ->all();
     }
 }

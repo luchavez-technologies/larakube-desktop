@@ -19,6 +19,27 @@ enum RunKind: string
     case LinkServer = 'link-server';
     case ConfigureHost = 'configure-host';
     case DeployApp = 'deploy-app';
+    case UpProject = 'up-project';
+    case DownProject = 'down-project';
+    case StartProject = 'start-project';
+    case StopProject = 'stop-project';
+    case PlexInit = 'plex-init';
+    case PlexStart = 'plex-start';
+    case PlexStop = 'plex-stop';
+    case PlexJoin = 'plex-join';
+    case PlexLeave = 'plex-leave';
+    case ContextImport = 'context-import';
+    case ContextSwitch = 'context-switch';
+    case ContextBackup = 'context-backup';
+    case ContextRestore = 'context-restore';
+    case ContextRemove = 'context-remove';
+    case ClusterGrant = 'cluster-grant';
+    case ClusterRevoke = 'cluster-revoke';
+    case CompanionAdd = 'companion-add';
+    case CompanionRemove = 'companion-remove';
+    case CompanionStart = 'companion-start';
+    case CompanionStop = 'companion-stop';
+    case CloudAuth = 'cloud-auth';
 
     public function changesClusterTools(): bool
     {

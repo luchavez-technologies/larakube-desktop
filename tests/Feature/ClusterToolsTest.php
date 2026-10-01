@@ -191,6 +191,63 @@ test('installing validates the domain and runs tool:add against the server conte
     File::deleteDirectory($bin);
 });
 
+test('installing with a specific domain host targets that host', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'crm']), [
+        'domain' => 'staging.example.com',
+        'wire_sso' => '0',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::InstallClusterTool)
+        ->and($run->label)->toBe('Install CRM on workshop-demo')
+        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm']);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'tool:add', '--tool=crm', '--context=larakube-203.0.113.21', '--domain=staging.example.com', '--no-wire-sso', '--no-wire-mail', '--force', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
+test('installing an additional deployment of a tool succeeds with its host', function () {
+    $bin = clusterToolsFakeCli();
+    $rows = [
+        [
+            'tool' => 'pocketbase', 'instance' => 'existing-tenant', 'icon' => '*', 'brand' => 'PocketBase', 'label' => 'PocketBase', 'installed' => true,
+            'namespace' => 'larakube-shared', 'host' => 'existing.example.com', 'aliases' => [], 'url' => 'https://existing.example.com',
+            'installedAt' => null, 'mail' => 'N/A', 'sso' => 'wired', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+        ],
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode($rows, JSON_PRETTY_PRINT)),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'pocketbase']), [
+        'domain' => 'pocket-test.example.com',
+        'admin_email' => 'admin@example.com',
+        'wire_sso' => '0',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::InstallClusterTool)
+        ->and($run->label)->toBe('Install PocketBase on workshop-demo')
+        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'pocketbase', 'admin_email' => 'admin@example.com']);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'tool:add', '--tool=pocketbase', '--context=larakube-203.0.113.21', '--domain=pocket-test.example.com', '--admin-email=admin@example.com', '--no-wire-sso', '--no-wire-mail', '--force', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
 test('removing needs the tool name typed and only applies to installed tools', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
@@ -256,14 +313,25 @@ test('each instance of a tool has its own detail page, and removal targets that 
     ]);
     $fake = ChildProcess::fake();
 
-    $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'sso', 'instance' => 'sso-team-example-com']))
+    $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'sso', 'domain' => 'sso.team.example.com']))
         ->assertInertia(fn (AssertableInertia $page) => $page->where('tool.host', 'sso.team.example.com'));
 
-    $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso', 'instance' => 'sso-team-example-com'])
+    $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso', 'domain' => 'sso.team.example.com'])
         ->assertRedirect();
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--domain=sso.team.example.com', $cmd, true));
     expect(Run::sole()->label)->toBe('Remove SSO from workshop-demo');
+
+    File::deleteDirectory($bin);
+});
+
+test('check-dns endpoint returns resolution status for a domain', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->getJson(route('servers.tools.check-dns', ['server' => 'workshop-demo', 'domain' => 'example.com']))
+        ->assertOk()
+        ->assertJsonStructure(['matches', 'serverIp', 'isWildcard']);
 
     File::deleteDirectory($bin);
 });

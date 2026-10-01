@@ -28,6 +28,7 @@ class ToolLocator
 
         return array_values(array_filter([
             $home !== '' ? "{$home}/.local/bin" : null,
+            $home !== '' ? "{$home}/.larakube/bin" : null,
             $home !== '' ? "{$home}/bin" : null,
             '/opt/homebrew/bin',
             '/usr/local/bin',

@@ -17,11 +17,13 @@ const labelTones = {
 
 export default function Card({
     label,
+    action,
     tone = 'default',
     className,
     children,
 }: {
     label?: string;
+    action?: ReactNode;
     tone?: keyof typeof tones;
     className?: string;
     children: ReactNode;
@@ -34,15 +36,22 @@ export default function Card({
                 className,
             )}
         >
-            {label && (
-                <h2
-                    className={cn(
-                        'mb-1 text-[11px] font-medium tracking-[0.06em] uppercase',
-                        labelTones[tone],
+            {(label || action) && (
+                <div className="mb-2 flex items-center justify-between gap-3">
+                    {label ? (
+                        <h2
+                            className={cn(
+                                'text-[11px] font-medium tracking-[0.06em] uppercase',
+                                labelTones[tone],
+                            )}
+                        >
+                            {label}
+                        </h2>
+                    ) : (
+                        <div />
                     )}
-                >
-                    {label}
-                </h2>
+                    {action}
+                </div>
             )}
             {children}
         </section>

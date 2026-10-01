@@ -16,6 +16,7 @@ use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -38,14 +39,106 @@ class ProjectController extends Controller
      * `--no-plex` keeps a Next.js app self-contained, so deploying it doesn't
      * also need the Plex Commons on the server.
      *
-     * @var array<string, array{label: string, description: string, command: list<string>}>
+     * @var array<string, array{label: string, category: string, description: string, command: list<string>, comingSoon?: bool}>
      */
     public const SCAFFOLDERS = [
-        'laravel' => ['label' => 'Laravel', 'description' => 'A full PHP web app with a database.', 'command' => ['new', '--fast']],
-        'nextjs' => ['label' => 'Next.js', 'description' => 'A React app with server rendering.', 'command' => ['nextjs:new', '--fast', '--no-plex']],
-        'vite' => ['label' => 'Vite', 'description' => 'A React single-page app, served as static files.', 'command' => ['vite:new', '--fast']],
-        'astro' => ['label' => 'Astro', 'description' => 'A content site, served as static files.', 'command' => ['astro:new', '--fast']],
-        'docusaurus' => ['label' => 'Docusaurus', 'description' => 'A documentation site, served as static files.', 'command' => ['docs:new', '--fast']],
+        'laravel' => [
+            'label' => 'Laravel',
+            'category' => 'fullstack',
+            'description' => 'A full PHP web app with a database and background queue.',
+            'command' => ['new', '--fast'],
+        ],
+        'statamic' => [
+            'label' => 'Statamic',
+            'category' => 'cms',
+            'description' => 'A flat-file or database CMS built on top of Laravel.',
+            'command' => ['statamic:new', '--fast', '--no-plex'],
+        ],
+        'wordpress' => [
+            'label' => 'WordPress (Bedrock)',
+            'category' => 'cms',
+            'description' => 'Modern WordPress with Composer and 12-factor configuration.',
+            'command' => ['wordpress:new', '--fast', '--no-plex'],
+        ],
+        'emdash' => [
+            'label' => 'Emdash',
+            'category' => 'cms',
+            'description' => 'Modern Astro and TypeScript-powered publishing CMS.',
+            'command' => ['emdash:new', '--fast'],
+            'comingSoon' => true,
+        ],
+        'nextjs' => [
+            'label' => 'Next.js',
+            'category' => 'fullstack',
+            'description' => 'A React app with server rendering and API routes.',
+            'command' => ['nextjs:new', '--fast', '--no-plex'],
+        ],
+        'django' => [
+            'label' => 'Django',
+            'category' => 'fullstack',
+            'description' => 'High-level Python web framework with batteries included.',
+            'command' => ['django:new', '--fast'],
+        ],
+        'fastapi' => [
+            'label' => 'FastAPI',
+            'category' => 'fullstack',
+            'description' => 'Modern, fast (high-performance) Python API framework.',
+            'command' => ['fastapi:new', '--fast'],
+        ],
+        'nestjs' => [
+            'label' => 'NestJS',
+            'category' => 'fullstack',
+            'description' => 'Progressive Node.js framework with TypeScript and architecture.',
+            'command' => ['nestjs:new', '--fast'],
+        ],
+        'adonisjs' => [
+            'label' => 'AdonisJS',
+            'category' => 'fullstack',
+            'description' => 'TypeScript-first MVC web framework for Node.js.',
+            'command' => ['adonisjs:new', '--fast'],
+        ],
+        'springboot' => [
+            'label' => 'Spring Boot',
+            'category' => 'fullstack',
+            'description' => 'Production-ready Java application framework.',
+            'command' => ['springboot:new', '--fast'],
+        ],
+        'dotnet' => [
+            'label' => '.NET Core',
+            'category' => 'fullstack',
+            'description' => 'Cross-platform, high-performance .NET web application.',
+            'command' => ['dotnet:new', '--fast'],
+        ],
+        'gin' => [
+            'label' => 'Gin (Go)',
+            'category' => 'fullstack',
+            'description' => 'Ultra-fast HTTP web framework written in Go.',
+            'command' => ['gin:new', '--fast'],
+        ],
+        'axum' => [
+            'label' => 'Axum (Rust)',
+            'category' => 'fullstack',
+            'description' => 'Ergonomic and modular web framework built with Tokio and Rust.',
+            'command' => ['axum:new', '--fast'],
+        ],
+        'vite' => [
+            'label' => 'Vite',
+            'category' => 'frontend',
+            'description' => 'A React single-page app, served as static files.',
+            'command' => ['vite:new', '--fast'],
+        ],
+        'astro' => [
+            'label' => 'Astro',
+            'category' => 'frontend',
+            'description' => 'A content site, served as static files.',
+            'command' => ['astro:new', '--fast'],
+        ],
+        'docusaurus' => [
+            'label' => 'Docusaurus',
+            'category' => 'docs',
+            'description' => 'A documentation site, served as static files.',
+            'command' => ['docs:new', '--fast'],
+        ],
     ];
 
     public function __construct(private ProjectInspector $inspector) {}
@@ -56,16 +149,45 @@ class ProjectController extends Controller
      */
     public const WIZARD_FRAMEWORKS = ['laravel', 'statamic', 'wordpress'];
 
-    public function index(): Response
+    public function index(ToolLocator $locator): Response
     {
         // The latest create run per project: keyBy keeps the last of each subject.
-        $scaffolds = Run::query()->where('kind', RunKind::NewProject)->orderBy('id')->get(['subject', 'status'])->keyBy('subject');
+        $scaffolds = Run::query()->where('kind', RunKind::NewProject)->orderBy('id')->get(['subject', 'project_id', 'status'])->keyBy(fn (Run $r) => $r->project_id ? "project:{$r->project_id}" : (string) $r->subject);
 
-        return Inertia::render('projects/index', [
-            'projects' => Project::query()->latest('id')->get()->map(fn (Project $project): array => [
+        $activeRuns = Run::query()
+            ->where('status', RunStatus::Running)
+            ->whereIn('kind', [
+                RunKind::UpProject,
+                RunKind::DownProject,
+                RunKind::StartProject,
+                RunKind::StopProject,
+            ])
+            ->get()
+            ->keyBy(fn (Run $r) => (int) ($r->project_id ?: (str_starts_with((string) $r->subject, 'project:') ? substr((string) $r->subject, 8) : 0)));
+
+        $workloads = $this->localWorkloadStatuses($locator);
+
+        $projects = Project::query()->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads): array {
+            $inspection = $this->inspector->inspect($project->path);
+            $activeRun = $activeRuns->get($project->id);
+
+            return [
                 'id' => $project->id,
                 'scaffoldStatus' => $scaffolds->get("project:{$project->id}")?->status,
-            ] + $this->inspector->inspect($project->path))->all(),
+                'localStatus' => $this->resolveLocalStatus($project, $inspection, $activeRun, $workloads),
+                'activeRun' => $activeRun ? [
+                    'id' => $activeRun->id,
+                    'label' => $activeRun->label,
+                    'kind' => $activeRun->kind?->value,
+                    'status' => $activeRun->status->value,
+                ] : null,
+            ] + $inspection;
+        })->all();
+
+        return Inertia::render('projects/index', [
+            'projects' => $projects,
+            'hasActiveRuns' => $activeRuns->isNotEmpty(),
+            'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => ($p['localStatus']['state'] ?? null) === 'running'),
         ]);
     }
 
@@ -89,14 +211,41 @@ class ProjectController extends Controller
     public function create(Request $request, LaravelOptions $laravel): Response
     {
         $parent = (string) $request->query('parent', '');
+        $requestedFramework = (string) $request->query('framework', '');
+        $defaultFramework = array_key_exists($requestedFramework, self::SCAFFOLDERS) && empty(self::SCAFFOLDERS[$requestedFramework]['comingSoon'])
+            ? $requestedFramework
+            : 'laravel';
+
+        $activeRun = null;
+        if ($request->filled('run')) {
+            $r = Run::query()->whereKey($request->query('run'))->first();
+            if ($r instanceof Run) {
+                $activeRun = [
+                    'id' => $r->id,
+                    'label' => $r->label,
+                    'kind' => $r->kind?->value,
+                    'status' => $r->status->value,
+                    'output' => (string) $r->output,
+                    'startedAt' => $r->created_at?->toIso8601String(),
+                    'finishedAt' => $r->finished_at?->toIso8601String(),
+                    'meta' => $r->meta,
+                ];
+            }
+        }
 
         return Inertia::render('projects/create', [
             'laravelOptions' => Inertia::defer(fn (): ?array => $laravel->questions()),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
-            'frameworks' => array_map(fn (array $scaffolder): array => ['label' => $scaffolder['label'], 'description' => $scaffolder['description']], self::SCAFFOLDERS),
+            'frameworks' => array_map(fn (array $scaffolder): array => [
+                'label' => $scaffolder['label'],
+                'description' => $scaffolder['description'],
+                'category' => $scaffolder['category'],
+                'comingSoon' => ! empty($scaffolder['comingSoon']),
+            ], self::SCAFFOLDERS),
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
-            'framework' => array_key_exists((string) $request->query('framework'), self::SCAFFOLDERS) ? (string) $request->query('framework') : 'laravel',
+            'framework' => $defaultFramework,
+            'activeRun' => $activeRun,
         ]);
     }
 
@@ -124,8 +273,14 @@ class ProjectController extends Controller
             'parent' => ['required', 'string'],
         ], [
             'name.regex' => 'Use lowercase letters, numbers and dashes, starting with a letter.',
-            'name.not_in' => 'The name "console" is reserved for the LaraKube Console.',
+            'name.not_in' => 'The name "console" is reserved.',
         ]);
+
+        $scaffolder = self::SCAFFOLDERS[$input['framework']];
+
+        if (! empty($scaffolder['comingSoon'])) {
+            return back()->withErrors(['framework' => "{$scaffolder['label']} is coming soon!"]);
+        }
 
         $parent = realpath($input['parent']) ?: $input['parent'];
 
@@ -139,7 +294,6 @@ class ProjectController extends Controller
             return back()->withErrors(['name' => "{$input['name']} already exists in this folder."]);
         }
 
-        $scaffolder = self::SCAFFOLDERS[$input['framework']];
         $extra = [];
 
         if ($input['framework'] === 'laravel') {
@@ -147,6 +301,12 @@ class ProjectController extends Controller
 
             if ($extra instanceof RedirectResponse) {
                 return $extra;
+            }
+        } elseif ($input['framework'] === 'statamic') {
+            if ($request->filled('email')) {
+                $email = $request->validate(['email' => ['required', 'email']])['email'];
+                Cache::forever(self::EMAIL_CACHE_KEY, $email);
+                $extra = ["--email={$email}"];
             }
         }
 
@@ -161,9 +321,19 @@ class ProjectController extends Controller
             subject: "project:{$project->id}",
             meta: ['project' => (string) $project->id, 'arguments' => (string) json_encode($arguments), 'cwd' => $parent],
             cwd: $parent,
+            targetType: 'project',
+            targetName: $input['name'],
+            projectId: $project->id,
+            projectName: $input['name'],
+            environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        return to_route('projects.create', [
+            'run' => $run->id,
+            'parent' => $parent,
+            'name' => $input['name'],
+            'framework' => $input['framework'],
+        ]);
     }
 
     /** Runs a failed or cancelled create again, with the same answers, if nothing was left behind. */
@@ -173,6 +343,8 @@ class ProjectController extends Controller
 
         abort_unless($last !== null && $this->canRetry($project, $last), 404);
 
+        $projectName = $last->project_name ?? $this->name($project);
+
         $run = $runner->start(
             label: $last->label,
             arguments: $this->recordedArguments($last),
@@ -180,12 +352,17 @@ class ProjectController extends Controller
             subject: "project:{$project->id}",
             meta: $last->meta ?? [],
             cwd: $last->meta['cwd'] ?? '',
+            targetType: 'project',
+            targetName: $last->target_name ?? $projectName,
+            projectId: $project->id,
+            projectName: $projectName,
+            environment: $last->environment ?? 'local',
         );
 
         return to_route('runs.show', $run);
     }
 
-    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel): Response
+    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel, ToolLocator $locator): Response
     {
         $scaffold = $this->lastScaffold($project);
 
@@ -199,11 +376,55 @@ class ProjectController extends Controller
             }
         }
 
+        $enrichedEnvs = [];
+        foreach ($inspection['environments'] as $name => $env) {
+            $matchedServerName = null;
+            if ($env['serverIp'] !== null || $env['serverContext'] !== null) {
+                foreach ($servers as $stack) {
+                    if (($env['serverIp'] !== null && $stack['ip'] === $env['serverIp'])
+                        || ($env['serverContext'] !== null && is_string($stack['context'] ?? null) && $stack['context'] === $env['serverContext'])) {
+                        $matchedServerName = $stack['name'];
+                        break;
+                    }
+                }
+            }
+            $enrichedEnvs[$name] = $env + ['serverName' => $matchedServerName];
+        }
+        $inspection['environments'] = $enrichedEnvs;
+
+        $latestRun = Run::query()
+            ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('subject', "project:{$project->id}"))
+            ->latest('id')
+            ->first();
+
         return Inertia::render('projects/show', [
-            'project' => ['id' => $project->id] + $inspection,
+            'project' => ['id' => $project->id, 'localStatus' => $this->resolveLocalStatus($project, $inspection, $latestRun, $this->localWorkloadStatuses($locator))] + $inspection,
             'server' => $server,
             'frameworks' => ProjectInspector::DEPLOYABLE,
-            'runs' => Run::query()->where('subject', "project:{$project->id}")->latest('id')->limit(5)->get(['id', 'label', 'kind', 'status', 'created_at'])->all(),
+            'runs' => Run::query()
+                ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('subject', "project:{$project->id}"))
+                ->latest('id')
+                ->limit(20)
+                ->get()
+                ->map(fn (Run $run): array => [
+                    'id' => $run->id,
+                    'label' => $run->label,
+                    'kind' => $run->kind?->value,
+                    'status' => $run->status->value,
+                    'created_at' => $run->created_at?->toIso8601String() ?? '',
+                    'environment' => $run->environment ?: $this->resolveRunEnvironment($run),
+                ])
+                ->all(),
+            'latestRun' => $latestRun ? [
+                'id' => $latestRun->id,
+                'label' => $latestRun->label,
+                'kind' => $latestRun->kind?->value,
+                'status' => $latestRun->status->value,
+                'output' => (string) $latestRun->output,
+                'startedAt' => $latestRun->created_at?->toISOString(),
+                'finishedAt' => $latestRun->finished_at?->toISOString(),
+                'environment' => $latestRun->environment ?: $this->resolveRunEnvironment($latestRun),
+            ] : null,
             'editors' => $editors->available(),
             'readyServers' => array_map(fn (array $stack): array => ['name' => $stack['name'], 'ip' => $stack['ip']], $servers),
             'scaffold' => $scaffold === null ? null : ['id' => $scaffold->id, 'status' => $scaffold->status, 'canRetry' => $this->canRetry($project, $scaffold)],
@@ -245,7 +466,7 @@ class ProjectController extends Controller
             }
         }
 
-        return $this->run($runner, $project, RunKind::InitProject, 'Set up '.basename($project->path).' for LaraKube', ['init', "--framework={$framework}", '--fast', ...$extra]);
+        return $this->run($runner, $project, RunKind::InitProject, 'Set up '.basename($project->path).' for LaraKube', ['init', "--framework={$framework}", '--fast', ...$extra], 'local');
     }
 
     /**
@@ -254,30 +475,190 @@ class ProjectController extends Controller
      */
     public function link(Request $request, Project $project, CliRunner $runner, StackCatalog $stacks): RedirectResponse
     {
-        $name = $request->validate(['server' => ['required', 'string']])['server'];
+        $validated = $request->validate([
+            'server' => ['required', 'string'],
+            'environment' => ['nullable', 'string', 'alpha_dash'],
+        ]);
+        $environment = $validated['environment'] ?? self::ENVIRONMENT;
+        $name = $validated['server'];
         $server = $stacks->find($name);
 
         if ($server === null || $server['status'] !== 'ready' || ! is_string($server['context'])) {
             return back()->withErrors(['server' => 'Choose one of your ready servers.']);
         }
 
-        return $this->run($runner, $project, RunKind::LinkServer, "Link {$this->name($project)} to {$name}", [
-            'env', self::ENVIRONMENT, "--context={$server['context']}", '--ingress=traefik', '--managed=', '--web-hosts=',
-        ]);
+        $args = [
+            'env', $environment, "--context={$server['context']}", '--ingress=traefik', '--managed=', '--web-hosts=',
+        ];
+
+        if (! empty($server['sshKey'])) {
+            $args[] = "--ssh-key={$server['sshKey']}";
+        }
+
+        return $this->run($runner, $project, RunKind::LinkServer, "Link {$this->name($project)} ({$environment}) to {$name}", $args, $environment);
     }
 
     public function host(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
-        $host = $request->validate([
+        $validated = $request->validate([
             'host' => ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
-        ], ['host.regex' => 'Enter a hostname like app.example.com, without https://.'])['host'];
+            'environment' => ['nullable', 'string', 'alpha_dash'],
+        ], ['host.regex' => 'Enter a hostname like app.example.com, without https://.']);
 
-        return $this->run($runner, $project, RunKind::ConfigureHost, "Set the address of {$this->name($project)}", ['cloud:configure', self::ENVIRONMENT, '--only=hosts', "--web-hosts={$host}"]);
+        $environment = $validated['environment'] ?? self::ENVIRONMENT;
+        $host = $validated['host'];
+
+        return $this->run($runner, $project, RunKind::ConfigureHost, "Set the address of {$this->name($project)} ({$environment})", ['cloud:configure', $environment, '--only=hosts', "--web-host={$host}"], $environment);
     }
 
-    public function deploy(Project $project, CliRunner $runner): RedirectResponse
+    public function deploy(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
-        return $this->run($runner, $project, RunKind::DeployApp, "Deploy {$this->name($project)}", ['cloud:deploy', self::ENVIRONMENT]);
+        $environment = (string) $request->input('environment', self::ENVIRONMENT);
+
+        $running = Run::query()
+            ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('subject', "project:{$project->id}"))
+            ->where('kind', RunKind::DeployApp)
+            ->where('status', RunStatus::Running)
+            ->first();
+
+        if ($running !== null) {
+            return to_route('projects.show', $project);
+        }
+
+        return $this->run($runner, $project, RunKind::DeployApp, "Deploy {$this->name($project)} ({$environment})", ['cloud:deploy', $environment], $environment);
+    }
+
+    public function up(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $args = ['up', $environment, '--no-console', '--no-test'];
+
+        return $this->run($runner, $project, RunKind::UpProject, "Up {$this->name($project)} ({$environment})", $args, $environment);
+    }
+
+    public function down(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $purge = $request->boolean('purge');
+        $args = ['down', $environment, '--force'];
+        if ($purge) {
+            $args[] = '--full';
+        }
+
+        $label = $purge
+            ? "Down & Purge {$this->name($project)} ({$environment})"
+            : "Down {$this->name($project)} ({$environment})";
+
+        return $this->run($runner, $project, RunKind::DownProject, $label, $args, $environment);
+    }
+
+    public function stopAll(CliRunner $runner, ToolLocator $locator): RedirectResponse
+    {
+        $projects = Project::all();
+        $workloads = $this->localWorkloadStatuses($locator);
+
+        foreach ($projects as $project) {
+            $inspection = $this->inspector->inspect($project->path);
+            if (! ($inspection['exists'] ?? false) || ! ($inspection['initialized'] ?? false)) {
+                continue;
+            }
+
+            $appName = (string) ($inspection['name'] ?? basename($project->path));
+            $ns = "{$appName}-local";
+            $workload = $workloads[$ns] ?? null;
+
+            if ($workload === null || $workload['replicas'] === 0) {
+                continue;
+            }
+
+            $this->run(
+                $runner,
+                $project,
+                RunKind::StopProject,
+                "Stop {$appName} (local)",
+                ['stop', 'local'],
+                'local',
+            );
+        }
+
+        return back();
+    }
+
+    public function downAll(Request $request, CliRunner $runner, ToolLocator $locator): RedirectResponse
+    {
+        $purge = $request->boolean('purge');
+        $args = ['down', 'local', '--force'];
+        if ($purge) {
+            $args[] = '--full';
+        }
+
+        $projects = Project::all();
+        $workloads = $this->localWorkloadStatuses($locator);
+
+        foreach ($projects as $project) {
+            $inspection = $this->inspector->inspect($project->path);
+            if (! ($inspection['exists'] ?? false) || ! ($inspection['initialized'] ?? false)) {
+                continue;
+            }
+
+            $appName = (string) ($inspection['name'] ?? basename($project->path));
+            $ns = "{$appName}-local";
+            $workload = $workloads[$ns] ?? null;
+
+            if ($workload === null && ! $purge) {
+                continue;
+            }
+
+            $label = $purge
+                ? "Down & Purge {$appName} (local)"
+                : "Down {$appName} (local)";
+
+            $this->run(
+                $runner,
+                $project,
+                RunKind::DownProject,
+                $label,
+                $args,
+                'local',
+            );
+        }
+
+        return back();
+    }
+
+    public function start(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $args = ['start', $environment];
+
+        return $this->run($runner, $project, RunKind::StartProject, "Start {$this->name($project)} ({$environment})", $args, $environment);
+    }
+
+    public function stop(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $args = ['stop', $environment];
+
+        return $this->run($runner, $project, RunKind::StopProject, "Stop {$this->name($project)} ({$environment})", $args, $environment);
+    }
+
+    public function tld(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'tld' => ['nullable', 'string', 'in:kube,localhost,test,local,internal'],
+        ]);
+
+        $blueprintPath = "{$project->path}/.larakube.json";
+        if (is_file($blueprintPath)) {
+            $data = json_decode((string) file_get_contents($blueprintPath), true);
+            if (is_array($data)) {
+                $tld = $validated['tld'] ?? null;
+                $data['localTld'] = ! empty($tld) ? ltrim(strtolower(trim($tld)), '.') : null;
+                file_put_contents($blueprintPath, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            }
+        }
+
+        return back();
     }
 
     /**
@@ -326,7 +707,11 @@ class ProjectController extends Controller
 
     private function lastScaffold(Project $project): ?Run
     {
-        return Run::query()->where('subject', "project:{$project->id}")->where('kind', RunKind::NewProject)->latest('id')->first();
+        return Run::query()
+            ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('subject', "project:{$project->id}"))
+            ->where('kind', RunKind::NewProject)
+            ->latest('id')
+            ->first();
     }
 
     /**
@@ -358,22 +743,179 @@ class ProjectController extends Controller
         return $this->inspector->inspect($project->path)['name'];
     }
 
+    private function resolveRunEnvironment(Run $run): string
+    {
+        if ($run->environment !== null && $run->environment !== '') {
+            return $run->environment;
+        }
+
+        $meta = $run->meta;
+        if (is_array($meta) && ! empty($meta['environment'])) {
+            return strtolower(trim((string) $meta['environment']));
+        }
+
+        if (preg_match('/\(([^)]+)\)/', $run->label, $matches)) {
+            return strtolower(trim($matches[1]));
+        }
+
+        if (in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject], true)) {
+            return 'local';
+        }
+
+        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost], true)) {
+            return 'production';
+        }
+
+        return 'local';
+    }
+
     /**
      * @param  list<string>  $arguments
      */
-    private function run(CliRunner $runner, Project $project, RunKind $kind, string $label, array $arguments): RedirectResponse
+    private function run(CliRunner $runner, Project $project, RunKind $kind, string $label, array $arguments, ?string $environment = null): RedirectResponse
     {
         abort_unless(is_dir($project->path), 404);
+
+        $projectName = $this->name($project);
+        $env = $environment !== null && $environment !== '' ? $environment : 'local';
+
+        $meta = ['project' => (string) $project->id];
+        if ($environment !== null && $environment !== '') {
+            $meta['environment'] = $environment;
+        }
 
         $run = $runner->start(
             label: $label,
             arguments: $arguments,
             kind: $kind,
             subject: "project:{$project->id}",
-            meta: ['project' => (string) $project->id],
+            meta: $meta,
             cwd: $project->path,
+            targetType: 'project',
+            targetName: $projectName,
+            projectId: $project->id,
+            projectName: $projectName,
+            environment: $env,
         );
 
-        return to_route('runs.show', $run);
+        return back();
+    }
+
+    /**
+     * @return array<string, array{replicas: int, readyReplicas: int, deploymentsCount: int}>
+     */
+    private function localWorkloadStatuses(ToolLocator $locator): array
+    {
+        $cli = $locator->find('kubectl');
+        if ($cli === null) {
+            return [];
+        }
+
+        try {
+            $isolated = $locator->isolate([$cli, 'get', 'deployments,statefulsets', '-A', '-o', 'json']);
+            $result = Process::env($isolated['environment'])->timeout(2)->run($isolated['command']);
+            if (! $result->successful()) {
+                return [];
+            }
+
+            $items = json_decode($result->output(), true)['items'] ?? [];
+            if (! is_array($items)) {
+                return [];
+            }
+
+            $namespaces = [];
+            foreach ($items as $item) {
+                $ns = (string) ($item['metadata']['namespace'] ?? '');
+                if (! str_ends_with($ns, '-local')) {
+                    continue;
+                }
+
+                $replicas = (int) ($item['spec']['replicas'] ?? 0);
+                $readyReplicas = (int) ($item['status']['readyReplicas'] ?? 0);
+
+                $namespaces[$ns] ??= ['replicas' => 0, 'readyReplicas' => 0, 'deploymentsCount' => 0];
+                $namespaces[$ns]['replicas'] += $replicas;
+                $namespaces[$ns]['readyReplicas'] += $readyReplicas;
+                $namespaces[$ns]['deploymentsCount']++;
+            }
+
+            return $namespaces;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $inspection
+     * @param  array<string, array{replicas: int, readyReplicas: int, deploymentsCount: int}>  $workloads
+     * @return array{state: 'running'|'paused'|'starting'|'stopping'|'down'|'uninitialized', label: string, tone: 'ok'|'warn'|'busy'|'muted', domain?: string, replicas?: int, readyReplicas?: int}
+     */
+    private function resolveLocalStatus(Project $project, array $inspection, ?Run $activeRun, array $workloads): array
+    {
+        if (! ($inspection['exists'] ?? false) || ! ($inspection['initialized'] ?? false)) {
+            return [
+                'state' => 'uninitialized',
+                'label' => 'Not set up',
+                'tone' => 'muted',
+            ];
+        }
+
+        $appName = (string) ($inspection['name'] ?? basename($project->path));
+        $effectiveTld = (string) ($inspection['effectiveTld'] ?? 'test');
+        $domain = "{$appName}.{$effectiveTld}";
+
+        if ($activeRun !== null) {
+            $isStopping = in_array($activeRun->kind, [RunKind::StopProject, RunKind::DownProject], true);
+
+            return [
+                'state' => $isStopping ? 'stopping' : 'starting',
+                'label' => $isStopping ? 'Stopping…' : 'Starting…',
+                'tone' => 'busy',
+                'domain' => $domain,
+            ];
+        }
+
+        $ns = "{$appName}-local";
+        $workload = $workloads[$ns] ?? null;
+
+        if ($workload !== null) {
+            if ($workload['readyReplicas'] > 0) {
+                return [
+                    'state' => 'running',
+                    'label' => 'Running',
+                    'tone' => 'ok',
+                    'domain' => $domain,
+                    'replicas' => $workload['replicas'],
+                    'readyReplicas' => $workload['readyReplicas'],
+                ];
+            }
+
+            if ($workload['replicas'] === 0) {
+                return [
+                    'state' => 'paused',
+                    'label' => 'Paused',
+                    'tone' => 'warn',
+                    'domain' => $domain,
+                    'replicas' => 0,
+                    'readyReplicas' => 0,
+                ];
+            }
+
+            return [
+                'state' => 'starting',
+                'label' => 'Starting…',
+                'tone' => 'busy',
+                'domain' => $domain,
+                'replicas' => $workload['replicas'],
+                'readyReplicas' => $workload['readyReplicas'],
+            ];
+        }
+
+        return [
+            'state' => 'down',
+            'label' => 'Down',
+            'tone' => 'muted',
+            'domain' => $domain,
+        ];
     }
 }

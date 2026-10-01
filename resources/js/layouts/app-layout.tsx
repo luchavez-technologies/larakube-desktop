@@ -1,10 +1,20 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
+import {
+    LayoutDashboard,
+    FolderGit2,
+    Server,
+    Wrench,
+    Activity,
+    Terminal,
+    Settings,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { readiness, tools } from '@/routes';
+import { dashboard, readiness, tools } from '@/routes';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
+import { show as settingsShow } from '@/routes/settings';
 
 type NavItem = {
     label: string;
@@ -12,17 +22,17 @@ type NavItem = {
     href: string | null;
     active: (url: string) => boolean;
     accent: string;
-    glyph: string;
+    icon: ComponentType<{ className?: string }>;
 };
 
 const navigation: NavItem[] = [
     {
-        label: 'Setup',
-        description: 'Tools & logins',
-        href: readiness().url,
-        active: (url) => url.startsWith('/readiness'),
-        accent: 'bg-setup',
-        glyph: '>_',
+        label: 'Dashboard',
+        description: 'Fleet overview',
+        href: dashboard().url,
+        active: (url) => url === '/' || url.startsWith('/dashboard'),
+        accent: 'bg-indigo-600',
+        icon: LayoutDashboard,
     },
     {
         label: 'Servers',
@@ -30,7 +40,7 @@ const navigation: NavItem[] = [
         href: serversIndex().url,
         active: (url) => url.startsWith('/servers') && !url.includes('/tools'),
         accent: 'bg-servers',
-        glyph: '↑',
+        icon: Server,
     },
     {
         label: 'Projects',
@@ -38,7 +48,7 @@ const navigation: NavItem[] = [
         href: projectsIndex().url,
         active: (url) => url.startsWith('/projects'),
         accent: 'bg-brand',
-        glyph: '▲',
+        icon: FolderGit2,
     },
     {
         label: 'Tools',
@@ -47,15 +57,31 @@ const navigation: NavItem[] = [
         active: (url) =>
             url.startsWith('/tools') || /^\/servers\/[^/]+\/tools/.test(url),
         accent: 'bg-tools',
-        glyph: '∿',
+        icon: Wrench,
     },
     {
         label: 'Activity',
         description: 'Recent runs',
         href: runsIndex().url,
         active: (url) => url.startsWith('/runs'),
-        accent: 'bg-zinc-500',
-        glyph: '≡',
+        accent: 'bg-zinc-600',
+        icon: Activity,
+    },
+    {
+        label: 'Setup',
+        description: 'Tools & logins',
+        href: readiness().url,
+        active: (url) => url.startsWith('/readiness'),
+        accent: 'bg-setup',
+        icon: Terminal,
+    },
+    {
+        label: 'Settings',
+        description: 'Global & AI config',
+        href: settingsShow().url,
+        active: (url) => url.startsWith('/settings'),
+        accent: 'bg-slate-600',
+        icon: Settings,
     },
 ];
 
@@ -66,28 +92,39 @@ export default function AppLayout({
     title: string;
     children: ReactNode;
 }) {
-    const { url } = usePage();
+    const { url, props } = usePage<{ hideProjects?: boolean }>();
+    const hideProjects = Boolean(props.hideProjects);
+    const visibleNavigation = navigation.filter(
+        (item) => !(hideProjects && item.label === 'Projects'),
+    );
 
     return (
         <div className="flex min-h-screen">
             <Head title={title} />
             <aside className="sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
                 <div className="mb-5 flex items-center gap-2.5 px-2.5">
-                    <img src="/icon.png" alt="" className="size-8" />
-                    <span className="text-[15px] font-semibold">LaraKube</span>
+                    <img
+                        src="/logo.png"
+                        alt="LaraKube"
+                        className="size-8 rounded-lg shadow-2xs"
+                    />
+                    <span className="text-[15px] font-semibold tracking-tight">
+                        LaraKube
+                    </span>
                 </div>
                 <nav className="flex flex-col gap-1">
-                    {navigation.map((item) => {
+                    {visibleNavigation.map((item) => {
                         const active = item.active(url);
+                        const Icon = item.icon;
                         const body = (
                             <>
                                 <span
                                     className={cn(
-                                        'flex size-7.5 items-center justify-center rounded-lg font-mono text-xs font-medium text-white',
+                                        'flex size-7.5 items-center justify-center rounded-lg text-white shadow-xs',
                                         item.accent,
                                     )}
                                 >
-                                    {item.glyph}
+                                    <Icon className="size-4" />
                                 </span>
                                 <span className="leading-tight">
                                     <span className="block text-sm font-medium">

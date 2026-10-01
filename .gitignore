@@ -10,6 +10,7 @@
 /resources/js/wayfinder
 /storage/*.key
 /storage/pail
+/storage/framework/temp
 /vendor
 .env
 .env.backup

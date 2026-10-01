@@ -91,7 +91,7 @@ export default function LogPanel({
         <div
             ref={ref}
             className={cn(
-                'overflow-auto rounded-xl bg-term p-4.5 font-mono text-xs leading-[18px]',
+                'custom-scrollbar-dark overflow-auto rounded-xl bg-term p-4.5 font-mono text-xs leading-[18px]',
                 className,
             )}
         >

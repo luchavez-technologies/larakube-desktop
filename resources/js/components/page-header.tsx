@@ -7,7 +7,7 @@ export default function PageHeader({
     meta,
     actions,
 }: {
-    title: string;
+    title: ReactNode;
     subtitle?: string;
     badge?: ReactNode;
     meta?: ReactNode;
