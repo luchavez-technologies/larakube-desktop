@@ -75,24 +75,9 @@ class ClusterStatus
         });
     }
 
-    /**
-     * The backups kept at the destination, newest first, from `backup:list --json`.
-     *
-     * @return array<mixed>|null
-     */
-    public function backups(string $context): ?array
-    {
-        return $this->remember("backups:{$context}", function () use ($context): ?array {
-            $report = $this->json(['backup:list', 'production', "--context={$context}", '--json'], 180);
-
-            return is_array($report) && ($report['success'] ?? false) === true ? $report : null;
-        });
-    }
-
     public function forgetBackup(string $context): void
     {
         Cache::forget("cluster-status:backup:{$context}");
-        Cache::forget("cluster-status:backups:{$context}");
     }
 
     public function forgetDns(string $context): void

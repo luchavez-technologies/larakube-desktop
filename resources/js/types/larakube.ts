@@ -721,6 +721,7 @@ export type BackupStatus = {
             bytes: number;
             items: number;
         } | null;
+        entries: BackupEntry[];
     };
     recoveryCard?: { exists: boolean; path: string };
 };
@@ -731,5 +732,3 @@ export type BackupEntry = {
     bytes: number;
     items: number;
 };
-
-export type BackupList = { backups: BackupEntry[]; incomplete: number };

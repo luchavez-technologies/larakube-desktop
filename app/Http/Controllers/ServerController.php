@@ -127,7 +127,6 @@ class ServerController extends Controller
             'tls' => Inertia::defer(fn (): ?array => $context !== null ? $status->tls($context) : null, 'tls'),
             'plex' => Inertia::defer(fn (): ?array => $context !== null ? $status->plex($context) : null, 'plex'),
             'backup' => Inertia::defer(fn (): ?array => $context !== null ? $status->backup($context) : null, 'backup'),
-            'backups' => Inertia::defer(fn (): ?array => $context !== null ? $status->backups($context) : null, 'backups'),
             'clusterUsers' => Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
         ]);
     }

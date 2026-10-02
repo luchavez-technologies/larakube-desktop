@@ -6,12 +6,7 @@ import Card from '@/components/card';
 import { ListRow, TwoLine } from '@/components/list-row';
 import StatusPill from '@/components/status-pill';
 import { SCHEDULES, ago, describeSchedule, formatBytes } from '@/lib/backups';
-import type {
-    BackupEntry,
-    BackupList,
-    BackupStatus,
-    Server,
-} from '@/types/larakube';
+import type { BackupEntry, BackupStatus, Server } from '@/types/larakube';
 
 type Dialog = 'setup' | 'schedule' | 'prune' | { restore: BackupEntry } | null;
 
@@ -33,12 +28,10 @@ function cardSaved(server: string): boolean {
 export default function BackupsCard({
     server,
     backup,
-    backups,
     disabled,
 }: {
     server: Server;
     backup?: BackupStatus | null;
-    backups?: BackupList | null;
     disabled?: boolean;
 }) {
     const [dialog, setDialog] = useState<Dialog>(null);
@@ -106,6 +99,8 @@ export default function BackupsCard({
 
     const schedule = backup.schedule;
     const last = backup.backups?.last ?? null;
+    const entries = backup.backups?.entries ?? [];
+    const incomplete = backup.backups?.incomplete ?? 0;
     const needsCard = !saved && backup.recoveryCard?.exists !== false;
 
     return (
@@ -251,11 +246,11 @@ export default function BackupsCard({
                     />
                 </ListRow>
 
-                {backups && backups.backups.length > 0 && (
+                {entries.length > 0 && (
                     <div className="mt-3 border-t border-line/60 pt-3">
                         <div className="mb-2 flex items-center justify-between">
                             <span className="text-xs font-medium text-soft">
-                                Backups ({backups.backups.length})
+                                Backups ({entries.length})
                             </span>
                             <Button
                                 variant="ghost"
@@ -266,7 +261,7 @@ export default function BackupsCard({
                             </Button>
                         </div>
                         <div className="space-y-1.5">
-                            {backups.backups.map((entry) => (
+                            {entries.map((entry) => (
                                 <div
                                     key={entry.id}
                                     className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2 ring-1 ring-line"
@@ -312,11 +307,11 @@ export default function BackupsCard({
                                 </div>
                             ))}
                         </div>
-                        {backups.incomplete > 0 && (
+                        {incomplete > 0 && (
                             <p className="mt-2 text-[11px] text-soft">
-                                {backups.incomplete} unfinished backup
-                                {backups.incomplete === 1 ? '' : 's'} at the
-                                destination can be removed by cleaning up.
+                                {incomplete} unfinished backup
+                                {incomplete === 1 ? '' : 's'} at the destination
+                                can be removed by cleaning up.
                             </p>
                         )}
                     </div>

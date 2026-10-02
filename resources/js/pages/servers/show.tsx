@@ -40,7 +40,6 @@ import type {
     PlexStatus,
     ClusterUser,
     BackupStatus,
-    BackupList,
 } from '@/types/larakube';
 
 type DnsGroup = { group: string; zones: string[]; ready: boolean };
@@ -60,7 +59,6 @@ export default function ShowServer({
     tls: tlsReport,
     plex,
     backup,
-    backups,
     clusterUsers,
 }: {
     server: Server;
@@ -71,7 +69,6 @@ export default function ShowServer({
     tls?: TlsReport | null;
     plex?: PlexStatus | null;
     backup?: BackupStatus | null;
-    backups?: BackupList | null;
     clusterUsers?: ClusterUser[] | null;
 }) {
     const { url } = usePage();
@@ -422,13 +419,12 @@ export default function ShowServer({
                     </Deferred>
 
                     <Deferred
-                        data={['backup', 'backups']}
+                        data="backup"
                         fallback={<CheckingRow title="Checking backups…" />}
                     >
                         <BackupsCard
                             server={server}
                             backup={backup}
-                            backups={backups}
                             disabled={!ready}
                         />
                     </Deferred>
