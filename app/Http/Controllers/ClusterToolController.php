@@ -163,10 +163,12 @@ class ClusterToolController extends Controller
         // The host is an instance's identity, so --domain removes exactly this one.
         $host = is_string($row['host'] ?? null) && $row['host'] !== '' ? $row['host'] : null;
         $displayName = $this->displayName($row);
+        // The CLI names the command for this exact instance (its engine included), never its category.
+        $command = is_string($row['removeCommand'] ?? null) && $row['removeCommand'] !== '' ? $row['removeCommand'] : "{$tool}:remove";
 
         $run = app(CliRunner::class)->start(
             label: 'Remove '.$displayName." from {$server}",
-            arguments: ["{$tool}:remove", 'production', "--context={$context}", ...($host !== null ? ["--domain={$host}"] : []), '--force'],
+            arguments: [$command, 'production', "--context={$context}", ...($host !== null ? ["--domain={$host}"] : []), '--force'],
             kind: RunKind::RemoveClusterTool,
             subject: $tool,
             meta: ['server' => $server, 'context' => $context, 'tool' => $tool, 'host' => $host ?? ''],

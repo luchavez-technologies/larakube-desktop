@@ -30,6 +30,7 @@ function clusterToolsRows(): array
 {
     $row = fn (string $tool, string $brand, string $label, bool $installed, ?string $host): array => [
         'tool' => $tool, 'instance' => '', 'icon' => '*', 'brand' => $brand, 'label' => $label, 'installed' => $installed,
+        'removeCommand' => $tool === 'sso' ? 'zitadel:remove' : $tool.':remove',
         'namespace' => 'larakube-shared', 'host' => $host, 'aliases' => [], 'url' => $host ? "https://{$host}" : null,
         'installedAt' => null, 'mail' => 'N/A', 'sso' => $installed ? 'wired' : '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
     ];
@@ -260,7 +261,7 @@ test('removing needs the tool name typed and only applies to installed tools', f
     $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso'])
         ->assertRedirect(route('runs.show', Run::sole()));
 
-    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'sso:remove', 'production', '--context=larakube-203.0.113.21', '--domain=sso.example.com', '--force', '--no-interaction']);
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'zitadel:remove', 'production', '--context=larakube-203.0.113.21', '--domain=sso.example.com', '--force', '--no-interaction']);
     expect(Run::sole()->label)->toBe('Remove SSO from workshop-demo');
 
     File::deleteDirectory($bin);
