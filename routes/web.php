@@ -22,6 +22,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
 
 Route::get('/readiness', [ReadinessController::class, 'show'])->name('readiness');
 Route::post('/setup/tools/{tool}/install', [ToolInstallController::class, 'store'])->name('setup.tools.install');
+Route::get('/setup/tools/{tool}/status', [ReadinessController::class, 'toolStatus'])->name('setup.tools.status');
 Route::post('/setup/local', [LocalSetupController::class, 'store'])->name('setup.local');
 Route::post('/setup/usage', [ReadinessController::class, 'setUsage'])->name('setup.usage');
 Route::post('/setup/cli/channel', [ReadinessController::class, 'setChannel'])->name('setup.cli.channel');

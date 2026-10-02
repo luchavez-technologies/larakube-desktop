@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -55,23 +56,44 @@ class ReadinessCheck
     }
 
     /**
+     * One tool's state on this computer. Remembered for a few minutes, because
+     * running `--version` on every tool is what made the Setup page slow.
+     *
+     * @return array{installed: bool, path: ?string, version: ?string}
+     */
+    public function status(string $slug, bool $fresh = false): array
+    {
+        $key = "readiness.tool.{$slug}";
+
+        if ($fresh) {
+            Cache::forget($key);
+        }
+
+        return Cache::remember($key, now()->addMinutes(5), function () use ($slug): array {
+            $path = $this->locator->find($slug);
+
+            return [
+                'installed' => $path !== null,
+                'path' => $path,
+                'version' => $path !== null ? $this->version($path, self::TOOLS[$slug]['versionArgs']) : null,
+            ];
+        });
+    }
+
+    /** Forget what is remembered about one tool, or all of them, after something installed. */
+    public function forget(?string $slug = null): void
+    {
+        foreach ($slug !== null ? [$slug] : array_keys(self::TOOLS) as $tool) {
+            Cache::forget("readiness.tool.{$tool}");
+        }
+    }
+
+    /**
      * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool, installed: bool, path: ?string, version: ?string}>
      */
     public function tools(): array
     {
-        $tools = [];
-
-        foreach ($this->catalog() as $entry) {
-            $path = $this->locator->find($entry['slug']);
-
-            $tools[] = $entry + [
-                'installed' => $path !== null,
-                'path' => $path,
-                'version' => $path !== null ? $this->version($path, self::TOOLS[$entry['slug']]['versionArgs']) : null,
-            ];
-        }
-
-        return $tools;
+        return array_map(fn (array $entry): array => $entry + $this->status($entry['slug']), $this->catalog());
     }
 
     /**

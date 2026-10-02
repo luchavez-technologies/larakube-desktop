@@ -6,6 +6,7 @@ use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +18,6 @@ class ReadinessController extends Controller
     {
         return Inertia::render('readiness', [
             'catalog' => $readiness->catalog(),
-            'tools' => Inertia::defer(fn (): array => $readiness->tools()),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
             'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,
             'cliChannel' => $installer->channel(),
@@ -36,6 +36,14 @@ class ReadinessController extends Controller
         $settings->update(['usage' => $validated['usage']]);
 
         return back();
+    }
+
+    /** One tool's state as JSON, so the Setup page can fill each row in as its own check finishes. */
+    public function toolStatus(string $tool, Request $request, ReadinessCheck $readiness): JsonResponse
+    {
+        abort_unless(array_key_exists($tool, ReadinessCheck::TOOLS), 404);
+
+        return response()->json($readiness->status($tool, $request->boolean('fresh')));
     }
 
     public function setChannel(Request $request, CliInstaller $installer): RedirectResponse

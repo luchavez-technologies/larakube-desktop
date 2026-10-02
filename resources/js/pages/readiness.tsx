@@ -17,11 +17,13 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { create as createServer } from '@/routes/servers';
 import { install } from '@/routes/setup/tools';
+import { useToolStatus } from '@/lib/tool-status';
 import type { Provider, Tool } from '@/types/larakube';
 
+type CatalogEntry = Omit<Tool, 'installed' | 'path' | 'version'>;
+
 type Props = {
-    catalog: Omit<Tool, 'installed' | 'path' | 'version'>[];
-    tools?: Tool[];
+    catalog: CatalogEntry[];
     providers?: Provider[] | null;
     cliInstallCommand: string;
     cliChannel?: string;
@@ -37,7 +39,6 @@ type Props = {
 
 export default function Readiness({
     catalog,
-    tools,
     providers,
     cliInstallCommand,
     cliChannel = 'canary',
@@ -45,8 +46,9 @@ export default function Readiness({
     usage,
     localCluster,
 }: Props) {
-    const cliMissing =
-        tools?.find((tool) => tool.slug === 'larakube')?.installed === false;
+    const [refresh, setRefresh] = useState(0);
+    const cli = useToolStatus('larakube', refresh);
+    const cliMissing = cli.status?.installed === false;
 
     const [selectedChannel, setSelectedChannel] = useState(cliChannel);
     const [showAwsModal, setShowAwsModal] = useState(false);
@@ -61,9 +63,10 @@ export default function Readiness({
                     <>
                         <Button
                             variant="secondary"
-                            onClick={() =>
-                                router.reload({ only: ['tools', 'providers'] })
-                            }
+                            onClick={() => {
+                                setRefresh((count) => count + 1);
+                                router.reload({ only: ['providers'] });
+                            }}
                         >
                             Check again
                         </Button>
@@ -105,44 +108,14 @@ export default function Readiness({
                                     (entry) =>
                                         usage === 'apps' || !entry.localOnly,
                                 )
-                                .map((entry) => {
-                                    const tool = tools?.find(
-                                        (t) => t.slug === entry.slug,
-                                    );
-
-                                    return (
-                                        <ListRow
-                                            key={entry.slug}
-                                            action={
-                                                tool ? (
-                                                    <ToolState
-                                                        tool={tool}
-                                                        channel={
-                                                            selectedChannel
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <RefreshCw className="size-4 animate-spin text-faint" />
-                                                )
-                                            }
-                                        >
-                                            <TwoLine
-                                                title={
-                                                    entry.required
-                                                        ? entry.label
-                                                        : `${entry.label} · optional`
-                                                }
-                                                detail={
-                                                    tool?.installed
-                                                        ? (tool.version ??
-                                                          tool.path)
-                                                        : entry.purpose
-                                                }
-                                                mono={tool?.installed}
-                                            />
-                                        </ListRow>
-                                    );
-                                })}
+                                .map((entry) => (
+                                    <ToolRow
+                                        key={entry.slug}
+                                        entry={entry}
+                                        channel={selectedChannel}
+                                        refresh={refresh}
+                                    />
+                                ))}
                         </Card>
                         <Card label="Cloud accounts">
                             <Deferred
@@ -307,7 +280,7 @@ function UsageChoice({ usage }: { usage: 'tools' | 'apps' | null }) {
                             router.post(
                                 '/setup/usage',
                                 { usage: option.value },
-                                { preserveScroll: true },
+                                { preserveScroll: true, only: ['usage'] },
                             )
                         }
                         className={`rounded-xl border p-4 text-left transition ${
@@ -376,6 +349,43 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
                 )}
             </Card>
         </div>
+    );
+}
+
+function ToolRow({
+    entry,
+    channel,
+    refresh,
+}: {
+    entry: CatalogEntry;
+    channel: string;
+    refresh: number;
+}) {
+    const { status, checking } = useToolStatus(entry.slug, refresh);
+    const tool = status ? { ...entry, ...status } : null;
+
+    return (
+        <ListRow
+            action={
+                tool && !checking ? (
+                    <ToolState tool={tool} channel={channel} />
+                ) : (
+                    <RefreshCw className="size-4 animate-spin text-faint" />
+                )
+            }
+        >
+            <TwoLine
+                title={
+                    entry.required ? entry.label : `${entry.label} · optional`
+                }
+                detail={
+                    tool?.installed
+                        ? (tool.version ?? tool.path)
+                        : entry.purpose
+                }
+                mono={tool?.installed}
+            />
+        </ListRow>
     );
 }
 

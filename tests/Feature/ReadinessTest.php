@@ -2,6 +2,7 @@
 
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Inertia\Testing\AssertableInertia;
@@ -27,27 +28,35 @@ function readinessFakeBinDirectory(array $binaries): string
     return $directory;
 }
 
-test('readiness reports installed tools with versions and missing ones as missing', function () {
+test('each tool answers for itself, with its version, or as missing', function () {
     $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
     Process::fake([
-        '*cloud:providers*' => Process::result(output: json_encode(['success' => true, 'providers' => []])),
         '*larakube*--version*' => Process::result(output: "LaraKube CLI v0.40.0\n"),
         '*kubectl*version*--client*' => Process::result(output: "Client Version: v1.34.1\nKustomize Version: v5.7.1\n"),
     ]);
 
-    $this->get(route('readiness'))
+    $this->getJson(route('setup.tools.status', 'larakube'))
         ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('readiness')
-            ->missing('tools')
-            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
-                ->where('tools.0.slug', 'larakube')
-                ->where('tools.0.installed', true)
-                ->where('tools.0.version', 'LaraKube CLI v0.40.0')
-                ->where('tools.1.version', 'Client Version: v1.34.1')
-                ->where('tools.2.slug', 'tofu')
-                ->where('tools.2.installed', false)
-                ->where('providers', [])));
+        ->assertJson(['installed' => true, 'version' => 'LaraKube CLI v0.40.0']);
+    $this->getJson(route('setup.tools.status', 'kubectl'))->assertJson(['installed' => true, 'version' => 'Client Version: v1.34.1']);
+    $this->getJson(route('setup.tools.status', 'tofu'))->assertJson(['installed' => false, 'version' => null]);
+    $this->getJson(route('setup.tools.status', 'nonsense'))->assertNotFound();
+
+    File::deleteDirectory($bin);
+});
+
+test('a tool is not checked again until asked to, or until an install ends', function () {
+    $bin = readinessFakeBinDirectory(['larakube']);
+    Cache::flush();
+    Process::fake(['*larakube*--version*' => Process::result(output: "v1\n")]);
+
+    $this->getJson(route('setup.tools.status', 'larakube'));
+    $this->getJson(route('setup.tools.status', 'larakube'));
+    Process::assertRanTimes(fn ($process) => in_array('--version', (array) $process->command, true), 1);
+
+    $this->getJson(route('setup.tools.status', ['tool' => 'larakube', 'fresh' => 1]));
+    Process::assertRanTimes(fn ($process) => in_array('--version', (array) $process->command, true), 2);
 
     File::deleteDirectory($bin);
 });

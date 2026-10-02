@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 
 class ToolInstallController extends Controller
 {
-    public function store(string $tool, CliRunner $runner, CliInstaller $installer, Request $request): RedirectResponse
+    public function store(string $tool, CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, Request $request): RedirectResponse
     {
         $definition = ReadinessCheck::TOOLS[$tool] ?? null;
 
@@ -37,6 +37,7 @@ class ToolInstallController extends Controller
             ]);
 
             $result = $installer->install($channel);
+            $readiness->forget('larakube');
 
             if ($result['success']) {
                 $run->update([

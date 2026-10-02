@@ -7,6 +7,7 @@ use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\Elevation;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolCatalog;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
@@ -55,6 +56,11 @@ class RecordRunOutput
             'result' => $result,
             'finished_at' => now(),
         ])->save();
+
+        // What Setup remembered about this computer is out of date once an install ends.
+        if ($run->kind === RunKind::InstallTool || $run->kind === RunKind::SetupLocal) {
+            app(ReadinessCheck::class)->forget($run->kind === RunKind::InstallTool ? $run->tool : null);
+        }
 
         // Passwordless sudo exists only while the local setup runs.
         if ($run->kind === RunKind::SetupLocal) {
