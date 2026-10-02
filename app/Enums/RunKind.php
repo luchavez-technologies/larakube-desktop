@@ -8,6 +8,8 @@ enum RunKind: string
     case DestroyServer = 'destroy-server';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */
     case InstallTool = 'install-tool';
+    /** The CLI's local setup (container runtime and a local k3s cluster), run with temporary passwordless sudo. */
+    case SetupLocal = 'setup-local';
     case InstallClusterTool = 'install-cluster-tool';
     case RemoveClusterTool = 'remove-cluster-tool';
     case ConnectDomain = 'connect-domain';

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Deferred, Link, router, useForm } from "@inertiajs/react";
+import { useState } from 'react';
+import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
     Download,
     ExternalLink,
@@ -8,17 +8,17 @@ import {
     X,
     CheckCircle2,
     AlertCircle,
-} from "lucide-react";
-import Button, { buttonClass } from "@/components/button";
-import Card from "@/components/card";
-import CopyButton from "@/components/copy-button";
-import { ListRow, TwoLine } from "@/components/list-row";
-import PageHeader from "@/components/page-header";
-import StatusPill from "@/components/status-pill";
-import AppLayout from "@/layouts/app-layout";
-import { create as createServer } from "@/routes/servers";
-import { install } from "@/routes/setup/tools";
-import type { Provider, Tool } from "@/types/larakube";
+} from 'lucide-react';
+import Button, { buttonClass } from '@/components/button';
+import Card from '@/components/card';
+import CopyButton from '@/components/copy-button';
+import { ListRow, TwoLine } from '@/components/list-row';
+import PageHeader from '@/components/page-header';
+import StatusPill from '@/components/status-pill';
+import AppLayout from '@/layouts/app-layout';
+import { create as createServer } from '@/routes/servers';
+import { install } from '@/routes/setup/tools';
+import type { Provider, Tool } from '@/types/larakube';
 
 type Props = {
     tools?: Tool[];
@@ -26,19 +26,26 @@ type Props = {
     cliInstallCommand: string;
     cliChannel?: string;
     cliDownloadUrl?: string;
-    usage: "tools" | "apps" | null;
+    usage: 'tools' | 'apps' | null;
+    localCluster?: {
+        engine: string;
+        context: string | null;
+        status: string;
+        tone: string;
+    };
 };
 
 export default function Readiness({
     tools,
     providers,
     cliInstallCommand,
-    cliChannel = "canary",
+    cliChannel = 'canary',
     cliDownloadUrl,
     usage,
+    localCluster,
 }: Props) {
     const cliMissing =
-        tools?.find((tool) => tool.slug === "larakube")?.installed === false;
+        tools?.find((tool) => tool.slug === 'larakube')?.installed === false;
 
     const [selectedChannel, setSelectedChannel] = useState(cliChannel);
     const [showAwsModal, setShowAwsModal] = useState(false);
@@ -54,7 +61,7 @@ export default function Readiness({
                         <Button
                             variant="secondary"
                             onClick={() =>
-                                router.reload({ only: ["tools", "providers"] })
+                                router.reload({ only: ['tools', 'providers'] })
                             }
                         >
                             Check again
@@ -62,7 +69,7 @@ export default function Readiness({
                         {!cliMissing && (
                             <Link
                                 href={createServer().url}
-                                className={buttonClass("primary")}
+                                className={buttonClass('primary')}
                             >
                                 Create a server
                             </Link>
@@ -79,7 +86,7 @@ export default function Readiness({
                         onChannelChange={(ch) => {
                             setSelectedChannel(ch);
                             router.post(
-                                "/setup/cli/channel",
+                                '/setup/cli/channel',
                                 { channel: ch },
                                 { preserveState: true },
                             );
@@ -88,12 +95,15 @@ export default function Readiness({
                 ) : (
                     <>
                         <UsageChoice usage={usage} />
+                        {usage === 'apps' && (
+                            <LocalDevelopment cluster={localCluster} />
+                        )}
                         <div className="grid grid-cols-2 items-start gap-4.5">
                             <Card label="Command-line tools">
                                 {tools
                                     ?.filter(
                                         (tool) =>
-                                            usage === "apps" || !tool.localOnly,
+                                            usage === 'apps' || !tool.localOnly,
                                     )
                                     .map((tool) => (
                                         <ListRow
@@ -142,7 +152,7 @@ export default function Readiness({
                                                                 .credentials
                                                                 .ready &&
                                                                 provider.slug ===
-                                                                    "aws" && (
+                                                                    'aws' && (
                                                                     <Button
                                                                         type="button"
                                                                         variant="secondary"
@@ -164,7 +174,7 @@ export default function Readiness({
                                                                 .credentials
                                                                 .ready &&
                                                                 provider.slug ===
-                                                                    "gcp" && (
+                                                                    'gcp' && (
                                                                     <Button
                                                                         type="button"
                                                                         variant="secondary"
@@ -174,7 +184,7 @@ export default function Readiness({
                                                                                 true,
                                                                             );
                                                                             router.post(
-                                                                                "/setup/cloud/gcp/login",
+                                                                                '/setup/cloud/gcp/login',
                                                                                 {},
                                                                                 {
                                                                                     onFinish:
@@ -206,15 +216,15 @@ export default function Readiness({
                                                                     provider
                                                                         .credentials
                                                                         .ready
-                                                                        ? "ok"
-                                                                        : "muted"
+                                                                        ? 'ok'
+                                                                        : 'muted'
                                                                 }
                                                             >
                                                                 {provider
                                                                     .credentials
                                                                     .ready
-                                                                    ? "Ready"
-                                                                    : "Not connected"}
+                                                                    ? 'Ready'
+                                                                    : 'Not connected'}
                                                             </StatusPill>
                                                         </div>
                                                     }
@@ -224,7 +234,7 @@ export default function Readiness({
                                                         detail={
                                                             provider.credentials
                                                                 .hint ??
-                                                            "Credentials verified"
+                                                            'Credentials verified'
                                                         }
                                                     />
                                                 </ListRow>
@@ -258,26 +268,26 @@ export default function Readiness({
     );
 }
 
-const USAGES: { value: "tools" | "apps"; title: string; detail: string }[] = [
+const USAGES: { value: 'tools' | 'apps'; title: string; detail: string }[] = [
     {
-        value: "tools",
-        title: "Install tools on a server",
-        detail: "Create servers and set up chat, a wiki, sign-in and more for your team. Nothing runs on this computer.",
+        value: 'tools',
+        title: 'Install tools on a server',
+        detail: 'Create servers and set up chat, a wiki, sign-in and more for your team. Nothing runs on this computer.',
     },
     {
-        value: "apps",
-        title: "Build and run apps here",
-        detail: "Everything above, plus creating apps and running them on this computer to work on them.",
+        value: 'apps',
+        title: 'Build and run apps here',
+        detail: 'Everything above, plus creating apps and running them on this computer to work on them.',
     },
 ];
 
-function UsageChoice({ usage }: { usage: "tools" | "apps" | null }) {
+function UsageChoice({ usage }: { usage: 'tools' | 'apps' | null }) {
     return (
         <div className="mb-4.5">
             <p className="mb-2 text-sm font-medium">
                 {usage === null
-                    ? "What will you use LaraKube Desktop for?"
-                    : "You are using LaraKube Desktop to"}
+                    ? 'What will you use LaraKube Desktop for?'
+                    : 'You are using LaraKube Desktop to'}
             </p>
             <div className="grid grid-cols-2 gap-3">
                 {USAGES.map((option) => (
@@ -287,15 +297,15 @@ function UsageChoice({ usage }: { usage: "tools" | "apps" | null }) {
                         aria-pressed={usage === option.value}
                         onClick={() =>
                             router.post(
-                                "/setup/usage",
+                                '/setup/usage',
                                 { usage: option.value },
                                 { preserveScroll: true },
                             )
                         }
                         className={`rounded-xl border p-4 text-left transition ${
                             usage === option.value
-                                ? "border-ink bg-white shadow-sm"
-                                : "border-line bg-white/60 hover:bg-white"
+                                ? 'border-ink bg-white shadow-sm'
+                                : 'border-line bg-white/60 hover:bg-white'
                         }`}
                     >
                         <span className="block text-sm font-semibold">
@@ -307,6 +317,56 @@ function UsageChoice({ usage }: { usage: "tools" | "apps" | null }) {
                     </button>
                 ))}
             </div>
+        </div>
+    );
+}
+
+function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
+    const { errors } = usePage<{ errors: Record<string, string> }>().props;
+    const running = cluster?.tone === 'ok';
+
+    const start = () => {
+        if (
+            window.confirm(
+                'This installs a local Kubernetes cluster (k3s) so you can run apps on this computer. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?',
+            )
+        ) {
+            router.post('/setup/local');
+        }
+    };
+
+    return (
+        <div className="mb-4.5">
+            <Card label="Local development">
+                <ListRow
+                    action={
+                        running ? (
+                            <StatusPill tone="ok">Ready</StatusPill>
+                        ) : (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={start}
+                            >
+                                Set up local development
+                            </Button>
+                        )
+                    }
+                >
+                    <TwoLine
+                        title="Local cluster"
+                        detail={
+                            running
+                                ? `${cluster?.engine} is running`
+                                : 'Runs your apps on this computer so you can work on them.'
+                        }
+                    />
+                </ListRow>
+                {errors.local && (
+                    <p className="mt-2 text-xs text-accent">{errors.local}</p>
+                )}
+            </Card>
         </div>
     );
 }
@@ -324,12 +384,12 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                     data={{ channel }}
                     method="post"
                     as="button"
-                    className={buttonClass("secondary", "sm")}
+                    className={buttonClass('secondary', 'sm')}
                 >
                     Install
                 </Link>
             )}
-            <StatusPill tone={tool.required ? "bad" : "muted"}>
+            <StatusPill tone={tool.required ? 'bad' : 'muted'}>
                 Missing
             </StatusPill>
         </div>
@@ -350,7 +410,7 @@ function CliMissing({
     const handleInstall = () => {
         setInstalling(true);
         router.post(
-            "/setup/tools/larakube/install",
+            '/setup/tools/larakube/install',
             { channel },
             {
                 onFinish: () => setInstalling(false),
@@ -379,22 +439,22 @@ function CliMissing({
                     </span>
                     <button
                         type="button"
-                        onClick={() => onChannelChange("canary")}
+                        onClick={() => onChannelChange('canary')}
                         className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            channel === "canary"
-                                ? "bg-brand text-white shadow-2xs"
-                                : "hover:text-foreground text-soft"
+                            channel === 'canary'
+                                ? 'bg-brand text-white shadow-2xs'
+                                : 'hover:text-foreground text-soft'
                         }`}
                     >
                         Canary
                     </button>
                     <button
                         type="button"
-                        onClick={() => onChannelChange("stable")}
+                        onClick={() => onChannelChange('stable')}
                         className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            channel === "stable"
-                                ? "bg-brand text-white shadow-2xs"
-                                : "hover:text-foreground text-soft"
+                            channel === 'stable'
+                                ? 'bg-brand text-white shadow-2xs'
+                                : 'hover:text-foreground text-soft'
                         }`}
                     >
                         Stable
@@ -417,8 +477,8 @@ function CliMissing({
                     )}
                     <span>
                         {installing
-                            ? "Downloading and installing…"
-                            : `Install LaraKube CLI (${channel === "canary" ? "Canary" : "Stable"})`}
+                            ? 'Downloading and installing…'
+                            : `Install LaraKube CLI (${channel === 'canary' ? 'Canary' : 'Stable'})`}
                     </span>
                 </Button>
             </div>
@@ -440,33 +500,33 @@ function CliMissing({
 
 function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
     const form = useForm({
-        access_key_id: "",
-        secret_access_key: "",
-        region: "us-east-1",
-        aws: "",
+        access_key_id: '',
+        secret_access_key: '',
+        region: 'us-east-1',
+        aws: '',
     });
 
     const regions = [
-        { value: "us-east-1", label: "US East (N. Virginia) · us-east-1" },
-        { value: "us-west-2", label: "US West (Oregon) · us-west-2" },
-        { value: "eu-west-1", label: "EU (Ireland) · eu-west-1" },
-        { value: "eu-central-1", label: "EU (Frankfurt) · eu-central-1" },
+        { value: 'us-east-1', label: 'US East (N. Virginia) · us-east-1' },
+        { value: 'us-west-2', label: 'US West (Oregon) · us-west-2' },
+        { value: 'eu-west-1', label: 'EU (Ireland) · eu-west-1' },
+        { value: 'eu-central-1', label: 'EU (Frankfurt) · eu-central-1' },
         {
-            value: "ap-southeast-1",
-            label: "Asia Pacific (Singapore) · ap-southeast-1",
+            value: 'ap-southeast-1',
+            label: 'Asia Pacific (Singapore) · ap-southeast-1',
         },
         {
-            value: "ap-northeast-1",
-            label: "Asia Pacific (Tokyo) · ap-northeast-1",
+            value: 'ap-northeast-1',
+            label: 'Asia Pacific (Tokyo) · ap-northeast-1',
         },
     ];
 
     function submit(e: React.FormEvent) {
         e.preventDefault();
-        form.post("/setup/cloud/aws", {
+        form.post('/setup/cloud/aws', {
             onSuccess: () => {
                 onClose();
-                router.reload({ only: ["providers"] });
+                router.reload({ only: ['providers'] });
             },
         });
     }
@@ -489,10 +549,10 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
 
                 <form onSubmit={submit} className="mt-4 space-y-4">
                     <p className="text-xs leading-relaxed text-soft">
-                        Credentials will be saved securely to{" "}
+                        Credentials will be saved securely to{' '}
                         <code className="text-foreground">
                             ~/.aws/credentials
-                        </code>{" "}
+                        </code>{' '}
                         and tested via AWS STS.
                     </p>
 
@@ -506,12 +566,12 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                             placeholder="AKIAIOSFODNN7EXAMPLE"
                             value={form.data.access_key_id}
                             onChange={(e) =>
-                                form.setData("access_key_id", e.target.value)
+                                form.setData('access_key_id', e.target.value)
                             }
                             className="w-full rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
                         />
                         {form.errors.access_key_id && (
-                            <p className="text-bad mt-1 text-xs">
+                            <p className="mt-1 text-xs text-accent">
                                 {form.errors.access_key_id}
                             </p>
                         )}
@@ -528,14 +588,14 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                             value={form.data.secret_access_key}
                             onChange={(e) =>
                                 form.setData(
-                                    "secret_access_key",
+                                    'secret_access_key',
                                     e.target.value,
                                 )
                             }
                             className="w-full rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
                         />
                         {form.errors.secret_access_key && (
-                            <p className="text-bad mt-1 text-xs">
+                            <p className="mt-1 text-xs text-accent">
                                 {form.errors.secret_access_key}
                             </p>
                         )}
@@ -548,7 +608,7 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                         <select
                             value={form.data.region}
                             onChange={(e) =>
-                                form.setData("region", e.target.value)
+                                form.setData('region', e.target.value)
                             }
                             className="w-full rounded-lg border-0 bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
                         >
@@ -559,14 +619,14 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                             ))}
                         </select>
                         {form.errors.region && (
-                            <p className="text-bad mt-1 text-xs">
+                            <p className="mt-1 text-xs text-accent">
                                 {form.errors.region}
                             </p>
                         )}
                     </div>
 
                     {form.errors.aws && (
-                        <div className="bg-bad-tint text-bad flex items-start gap-2 rounded-lg p-3 text-xs">
+                        <div className="bg-bad-tint flex items-start gap-2 rounded-lg p-3 text-xs text-accent">
                             <AlertCircle className="mt-0.5 size-4 shrink-0" />
                             <span>{form.errors.aws}</span>
                         </div>
@@ -585,7 +645,7 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                             variant="primary"
                             disabled={form.processing}
                         >
-                            {form.processing ? "Verifying…" : "Save & Verify"}
+                            {form.processing ? 'Verifying…' : 'Save & Verify'}
                         </Button>
                     </div>
                 </form>

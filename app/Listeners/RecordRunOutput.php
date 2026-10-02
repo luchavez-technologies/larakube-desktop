@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Services\Elevation;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ToolCatalog;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
@@ -54,6 +55,11 @@ class RecordRunOutput
             'result' => $result,
             'finished_at' => now(),
         ])->save();
+
+        // Passwordless sudo exists only while the local setup runs.
+        if ($run->kind === RunKind::SetupLocal) {
+            app(Elevation::class)->revoke();
+        }
 
         $context = $run->meta['context'] ?? null;
 

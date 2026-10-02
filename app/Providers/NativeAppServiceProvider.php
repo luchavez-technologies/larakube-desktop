@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Enums\RunKind;
+use App\Enums\RunStatus;
+use App\Models\Run;
+use App\Services\Elevation;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Facades\Window;
 
@@ -13,6 +17,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
+        $this->closeInterruptedLocalSetup();
+
         Window::open()
             ->title(config('app.name'))
             ->width(1180)
@@ -20,6 +26,21 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(960)
             ->minHeight(640)
             ->rememberState();
+    }
+
+    /** A local setup the app was closed during never got to remove its temporary sudo access. */
+    private function closeInterruptedLocalSetup(): void
+    {
+        try {
+            $interrupted = Run::query()->where('kind', RunKind::SetupLocal)->where('status', RunStatus::Running);
+
+            if ($interrupted->exists()) {
+                app(Elevation::class)->revoke();
+                $interrupted->update(['status' => RunStatus::Failed, 'finished_at' => now()]);
+            }
+        } catch (\Throwable) {
+            // The database may not be migrated yet on a first launch.
+        }
     }
 
     /**

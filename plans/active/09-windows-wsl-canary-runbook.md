@@ -31,6 +31,8 @@ Check each step and note what you see. Stop at the first failure and write down 
 6. **CLI install.** Press Install on LaraKube CLI. It should download into `~/.larakube/bin`. Confirm: `~/.larakube/bin/larakube --version`.
 7. **kubectl and OpenTofu.** Press Install on each. Both should turn Installed.
 8. **Container runtime.** Press Install on Podman in Setup. Inside WSL it runs as root through Windows, so there is no password prompt. It should turn Installed. If it fails, copy the run's output from Activity. Fallback in Ubuntu: `sudo apt-get install -y podman slirp4netns fuse-overlayfs uidmap`, then **Check again**.
+   **What is this computer for?** At the top of Setup, pick *Install tools on a server* (hides Podman, Docker and Git) and then *Build and run apps here* (shows them, plus **Local development**). The choice should stick after Check again.
+   **Local development.** Press **Set up local development** and confirm. Expect no password prompt inside WSL; the run's output shows Podman, then k3s, then Traefik. Afterwards, in Ubuntu: `sudo ls /etc/sudoers.d/` must NOT list `larakube-desktop-setup` (access is removed when the run ends), and `kubectl get nodes` should show the node Ready. If Setup asks you to restart WSL (mirrored networking), do `wsl --shutdown` from PowerShell, reopen Desktop, and press **Check again**.
 9. **Cloud account.** Save a DigitalOcean or Hetzner token in Settings. The provider shows Ready on Setup.
 10. **Create a server** (billed by the provider, destroy it afterwards). Servers → Create a server → size the smallest → Create. Expect about five minutes.
 11. **Install a tool** on that server (Tools → pick the server → Install one small tool).
