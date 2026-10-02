@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CloudAuthController;
 use App\Http\Controllers\ClusterAccessController;
 use App\Http\Controllers\ClusterToolController;
@@ -44,6 +45,14 @@ Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->na
 Route::post('/servers/{server}/plex/init', [PlexController::class, 'initServer'])->name('servers.plex.init');
 Route::post('/servers/{server}/plex/start', [PlexController::class, 'startServer'])->name('servers.plex.start');
 Route::post('/servers/{server}/plex/stop', [PlexController::class, 'stopServer'])->name('servers.plex.stop');
+Route::post('/servers/{server}/backups/setup', [BackupController::class, 'setup'])->name('servers.backups.setup');
+Route::post('/servers/{server}/backups/schedule', [BackupController::class, 'schedule'])->name('servers.backups.schedule');
+Route::post('/servers/{server}/backups/unschedule', [BackupController::class, 'unschedule'])->name('servers.backups.unschedule');
+Route::post('/servers/{server}/backups/run', [BackupController::class, 'run'])->name('servers.backups.run');
+Route::post('/servers/{server}/backups/check', [BackupController::class, 'check'])->name('servers.backups.check');
+Route::post('/servers/{server}/backups/restore', [BackupController::class, 'restore'])->name('servers.backups.restore');
+Route::post('/servers/{server}/backups/prune', [BackupController::class, 'prune'])->name('servers.backups.prune');
+Route::post('/servers/{server}/backups/recovery-card', [BackupController::class, 'recoveryCard'])->name('servers.backups.recovery-card');
 Route::post('/servers/{server}/access/grant', [ClusterAccessController::class, 'grant'])->name('servers.access.grant');
 Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 'revoke'])->name('servers.access.revoke');
 

@@ -10,6 +10,14 @@ enum RunKind: string
     case InstallTool = 'install-tool';
     /** The CLI's local setup (container runtime and a local k3s cluster), run with temporary passwordless sudo. */
     case SetupLocal = 'setup-local';
+    /** Backups on a server: destination, schedule, a backup now, checking and restoring one, clearing old ones. */
+    case BackupInit = 'backup-init';
+    case BackupSchedule = 'backup-schedule';
+    case BackupUnschedule = 'backup-unschedule';
+    case BackupRun = 'backup-run';
+    case BackupCheck = 'backup-check';
+    case BackupRestore = 'backup-restore';
+    case BackupPrune = 'backup-prune';
     case InstallClusterTool = 'install-cluster-tool';
     case RemoveClusterTool = 'remove-cluster-tool';
     case ConnectDomain = 'connect-domain';
@@ -42,6 +50,11 @@ enum RunKind: string
     case CompanionStart = 'companion-start';
     case CompanionStop = 'companion-stop';
     case CloudAuth = 'cloud-auth';
+
+    public function changesBackups(): bool
+    {
+        return in_array($this, [self::BackupInit, self::BackupSchedule, self::BackupUnschedule, self::BackupRun, self::BackupRestore, self::BackupPrune], true);
+    }
 
     public function changesClusterTools(): bool
     {

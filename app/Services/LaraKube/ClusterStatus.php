@@ -60,6 +60,41 @@ class ClusterStatus
         });
     }
 
+    /**
+     * Whether the server is backed up, where to, on what schedule, and the
+     * latest backup, from `backup:status --json`. Never holds a key or the passphrase.
+     *
+     * @return array<mixed>|null
+     */
+    public function backup(string $context): ?array
+    {
+        return $this->remember("backup:{$context}", function () use ($context): ?array {
+            $report = $this->json(['backup:status', 'production', "--context={$context}", '--json'], 180);
+
+            return is_array($report) && ($report['success'] ?? false) === true ? $report : null;
+        });
+    }
+
+    /**
+     * The backups kept at the destination, newest first, from `backup:list --json`.
+     *
+     * @return array<mixed>|null
+     */
+    public function backups(string $context): ?array
+    {
+        return $this->remember("backups:{$context}", function () use ($context): ?array {
+            $report = $this->json(['backup:list', 'production', "--context={$context}", '--json'], 180);
+
+            return is_array($report) && ($report['success'] ?? false) === true ? $report : null;
+        });
+    }
+
+    public function forgetBackup(string $context): void
+    {
+        Cache::forget("cluster-status:backup:{$context}");
+        Cache::forget("cluster-status:backups:{$context}");
+    }
+
     public function forgetDns(string $context): void
     {
         Cache::forget("cluster-status:dns:{$context}");

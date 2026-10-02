@@ -31,6 +31,7 @@ import {
 } from '@/routes/projects';
 import { destroy, dns, index, tls } from '@/routes/servers';
 import { index as toolsIndex, show as showTool } from '@/routes/servers/tools';
+import BackupsCard from '@/pages/servers/backups-card';
 import { providerLabels, toolName, toolTagline } from '@/types/larakube';
 import type {
     ClusterTool,
@@ -38,6 +39,8 @@ import type {
     Server,
     PlexStatus,
     ClusterUser,
+    BackupStatus,
+    BackupList,
 } from '@/types/larakube';
 
 type DnsGroup = { group: string; zones: string[]; ready: boolean };
@@ -56,6 +59,8 @@ export default function ShowServer({
     dns: dnsGroups,
     tls: tlsReport,
     plex,
+    backup,
+    backups,
     clusterUsers,
 }: {
     server: Server;
@@ -65,6 +70,8 @@ export default function ShowServer({
     dns?: DnsGroup[] | null;
     tls?: TlsReport | null;
     plex?: PlexStatus | null;
+    backup?: BackupStatus | null;
+    backups?: BackupList | null;
     clusterUsers?: ClusterUser[] | null;
 }) {
     const { url } = usePage();
@@ -410,6 +417,18 @@ export default function ShowServer({
                         <PlexCommonsCard
                             server={server}
                             plex={plex}
+                            disabled={!ready}
+                        />
+                    </Deferred>
+
+                    <Deferred
+                        data={['backup', 'backups']}
+                        fallback={<CheckingRow title="Checking backups…" />}
+                    >
+                        <BackupsCard
+                            server={server}
+                            backup={backup}
+                            backups={backups}
                             disabled={!ready}
                         />
                     </Deferred>

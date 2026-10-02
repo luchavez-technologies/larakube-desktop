@@ -41,6 +41,13 @@ export type RunKind =
     | 'down-project'
     | 'start-project'
     | 'stop-project'
+    | 'backup-init'
+    | 'backup-schedule'
+    | 'backup-unschedule'
+    | 'backup-run'
+    | 'backup-check'
+    | 'backup-restore'
+    | 'backup-prune'
     | 'plex-init'
     | 'plex-start'
     | 'plex-stop'
@@ -690,3 +697,39 @@ export type NewAppQuestion = {
 };
 
 export type NewAppAnswers = Record<string, string | string[] | null>;
+
+export type BackupSchedule = {
+    scheduled: boolean;
+    cron: string | null;
+    timezone: string | null;
+    suspended: boolean;
+    lastScheduleTime: string | null;
+    lastSuccessfulTime: string | null;
+};
+
+export type BackupStatus = {
+    configured: boolean;
+    destination?: { endpoint: string; bucket: string; region: string };
+    schedule?: BackupSchedule;
+    backups?: {
+        available: boolean;
+        count: number;
+        incomplete: number;
+        last: {
+            id: string;
+            taken: string;
+            bytes: number;
+            items: number;
+        } | null;
+    };
+    recoveryCard?: { exists: boolean; path: string };
+};
+
+export type BackupEntry = {
+    id: string;
+    taken: string;
+    bytes: number;
+    items: number;
+};
+
+export type BackupList = { backups: BackupEntry[]; incomplete: number };

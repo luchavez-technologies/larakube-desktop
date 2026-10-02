@@ -73,6 +73,10 @@ class RecordRunOutput
             app(ToolCatalog::class)->forget($context);
         }
 
+        if ($context !== null && $run->kind?->changesBackups()) {
+            app(ClusterStatus::class)->forgetBackup($context);
+        }
+
         if ($context !== null && $run->kind === RunKind::ConnectDomain) {
             app(ClusterStatus::class)->forgetDns($context);
         }

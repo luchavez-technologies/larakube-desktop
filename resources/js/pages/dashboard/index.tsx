@@ -35,6 +35,7 @@ type DashboardProps = {
     servers: Server[];
     runs: RecentRun[];
     toolsReady: boolean;
+    unprotectedServers?: string[];
     localCluster: {
         engine: string;
         context?: string | null;
@@ -49,6 +50,7 @@ export default function DashboardIndex({
     servers,
     runs,
     toolsReady,
+    unprotectedServers,
     localCluster,
 }: DashboardProps) {
     return (
@@ -93,6 +95,31 @@ export default function DashboardIndex({
                             className={buttonClass('primary', 'sm')}
                         >
                             <span>Complete Setup</span>
+                            <ArrowRight className="size-3" />
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {unprotectedServers && unprotectedServers.length > 0 && (
+                <div className="mb-6 rounded-xl border border-warn-line bg-warn-tint p-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-medium text-ink">
+                                {unprotectedServers.length === 1
+                                    ? '1 server has no backups'
+                                    : `${unprotectedServers.length} servers have no backups`}
+                            </p>
+                            <p className="text-xs text-soft">
+                                {unprotectedServers.join(', ')}. If a server is
+                                lost, what is on it is lost too.
+                            </p>
+                        </div>
+                        <Link
+                            href={`/servers/${unprotectedServers[0]}`}
+                            className={buttonClass('primary', 'sm')}
+                        >
+                            <span>Set up backups</span>
                             <ArrowRight className="size-3" />
                         </Link>
                     </div>

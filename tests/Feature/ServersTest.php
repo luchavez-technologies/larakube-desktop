@@ -247,3 +247,17 @@ test('a finished Connect a domain run drops the cached DNS status', function () 
 
     expect(Cache::has('cluster-status:dns:larakube-203.0.113.21'))->toBeFalse();
 });
+
+test('a server page asks for its backup state and backups on their own', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    Cache::flush();
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('backup')
+            ->missing('backups'));
+
+    File::deleteDirectory($bin);
+});

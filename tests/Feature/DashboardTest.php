@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Project;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
@@ -72,4 +73,31 @@ test('a first launch with no CLI sends the user to Setup', function () {
     app()->instance(ToolLocator::class, new ToolLocator([$empty]));
 
     $this->get(route('dashboard'))->assertRedirect(route('readiness'));
+});
+
+test('the dashboard warns about ready servers that have no backups', function () {
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([
+        ['name' => 'safe-vps', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'r', 'ip' => '1.1.1.1', 'context' => 'ctx-safe', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ['name' => 'bare-vps', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'r', 'ip' => '2.2.2.2', 'context' => 'ctx-bare', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ['name' => 'new-vps', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'r', 'ip' => null, 'context' => null, 'account' => null, 'projectId' => null, 'status' => 'creating'],
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $backups = mock(ClusterStatus::class);
+    $backups->shouldReceive('backup')->with('ctx-safe')->andReturn(['success' => true, 'configured' => true]);
+    $backups->shouldReceive('backup')->with('ctx-bare')->andReturn(['success' => true, 'configured' => false]);
+    app()->instance(ClusterStatus::class, $backups);
+
+    $this->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->missing('unprotectedServers')
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('unprotectedServers', ['bare-vps'])));
+
+    File::deleteDirectory($bin);
 });

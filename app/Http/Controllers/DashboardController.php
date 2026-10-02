@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Run;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
@@ -21,6 +22,7 @@ class DashboardController extends Controller
         ProjectInspector $inspector,
         ToolLocator $locator,
         LocalCluster $localCluster,
+        ClusterStatus $clusterStatus,
     ): Response|RedirectResponse {
         // A first launch has no CLI yet, and every other page needs it: Setup installs it.
         if ($locator->find('larakube') === null) {
@@ -57,10 +59,12 @@ class DashboardController extends Controller
             'runs' => $recentRuns,
             'toolsReady' => $missingRequired === [],
             'localCluster' => $cluster,
+            'unprotectedServers' => Inertia::defer(fn (): array => collect($allServers)
+                ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context']))
+                ->filter(fn (array $server): bool => ($clusterStatus->backup($server['context'])['configured'] ?? true) === false)
+                ->pluck('name')
+                ->values()
+                ->all(), 'backups'),
         ]);
     }
-
-    /**
-     * @return array{engine: string, context: ?string, status: string, tone: string}
-     */
 }
