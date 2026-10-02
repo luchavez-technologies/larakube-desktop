@@ -145,6 +145,50 @@ class ToolCatalog
     }
 
     /**
+     * Swaps one tool's rows for what the registry says about it right now (about
+     * a second), so a tool that was just installed or removed shows at once instead
+     * of after the slow live check. The list stays stale, so that check still runs.
+     */
+    public function refreshTool(string $context, string $tool): void
+    {
+        $last = $this->lastVerified($context);
+
+        if ($last === null) {
+            return;
+        }
+
+        $registered = $this->load($context, registryOnly: true);
+
+        if ($registered === null) {
+            return;
+        }
+
+        $fresh = array_values(array_filter($registered, fn (array $row): bool => ($row['tool'] ?? null) === $tool));
+        $rows = [];
+        $placed = false;
+
+        foreach ($last['tools'] as $row) {
+            if (($row['tool'] ?? null) !== $tool) {
+                $rows[] = $row;
+
+                continue;
+            }
+
+            if (! $placed) {
+                array_push($rows, ...$fresh);
+                $placed = true;
+            }
+        }
+
+        if (! $placed) {
+            array_push($rows, ...$fresh);
+        }
+
+        Cache::forever($this->key($context), ['tools' => $rows, 'checkedAt' => null]);
+        Cache::forget($this->key($context).':registered');
+    }
+
+    /**
      * @return list<array<string, mixed>>|null
      */
     private function load(string $context, bool $registryOnly): ?array

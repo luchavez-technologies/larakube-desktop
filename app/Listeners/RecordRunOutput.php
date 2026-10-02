@@ -71,6 +71,13 @@ class RecordRunOutput
 
         if ($context !== null && $run->kind?->changesClusterTools()) {
             app(ToolCatalog::class)->forget($context);
+
+            // Show what just changed at once; the full live check follows on the next visit.
+            $tool = $run->meta['tool'] ?? null;
+
+            if ($status === RunStatus::Succeeded && is_string($tool) && in_array($run->kind, [RunKind::InstallClusterTool, RunKind::RemoveClusterTool], true)) {
+                app(ToolCatalog::class)->refreshTool($context, $tool);
+            }
         }
 
         if ($context !== null && $run->kind?->changesBackups()) {

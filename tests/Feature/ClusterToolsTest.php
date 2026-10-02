@@ -182,7 +182,7 @@ test('installing validates the domain and runs tool:add against the server conte
     $run = Run::sole();
     expect($run->kind)->toBe(RunKind::InstallClusterTool)
         ->and($run->label)->toBe('Install CRM on workshop-demo')
-        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm']);
+        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm', 'host' => 'example.com']);
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
         "{$bin}/larakube", 'tool:add', '--tool=crm', '--context=larakube-203.0.113.21', '--domain=example.com', '--wire-sso', '--no-wire-mail', '--force', '--no-interaction',
@@ -204,7 +204,7 @@ test('installing with a specific domain host targets that host', function () {
     $run = Run::sole();
     expect($run->kind)->toBe(RunKind::InstallClusterTool)
         ->and($run->label)->toBe('Install CRM on workshop-demo')
-        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm']);
+        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm', 'host' => 'staging.example.com']);
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
         "{$bin}/larakube", 'tool:add', '--tool=crm', '--context=larakube-203.0.113.21', '--domain=staging.example.com', '--no-wire-sso', '--no-wire-mail', '--force', '--no-interaction',
@@ -239,7 +239,7 @@ test('installing an additional deployment of a tool succeeds with its host', fun
     $run = Run::sole();
     expect($run->kind)->toBe(RunKind::InstallClusterTool)
         ->and($run->label)->toBe('Install PocketBase on workshop-demo')
-        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'pocketbase', 'admin_email' => 'admin@example.com']);
+        ->and($run->meta)->toBe(['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'pocketbase', 'host' => 'pocket-test.example.com', 'admin_email' => 'admin@example.com']);
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
         "{$bin}/larakube", 'tool:add', '--tool=pocketbase', '--context=larakube-203.0.113.21', '--domain=pocket-test.example.com', '--admin-email=admin@example.com', '--no-wire-sso', '--no-wire-mail', '--force', '--no-interaction',
@@ -332,6 +332,51 @@ test('check-dns endpoint returns resolution status for a domain', function () {
     $this->getJson(route('servers.tools.check-dns', ['server' => 'workshop-demo', 'domain' => 'example.com']))
         ->assertOk()
         ->assertJsonStructure(['matches', 'serverIp', 'isWildcard']);
+
+    File::deleteDirectory($bin);
+});
+
+test('a tool that was just installed shows at once, without waiting for the live check', function () {
+    $bin = clusterToolsFakeCli();
+    Cache::flush();
+    $before = clusterToolsRows();
+    Cache::forever('cluster-tools:ctx', ['tools' => $before, 'checkedAt' => now()->subMinutes(5)->getTimestamp()]);
+
+    // The registry already knows the new CRM instance.
+    $registry = $before;
+    $registry[1] = [...$before[1], 'installed' => true, 'host' => 'crm.example.com', 'url' => 'https://crm.example.com'];
+    Process::fake(['*tool:list*--registry-only*' => Process::result(output: json_encode($registry))]);
+
+    $run = Run::create([
+        'label' => 'Install CRM on demo', 'command' => ['larakube', 'tool:add'], 'kind' => RunKind::InstallClusterTool,
+        'meta' => ['server' => 'demo', 'context' => 'ctx', 'tool' => 'crm', 'host' => 'crm.example.com'],
+    ]);
+    event(new ProcessExited($run->alias(), 0));
+
+    $last = app(ToolCatalog::class)->lastVerified('ctx');
+
+    expect($last['checkedAt'])->toBeNull()
+        ->and(array_column($last['tools'], 'tool'))->toBe(['sso', 'crm'])
+        ->and($last['tools'][1])->toMatchArray(['installed' => true, 'host' => 'crm.example.com'])
+        ->and($last['tools'][0]['host'])->toBe('sso.example.com');
+
+    File::deleteDirectory($bin);
+});
+
+test('a failed install leaves the list as it was', function () {
+    $bin = clusterToolsFakeCli();
+    Cache::flush();
+    Cache::forever('cluster-tools:ctx', ['tools' => clusterToolsRows(), 'checkedAt' => now()->getTimestamp()]);
+    Process::fake();
+
+    $run = Run::create([
+        'label' => 'Install CRM on demo', 'command' => ['larakube', 'tool:add'], 'kind' => RunKind::InstallClusterTool,
+        'meta' => ['server' => 'demo', 'context' => 'ctx', 'tool' => 'crm', 'host' => 'crm.example.com'],
+    ]);
+    event(new ProcessExited($run->alias(), 1));
+
+    Process::assertNotRan(fn ($process) => in_array('--registry-only', (array) $process->command, true));
+    expect(app(ToolCatalog::class)->lastVerified('ctx')['tools'][1]['installed'])->toBeFalse();
 
     File::deleteDirectory($bin);
 });
