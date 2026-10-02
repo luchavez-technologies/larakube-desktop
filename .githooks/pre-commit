@@ -1,6 +1,15 @@
 #!/bin/sh
 # Same gate as CI (composer ci:check): formatting, types and tests. Fix formatting with `npm run check:fix`.
 echo "Running pre-commit checks (composer ci:check)..."
+# The Electron plugin is built by CI's `build` job, not by ci:check, so a type error
+# in it would only show up after pushing. Check it here when its dependencies exist.
+if [ -d nativephp/electron/node_modules ]; then
+    (cd nativephp/electron/electron-plugin && npx tsc --noEmit -p .) || {
+        echo "The Electron plugin has a type error (nativephp/electron/electron-plugin)."
+        exit 1
+    }
+fi
+
 composer ci:check || {
     echo "Pre-commit checks failed. Fix the errors above (formatting: npm run check:fix)."
     exit 1

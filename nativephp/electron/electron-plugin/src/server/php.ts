@@ -325,6 +325,7 @@ interface EnvironmentVariables {
     VIEW_COMPILED_PATH?: string;
     NIGHTWATCH_TOKEN?: string;
     NIGHTWATCH_INGEST_URI?: string;
+    PHP_CLI_SERVER_WORKERS?: string;
 }
 
 function getDefaultEnvironmentVariables(secret?: string, apiPort?: number): EnvironmentVariables {
