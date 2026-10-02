@@ -124,6 +124,21 @@ jobs:
         run: |
           mkdir -p out
           find nativephp/electron/dist -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} out/ \;
+          # Fixed names beside the versioned ones, so the docs can link to
+          # releases/latest/download/<name> and releases/download/canary/<name>
+          # without asking the GitHub API (which rate-limits shared networks).
+          cd out
+          for f in *.dmg; do
+            [ -e "$f" ] || continue
+            case "$f" in
+              *arm64*) cp "$f" LaraKube-Desktop-mac-arm64.dmg ;;
+              *x64*) cp "$f" LaraKube-Desktop-mac-x64.dmg ;;
+            esac
+          done
+          for f in *.exe; do [ -e "$f" ] && cp "$f" LaraKube-Desktop-windows-x64-setup.exe; done
+          for f in *.AppImage; do [ -e "$f" ] && cp "$f" LaraKube-Desktop-linux-x64.AppImage; done
+          for f in *.deb; do [ -e "$f" ] && cp "$f" LaraKube-Desktop-linux-x64.deb; done
+          cd ..
           ls -la out
           test -n "$(ls -A out)"
 

@@ -54,4 +54,6 @@ For every step note: pass or fail, the exact message, and a screenshot of any fa
 
 ## After it passes
 
-Tag `v0.0.1` on `desktop/` (`git tag v0.0.1 && git push origin v0.0.1`) and re-run the download page check on `/download` Stable.
+1. Tag `v0.0.1` on `desktop/` (`git tag v0.0.1 && git push origin v0.0.1`) and wait for the release run.
+2. In `docs/src/brand.ts` set `stableReleased = true`, so the download page offers Stable.
+3. Check `/download` Stable: the buttons link to `releases/latest/download/LaraKube-Desktop-*` (fixed names the workflow now publishes).
