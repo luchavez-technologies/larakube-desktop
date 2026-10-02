@@ -8,6 +8,7 @@ use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Process;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,7 +20,12 @@ class DashboardController extends Controller
         ReadinessCheck $readiness,
         ProjectInspector $inspector,
         ToolLocator $locator,
-    ): Response {
+    ): Response|RedirectResponse {
+        // A first launch has no CLI yet, and every other page needs it: Setup installs it.
+        if ($locator->find('larakube') === null) {
+            return redirect()->route('readiness');
+        }
+
         $allProjects = Project::query()->latest('id')->get();
         $projectsCount = $allProjects->count();
         $recentProjects = $allProjects->take(4)->map(fn (Project $p): array => [

@@ -4,9 +4,17 @@ use App\Models\Project;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
+use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
 test('dashboard page renders with stats and workspace overview', function () {
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
     $stacks = mock(StackCatalog::class);
     $stacks->shouldReceive('all')->andReturn([
         ['name' => 'gcp-vps', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '34.27.253.31', 'context' => 'larakube-34.27.253.31', 'account' => null, 'projectId' => null, 'status' => 'ready'],
@@ -56,4 +64,12 @@ test('dashboard page renders with stats and workspace overview', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('dashboard/index')
         );
+});
+
+test('a first launch with no CLI sends the user to Setup', function () {
+    $empty = storage_path('framework/testing/empty-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($empty);
+    app()->instance(ToolLocator::class, new ToolLocator([$empty]));
+
+    $this->get(route('dashboard'))->assertRedirect(route('readiness'));
 });
