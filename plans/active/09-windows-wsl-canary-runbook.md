@@ -31,6 +31,9 @@ Check each step and note what you see. Stop at the first failure and write down 
 6. **CLI install.** Press Install on LaraKube CLI. It should download into `~/.larakube/bin`. Confirm: `~/.larakube/bin/larakube --version`.
 7. **kubectl and OpenTofu.** Press Install on each. Both should turn Installed.
 8. **Container runtime.** Docker or Podman is installed by you (it needs `sudo`, which the app cannot ask for). In Ubuntu: `sudo apt-get install -y podman slirp4netns fuse-overlayfs uidmap`, then **Check again**. Podman should turn Installed.
+   **Elevation probes** (so we can later install Podman from the app without a terminal). Run each in Ubuntu and note the result:
+   - `which pkexec && pkexec true` (a graphical password prompt on Windows means it works; "no agent" or no window means it will not).
+   - `/mnt/c/Windows/System32/wsl.exe -u root -- id -u` (prints `0` if the Windows-side root route works with no password).
 9. **Cloud account.** Save a DigitalOcean or Hetzner token in Settings. The provider shows Ready on Setup.
 10. **Create a server** (billed by the provider, destroy it afterwards). Servers → Create a server → size the smallest → Create. Expect about five minutes.
 11. **Install a tool** on that server (Tools → pick the server → Install one small tool).
