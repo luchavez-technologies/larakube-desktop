@@ -7,6 +7,7 @@ import {
     RefreshCw,
     X,
     AlertCircle,
+    Check,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -266,37 +267,61 @@ function UsageChoice({ usage }: { usage: 'tools' | 'apps' | null }) {
     return (
         <div className="mb-4.5">
             <p className="mb-2 text-sm font-medium">
-                {usage === null
-                    ? 'What will you use LaraKube Desktop for?'
-                    : 'You are using LaraKube Desktop to'}
+                What will you use LaraKube Desktop for?
+                {usage === null && (
+                    <span className="ml-2 font-normal text-accent">
+                        Choose one
+                    </span>
+                )}
             </p>
-            <div className="grid grid-cols-2 gap-3">
-                {USAGES.map((option) => (
-                    <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={usage === option.value}
-                        onClick={() =>
-                            router.post(
-                                '/setup/usage',
-                                { usage: option.value },
-                                { preserveScroll: true, only: ['usage'] },
-                            )
-                        }
-                        className={`rounded-xl border p-4 text-left transition ${
-                            usage === option.value
-                                ? 'border-ink bg-white shadow-sm'
-                                : 'border-line bg-white/60 hover:bg-white'
-                        }`}
-                    >
-                        <span className="block text-sm font-semibold">
-                            {option.title}
-                        </span>
-                        <span className="mt-1 block text-xs leading-relaxed text-soft">
-                            {option.detail}
-                        </span>
-                    </button>
-                ))}
+            <div
+                role="radiogroup"
+                aria-label="What this computer is for"
+                className="grid grid-cols-2 gap-3"
+            >
+                {USAGES.map((option) => {
+                    const selected = usage === option.value;
+
+                    return (
+                        <button
+                            key={option.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() =>
+                                router.post(
+                                    '/setup/usage',
+                                    { usage: option.value },
+                                    { preserveScroll: true, only: ['usage'] },
+                                )
+                            }
+                            className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 text-left transition ${
+                                selected
+                                    ? 'border-accent bg-accent-tint'
+                                    : 'border-line bg-white hover:border-faint hover:bg-paper'
+                            }`}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                                    selected
+                                        ? 'border-accent bg-accent text-white'
+                                        : 'border-faint bg-white'
+                                }`}
+                            >
+                                {selected && <Check className="size-3" />}
+                            </span>
+                            <span>
+                                <span className="block text-sm font-semibold">
+                                    {option.title}
+                                </span>
+                                <span className="mt-1 block text-xs leading-relaxed text-soft">
+                                    {option.detail}
+                                </span>
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
