@@ -64,3 +64,16 @@ test('providers are null when the CLI is too old to know cloud:providers', funct
 
     File::deleteDirectory($bin);
 });
+
+test('the usage choice is saved and offered back to the Setup page', function () {
+    readinessFakeBinDirectory(['larakube']);
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+    Process::fake(['*' => Process::result(output: '')]);
+
+    $this->post(route('setup.usage'), ['usage' => 'apps'])->assertRedirect();
+    $this->post(route('setup.usage'), ['usage' => 'nonsense'])->assertSessionHasErrors('usage');
+
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page->where('usage', 'apps'));
+});

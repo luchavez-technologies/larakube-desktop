@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Process;
 class ReadinessCheck
 {
     /**
-     * @var array<string, array{label: string, purpose: string, required: bool, versionArgs: list<string>, installable: bool}>
+     * @var array<string, array{label: string, purpose: string, required: bool, versionArgs: list<string>, installable: bool, localOnly?: bool}>
      */
     public const TOOLS = [
         'larakube' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs every action in this app.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true],
@@ -20,9 +20,9 @@ class ReadinessCheck
         'tofu' => ['label' => 'OpenTofu', 'purpose' => 'Provisions new cloud servers.', 'required' => true, 'versionArgs' => ['version'], 'installable' => true],
         'aws' => ['label' => 'AWS CLI', 'purpose' => 'Needed for Amazon Web Services servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
         'gcloud' => ['label' => 'Google Cloud CLI', 'purpose' => 'Needed for Google Cloud servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
-        'git' => ['label' => 'Git', 'purpose' => 'Needed to deploy Laravel apps.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false],
-        'docker' => ['label' => 'Docker', 'purpose' => 'Builds your apps to deploy them. OrbStack or Docker Desktop provide it; Podman works too.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false],
-        'podman' => ['label' => 'Podman', 'purpose' => 'Builds your apps to deploy them, instead of Docker.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
+        'git' => ['label' => 'Git', 'purpose' => 'Needed to deploy Laravel apps.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false, 'localOnly' => true],
+        'docker' => ['label' => 'Docker', 'purpose' => 'Builds your apps to deploy them. OrbStack or Docker Desktop provide it; Podman works too.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false, 'localOnly' => true],
+        'podman' => ['label' => 'Podman', 'purpose' => 'Builds your apps to deploy them, instead of Docker.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
     ];
 
     public const CLI_INSTALL_COMMAND = 'curl -fsSL https://cli.larakube.app/install.sh | bash -s -- --canary';
@@ -30,7 +30,7 @@ class ReadinessCheck
     public function __construct(private ToolLocator $locator) {}
 
     /**
-     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, installed: bool, path: ?string, version: ?string}>
+     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool, installed: bool, path: ?string, version: ?string}>
      */
     public function tools(): array
     {
@@ -45,6 +45,7 @@ class ReadinessCheck
                 'purpose' => $tool['purpose'],
                 'required' => $tool['required'],
                 // Podman installs through apt, so only Linux (and WSL) can offer it.
+                'localOnly' => $tool['localOnly'] ?? false,
                 'installable' => $tool['installable'] && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux'),
                 'installed' => $path !== null,
                 'path' => $path,

@@ -21,6 +21,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
 
 Route::get('/readiness', [ReadinessController::class, 'show'])->name('readiness');
 Route::post('/setup/tools/{tool}/install', [ToolInstallController::class, 'store'])->name('setup.tools.install');
+Route::post('/setup/usage', [ReadinessController::class, 'setUsage'])->name('setup.usage');
 Route::post('/setup/cli/channel', [ReadinessController::class, 'setChannel'])->name('setup.cli.channel');
 Route::post('/setup/cloud/aws', [CloudAuthController::class, 'saveAws'])->name('setup.cloud.aws');
 Route::post('/setup/cloud/gcp/login', [CloudAuthController::class, 'loginGcp'])->name('setup.cloud.gcp.login');

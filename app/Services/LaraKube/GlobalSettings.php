@@ -6,6 +6,9 @@ class GlobalSettings
 {
     public const ALLOWED_TLDS = ['kube', 'localhost', 'test', 'local', 'internal'];
 
+    /** What this computer is for: `tools` installs Cluster Tools on servers, `apps` also builds and runs apps locally. */
+    public const USAGES = ['tools', 'apps'];
+
     public const AI_PROVIDERS = ['anthropic' => 'Anthropic (Claude)', 'openai' => 'OpenAI', 'gemini' => 'Google Gemini'];
 
     public const CLOUD_PROVIDERS = ['do' => 'DigitalOcean', 'hetzner' => 'Hetzner Cloud', 'gcp' => 'Google Cloud', 'aws' => 'Amazon Web Services'];
@@ -23,6 +26,7 @@ class GlobalSettings
      *     shareToken: ?string,
      *     hideProjects: bool,
      *     cliChannel: string,
+     *     usage: ?string,
      *     detectedAgents: array<string, array{name: string, installed: bool, bridged: bool}>
      * }
      */
@@ -60,6 +64,7 @@ class GlobalSettings
             'shareToken' => is_string($config['shareToken'] ?? null) ? $config['shareToken'] : null,
             'hideProjects' => (bool) ($config['hideProjects'] ?? false),
             'cliChannel' => (string) ($config['cliChannel'] ?? 'canary'),
+            'usage' => in_array($config['usage'] ?? null, self::USAGES, true) ? $config['usage'] : null,
             'detectedAgents' => $agents,
         ];
     }
@@ -103,6 +108,10 @@ class GlobalSettings
 
         if (isset($data['cliChannel']) && in_array($data['cliChannel'], ['canary', 'stable'], true)) {
             $config['cliChannel'] = $data['cliChannel'];
+        }
+
+        if (isset($data['usage']) && in_array($data['usage'], self::USAGES, true)) {
+            $config['usage'] = $data['usage'];
         }
 
         if (! empty($data['doToken'])) {

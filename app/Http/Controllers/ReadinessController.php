@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\LaraKube\CliInstaller;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,15 +12,27 @@ use Inertia\Response;
 
 class ReadinessController extends Controller
 {
-    public function show(ReadinessCheck $readiness, CliInstaller $installer): Response
+    public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings): Response
     {
         return Inertia::render('readiness', [
             'tools' => Inertia::defer(fn (): array => $readiness->tools()),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
             'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,
             'cliChannel' => $installer->channel(),
+            'usage' => $settings->get()['usage'],
             'cliDownloadUrl' => $installer->downloadUrl(),
         ]);
+    }
+
+    public function setUsage(Request $request, GlobalSettings $settings): RedirectResponse
+    {
+        $validated = $request->validate([
+            'usage' => ['required', 'string', 'in:'.implode(',', GlobalSettings::USAGES)],
+        ]);
+
+        $settings->update(['usage' => $validated['usage']]);
+
+        return back();
     }
 
     public function setChannel(Request $request, CliInstaller $installer): RedirectResponse

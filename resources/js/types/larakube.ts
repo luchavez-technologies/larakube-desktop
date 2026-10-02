@@ -4,6 +4,7 @@ export type Tool = {
     purpose: string;
     required: boolean;
     installable: boolean;
+    localOnly: boolean;
     installed: boolean;
     path: string | null;
     version: string | null;
