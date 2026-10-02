@@ -351,6 +351,13 @@ function getDefaultEnvironmentVariables(secret?: string, apiPort?: number): Envi
             : join(process.env.APP_PATH, 'extras'),
     };
 
+    // PHP's built-in server answers one request at a time, so the slow checks a
+    // page makes (each asks a server over the network) queue behind each other.
+    // A few workers let them run together. Windows does not support workers.
+    if (process.platform !== 'win32') {
+        variables.PHP_CLI_SERVER_WORKERS = '4';
+    }
+
     // Only if the server has already started
     if (secret && apiPort) {
         variables.NATIVEPHP_API_URL = `http://127.0.0.1:${apiPort}/api/`;
