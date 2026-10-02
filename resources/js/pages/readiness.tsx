@@ -20,6 +20,7 @@ import { install } from '@/routes/setup/tools';
 import type { Provider, Tool } from '@/types/larakube';
 
 type Props = {
+    catalog: Omit<Tool, 'installed' | 'path' | 'version'>[];
     tools?: Tool[];
     providers?: Provider[] | null;
     cliInstallCommand: string;
@@ -35,6 +36,7 @@ type Props = {
 };
 
 export default function Readiness({
+    catalog,
     tools,
     providers,
     cliInstallCommand,
@@ -77,187 +79,194 @@ export default function Readiness({
                 }
             />
 
-            <Deferred data="tools" fallback={<Skeleton />}>
-                {cliMissing ? (
-                    <CliMissing
-                        command={cliInstallCommand}
-                        channel={selectedChannel}
-                        onChannelChange={(ch) => {
-                            setSelectedChannel(ch);
-                            router.post(
-                                '/setup/cli/channel',
-                                { channel: ch },
-                                { preserveState: true },
-                            );
-                        }}
-                    />
-                ) : (
-                    <>
-                        <UsageChoice usage={usage} />
-                        {usage === 'apps' && (
-                            <LocalDevelopment cluster={localCluster} />
-                        )}
-                        <div className="grid grid-cols-2 items-start gap-4.5">
-                            <Card label="Command-line tools">
-                                {tools
-                                    ?.filter(
-                                        (tool) =>
-                                            usage === 'apps' || !tool.localOnly,
-                                    )
-                                    .map((tool) => (
+            {cliMissing ? (
+                <CliMissing
+                    command={cliInstallCommand}
+                    channel={selectedChannel}
+                    onChannelChange={(ch) => {
+                        setSelectedChannel(ch);
+                        router.post(
+                            '/setup/cli/channel',
+                            { channel: ch },
+                            { preserveState: true },
+                        );
+                    }}
+                />
+            ) : (
+                <>
+                    <UsageChoice usage={usage} />
+                    {usage === 'apps' && (
+                        <LocalDevelopment cluster={localCluster} />
+                    )}
+                    <div className="grid grid-cols-2 items-start gap-4.5">
+                        <Card label="Command-line tools">
+                            {catalog
+                                .filter(
+                                    (entry) =>
+                                        usage === 'apps' || !entry.localOnly,
+                                )
+                                .map((entry) => {
+                                    const tool = tools?.find(
+                                        (t) => t.slug === entry.slug,
+                                    );
+
+                                    return (
                                         <ListRow
-                                            key={tool.slug}
+                                            key={entry.slug}
                                             action={
-                                                <ToolState
-                                                    tool={tool}
-                                                    channel={selectedChannel}
-                                                />
+                                                tool ? (
+                                                    <ToolState
+                                                        tool={tool}
+                                                        channel={
+                                                            selectedChannel
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <RefreshCw className="size-4 animate-spin text-faint" />
+                                                )
                                             }
                                         >
                                             <TwoLine
                                                 title={
-                                                    tool.required
-                                                        ? tool.label
-                                                        : `${tool.label} · optional`
+                                                    entry.required
+                                                        ? entry.label
+                                                        : `${entry.label} · optional`
                                                 }
                                                 detail={
-                                                    tool.installed
+                                                    tool?.installed
                                                         ? (tool.version ??
                                                           tool.path)
-                                                        : tool.purpose
+                                                        : entry.purpose
                                                 }
-                                                mono={tool.installed}
+                                                mono={tool?.installed}
                                             />
                                         </ListRow>
-                                    ))}
-                            </Card>
-                            <Card label="Cloud accounts">
-                                <Deferred
-                                    data="providers"
-                                    fallback={
-                                        <p className="py-3 text-sm text-soft">
-                                            Checking logins…
-                                        </p>
-                                    }
-                                >
-                                    {providers ? (
-                                        <>
-                                            {providers.map((provider) => (
-                                                <ListRow
-                                                    key={provider.slug}
-                                                    action={
-                                                        <div className="flex items-center gap-2">
-                                                            {!provider
-                                                                .credentials
-                                                                .ready &&
-                                                                provider.slug ===
-                                                                    'aws' && (
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="secondary"
-                                                                        size="sm"
-                                                                        onClick={() =>
-                                                                            setShowAwsModal(
-                                                                                true,
-                                                                            )
-                                                                        }
-                                                                        className="gap-1.5"
-                                                                    >
-                                                                        <Key className="size-3.5" />
-                                                                        <span>
-                                                                            Connect
-                                                                        </span>
-                                                                    </Button>
-                                                                )}
-                                                            {!provider
-                                                                .credentials
-                                                                .ready &&
-                                                                provider.slug ===
-                                                                    'gcp' && (
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="secondary"
-                                                                        size="sm"
-                                                                        onClick={() => {
-                                                                            setIsGcpLoggingIn(
-                                                                                true,
-                                                                            );
-                                                                            router.post(
-                                                                                '/setup/cloud/gcp/login',
-                                                                                {},
-                                                                                {
-                                                                                    onFinish:
-                                                                                        () =>
-                                                                                            setIsGcpLoggingIn(
-                                                                                                false,
-                                                                                            ),
-                                                                                },
-                                                                            );
-                                                                        }}
-                                                                        disabled={
-                                                                            isGcpLoggingIn
-                                                                        }
-                                                                        className="gap-1.5"
-                                                                    >
-                                                                        {isGcpLoggingIn ? (
-                                                                            <RefreshCw className="size-3.5 animate-spin" />
-                                                                        ) : (
-                                                                            <ExternalLink className="size-3.5" />
-                                                                        )}
-                                                                        <span>
-                                                                            Sign
-                                                                            in
-                                                                        </span>
-                                                                    </Button>
-                                                                )}
-                                                            <StatusPill
-                                                                tone={
-                                                                    provider
-                                                                        .credentials
-                                                                        .ready
-                                                                        ? 'ok'
-                                                                        : 'muted'
-                                                                }
-                                                            >
-                                                                {provider
+                                    );
+                                })}
+                        </Card>
+                        <Card label="Cloud accounts">
+                            <Deferred
+                                data="providers"
+                                fallback={
+                                    <p className="flex items-center gap-2 py-3 text-sm text-soft">
+                                        <RefreshCw className="size-4 animate-spin" />
+                                        Checking logins…
+                                    </p>
+                                }
+                            >
+                                {providers ? (
+                                    <>
+                                        {providers.map((provider) => (
+                                            <ListRow
+                                                key={provider.slug}
+                                                action={
+                                                    <div className="flex items-center gap-2">
+                                                        {!provider.credentials
+                                                            .ready &&
+                                                            provider.slug ===
+                                                                'aws' && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        setShowAwsModal(
+                                                                            true,
+                                                                        )
+                                                                    }
+                                                                    className="gap-1.5"
+                                                                >
+                                                                    <Key className="size-3.5" />
+                                                                    <span>
+                                                                        Connect
+                                                                    </span>
+                                                                </Button>
+                                                            )}
+                                                        {!provider.credentials
+                                                            .ready &&
+                                                            provider.slug ===
+                                                                'gcp' && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setIsGcpLoggingIn(
+                                                                            true,
+                                                                        );
+                                                                        router.post(
+                                                                            '/setup/cloud/gcp/login',
+                                                                            {},
+                                                                            {
+                                                                                onFinish:
+                                                                                    () =>
+                                                                                        setIsGcpLoggingIn(
+                                                                                            false,
+                                                                                        ),
+                                                                            },
+                                                                        );
+                                                                    }}
+                                                                    disabled={
+                                                                        isGcpLoggingIn
+                                                                    }
+                                                                    className="gap-1.5"
+                                                                >
+                                                                    {isGcpLoggingIn ? (
+                                                                        <RefreshCw className="size-3.5 animate-spin" />
+                                                                    ) : (
+                                                                        <ExternalLink className="size-3.5" />
+                                                                    )}
+                                                                    <span>
+                                                                        Sign in
+                                                                    </span>
+                                                                </Button>
+                                                            )}
+                                                        <StatusPill
+                                                            tone={
+                                                                provider
                                                                     .credentials
                                                                     .ready
-                                                                    ? 'Ready'
-                                                                    : 'Not connected'}
-                                                            </StatusPill>
-                                                        </div>
+                                                                    ? 'ok'
+                                                                    : 'muted'
+                                                            }
+                                                        >
+                                                            {provider
+                                                                .credentials
+                                                                .ready
+                                                                ? 'Ready'
+                                                                : 'Not connected'}
+                                                        </StatusPill>
+                                                    </div>
+                                                }
+                                            >
+                                                <TwoLine
+                                                    title={provider.label}
+                                                    detail={
+                                                        provider.credentials
+                                                            .hint ??
+                                                        'Credentials verified'
                                                     }
-                                                >
-                                                    <TwoLine
-                                                        title={provider.label}
-                                                        detail={
-                                                            provider.credentials
-                                                                .hint ??
-                                                            'Credentials verified'
-                                                        }
-                                                    />
-                                                </ListRow>
-                                            ))}
-                                            <p className="mt-2 text-xs leading-relaxed text-soft">
-                                                AWS & Google Cloud connect
-                                                natively without terminal.
-                                                Tokens for DigitalOcean &
-                                                Hetzner can also be
-                                                pre-configured in Settings.
-                                            </p>
-                                        </>
-                                    ) : (
-                                        <p className="py-3 text-sm text-soft">
-                                            Couldn't read cloud providers.
-                                            Update the LaraKube CLI.
+                                                />
+                                            </ListRow>
+                                        ))}
+                                        <p className="mt-2 text-xs leading-relaxed text-soft">
+                                            AWS & Google Cloud connect natively
+                                            without terminal. Tokens for
+                                            DigitalOcean & Hetzner can also be
+                                            pre-configured in Settings.
                                         </p>
-                                    )}
-                                </Deferred>
-                            </Card>
-                        </div>
-                    </>
-                )}
-            </Deferred>
+                                    </>
+                                ) : (
+                                    <p className="py-3 text-sm text-soft">
+                                        Couldn't read cloud providers. Update
+                                        the LaraKube CLI.
+                                    </p>
+                                )}
+                            </Deferred>
+                        </Card>
+                    </div>
+                </>
+            )}
 
             {/* AWS Credential Modal */}
             {showAwsModal && (
@@ -649,26 +658,6 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                     </div>
                 </form>
             </div>
-        </div>
-    );
-}
-
-function Skeleton() {
-    return (
-        <div className="grid grid-cols-2 gap-4.5">
-            {[0, 1].map((column) => (
-                <div
-                    key={column}
-                    className="space-y-3 rounded-2xl bg-surface p-5.5 ring-1 ring-line"
-                >
-                    {Array.from({ length: 4 }, (_, row) => (
-                        <div
-                            key={row}
-                            className="h-9 animate-pulse rounded bg-badge"
-                        />
-                    ))}
-                </div>
-            ))}
         </div>
     );
 }

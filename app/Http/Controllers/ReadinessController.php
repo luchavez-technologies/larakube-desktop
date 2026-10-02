@@ -16,6 +16,7 @@ class ReadinessController extends Controller
     public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster): Response
     {
         return Inertia::render('readiness', [
+            'catalog' => $readiness->catalog(),
             'tools' => Inertia::defer(fn (): array => $readiness->tools()),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
             'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,

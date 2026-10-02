@@ -30,26 +30,44 @@ class ReadinessCheck
     public function __construct(private ToolLocator $locator) {}
 
     /**
+     * Every tool the page lists, without checking this computer, so the page can
+     * draw its rows at once and fill each in as its check finishes.
+     *
+     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool}>
+     */
+    public function catalog(): array
+    {
+        $catalog = [];
+
+        foreach (self::TOOLS as $slug => $tool) {
+            $catalog[] = [
+                'slug' => $slug,
+                'label' => $tool['label'],
+                'purpose' => $tool['purpose'],
+                'required' => $tool['required'],
+                'localOnly' => $tool['localOnly'] ?? false,
+                // Podman installs through apt, so only Linux (and WSL) can offer it.
+                'installable' => $tool['installable'] && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux'),
+            ];
+        }
+
+        return $catalog;
+    }
+
+    /**
      * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool, installed: bool, path: ?string, version: ?string}>
      */
     public function tools(): array
     {
         $tools = [];
 
-        foreach (self::TOOLS as $slug => $tool) {
-            $path = $this->locator->find($slug);
+        foreach ($this->catalog() as $entry) {
+            $path = $this->locator->find($entry['slug']);
 
-            $tools[] = [
-                'slug' => $slug,
-                'label' => $tool['label'],
-                'purpose' => $tool['purpose'],
-                'required' => $tool['required'],
-                // Podman installs through apt, so only Linux (and WSL) can offer it.
-                'localOnly' => $tool['localOnly'] ?? false,
-                'installable' => $tool['installable'] && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux'),
+            $tools[] = $entry + [
                 'installed' => $path !== null,
                 'path' => $path,
-                'version' => $path !== null ? $this->version($path, $tool['versionArgs']) : null,
+                'version' => $path !== null ? $this->version($path, self::TOOLS[$entry['slug']]['versionArgs']) : null,
             ];
         }
 

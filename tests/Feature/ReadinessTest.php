@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -76,4 +77,15 @@ test('the usage choice is saved and offered back to the Setup page', function ()
     $this->post(route('setup.usage'), ['usage' => 'nonsense'])->assertSessionHasErrors('usage');
 
     $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page->where('usage', 'apps'));
+});
+
+test('the Setup page lists every tool at once, before any check has run', function () {
+    readinessFakeBinDirectory(['larakube']);
+    Process::fake(['*' => Process::result(output: '')]);
+
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('readiness')
+        ->has('catalog', count(ReadinessCheck::TOOLS))
+        ->where('catalog.0.slug', 'larakube')
+        ->missing('tools'));
 });
