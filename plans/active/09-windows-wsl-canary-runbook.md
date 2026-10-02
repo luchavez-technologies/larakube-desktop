@@ -20,13 +20,12 @@ Check each step and note what you see. Stop at the first failure and write down 
 
 1. **WSL.** In PowerShell: `wsl --status`. It should list a default distro (Ubuntu) and WSL version 2. If not: `wsl --install`, then restart.
 2. **WSLg.** Open Ubuntu and run `echo $DISPLAY $WAYLAND_DISPLAY`. One of them should be non-empty. If both are empty, this machine cannot show Linux apps (Windows 10 or an old WSL): `wsl --update`, then retry.
-3. **Download.** In Ubuntu, from the docs download page's Linux link (or the command below):
+3. **Download.** In Ubuntu (not Windows), run the command on `docs` `/download?os=windows`:
     ```bash
-    cd ~ && curl -fL -o LaraKube.AppImage \
-      "$(gh release view canary -R luchavez-technologies/larakube-desktop --json assets -q '.assets[]|select(.name|endswith(".AppImage")).url')"
-    chmod +x LaraKube.AppImage
+    curl -fL -o LaraKube-Desktop.AppImage https://github.com/luchavez-technologies/larakube-desktop/releases/download/canary/LaraKube-Desktop-linux-x64.AppImage
+    chmod +x LaraKube-Desktop.AppImage
     ```
-4. **Launch.** `./LaraKube.AppImage`. If it fails with a FUSE error, run `./LaraKube.AppImage --appimage-extract-and-run` and note it. If it opens a window, take a screenshot.
+4. **Launch.** `./LaraKube-Desktop.AppImage`. If it fails with a FUSE error, run `./LaraKube-Desktop.AppImage --appimage-extract-and-run` and note it. If it opens a window, take a screenshot.
 5. **First launch → Setup.** With no CLI installed the app should land on Setup, not the dashboard.
 6. **CLI install.** Press Install on LaraKube CLI. It should download into `~/.larakube/bin`. Confirm: `~/.larakube/bin/larakube --version`.
 7. **kubectl and OpenTofu.** Press Install on each. Both should turn Installed.
