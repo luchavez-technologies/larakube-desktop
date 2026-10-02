@@ -6,6 +6,7 @@ use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
+use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,9 +15,11 @@ use Inertia\Response;
 
 class ReadinessController extends Controller
 {
-    public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster): Response
+    public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl): Response
     {
         return Inertia::render('readiness', [
+            'windows' => $wsl->isWindows(),
+            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
             'catalog' => $readiness->catalog(),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
             'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,

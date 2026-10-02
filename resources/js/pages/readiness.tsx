@@ -23,7 +23,17 @@ import type { Provider, Tool } from '@/types/larakube';
 
 type CatalogEntry = Omit<Tool, 'installed' | 'path' | 'version'>;
 
+type WslState = {
+    state: 'ready' | 'missing' | 'no-distro' | 'old-version' | 'broken';
+    distro: string | null;
+    version: number | null;
+    message: string;
+    command: string | null;
+};
+
 type Props = {
+    windows: boolean;
+    wsl?: WslState | null;
     catalog: CatalogEntry[];
     providers?: Provider[] | null;
     cliInstallCommand: string;
@@ -39,6 +49,8 @@ type Props = {
 };
 
 export default function Readiness({
+    windows,
+    wsl,
     catalog,
     providers,
     cliInstallCommand,
@@ -66,7 +78,7 @@ export default function Readiness({
                             variant="secondary"
                             onClick={() => {
                                 setRefresh((count) => count + 1);
-                                router.reload({ only: ['providers'] });
+                                router.reload({ only: ['providers', 'wsl'] });
                             }}
                         >
                             Check again
@@ -83,7 +95,9 @@ export default function Readiness({
                 }
             />
 
-            {cliMissing ? (
+            {windows && (!wsl || wsl.state !== 'ready') ? (
+                <WslCheck wsl={wsl} />
+            ) : cliMissing ? (
                 <CliMissing
                     command={cliInstallCommand}
                     channel={selectedChannel}
@@ -374,6 +388,55 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
                 )}
             </Card>
         </div>
+    );
+}
+
+function WslCheck({ wsl }: { wsl?: WslState | null }) {
+    if (!wsl) {
+        return (
+            <Card label="Windows Subsystem for Linux">
+                <p className="flex items-center gap-2 py-3 text-sm text-soft">
+                    <RefreshCw className="size-4 animate-spin" />
+                    Checking Windows Subsystem for Linux…
+                </p>
+            </Card>
+        );
+    }
+
+    return (
+        <Card label="Windows Subsystem for Linux">
+            <div className="flex items-start gap-3 py-3">
+                <AlertCircle className="mt-0.5 size-5 shrink-0 text-accent" />
+                <div className="space-y-3 text-sm">
+                    <p className="font-medium">{wsl.message}</p>
+                    {wsl.command ? (
+                        <>
+                            <ol className="list-decimal space-y-1 pl-5 text-soft">
+                                <li>
+                                    Open PowerShell as administrator
+                                    (right-click Start, then Terminal (Admin)).
+                                </li>
+                                <li>Run this command:</li>
+                            </ol>
+                            <div className="flex items-center justify-between gap-3 rounded-lg bg-term px-3 py-2 font-mono text-xs text-term-bright">
+                                <code>{wsl.command}</code>
+                                <CopyButton value={wsl.command} />
+                            </div>
+                            <p className="text-soft">
+                                Restart your computer if Windows asks, open
+                                LaraKube Desktop again, then press Check again.
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-soft">
+                            Restart your computer, and make sure virtualization
+                            is turned on in the BIOS. Then open LaraKube Desktop
+                            and press Check again.
+                        </p>
+                    )}
+                </div>
+            </div>
+        </Card>
     );
 }
 

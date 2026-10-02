@@ -98,3 +98,12 @@ test('the Setup page lists every tool at once, before any check has run', functi
         ->where('catalog.0.slug', 'larakube')
         ->missing('tools'));
 });
+
+test('only a Windows computer is asked about WSL', function () {
+    readinessFakeBinDirectory(['larakube']);
+    Process::fake(['*' => Process::result(output: '')]);
+
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('windows', PHP_OS_FAMILY === 'Windows')
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
+});
