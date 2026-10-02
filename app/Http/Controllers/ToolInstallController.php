@@ -57,7 +57,7 @@ class ToolInstallController extends Controller
 
         $run = $runner->start(
             label: "Install {$definition['label']}",
-            arguments: ['setup', "--tools={$tool}"],
+            arguments: $tool === 'podman' ? ['runtime:install', '--runtime=podman'] : ['setup', "--tools={$tool}"],
             kind: RunKind::InstallTool,
             subject: $tool,
             targetType: 'tool',

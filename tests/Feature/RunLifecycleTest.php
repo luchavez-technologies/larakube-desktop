@@ -76,6 +76,21 @@ test('installing a tool delegates to larakube setup', function () {
     File::deleteDirectory($directory);
 });
 
+test('installing Podman runs the runtime installer, not the tool setup', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/larakube", "#!/bin/sh\n");
+    chmod("{$directory}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
+    $fake = ChildProcess::fake();
+
+    $this->post(route('setup.tools.install', 'podman'))->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'runtime:install', '--runtime=podman', '--no-interaction']);
+
+    File::deleteDirectory($directory);
+});
+
 test('output posted back by NativePHP keeps its newlines', function () {
     $run = runLifecycleRun();
     $secret = 'test-secret';
