@@ -6,7 +6,6 @@ import {
     SiTwenty,
     SiLivekit,
     SiUptimekuma,
-    SiBitwarden,
     SiForgejo,
     SiGitea,
     SiGrafana,

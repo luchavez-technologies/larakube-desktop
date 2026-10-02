@@ -12,7 +12,6 @@ import AppLayout from '@/layouts/app-layout';
 import { open } from '@/routes';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
 import {
-    describeTool,
     toolName,
     toolTagline,
     toolCategories,

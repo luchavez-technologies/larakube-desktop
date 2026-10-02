@@ -11,7 +11,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
     Trash2,
     Play,
-    Square,
     ExternalLink,
     Plus,
     ArrowRight,
@@ -169,8 +168,7 @@ export default function ShowProject({
             project.environments?.[activeEnv] ?? {
                 name: activeEnv,
                 isLocal: false,
-                webHost:
-                    activeEnv === 'production' ? project.webHost : null,
+                webHost: activeEnv === 'production' ? project.webHost : null,
                 serverIp: server?.ip ?? null,
                 serverName: server?.name ?? null,
                 plex: [],
@@ -499,7 +497,7 @@ function EnvironmentSwitchBar({
                     )}
                 </button>
 
-                <div className="mx-1 h-5 w-px bg-line shrink-0" />
+                <div className="mx-1 h-5 w-px shrink-0 bg-line" />
 
                 {/* Cloud Environment Tabs */}
                 {envsToRender.map((env) => {
@@ -558,7 +556,10 @@ function EnvironmentSwitchBar({
                         method="post"
                         data={{ url: `https://${localDomain}` }}
                         as="button"
-                        className={cn(buttonClass('secondary', 'sm'), 'gap-1.5')}
+                        className={cn(
+                            buttonClass('secondary', 'sm'),
+                            'gap-1.5',
+                        )}
                         title="Open local application in browser"
                     >
                         <span>Open local site</span>
@@ -649,7 +650,7 @@ function CloudEnvironmentOverviewCard({
                     {/* Server Details */}
                     <div className="rounded-xl border border-line bg-paper/60 p-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Target Server
                             </span>
                             {readyServers.length > 1 && activeServer && (
@@ -711,13 +712,15 @@ function CloudEnvironmentOverviewCard({
                     {/* Public Address Details */}
                     <div className="rounded-xl border border-line bg-paper/60 p-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Public Address
                             </span>
                             {activeHost && (
                                 <button
                                     type="button"
-                                    onClick={() => setShowEditHost(!showEditHost)}
+                                    onClick={() =>
+                                        setShowEditHost(!showEditHost)
+                                    }
                                     className="text-[11px] text-soft hover:text-ink"
                                 >
                                     {showEditHost ? 'Cancel' : 'Edit'}
@@ -840,7 +843,7 @@ function EnvironmentBackingServicesCard({
                     {/* Database */}
                     <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
                         <div>
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Database
                             </span>
                             <div className="mt-1 text-xs font-semibold text-ink">
@@ -853,7 +856,7 @@ function EnvironmentBackingServicesCard({
                     {/* Cache & Queues */}
                     <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
                         <div>
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Cache &amp; Queues
                             </span>
                             <div className="mt-1 text-xs font-semibold text-ink">
@@ -866,7 +869,7 @@ function EnvironmentBackingServicesCard({
                     {/* Object Storage */}
                     <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
                         <div>
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-soft">
+                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Object Storage
                             </span>
                             <div className="mt-1 text-xs font-semibold text-ink">
@@ -939,7 +942,7 @@ function DeployDialog({
     open,
     onClose,
     project,
-    server,
+    server: _server,
     activeEnv,
     activeServer,
     activeHost,
@@ -1088,7 +1091,8 @@ function DeployDialog({
                                     <p className="text-xs text-soft">
                                         <Link
                                             href={
-                                                showServer(activeServer.name).url
+                                                showServer(activeServer.name)
+                                                    .url
                                             }
                                             className="font-medium text-ink hover:underline"
                                         >
@@ -1285,7 +1289,7 @@ function AddEnvironmentDialog({
     onClose,
     project,
     readyServers,
-    onCreated,
+    onCreated: _onCreated,
 }: {
     open: boolean;
     onClose: () => void;
@@ -1341,10 +1345,7 @@ function AddEnvironmentDialog({
                     </button>
                 </div>
 
-                <Form
-                    action={link(project.id)}
-                    className="space-y-4"
-                >
+                <Form action={link(project.id)} className="space-y-4">
                     {({ errors, processing }) => (
                         <>
                             <div>
@@ -1603,7 +1604,7 @@ function LinkServerForm({
     project,
     servers,
     environment = 'production',
-    onSuccess,
+    onSuccess: _onSuccess,
 }: {
     project: Project;
     servers: ReadyServer[];

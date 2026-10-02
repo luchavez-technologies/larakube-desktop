@@ -86,7 +86,13 @@ export type Run = {
     finishedAt: string | null;
 };
 
-export type RunTargetType = 'project' | 'server' | 'tool' | 'companion' | 'context' | 'system';
+export type RunTargetType =
+    | 'project'
+    | 'server'
+    | 'tool'
+    | 'companion'
+    | 'context'
+    | 'system';
 
 export type RunSummary = Pick<
     Run,

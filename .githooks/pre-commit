@@ -1,0 +1,7 @@
+#!/bin/sh
+# Same gate as CI (composer ci:check): formatting, types and tests. Fix formatting with `npm run check:fix`.
+echo "Running pre-commit checks (composer ci:check)..."
+composer ci:check || {
+    echo "Pre-commit checks failed. Fix the errors above (formatting: npm run check:fix)."
+    exit 1
+}

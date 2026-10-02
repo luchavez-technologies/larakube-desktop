@@ -6,10 +6,9 @@ import {
     FolderGit2,
     ArrowRight,
     Sparkles,
-    CheckCircle2,
     X,
 } from 'lucide-react';
-import Button, { buttonClass } from '@/components/button';
+import { buttonClass } from '@/components/button';
 import { create as createProject } from '@/routes/projects';
 import {
     create as createServer,

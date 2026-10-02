@@ -1215,10 +1215,6 @@ function CheckedAgo({ checkedAt }: { checkedAt: string | null }) {
     );
 }
 
-function ToolIcon({ tool }: { tool: ClusterTool }) {
-    return <ToolLogo tool={tool} size="md" />;
-}
-
 function InstalledCard({
     server,
     tool,

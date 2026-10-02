@@ -6,7 +6,6 @@ import {
     Key,
     RefreshCw,
     X,
-    CheckCircle2,
     AlertCircle,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
@@ -40,7 +39,7 @@ export default function Readiness({
     providers,
     cliInstallCommand,
     cliChannel = 'canary',
-    cliDownloadUrl,
+    cliDownloadUrl: _cliDownloadUrl,
     usage,
     localCluster,
 }: Props) {

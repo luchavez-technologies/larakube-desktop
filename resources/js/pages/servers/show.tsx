@@ -31,12 +31,7 @@ import {
 } from '@/routes/projects';
 import { destroy, dns, index, tls } from '@/routes/servers';
 import { index as toolsIndex, show as showTool } from '@/routes/servers/tools';
-import {
-    describeTool,
-    providerLabels,
-    toolName,
-    toolTagline,
-} from '@/types/larakube';
+import { providerLabels, toolName, toolTagline } from '@/types/larakube';
 import type {
     ClusterTool,
     Project,

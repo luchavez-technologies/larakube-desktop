@@ -187,7 +187,7 @@ class ProjectController extends Controller
         return Inertia::render('projects/index', [
             'projects' => $projects,
             'hasActiveRuns' => $activeRuns->isNotEmpty(),
-            'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => ($p['localStatus']['state'] ?? null) === 'running'),
+            'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => $p['localStatus']['state'] === 'running'),
         ]);
     }
 
@@ -559,11 +559,11 @@ class ProjectController extends Controller
 
         foreach ($projects as $project) {
             $inspection = $this->inspector->inspect($project->path);
-            if (! ($inspection['exists'] ?? false) || ! ($inspection['initialized'] ?? false)) {
+            if (! $inspection['exists'] || ! $inspection['initialized']) {
                 continue;
             }
 
-            $appName = (string) ($inspection['name'] ?? basename($project->path));
+            $appName = $inspection['name'];
             $ns = "{$appName}-local";
             $workload = $workloads[$ns] ?? null;
 
@@ -597,11 +597,11 @@ class ProjectController extends Controller
 
         foreach ($projects as $project) {
             $inspection = $this->inspector->inspect($project->path);
-            if (! ($inspection['exists'] ?? false) || ! ($inspection['initialized'] ?? false)) {
+            if (! $inspection['exists'] || ! $inspection['initialized']) {
                 continue;
             }
 
-            $appName = (string) ($inspection['name'] ?? basename($project->path));
+            $appName = $inspection['name'];
             $ns = "{$appName}-local";
             $workload = $workloads[$ns] ?? null;
 
@@ -852,7 +852,7 @@ class ProjectController extends Controller
      */
     private function resolveLocalStatus(Project $project, array $inspection, ?Run $activeRun, array $workloads): array
     {
-        if (! ($inspection['exists'] ?? false) || ! ($inspection['initialized'] ?? false)) {
+        if (! $inspection['exists'] || ! $inspection['initialized']) {
             return [
                 'state' => 'uninitialized',
                 'label' => 'Not set up',
@@ -860,7 +860,7 @@ class ProjectController extends Controller
             ];
         }
 
-        $appName = (string) ($inspection['name'] ?? basename($project->path));
+        $appName = $inspection['name'];
         $effectiveTld = (string) ($inspection['effectiveTld'] ?? 'test');
         $domain = "{$appName}.{$effectiveTld}";
 

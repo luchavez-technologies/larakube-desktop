@@ -1,7 +1,7 @@
 import { Form, router, useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
 import { Archive, ArrowRightLeft, Layers, Save, Trash2 } from 'lucide-react';
-import Button, { buttonClass } from '@/components/button';
+import Button from '@/components/button';
 import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';

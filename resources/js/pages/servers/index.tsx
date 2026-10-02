@@ -535,7 +535,7 @@ function ImportKubeconfigModal({ onClose }: { onClose: () => void }) {
                                                     size="sm"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        triggerNativePicker();
+                                                        void triggerNativePicker();
                                                     }}
                                                     disabled={isPicking}
                                                 >

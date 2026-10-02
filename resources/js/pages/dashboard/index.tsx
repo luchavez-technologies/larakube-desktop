@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { Plus, ArrowRight } from 'lucide-react';
-import Button, { buttonClass } from '@/components/button';
+import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
