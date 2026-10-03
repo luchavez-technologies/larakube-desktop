@@ -22,6 +22,7 @@ class InstallClusterToolRequest extends FormRequest
             'admin_email' => ['nullable', 'string', 'email', 'max:255'],
             'wire_sso' => ['boolean'],
             'wire_mail' => ['boolean'],
+            'options' => ['array'],
         ];
     }
 

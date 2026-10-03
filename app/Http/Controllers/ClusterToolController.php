@@ -9,6 +9,7 @@ use App\Http\Requests\RemoveClusterToolRequest;
 use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
@@ -117,6 +118,17 @@ class ClusterToolController extends Controller
                 : "admin@{$domain}";
         }
 
+        // The CLI's own options for this tool (an app name, whether to share the
+        // Commons...), turned into flags the way a new app's answers are.
+        $resolved = app(FrameworkForm::class)->resolve(
+            $this->optionFields($row),
+            (array) $request->input('options', []),
+        );
+
+        if ($resolved['errors'] !== []) {
+            return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["options.{$key}" => $error])->all());
+        }
+
         $displayName = $this->displayName($row);
         $label = 'Install '.$displayName." on {$server}";
 
@@ -130,6 +142,7 @@ class ClusterToolController extends Controller
                 ...($adminEmail !== '' ? ["--admin-email={$adminEmail}"] : []),
                 $request->boolean('wire_sso') ? '--wire-sso' : '--no-wire-sso',
                 $request->boolean('wire_mail') ? '--wire-mail' : '--no-wire-mail',
+                ...$resolved['flags'],
                 '--force',
             ],
             kind: RunKind::InstallClusterTool,
@@ -229,5 +242,24 @@ class ClusterToolController extends Controller
             ->get()
             ->mapWithKeys(fn (Run $run): array => [(string) ($run->tool ?? $run->subject) => $run->id])
             ->all();
+    }
+
+    /**
+     * The plain choices the CLI lists for installing this tool.
+     *
+     * @param  array<string, mixed>  $row
+     * @return list<array<string, mixed>>
+     */
+    private function optionFields(array $row): array
+    {
+        $fields = [];
+
+        foreach (is_array($row['initFields'] ?? null) ? $row['initFields'] : [] as $field) {
+            if (is_array($field) && ($field['role'] ?? null) === 'option') {
+                $fields[] = $field;
+            }
+        }
+
+        return $fields;
     }
 }

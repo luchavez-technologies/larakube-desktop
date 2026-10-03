@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
+import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
@@ -35,6 +36,7 @@ import {
 } from '@/types/larakube';
 import type {
     ClusterTool,
+    NewAppAnswers,
     Server,
     CompanionApp,
     ServerDomain,
@@ -1833,6 +1835,16 @@ function InstallDialog({
         return `admin@${cleanDomain}`;
     }, [server.account, domain, selectedBaseDomain]);
 
+    // The tool's own choices, as the CLI describes them (an app name, whether to share the Commons...).
+    const optionFields = useMemo(
+        () =>
+            (tool.initFields ?? []).filter((field) => field.role === 'option'),
+        [tool.initFields],
+    );
+    const [options, setOptions] = useState<NewAppAnswers>(() =>
+        defaultAnswers(optionFields),
+    );
+
     const [adminEmail, setAdminEmail] = useState(defaultAdminEmail);
     const [touchedAdminEmail, setTouchedAdminEmail] = useState(false);
 
@@ -2181,6 +2193,48 @@ function InstallDialog({
                                         </span>
                                     )}
                                 </label>
+                            )}
+                            {optionFields.length > 0 && (
+                                <div className="space-y-4">
+                                    <FrameworkFields
+                                        fields={optionFields}
+                                        answers={options}
+                                        errors={
+                                            errors as Record<string, string>
+                                        }
+                                        errorPrefix="options"
+                                        onChange={setOptions}
+                                    />
+                                    {Object.entries(options).flatMap(
+                                        ([key, value]) =>
+                                            (Array.isArray(value)
+                                                ? value
+                                                : [value]
+                                            )
+                                                .filter(
+                                                    (item) =>
+                                                        item !== null &&
+                                                        item !== '' &&
+                                                        item !== false,
+                                                )
+                                                .map((item, index) => (
+                                                    <input
+                                                        key={`${key}-${index}`}
+                                                        type="hidden"
+                                                        name={
+                                                            Array.isArray(value)
+                                                                ? `options[${key}][]`
+                                                                : `options[${key}]`
+                                                        }
+                                                        value={
+                                                            item === true
+                                                                ? '1'
+                                                                : String(item)
+                                                        }
+                                                    />
+                                                )),
+                                    )}
+                                </div>
                             )}
                             {ssoInstalled && (
                                 <Checkbox

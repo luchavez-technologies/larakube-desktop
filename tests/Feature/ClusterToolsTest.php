@@ -406,3 +406,33 @@ test('whether a tool gets an admin email comes from the fields the CLI sends for
     'it asks for one' => [[['key' => 'domain', 'type' => 'text', 'label' => 'Domain', 'flag' => '--domain='], ['key' => 'adminEmail', 'type' => 'text', 'label' => 'Admin email', 'flag' => '--admin-email=']], 'admin@crm.example.com'],
     'it does not' => [[['key' => 'domain', 'type' => 'text', 'label' => 'Domain', 'flag' => '--domain=']], null],
 ]);
+
+test('a tool\'s own options reach the install as flags, the way the CLI described them', function () {
+    $bin = clusterToolsFakeCli();
+    $field = fn (string $key, string $flag, string $type, string $role = 'option'): array => ['key' => $key, 'type' => $type, 'role' => $role, 'label' => $key, 'flag' => $flag, 'required' => false];
+    $row = [
+        'tool' => 'grafana', 'instance' => '', 'icon' => '*', 'brand' => 'Grafana', 'label' => 'Grafana', 'installed' => false,
+        'initFields' => [$field('domain', '--domain=', 'text', 'host'), $field('appName', '--app-name=', 'text'), $field('noLogs', '--no-logs', 'confirm'), $field('withTraces', '--with-traces', 'confirm'), $field('vpnOnly', '--vpn-only', 'confirm', 'access')],
+        'namespace' => 'larakube-shared', 'host' => null, 'aliases' => [], 'url' => null,
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+    ]);
+    $fake = ChildProcess::fake();
+
+    // vpnOnly is an access setting, not a plain option: it is never passed from this form.
+    $this->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'grafana']), [
+        'domain' => 'grafana.example.com',
+        'options' => ['appName' => 'Metrics', 'noLogs' => '1', 'vpnOnly' => '1'],
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'tool:add', '--tool=grafana', '--context=larakube-203.0.113.21', '--domain=grafana.example.com', '--no-wire-sso', '--no-wire-mail', '--app-name=Metrics', '--no-logs', '--force', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
