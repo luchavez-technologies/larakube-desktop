@@ -9,6 +9,8 @@ import {
 import type { FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
+    Eye,
+    EyeOff,
     Trash2,
     Play,
     ExternalLink,
@@ -930,14 +932,30 @@ function EnvironmentBackingServicesCard({
                     </div>
                 )}
 
-                {hasSecrets && !revealed && (
+                {hasSecrets && (
                     <button
                         type="button"
-                        onClick={reveal}
+                        role="switch"
+                        aria-checked={revealed !== null}
+                        onClick={() =>
+                            revealed ? setRevealed(null) : reveal()
+                        }
                         disabled={revealing}
-                        className="text-xs font-medium text-soft hover:text-ink"
+                        className={cn(
+                            buttonClass('secondary', 'sm'),
+                            'h-7 gap-1.5 px-2.5 text-xs',
+                        )}
                     >
-                        {revealing ? 'Revealing…' : 'Reveal passwords and keys'}
+                        {revealed ? (
+                            <EyeOff className="size-3.5" />
+                        ) : (
+                            <Eye className="size-3.5" />
+                        )}
+                        {revealing
+                            ? 'Revealing…'
+                            : revealed
+                              ? 'Hide passwords and keys'
+                              : 'Show passwords and keys'}
                     </button>
                 )}
 
