@@ -236,7 +236,7 @@ test('choosing where to create a project keeps what was typed', function () {
             ->where('parent', $parent)
             ->where('name', 'blog')
             ->where('framework', 'astro')
-            ->has('frameworks', 16));
+            ->has('frameworks', 15));
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -507,7 +507,7 @@ test('linking a server supports custom environments like staging', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
-test('frameworks are categorized and emdash is marked coming soon', function () {
+test('frameworks are categorized, emdash is marked coming soon and WordPress is not offered', function () {
     $sandbox = projectsSandbox();
     $parent = dirname($sandbox['app']);
 
@@ -515,7 +515,7 @@ test('frameworks are categorized and emdash is marked coming soon', function () 
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('projects/create')
             ->where('frameworks.statamic.category', 'cms')
-            ->where('frameworks.wordpress.category', 'cms')
+            ->missing('frameworks.wordpress')
             ->where('frameworks.emdash.category', 'cms')
             ->where('frameworks.emdash.comingSoon', true)
             ->where('frameworks.statamic.comingSoon', false)
@@ -555,6 +555,49 @@ test('scaffolding Statamic passes super user email when provided', function () {
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
         $bin, 'statamic:new', 'my-statamic-site', '--fast', '--no-plex', '--email=admin@example.com', '--no-interaction',
     ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('WordPress cannot be started from Desktop, even by posting the form directly', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+    ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'wordpress', 'parent' => $parent])
+        ->assertSessionHasErrors('framework');
+
+    expect(Run::count())->toBe(0)->and(Project::count())->toBe(0);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('purging a project deletes its data, so its name has to be typed back', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+    $name = basename($sandbox['app']);
+
+    $this->post(route('projects.down', $project), ['purge' => true])->assertSessionHasErrors('confirm');
+    $this->post(route('projects.down', $project), ['purge' => true, 'confirm' => 'wrong'])->assertSessionHasErrors('confirm');
+    expect(Run::count())->toBe(0);
+
+    $this->post(route('projects.down', $project), ['purge' => true, 'confirm' => $name])->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'down', 'local', '--force', '--full', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('purging every local project needs "purge all" typed', function () {
+    $sandbox = projectsSandbox();
+    Project::create(['path' => $sandbox['app']]);
+    ChildProcess::fake();
+
+    $this->post(route('projects.down-all'), ['purge' => true])->assertSessionHasErrors('confirm');
+    expect(Run::count())->toBe(0);
 
     File::deleteDirectory($sandbox['home']);
 });

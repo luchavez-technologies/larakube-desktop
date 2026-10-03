@@ -39,7 +39,7 @@ class ProjectController extends Controller
      * `--no-plex` keeps a Next.js app self-contained, so deploying it doesn't
      * also need the Plex Commons on the server.
      *
-     * @var array<string, array{label: string, category: string, description: string, command: list<string>, comingSoon?: bool}>
+     * @var array<string, array{label: string, category: string, description: string, command: list<string>, comingSoon?: bool, hidden?: bool}>
      */
     public const SCAFFOLDERS = [
         'laravel' => [
@@ -59,6 +59,8 @@ class ProjectController extends Controller
             'category' => 'cms',
             'description' => 'Modern WordPress with Composer and 12-factor configuration.',
             'command' => ['wordpress:new', '--fast', '--no-plex'],
+            // Not offered for now: most WordPress sites live on managed hosts, so a local repo has little pull.
+            'hidden' => true,
         ],
         'emdash' => [
             'label' => 'Emdash',
@@ -212,7 +214,7 @@ class ProjectController extends Controller
     {
         $parent = (string) $request->query('parent', '');
         $requestedFramework = (string) $request->query('framework', '');
-        $defaultFramework = array_key_exists($requestedFramework, self::SCAFFOLDERS) && empty(self::SCAFFOLDERS[$requestedFramework]['comingSoon'])
+        $defaultFramework = array_key_exists($requestedFramework, self::SCAFFOLDERS) && empty(self::SCAFFOLDERS[$requestedFramework]['comingSoon']) && empty(self::SCAFFOLDERS[$requestedFramework]['hidden'])
             ? $requestedFramework
             : 'laravel';
 
@@ -241,7 +243,7 @@ class ProjectController extends Controller
                 'description' => $scaffolder['description'],
                 'category' => $scaffolder['category'],
                 'comingSoon' => ! empty($scaffolder['comingSoon']),
-            ], self::SCAFFOLDERS),
+            ], array_filter(self::SCAFFOLDERS, fn (array $scaffolder): bool => empty($scaffolder['hidden']))),
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
             'framework' => $defaultFramework,
@@ -277,6 +279,10 @@ class ProjectController extends Controller
         ]);
 
         $scaffolder = self::SCAFFOLDERS[$input['framework']];
+
+        if (! empty($scaffolder['hidden'])) {
+            return back()->withErrors(['framework' => "{$scaffolder['label']} can't be created from Desktop yet."]);
+        }
 
         if (! empty($scaffolder['comingSoon'])) {
             return back()->withErrors(['framework' => "{$scaffolder['label']} is coming soon!"]);
@@ -540,6 +546,12 @@ class ProjectController extends Controller
     {
         $environment = (string) $request->input('environment', 'local');
         $purge = $request->boolean('purge');
+
+        // A purge deletes the project's data volumes, so the project's name has to be typed back.
+        if ($purge && $request->string('confirm')->toString() !== $this->name($project)) {
+            return back()->withErrors(['confirm' => 'Type the project name to confirm purging its data.']);
+        }
+
         $args = ['down', $environment, '--force'];
         if ($purge) {
             $args[] = '--full';
@@ -587,6 +599,11 @@ class ProjectController extends Controller
     public function downAll(Request $request, CliRunner $runner, ToolLocator $locator): RedirectResponse
     {
         $purge = $request->boolean('purge');
+
+        if ($purge && $request->string('confirm')->toString() !== 'purge all') {
+            return back()->withErrors(['confirm' => 'Type "purge all" to confirm purging every local project.']);
+        }
+
         $args = ['down', 'local', '--force'];
         if ($purge) {
             $args[] = '--full';
