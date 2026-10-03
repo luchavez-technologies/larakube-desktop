@@ -33,12 +33,9 @@ import {
     SiReactiveresume,
 } from '@icons-pack/react-simple-icons';
 import type { ClusterTool } from '@/types/larakube';
-import { describeTool, toolName } from '@/types/larakube';
 
 type Props = {
-    tool?:
-        | ClusterTool
-        | { tool?: string; brand?: string; label?: string; icon?: string };
+    tool?: ClusterTool | { tool?: string; logo?: string; icon?: string };
     slug?: string;
     size?: 'sm' | 'md' | 'lg';
     className?: string;
@@ -55,11 +52,8 @@ export default function ToolLogo({
     size = 'md',
     className = '',
 }: Props) {
-    const slug = (rawSlug ?? tool?.tool ?? '').toLowerCase();
-    const label = tool?.label ?? '';
-    const { engine } = tool ? describeTool(label) : { engine: null };
-    const brand = tool ? toolName(tool).toLowerCase() : '';
-    const engineLower = (engine ?? '').toLowerCase();
+    // The CLI names what to draw (`logo`); a slug is only for things the CLI does not list, like companions.
+    const id = (tool?.logo ?? rawSlug ?? tool?.tool ?? '').toLowerCase();
 
     const sizeClass = {
         sm: 'size-8 text-xs rounded-lg',
@@ -79,13 +73,7 @@ export default function ToolLogo({
         lg: 'size-6',
     }[size];
 
-    const visual = getBrandVisual(
-        slug,
-        engineLower,
-        brand,
-        iconPixelSize,
-        iconSizeClass,
-    );
+    const visual = getBrandVisual(id, iconPixelSize, iconSizeClass);
 
     if (visual) {
         return (
@@ -107,19 +95,12 @@ export default function ToolLogo({
 }
 
 function getBrandVisual(
-    slug: string,
-    engine: string,
-    brand: string,
+    id: string,
     px: number,
     sizeClass: string,
 ): BrandVisual | null {
     // 1. PocketBase / Data / Headless CMS
-    if (
-        slug === 'data' ||
-        slug === 'pocketbase' ||
-        engine.includes('pocketbase') ||
-        brand.includes('pocketbase')
-    ) {
+    if (id === 'pocketbase') {
         return {
             containerClass:
                 'bg-sky-500/10 ring-1 ring-sky-500/25 text-[#0284C7] dark:text-[#38BDF8]',
@@ -128,11 +109,7 @@ function getBrandVisual(
     }
 
     // 1b. Directus
-    if (
-        slug === 'directus' ||
-        engine.includes('directus') ||
-        brand.includes('directus')
-    ) {
+    if (id === 'directus') {
         return {
             containerClass:
                 'bg-[#64748B]/10 ring-1 ring-[#64748B]/25 text-[#6644FF] dark:text-[#8866FF]',
@@ -141,12 +118,7 @@ function getBrandVisual(
     }
 
     // 2. Matrix / Chat
-    if (
-        slug === 'chat' ||
-        slug === 'matrix' ||
-        engine.includes('matrix') ||
-        brand.includes('matrix')
-    ) {
+    if (id === 'matrix') {
         return {
             containerClass:
                 'bg-neutral-900 dark:bg-neutral-800 ring-1 ring-neutral-700 text-white shadow-xs',
@@ -155,13 +127,7 @@ function getBrandVisual(
     }
 
     // 3. OpenBao / Vault (Secrets)
-    if (
-        slug === 'secrets' ||
-        slug === 'openbao' ||
-        engine.includes('openbao') ||
-        brand.includes('openbao') ||
-        engine.includes('vault')
-    ) {
+    if (id === 'openbao') {
         return {
             containerClass:
                 'bg-teal-500/10 ring-1 ring-teal-500/25 text-[#136C56] dark:text-[#3ABFA0]',
@@ -170,12 +136,7 @@ function getBrandVisual(
     }
 
     // 4. Twenty CRM
-    if (
-        slug === 'crm' ||
-        slug === 'twenty' ||
-        engine.includes('twenty') ||
-        brand.includes('twenty')
-    ) {
+    if (id === 'twenty') {
         return {
             containerClass:
                 'bg-neutral-900 dark:bg-neutral-800 ring-1 ring-neutral-700 text-white shadow-xs',
@@ -184,12 +145,7 @@ function getBrandVisual(
     }
 
     // 5. LiveKit / Meet (crisp on dark container)
-    if (
-        slug === 'meet' ||
-        slug === 'livekit' ||
-        engine.includes('livekit') ||
-        brand.includes('livekit')
-    ) {
+    if (id === 'livekit') {
         return {
             containerClass:
                 'bg-slate-900 dark:bg-slate-800 ring-1 ring-slate-700 text-white shadow-xs',
@@ -198,12 +154,7 @@ function getBrandVisual(
     }
 
     // 6. Uptime Kuma
-    if (
-        slug === 'uptime' ||
-        slug === 'kuma' ||
-        engine.includes('kuma') ||
-        brand.includes('kuma')
-    ) {
+    if (id === 'kuma') {
         return {
             containerClass:
                 'bg-emerald-500/10 ring-1 ring-emerald-500/25 text-[#16A34A] dark:text-[#4ADE80]',
@@ -212,13 +163,7 @@ function getBrandVisual(
     }
 
     // 7. Vaultwarden / Bitwarden / Passwords
-    if (
-        slug === 'passwords' ||
-        slug === 'vaultwarden' ||
-        engine.includes('vaultwarden') ||
-        brand.includes('vaultwarden') ||
-        engine.includes('bitwarden')
-    ) {
+    if (id === 'vaultwarden') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#175DDC] dark:text-[#60A5FA]',
@@ -227,19 +172,14 @@ function getBrandVisual(
     }
 
     // 8. Forgejo / Gitea / Git
-    if (
-        slug === 'git' ||
-        slug === 'forgejo' ||
-        engine.includes('forgejo') ||
-        brand.includes('forgejo')
-    ) {
+    if (id === 'forgejo') {
         return {
             containerClass:
                 'bg-orange-500/10 ring-1 ring-orange-500/25 text-[#EA580C] dark:text-[#FB923C]',
             icon: <SiForgejo size={px} color="#EA580C" />,
         };
     }
-    if (engine.includes('gitea') || brand.includes('gitea')) {
+    if (id === 'gitea') {
         return {
             containerClass:
                 'bg-lime-500/10 ring-1 ring-lime-500/25 text-[#4D7C0F] dark:text-[#84CC16]',
@@ -248,12 +188,7 @@ function getBrandVisual(
     }
 
     // 9. Grafana / Monitor
-    if (
-        slug === 'monitor' ||
-        slug === 'grafana' ||
-        engine.includes('grafana') ||
-        brand.includes('grafana')
-    ) {
+    if (id === 'grafana') {
         return {
             containerClass:
                 'bg-amber-500/10 ring-1 ring-amber-500/25 text-[#D97706] dark:text-[#FBBF24]',
@@ -262,7 +197,7 @@ function getBrandVisual(
     }
 
     // 10. Prometheus
-    if (engine.includes('prometheus') || brand.includes('prometheus')) {
+    if (id === 'prometheus') {
         return {
             containerClass:
                 'bg-red-500/10 ring-1 ring-red-500/25 text-[#DC2626] dark:text-[#F87171]',
@@ -271,12 +206,7 @@ function getBrandVisual(
     }
 
     // 11. MinIO / Drive / Object Storage
-    if (
-        slug === 'drive' ||
-        slug === 'minio' ||
-        engine.includes('minio') ||
-        brand.includes('minio')
-    ) {
+    if (id === 'minio') {
         return {
             containerClass:
                 'bg-rose-500/10 ring-1 ring-rose-500/25 text-[#C72E49] dark:text-[#FB7185]',
@@ -285,12 +215,7 @@ function getBrandVisual(
     }
 
     // 12. ownCloud / oCIS
-    if (
-        slug === 'ocis' ||
-        engine.includes('owncloud') ||
-        engine.includes('ocis') ||
-        brand.includes('owncloud')
-    ) {
+    if (id === 'ocis') {
         return {
             containerClass:
                 'bg-[#041E42] ring-1 ring-[#041E42]/80 text-white shadow-xs',
@@ -299,12 +224,7 @@ function getBrandVisual(
     }
 
     // 13. n8n / Flow
-    if (
-        slug === 'flow' ||
-        slug === 'n8n' ||
-        engine.includes('n8n') ||
-        brand.includes('n8n')
-    ) {
+    if (id === 'n8n') {
         return {
             containerClass:
                 'bg-pink-500/10 ring-1 ring-pink-500/25 text-[#DB2777] dark:text-[#F472B6]',
@@ -313,11 +233,7 @@ function getBrandVisual(
     }
 
     // 13b. Windmill
-    if (
-        slug === 'windmill' ||
-        engine.includes('windmill') ||
-        brand.includes('windmill')
-    ) {
+    if (id === 'windmill') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#3B82F6]',
@@ -337,12 +253,7 @@ function getBrandVisual(
     }
 
     // 14. Metabase / Insights
-    if (
-        slug === 'insights' ||
-        slug === 'metabase' ||
-        engine.includes('metabase') ||
-        brand.includes('metabase')
-    ) {
+    if (id === 'metabase') {
         return {
             containerClass:
                 'bg-sky-500/10 ring-1 ring-sky-500/25 text-[#0284C7] dark:text-[#38BDF8]',
@@ -351,12 +262,7 @@ function getBrandVisual(
     }
 
     // 15. Outline / Notes
-    if (
-        slug === 'notes' ||
-        slug === 'outline' ||
-        engine.includes('outline') ||
-        brand.includes('outline')
-    ) {
+    if (id === 'outline') {
         return {
             containerClass:
                 'bg-zinc-900 dark:bg-zinc-800 ring-1 ring-zinc-700 text-white shadow-xs',
@@ -365,12 +271,7 @@ function getBrandVisual(
     }
 
     // 16. Chatwoot / Support
-    if (
-        slug === 'support' ||
-        slug === 'chatwoot' ||
-        engine.includes('chatwoot') ||
-        brand.includes('chatwoot')
-    ) {
+    if (id === 'chatwoot') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#2563EB] dark:text-[#60A5FA]',
@@ -379,12 +280,7 @@ function getBrandVisual(
     }
 
     // 17. Umami / Analytics
-    if (
-        slug === 'analytics' ||
-        slug === 'umami' ||
-        engine.includes('umami') ||
-        brand.includes('umami')
-    ) {
+    if (id === 'umami') {
         return {
             containerClass:
                 'bg-neutral-900 dark:bg-neutral-800 ring-1 ring-neutral-700 text-white shadow-xs',
@@ -393,11 +289,7 @@ function getBrandVisual(
     }
 
     // 18. Plausible Analytics
-    if (
-        slug === 'plausible' ||
-        engine.includes('plausible') ||
-        brand.includes('plausible')
-    ) {
+    if (id === 'plausible') {
         return {
             containerClass:
                 'bg-indigo-500/10 ring-1 ring-indigo-500/25 text-[#4F46E5] dark:text-[#818CF8]',
@@ -406,12 +298,7 @@ function getBrandVisual(
     }
 
     // 19. GlitchTip / Sentry / Errors
-    if (
-        slug === 'errors' ||
-        slug === 'glitchtip' ||
-        engine.includes('glitchtip') ||
-        brand.includes('glitchtip')
-    ) {
+    if (id === 'glitchtip') {
         return {
             containerClass:
                 'bg-purple-900 ring-1 ring-purple-700 text-white shadow-xs',
@@ -435,12 +322,7 @@ function getBrandVisual(
     }
 
     // 20. NetBird / WireGuard / VPN
-    if (
-        slug === 'vpn' ||
-        slug === 'netbird' ||
-        engine.includes('netbird') ||
-        brand.includes('netbird')
-    ) {
+    if (id === 'netbird') {
         return {
             containerClass:
                 'bg-orange-500/10 ring-1 ring-orange-500/25 text-[#F55422]',
@@ -458,7 +340,7 @@ function getBrandVisual(
             ),
         };
     }
-    if (engine.includes('wireguard')) {
+    if (id === 'wireguard') {
         return {
             containerClass:
                 'bg-red-500/10 ring-1 ring-red-500/25 text-[#88171A]',
@@ -467,12 +349,7 @@ function getBrandVisual(
     }
 
     // 21. Zitadel / SSO
-    if (
-        slug === 'sso' ||
-        slug === 'zitadel' ||
-        engine.includes('zitadel') ||
-        brand.includes('zitadel')
-    ) {
+    if (id === 'zitadel') {
         return {
             containerClass:
                 'bg-amber-500/10 ring-1 ring-amber-500/25 text-[#FF3B30]',
@@ -524,13 +401,7 @@ function getBrandVisual(
     }
 
     // 22. Stalwart / Mailpit / Mail
-    if (
-        slug === 'mail' ||
-        slug === 'stalwart' ||
-        engine.includes('stalwart') ||
-        brand.includes('stalwart') ||
-        engine.includes('mailpit')
-    ) {
+    if (id === 'stalwart' || id === 'mailpit') {
         return {
             containerClass:
                 'bg-indigo-500/10 ring-1 ring-indigo-500/25 text-[#4F46E5]',
@@ -546,12 +417,7 @@ function getBrandVisual(
     }
 
     // 23. Teable / Sheets
-    if (
-        slug === 'sheets' ||
-        slug === 'teable' ||
-        engine.includes('teable') ||
-        brand.includes('teable')
-    ) {
+    if (id === 'teable') {
         return {
             containerClass:
                 'bg-emerald-500/10 ring-1 ring-emerald-500/25 text-[#10B981]',
@@ -571,12 +437,7 @@ function getBrandVisual(
     }
 
     // 24. Documenso / Sign
-    if (
-        slug === 'sign' ||
-        slug === 'documenso' ||
-        engine.includes('documenso') ||
-        brand.includes('documenso')
-    ) {
+    if (id === 'documenso') {
         return {
             containerClass:
                 'bg-emerald-500/10 ring-1 ring-emerald-500/25 text-[#16A34A]',
@@ -596,7 +457,7 @@ function getBrandVisual(
     }
 
     // 25. Traefik
-    if (slug === 'traefik' || engine.includes('traefik')) {
+    if (id === 'traefik') {
         return {
             containerClass:
                 'bg-cyan-500/10 ring-1 ring-cyan-500/25 text-[#0891B2]',
@@ -605,12 +466,7 @@ function getBrandVisual(
     }
 
     // 26. Headlamp / Dashboard
-    if (
-        slug === 'dashboard' ||
-        slug === 'headlamp' ||
-        engine.includes('headlamp') ||
-        brand.includes('headlamp')
-    ) {
+    if (id === 'headlamp') {
         return {
             containerClass:
                 'bg-purple-500/10 ring-1 ring-purple-500/25 text-[#7C3AED]',
@@ -627,12 +483,7 @@ function getBrandVisual(
     }
 
     // 27. Penpot / Design
-    if (
-        slug === 'design' ||
-        slug === 'penpot' ||
-        engine.includes('penpot') ||
-        brand.includes('penpot')
-    ) {
+    if (id === 'penpot') {
         return {
             containerClass:
                 'bg-violet-500/10 ring-1 ring-violet-500/25 text-[#8B5CF6]',
@@ -641,11 +492,7 @@ function getBrandVisual(
     }
 
     // 28. Reactive Resume / Resume
-    if (
-        slug === 'resume' ||
-        engine.includes('resume') ||
-        brand.includes('resume')
-    ) {
+    if (id === 'resume') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#2563EB]',
@@ -654,12 +501,7 @@ function getBrandVisual(
     }
 
     // 29. Yopass / Paste
-    if (
-        slug === 'paste' ||
-        slug === 'yopass' ||
-        engine.includes('yopass') ||
-        brand.includes('yopass')
-    ) {
+    if (id === 'yopass') {
         return {
             containerClass:
                 'bg-orange-500/10 ring-1 ring-orange-500/25 text-[#EA580C]',
@@ -700,7 +542,7 @@ function getBrandVisual(
     }
 
     // 30. ExternalDNS / DNS
-    if (slug === 'dns' || slug === 'external-dns' || engine.includes('dns')) {
+    if (id === 'external-dns') {
         return {
             containerClass:
                 'bg-cyan-500/10 ring-1 ring-cyan-500/25 text-[#0891B2]',
@@ -728,12 +570,7 @@ function getBrandVisual(
     }
 
     // 31. Planka / Tasks
-    if (
-        slug === 'tasks' ||
-        slug === 'planka' ||
-        engine.includes('planka') ||
-        brand.includes('planka')
-    ) {
+    if (id === 'planka') {
         return {
             containerClass:
                 'bg-emerald-500/10 ring-1 ring-emerald-500/25 text-[#059669]',
@@ -753,12 +590,7 @@ function getBrandVisual(
     }
 
     // 32. Kutt / Links
-    if (
-        slug === 'link' ||
-        slug === 'kutt' ||
-        engine.includes('kutt') ||
-        brand.includes('kutt')
-    ) {
+    if (id === 'kutt') {
         return {
             containerClass:
                 'bg-blue-600/10 ring-1 ring-blue-600/25 text-[#2563EB]',
@@ -775,12 +607,7 @@ function getBrandVisual(
     }
 
     // 33. Sendrec / Record
-    if (
-        slug === 'record' ||
-        slug === 'sendrec' ||
-        engine.includes('sendrec') ||
-        brand.includes('sendrec')
-    ) {
+    if (id === 'sendrec') {
         return {
             containerClass:
                 'bg-indigo-500/10 ring-1 ring-indigo-500/25 text-[#6366F1]',
@@ -807,12 +634,7 @@ function getBrandVisual(
     }
 
     // 34. Bulwark / Webmail
-    if (
-        slug === 'webmail' ||
-        slug === 'bulwark' ||
-        engine.includes('bulwark') ||
-        brand.includes('bulwark')
-    ) {
+    if (id === 'bulwark') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#2563EB]',
@@ -828,7 +650,7 @@ function getBrandVisual(
     }
 
     // 35. Redis / RedisInsight
-    if (slug === 'redis' || slug === 'redisinsight') {
+    if (id === 'redis' || id === 'redisinsight') {
         return {
             containerClass:
                 'bg-red-500/10 ring-1 ring-red-500/25 text-[#DC2626]',
@@ -837,7 +659,7 @@ function getBrandVisual(
     }
 
     // 36. PostgreSQL / pgAdmin
-    if (slug === 'postgres' || slug === 'postgresql' || slug === 'pgadmin') {
+    if (id === 'postgres' || id === 'postgresql' || id === 'pgadmin') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#3B82F6]',
@@ -846,14 +668,14 @@ function getBrandVisual(
     }
 
     // 37. MySQL / phpMyAdmin
-    if (slug === 'mysql') {
+    if (id === 'mysql') {
         return {
             containerClass:
                 'bg-sky-500/10 ring-1 ring-sky-500/25 text-[#0284C7]',
             icon: <SiMysql size={px} color="#0284C7" />,
         };
     }
-    if (slug === 'phpmyadmin') {
+    if (id === 'phpmyadmin') {
         return {
             containerClass:
                 'bg-sky-500/10 ring-1 ring-sky-500/25 text-[#0284C7]',
@@ -862,7 +684,7 @@ function getBrandVisual(
     }
 
     // 38. MariaDB
-    if (slug === 'mariadb') {
+    if (id === 'mariadb') {
         return {
             containerClass:
                 'bg-teal-500/10 ring-1 ring-teal-500/25 text-[#0D9488]',
@@ -871,7 +693,7 @@ function getBrandVisual(
     }
 
     // 39. MongoDB / Mongo Express
-    if (slug === 'mongodb' || slug === 'mongo-express') {
+    if (id === 'mongodb' || id === 'mongo-express') {
         return {
             containerClass:
                 'bg-emerald-500/10 ring-1 ring-emerald-500/25 text-[#059669]',
@@ -880,7 +702,7 @@ function getBrandVisual(
     }
 
     // 40. Adminer
-    if (slug === 'adminer') {
+    if (id === 'adminer') {
         return {
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#2563EB]',

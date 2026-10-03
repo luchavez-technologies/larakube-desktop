@@ -172,6 +172,15 @@ export type ClusterTool = {
     url: string | null;
     installedAt: string | null;
     categories?: string[];
+    /** The product's own name (e.g. Twenty), never the category. */
+    name?: string;
+    tagline?: string;
+    stack?: string[];
+    /** What to draw: an id a renderer knows, or later a URL. */
+    logo?: string;
+    paid?: boolean;
+    /** The exact command that removes this instance. */
+    removeCommand?: string;
     components?: ClusterToolComponent[];
     sso: Wiring;
     mail: Wiring;
@@ -181,286 +190,15 @@ export type ClusterTool = {
     requiresAdminEmail?: boolean;
 };
 
-export const TOOL_DISPLAY_NAMES: Record<string, string> = {
-    twenty: 'Twenty',
-    matrix: 'Matrix',
-    pocketbase: 'PocketBase',
-    directus: 'Directus',
-    n8n: 'n8n',
-    windmill: 'Windmill',
-    livekit: 'LiveKit',
-    ocis: 'ownCloud (oCIS)',
-    openbao: 'OpenBao',
-    netbird: 'NetBird',
-    zitadel: 'Zitadel',
-    vaultwarden: 'Vaultwarden',
-    kuma: 'Uptime Kuma',
-    grafana: 'Grafana',
-    forgejo: 'Forgejo',
-    gitea: 'Gitea',
-    metabase: 'Metabase',
-    glitchtip: 'GlitchTip',
-    outline: 'Outline',
-    teable: 'Teable',
-    documenso: 'Documenso',
-    chatwoot: 'Chatwoot',
-    umami: 'Umami',
-    plausible: 'Plausible',
-    headlamp: 'Headlamp',
-    stalwart: 'Stalwart',
-    bulwark: 'Bulwark',
-    planka: 'Planka',
-    kutt: 'Kutt',
-    penpot: 'Penpot',
-    resume: 'Reactive Resume',
-    yopass: 'Yopass',
-    sendrec: 'Sendrec',
-    'external-dns': 'ExternalDNS',
-
-    // Legacy categories mapped directly to their individual product
-    crm: 'Twenty',
-    chat: 'Matrix',
-    meet: 'LiveKit',
-    drive: 'ownCloud (oCIS)',
-    flow: 'n8n',
-    monitor: 'Grafana',
-    mail: 'Stalwart',
-    webmail: 'Bulwark',
-    secrets: 'OpenBao',
-    vpn: 'NetBird',
-    sso: 'Zitadel',
-    passwords: 'Vaultwarden',
-    uptime: 'Uptime Kuma',
-    errors: 'GlitchTip',
-    git: 'Forgejo',
-    insights: 'Metabase',
-    dns: 'ExternalDNS',
-    data: 'PocketBase',
-    sheets: 'Teable',
-    notes: 'Outline',
-    analytics: 'Umami',
-    tasks: 'Planka',
-    sign: 'Documenso',
-    support: 'Chatwoot',
-    link: 'Kutt',
-    links: 'Kutt',
-    record: 'Sendrec',
-    dashboard: 'Headlamp',
-    design: 'Penpot',
-    paste: 'Yopass',
-};
-
-const GENERIC_CATEGORY_NAMES = new Set([
-    'crm',
-    'chat',
-    'meet',
-    'drive',
-    'automation',
-    'flow',
-    'monitor',
-    'monitoring stack',
-    'secrets',
-    'secrets manager',
-    'vpn',
-    'sso',
-    'identity provider',
-    'passwords',
-    'password manager',
-    'uptime',
-    'status pages',
-    'errors',
-    'error tracking',
-    'git',
-    'git forge',
-    'insights',
-    'business intelligence',
-    'dns',
-    'automated dns',
-    'mail',
-    'mail server',
-    'webmail',
-    'webmail ui',
-    'notes',
-    'team wiki',
-    'sheets',
-    'spreadsheet database',
-    'analytics',
-    'web analytics',
-    'tasks',
-    'project management',
-    'sign',
-    'document signing',
-    'support',
-    'customer support',
-    'link',
-    'links',
-    'link management',
-    'record',
-    'screen recording',
-    'dashboard',
-    'kubernetes control plane',
-    'design',
-    'paste',
-    'secure paste',
-    'resume',
-    'resume builder',
-    'data',
-    'headless cms',
-]);
-
-export const TOOL_TAGLINES: Record<string, string> = {
-    twenty: 'CRM & Customer Management',
-    crm: 'CRM & Customer Management',
-    matrix: 'Decentralized Team Chat',
-    chat: 'Decentralized Team Chat',
-    livekit: 'WebRTC Video Meetings',
-    meet: 'WebRTC Video Meetings',
-    pocketbase: 'Embedded SQLite & Backend API',
-    directus: 'Headless CMS & Data Platform',
-    data: 'Headless CMS & Backend API',
-    n8n: 'Workflow Automation',
-    windmill: 'Developer Workflow Engine',
-    flow: 'Workflow Automation',
-    ocis: 'Cloud Storage & File Sync',
-    drive: 'Cloud Storage & File Sync',
-    openbao: 'Secrets Vault & Encryption',
-    secrets: 'Secrets Vault & Encryption',
-    netbird: 'Zero-Trust VPN Mesh',
-    vpn: 'Zero-Trust VPN Mesh',
-    zitadel: 'Identity Provider & SSO',
-    sso: 'Identity Provider & SSO',
-    vaultwarden: 'Bitwarden Password Vault',
-    passwords: 'Bitwarden Password Vault',
-    kuma: 'Status Pages & Monitoring',
-    uptime: 'Status Pages & Monitoring',
-    grafana: 'Metrics & Observability Dashboards',
-    monitor: 'Metrics & Observability Dashboards',
-    forgejo: 'Self-Hosted Git & CI/CD',
-    gitea: 'Self-Hosted Git Forge',
-    git: 'Self-Hosted Git Forge',
-    metabase: 'Business Intelligence & BI',
-    insights: 'Business Intelligence & BI',
-    glitchtip: 'Error Tracking & Sentry APM',
-    errors: 'Error Tracking & Sentry APM',
-    outline: 'Team Wiki & Knowledge Base',
-    notes: 'Team Wiki & Knowledge Base',
-    teable: 'Spreadsheet Database',
-    sheets: 'Spreadsheet Database',
-    documenso: 'Digital Document Signing',
-    sign: 'Digital Document Signing',
-    chatwoot: 'Customer Support & Live Chat',
-    support: 'Customer Support & Live Chat',
-    umami: 'Privacy-Focused Web Analytics',
-    plausible: 'Lightweight Web Analytics',
-    analytics: 'Web Analytics',
-    headlamp: 'Kubernetes Control Plane Dashboard',
-    dashboard: 'Kubernetes Control Plane Dashboard',
-    stalwart: 'All-in-One Mail Server',
-    mail: 'All-in-One Mail Server',
-    bulwark: 'Webmail Client',
-    webmail: 'Webmail Client',
-    planka: 'Kanban Project Management',
-    tasks: 'Kanban Project Management',
-    kutt: 'Link Shortener & Management',
-    link: 'Link Shortener & Management',
-    links: 'Link Shortener & Management',
-    penpot: 'Design & Prototyping',
-    design: 'Design & Prototyping',
-    resume: 'Resume & CV Builder',
-    yopass: 'Burn-After-Read Secret Sharing',
-    paste: 'Burn-After-Read Secret Sharing',
-    sendrec: 'Screen Recording & Sharing',
-    record: 'Screen Recording & Sharing',
-    'external-dns': 'Automated DNS Sync',
-    dns: 'Automated DNS Sync',
-};
-
-export const TOOL_CATEGORIES_MAP: Record<string, string[]> = {
-    twenty: ['communication', 'productivity', 'backend', 'database'],
-    crm: ['communication', 'productivity', 'backend', 'database'],
-    matrix: ['communication'],
-    chat: ['communication'],
-    livekit: ['communication'],
-    meet: ['communication'],
-    stalwart: ['communication', 'devops'],
-    mail: ['communication', 'devops'],
-    bulwark: ['communication', 'productivity'],
-    webmail: ['communication', 'productivity'],
-    chatwoot: ['communication', 'productivity'],
-    support: ['communication', 'productivity'],
-    sendrec: ['communication', 'productivity'],
-    record: ['communication', 'productivity'],
-    yopass: ['security', 'communication'],
-    paste: ['security', 'communication'],
-
-    pocketbase: ['database', 'backend', 'auth', 'storage'],
-    directus: ['database', 'backend', 'auth'],
-    data: ['database', 'backend', 'auth'],
-    teable: ['database', 'productivity', 'backend'],
-    sheets: ['database', 'productivity', 'backend'],
-
-    n8n: ['devops', 'productivity', 'communication'],
-    windmill: ['devops', 'productivity', 'backend'],
-    flow: ['devops', 'productivity', 'communication'],
-
-    openbao: ['security', 'devops'],
-    secrets: ['security', 'devops'],
-    netbird: ['security', 'devops'],
-    vpn: ['security', 'devops'],
-    zitadel: ['auth', 'security'],
-    sso: ['auth', 'security'],
-    vaultwarden: ['security', 'productivity'],
-    passwords: ['security', 'productivity'],
-
-    kuma: ['observability', 'devops'],
-    uptime: ['observability', 'devops'],
-    grafana: ['observability', 'devops'],
-    monitor: ['observability', 'devops'],
-    glitchtip: ['observability', 'devops'],
-    errors: ['observability', 'devops'],
-
-    ocis: ['storage', 'productivity'],
-    drive: ['storage', 'productivity'],
-
-    outline: ['productivity', 'communication'],
-    notes: ['productivity', 'communication'],
-    planka: ['productivity'],
-    tasks: ['productivity'],
-    documenso: ['productivity', 'security'],
-    sign: ['productivity', 'security'],
-    penpot: ['productivity'],
-    design: ['productivity'],
-    resume: ['productivity'],
-
-    forgejo: ['devops', 'productivity'],
-    gitea: ['devops', 'productivity'],
-    git: ['devops', 'productivity'],
-    headlamp: ['devops'],
-    dashboard: ['devops'],
-    'external-dns': ['devops'],
-    dns: ['devops'],
-
-    metabase: ['analytics', 'database'],
-    insights: ['analytics', 'database'],
-    umami: ['analytics'],
-    plausible: ['analytics'],
-    analytics: ['analytics'],
-    kutt: ['productivity', 'analytics'],
-    link: ['productivity', 'analytics'],
-    links: ['productivity', 'analytics'],
-};
-
 export function toolCategories(tool: {
     tool?: string;
     categories?: string[];
     label?: string;
     brand?: string;
 }): string[] {
-    if (tool.categories && tool.categories.length > 0) {
-        return tool.categories;
-    }
-    const slug = (tool.tool ?? '').toLowerCase();
-    return TOOL_CATEGORIES_MAP[slug] ?? ['productivity'];
+    return tool.categories && tool.categories.length > 0
+        ? tool.categories
+        : ['productivity'];
 }
 
 export function categoryLabel(category: string): string {
@@ -481,32 +219,12 @@ export function categoryLabel(category: string): string {
     );
 }
 
-export const TOOL_STACKS: Record<string, string[]> = {
-    grafana: ['Grafana', 'Prometheus', 'Loki'],
-    monitor: ['Grafana', 'Prometheus', 'Loki'],
-    netbird: ['Management', 'Signal', 'Relay', 'Dashboard', 'Client'],
-    vpn: ['Management', 'Signal', 'Relay', 'Dashboard', 'Client'],
-    matrix: ['Synapse', 'Element Web', 'MAS Auth', 'Coturn', 'Admin'],
-    chat: ['Synapse', 'Element Web', 'MAS Auth', 'Coturn', 'Admin'],
-    twenty: ['Twenty App', 'Worker'],
-    crm: ['Twenty App', 'Worker'],
-    forgejo: ['Forgejo Server', 'Actions Runner'],
-    git: ['Forgejo Server', 'Actions Runner'],
-    penpot: ['Backend', 'Frontend', 'Exporter'],
-    design: ['Backend', 'Frontend', 'Exporter'],
-    glitchtip: ['Web API', 'Worker'],
-    errors: ['Web API', 'Worker'],
-    livekit: ['LiveKit Server', 'JWT Auth'],
-    meet: ['LiveKit Server', 'JWT Auth'],
-};
-
 export function toolStack(tool: {
-    tool?: string;
+    stack?: string[];
     components?: ClusterToolComponent[];
 }): string[] {
-    const slug = (tool.tool ?? '').toLowerCase();
-    if (TOOL_STACKS[slug]) {
-        return TOOL_STACKS[slug];
+    if (tool.stack && tool.stack.length > 0) {
+        return tool.stack;
     }
     if (tool.components && tool.components.length > 1) {
         const unique = new Set<string>();
@@ -521,10 +239,12 @@ export function toolStack(tool: {
     return [];
 }
 
-export function toolTagline(tool: { tool?: string; label?: string }): string {
-    const slug = (tool.tool ?? '').toLowerCase();
-    if (slug && TOOL_TAGLINES[slug]) {
-        return TOOL_TAGLINES[slug];
+export function toolTagline(tool: {
+    tagline?: string;
+    label?: string;
+}): string {
+    if (tool.tagline) {
+        return tool.tagline;
     }
     if (tool.label) {
         const { engine, summary } = describeTool(tool.label);
@@ -544,43 +264,19 @@ export function describeTool(label: string): {
         : { summary: label, engine: null };
 }
 
-/** Returns the individual product name (e.g. Twenty, Matrix, PocketBase), never a generic category. */
+/** The product's name as the CLI sends it, never a category. */
 export function toolName(tool: {
+    name?: string;
     brand?: string;
-    tool?: string;
     label?: string;
 }): string {
-    const raw = (tool.brand ?? '').replace(/\s*\[[^\]]*\]$/, '').trim();
-    const slug = (tool.tool ?? '').toLowerCase();
-
-    // 1. If brand is explicitly set and is NOT a generic category name, return it.
-    if (raw && !GENERIC_CATEGORY_NAMES.has(raw.toLowerCase())) {
-        return raw;
+    if (tool.name) {
+        return tool.name;
     }
 
-    // 2. If the tool slug matches a known individual tool, return its canonical product name.
-    if (slug && TOOL_DISPLAY_NAMES[slug]) {
-        return TOOL_DISPLAY_NAMES[slug];
-    }
+    const brand = (tool.brand ?? '').replace(/\s*\[[^\]]*\]$/, '').trim();
 
-    // 3. If label contains engine info, check if it contains a known product.
-    if (tool.label) {
-        const { engine, summary } = describeTool(tool.label);
-        if (engine && !GENERIC_CATEGORY_NAMES.has(engine.toLowerCase())) {
-            const engineKey = engine.toLowerCase();
-            return TOOL_DISPLAY_NAMES[engineKey] ?? engine;
-        }
-        if (summary && !GENERIC_CATEGORY_NAMES.has(summary.toLowerCase())) {
-            const summaryKey = summary.toLowerCase();
-            return TOOL_DISPLAY_NAMES[summaryKey] ?? summary;
-        }
-    }
-
-    if (slug) {
-        return slug.charAt(0).toUpperCase() + slug.slice(1);
-    }
-
-    return 'Tool';
+    return brand || (tool.label ? describeTool(tool.label).summary : 'Tool');
 }
 
 export type ProjectEnvironment = {
