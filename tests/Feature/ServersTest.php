@@ -165,7 +165,7 @@ test('activity lists runs newest first', function () {
             ->where('runs.1.targetName', 'one'));
 });
 
-test('Connect a domain runs dns:init against the server with the token in the environment only', function () {
+test('Connect a domain runs tool:init for external-dns against the server with the token in the environment only', function () {
     $bin = serversFakeCli();
     serversFakeStacks();
     $fake = ChildProcess::fake();
@@ -179,7 +179,7 @@ test('Connect a domain runs dns:init against the server with the token in the en
     expect(Run::sole()->kind)->toBe(RunKind::ConnectDomain)
         ->and(json_encode(Run::sole()->command))->not->toContain('cf-token');
 
-    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'dns:init', 'production', '--context=larakube-203.0.113.21', '--group=company-domains', '--force', '--no-interaction']
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tool:init', 'production', '--tool=external-dns', '--context=larakube-203.0.113.21', '--group=company-domains', '--force', '--no-interaction']
         && ! str_contains(implode(' ', $cmd), 'cf-token')
         && ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'cf-token');
 

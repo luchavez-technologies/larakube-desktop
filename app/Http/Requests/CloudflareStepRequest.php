@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-/** Shared by Connect a domain (dns:init) and Automatic SSL certificates (tls:init). */
+/** Shared by Connect a domain (tool:init --tool=external-dns) and Automatic SSL certificates (tls:init). */
 class CloudflareStepRequest extends FormRequest
 {
     public function authorize(): bool
@@ -46,7 +46,7 @@ class CloudflareStepRequest extends FormRequest
     }
 
     /**
-     * The token travels by environment variable (dns:init and tls:init both
+     * The token travels by environment variable (external-dns's init and tls:init both
      * read it), never on the command line.
      *
      * @return array<string, string>

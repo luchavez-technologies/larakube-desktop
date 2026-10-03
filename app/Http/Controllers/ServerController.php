@@ -137,7 +137,7 @@ class ServerController extends Controller
 
         $run = $runner->start(
             label: "Connect a domain to {$server}",
-            arguments: ['dns:init', 'production', "--context={$context}", ...$request->groupArgument(), '--force'],
+            arguments: ['tool:init', 'production', '--tool=external-dns', "--context={$context}", ...$request->groupArgument(), '--force'],
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::ConnectDomain,
             subject: $server,
