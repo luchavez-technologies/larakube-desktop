@@ -1,12 +1,13 @@
 import { Deferred, Link, router, useForm } from '@inertiajs/react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { ChevronDown, ExternalLink, RefreshCw } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
+import { open } from '@/routes';
 import { index, store } from '@/routes/servers';
 import type { Provider } from '@/types/larakube';
 
@@ -68,6 +69,7 @@ function ServerForm({
         region: initial.defaultRegion,
         size: initial.defaultVpsSize,
         api_token: '',
+        cloudflare_token: '',
         aws_access_key_id: '',
         aws_secret_access_key: '',
         project_id: projectId,
@@ -264,6 +266,14 @@ function ServerForm({
                         </Field>
                     </div>
                 )}
+
+                <CloudflareOption
+                    value={form.data.cloudflare_token}
+                    error={form.errors.cloudflare_token}
+                    onChange={(value) =>
+                        form.setData('cloudflare_token', value)
+                    }
+                />
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-4">
@@ -294,6 +304,82 @@ function ServerForm({
                 </div>
             </div>
         </form>
+    );
+}
+
+/** The optional Cloudflare step: what it gives, how to get a token, and that it can wait. */
+function CloudflareOption({
+    value,
+    error,
+    onChange,
+}: {
+    value: string;
+    error?: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <details
+            className="group rounded-xl bg-paper/60 ring-1 ring-line"
+            open={value !== ''}
+        >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                <span>
+                    <span className="block text-[13px] font-medium text-ink">
+                        Connect Cloudflare now (optional)
+                    </span>
+                    <span className="block text-xs text-soft">
+                        Domains and HTTPS set up for you. You can skip this and
+                        do it later.
+                    </span>
+                </span>
+                <ChevronDown className="size-4 shrink-0 text-soft transition group-open:rotate-180" />
+            </summary>
+            <div className="space-y-3 border-t border-line/60 px-4 py-3 text-xs leading-relaxed text-soft">
+                <p>
+                    With a Cloudflare token, every tool you install gets its
+                    address (DNS record) created automatically, and certificates
+                    keep renewing even when Cloudflare proxies your site.
+                    Without one, the server still works: you point your
+                    domain&apos;s DNS at it yourself, and HTTPS uses Let&apos;s
+                    Encrypt over plain HTTP.
+                </p>
+                <ol className="list-decimal space-y-1 pl-4">
+                    <li>
+                        Open{' '}
+                        <Link
+                            href={open().url}
+                            method="post"
+                            data={{
+                                url: 'https://dash.cloudflare.com/profile/api-tokens',
+                            }}
+                            as="button"
+                            className="font-medium text-servers hover:underline"
+                        >
+                            Cloudflare &rarr; My Profile &rarr; API Tokens
+                        </Link>{' '}
+                        and choose <strong>Create Token</strong>.
+                    </li>
+                    <li>
+                        Use the <strong>Edit zone DNS</strong> template, and
+                        under Zone Resources pick your domain (or all zones).
+                    </li>
+                    <li>Create it, copy the token, and paste it below.</li>
+                </ol>
+                <Field
+                    label="Cloudflare API token"
+                    hint="Used once and never saved in this app. If you don't have one yet, leave it empty: Connect a domain on the server's page does the same later."
+                    error={error}
+                >
+                    <input
+                        type="password"
+                        value={value}
+                        onChange={(event) => onChange(event.target.value)}
+                        autoComplete="off"
+                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                    />
+                </Field>
+            </div>
+        </details>
     );
 }
 

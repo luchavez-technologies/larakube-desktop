@@ -55,6 +55,38 @@ test('creating a server starts a non-interactive cloud:create child process', fu
     File::deleteDirectory($bin);
 });
 
+test('a Cloudflare token given with a new server opts the run into DNS and SSL, and travels by environment only', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'do', 'stack_name' => 'my-first-server', 'region' => 'sgp1', 'size' => 's-1vcpu-2gb',
+        'api_token' => 'dop_v1_secret', 'cloudflare_token' => 'cf_secret',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+
+    expect(implode(' ', $run->command))->not->toContain('cf_secret');
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => in_array('--cloudflare', $cmd, true)
+        && ! str_contains(implode(' ', $cmd), 'cf_secret')
+        && ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'cf_secret'
+        && ($env['TF_VAR_do_token'] ?? null) === 'dop_v1_secret');
+
+    File::deleteDirectory($bin);
+});
+
+test('without a Cloudflare token the server is created as before, with no Cloudflare step', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), ['provider' => 'do', 'stack_name' => 'my-first-server', 'region' => 'sgp1', 'size' => 's-1vcpu-2gb', 'api_token' => 'dop_v1_secret'])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => ! in_array('--cloudflare', $cmd, true) && ! array_key_exists('LARAKUBE_CLOUDFLARE_TOKEN', $env ?? []));
+
+    File::deleteDirectory($bin);
+});
+
 test('server fields are validated before anything runs', function () {
     $bin = createServerFakeCli();
     $fake = ChildProcess::fake();

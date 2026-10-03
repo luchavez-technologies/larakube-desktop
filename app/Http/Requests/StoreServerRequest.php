@@ -34,6 +34,7 @@ class StoreServerRequest extends FormRequest
             'region' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9-]+$/'],
             'size' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9.-]+$/'],
             'api_token' => ['nullable', 'string', 'max:200'],
+            'cloudflare_token' => ['nullable', 'string', 'max:200'],
             'aws_access_key_id' => ['nullable', 'string', 'max:100'],
             'aws_secret_access_key' => ['nullable', 'string', 'max:200'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
@@ -50,10 +51,26 @@ class StoreServerRequest extends FormRequest
         ];
     }
 
+    /** Whether the person gave a Cloudflare token, so the new server gets DNS records and SSL set up. */
+    public function connectsCloudflare(): bool
+    {
+        return trim((string) $this->input('cloudflare_token')) !== '';
+    }
+
     /**
      * @return array<string, string>
      */
     public function secretEnvironment(): array
+    {
+        $cloudflare = $this->connectsCloudflare() ? ['LARAKUBE_CLOUDFLARE_TOKEN' => trim((string) $this->input('cloudflare_token'))] : [];
+
+        return $cloudflare + $this->providerEnvironment();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function providerEnvironment(): array
     {
         $provider = $this->string('provider')->toString();
 

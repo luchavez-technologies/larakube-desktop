@@ -53,6 +53,7 @@ class ServerController extends Controller
                 '--region='.$request->string('region'),
                 '--size='.$request->string('size'),
                 '--json',
+                ...($request->connectsCloudflare() ? ['--cloudflare'] : []),
                 // Inside a project, the environment argument binds it to the new server.
                 ...($project !== null ? [ProjectController::ENVIRONMENT] : []),
             ],
