@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
@@ -112,9 +113,13 @@ class ReadinessCheck
 
         $isolated = $this->locator->isolate([$cli, 'cloud:providers', '--json', '--no-interaction']);
 
-        $result = Process::env($isolated['environment'])
-            ->timeout(60)
-            ->run($isolated['command']);
+        try {
+            $result = Process::env($isolated['environment'])
+                ->timeout(60)
+                ->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
 
         $decoded = json_decode($this->lastLine($result->output()), true);
 

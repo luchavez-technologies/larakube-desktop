@@ -19,6 +19,12 @@ export type Provider = {
     defaultRegion: string;
     vpsSizes: PickerOption[];
     defaultVpsSize: string;
+    /** Where the regions and prices come from: the provider's own list now, an earlier copy of it, or the CLI's built-in estimate. */
+    pricing?: {
+        source: 'live' | 'cached' | 'builtin';
+        asOf: string | null;
+        currency: string | null;
+    };
     credentials: { ready: boolean; hint: string | null };
 };
 

@@ -75,6 +75,25 @@ test('providers are null when the CLI is too old to know cloud:providers', funct
     File::deleteDirectory($bin);
 });
 
+test('where a provider\'s prices come from is passed through, so the form can say so', function () {
+    $bin = readinessFakeBinDirectory(['larakube']);
+    Process::fake([
+        '*cloud:providers*' => Process::result(output: json_encode(['success' => true, 'providers' => [
+            ['slug' => 'do', 'label' => 'DigitalOcean', 'pricing' => ['source' => 'live', 'asOf' => '2026-10-04T01:00:00+00:00', 'currency' => 'USD']],
+            ['slug' => 'aws', 'label' => 'Amazon Web Services', 'pricing' => ['source' => 'builtin', 'asOf' => null, 'currency' => null]],
+        ]])),
+        '*' => Process::result(output: 'v1'),
+    ]);
+
+    $this->get(route('readiness'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('providers.0.pricing.source', 'live')
+                ->where('providers.1.pricing.source', 'builtin')));
+
+    File::deleteDirectory($bin);
+});
+
 test('the usage choice is saved and offered back to the Setup page', function () {
     readinessFakeBinDirectory(['larakube']);
     $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));

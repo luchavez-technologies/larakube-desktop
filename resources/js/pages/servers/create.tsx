@@ -198,7 +198,11 @@ function ServerForm({
                             options={provider.regions}
                         />
                     </Field>
-                    <Field label="Size" error={form.errors.size}>
+                    <Field
+                        label="Size"
+                        error={form.errors.size}
+                        hint={pricingNote(provider)}
+                    >
                         <Select
                             value={form.data.size}
                             onChange={(value) => form.setData('size', value)}
@@ -279,7 +283,7 @@ function ServerForm({
             <div className="mt-5 flex items-center justify-between gap-4">
                 <p className="text-[13px] text-soft">
                     {price
-                        ? `About ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                        ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
                         : `Billed by ${provider.label}. You can destroy it any time.`}
                 </p>
                 <div className="flex items-center gap-2.5">
@@ -308,6 +312,35 @@ function ServerForm({
 }
 
 /** The optional Cloudflare step: what it gives, how to get a token, and that it can wait. */
+/** Says where the sizes and prices come from, so a stale one is never passed off as current. */
+function pricingNote(provider: Provider): string | undefined {
+    const pricing = provider.pricing;
+
+    if (!pricing) return undefined;
+
+    if (pricing.source === 'live') {
+        return `Prices from ${provider.label}, fetched ${ago(pricing.asOf)}.`;
+    }
+
+    if (pricing.source === 'cached') {
+        return `Couldn't reach ${provider.label} just now. These prices are from ${ago(pricing.asOf)} and may have changed.`;
+    }
+
+    return `Estimated prices, which may be out of date.${provider.credentials.ready ? '' : ` Connect ${provider.label} to see its current ones.`}`;
+}
+
+function ago(iso: string | null): string {
+    const minutes = iso
+        ? Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+        : 0;
+
+    if (minutes < 2) return 'just now';
+    if (minutes < 60) return `${minutes} minutes ago`;
+    if (minutes < 1440) return `${Math.round(minutes / 60)} hours ago`;
+
+    return `${Math.round(minutes / 1440)} days ago`;
+}
+
 function CloudflareOption({
     value,
     error,
