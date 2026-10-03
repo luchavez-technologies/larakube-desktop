@@ -19,7 +19,6 @@ import {
     Terminal,
     ChevronDown,
     ChevronUp,
-    MoreHorizontal,
     Laptop,
     Cloud,
     X,
@@ -265,7 +264,6 @@ export default function ShowProject({
                         {project.exists && (
                             <EditorMenu project={project} editors={editors} />
                         )}
-                        <ProjectOptionsMenu project={project} />
                     </div>
                 }
             />
@@ -338,7 +336,6 @@ export default function ShowProject({
                         onAddEnv={() => setAddEnvModalOpen(true)}
                         runs={runs}
                         project={project}
-                        onDeployClick={() => setDeployModalOpen(true)}
                     />
 
                     {/* Main Layout Grid */}
@@ -437,7 +434,6 @@ function EnvironmentSwitchBar({
     onAddEnv,
     runs,
     project,
-    onDeployClick,
 }: {
     activeEnv: string;
     onSelectEnv: (env: string) => void;
@@ -446,7 +442,6 @@ function EnvironmentSwitchBar({
     onAddEnv: () => void;
     runs: RecentRun[];
     project: Project;
-    onDeployClick: () => void;
 }) {
     const isLocalActive = activeEnv === 'local';
     const isLocalRunning = runs.some(
@@ -463,19 +458,8 @@ function EnvironmentSwitchBar({
         project.effectiveTld || project.localTld || project.globalTld || 'test';
     const localDomain = `${project.name}.${effectiveTld}`;
 
-    // Target cloud environments to render (defaults to production if none configured)
-    const envsToRender =
-        cloudEnvs.length > 0
-            ? cloudEnvs
-            : [
-                  {
-                      name: 'production',
-                      isLocal: false,
-                      webHost: project.webHost,
-                      serverIp: project.serverIp,
-                      serverName: null,
-                  },
-              ];
+    // Only the cloud environments the project really has: none until one is created.
+    const envsToRender = cloudEnvs;
 
     const activeDeploy = runs.find(
         (r) =>
@@ -551,10 +535,10 @@ function EnvironmentSwitchBar({
                     type="button"
                     onClick={onAddEnv}
                     className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-medium text-soft transition-colors hover:bg-paper hover:text-ink"
-                    title="Add a new cloud environment overlay"
+                    title="Create a cloud environment, such as staging or production"
                 >
                     <Plus className="size-3.5" />
-                    <span>Add</span>
+                    <span>New environment</span>
                 </button>
             </div>
 
@@ -582,15 +566,6 @@ function EnvironmentSwitchBar({
                                 {`Deploying (${activeEnv})`}
                             </StatusPill>
                         )}
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={onDeployClick}
-                            className="gap-1.5 shadow-2xs"
-                        >
-                            <Play className="size-3 fill-current" />
-                            <span>Deploy to {activeEnv.toUpperCase()}</span>
-                        </Button>
                     </div>
                 )}
             </div>
@@ -811,7 +786,9 @@ function CloudEnvironmentOverviewCard({
                         <span>
                             {hasSucceededDeploy
                                 ? `Deploy ${activeEnv.toUpperCase()} again`
-                                : `Deploy to ${activeEnv.toUpperCase()}`}
+                                : activeServer
+                                  ? `Deploy to ${activeEnv.toUpperCase()}`
+                                  : 'Set up deployment'}
                         </span>
                     </Button>
                 </div>
@@ -1880,33 +1857,6 @@ function EditorMenu({
                 </p>
             )}
         </div>
-    );
-}
-
-function ProjectOptionsMenu({ project }: { project: Project }) {
-    return (
-        <details className="group relative">
-            <summary
-                className={cn(
-                    buttonClass('secondary'),
-                    'cursor-pointer list-none px-2.5',
-                )}
-                title="More options"
-            >
-                <MoreHorizontal className="size-4" />
-            </summary>
-            <div className="absolute right-0 z-20 mt-1.5 w-56 rounded-xl bg-surface p-1 shadow-lg ring-1 ring-line">
-                <Link
-                    href={destroy(project.id).url}
-                    method="delete"
-                    as="button"
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-accent transition-colors hover:bg-paper"
-                >
-                    <Trash2 className="size-3.5" />
-                    <span>Remove from Desktop</span>
-                </Link>
-            </div>
-        </details>
     );
 }
 
