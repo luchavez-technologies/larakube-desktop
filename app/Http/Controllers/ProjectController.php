@@ -15,8 +15,10 @@ use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
+use App\Services\LaraKube\ProjectServices;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -251,7 +253,7 @@ class ProjectController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel, FrameworkCatalog $frameworks, ToolLocator $locator): Response
+    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel, FrameworkCatalog $frameworks, ToolLocator $locator, ProjectServices $services): Response
     {
         $scaffold = $this->lastScaffold($project);
 
@@ -320,7 +322,22 @@ class ProjectController extends Controller
             'wizardFrameworks' => $this->initEmailFrameworks($frameworks),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'laravelOptions' => Inertia::optional(fn (): ?array => $laravel->questions()),
+            // Where each environment's database, cache and storage run, from the CLI.
+            'backing' => Inertia::defer(fn (): array => collect(array_keys($inspection['environments']))
+                ->mapWithKeys(fn (string $environment): array => [$environment => $services->get($project->path, $environment)])
+                ->all()),
         ]);
+    }
+
+    /** The same, for one environment, with the secrets in it: what "reveal" fetches. */
+    public function services(Request $request, Project $project, ProjectServices $services): JsonResponse
+    {
+        $environment = $request->validate(['environment' => ['required', 'string', 'alpha_dash']])['environment'];
+        $result = $services->get($project->path, $environment, reveal: true);
+
+        abort_if($result === null, 404);
+
+        return response()->json($result)->header('Cache-Control', 'no-store');
     }
 
     public function openInEditor(Request $request, Project $project, EditorLauncher $editors): RedirectResponse

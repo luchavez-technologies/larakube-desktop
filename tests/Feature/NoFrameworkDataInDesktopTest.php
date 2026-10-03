@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\File;
  * is added or changed in the CLI alone and nothing here can drift from it.
  */
 test('Desktop keeps no table of frameworks, their categories or their defaults', function (): void {
-    $forbidden = ['SCAFFOLDERS', 'WIZARD_FRAMEWORKS', 'FRAMEWORK_META', 'const CATEGORIES', 'categoryBadgeLabel', 'DEPLOYABLE'];
+    $forbidden = ['SCAFFOLDERS', 'WIZARD_FRAMEWORKS', 'FRAMEWORK_META', 'const CATEGORIES', 'categoryBadgeLabel', 'DEPLOYABLE', 'getDbProvider', 'getCacheProvider', 'getStorageProvider'];
     $sources = [
         ...desktopSources(),
         ...collect(File::allFiles(app_path()))->mapWithKeys(fn (SplFileInfo $file): array => ["app/{$file->getRelativePathname()}" => (string) file_get_contents($file->getPathname())])->all(),

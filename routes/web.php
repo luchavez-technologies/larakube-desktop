@@ -77,6 +77,7 @@ Route::post('/projects/{project}/start', [ProjectController::class, 'start'])->n
 Route::post('/projects/{project}/stop', [ProjectController::class, 'stop'])->name('projects.stop');
 Route::post('/projects/{project}/tld', [ProjectController::class, 'tld'])->name('projects.tld');
 Route::post('/projects/{project}/plex/join', [PlexController::class, 'joinProject'])->name('projects.plex.join');
+Route::get('/projects/{project}/services', [ProjectController::class, 'services'])->name('projects.services');
 Route::post('/projects/{project}/plex/leave', [PlexController::class, 'leaveProject'])->name('projects.plex.leave');
 
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');

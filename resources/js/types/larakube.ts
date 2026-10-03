@@ -471,3 +471,16 @@ export type BackupEntry = {
     bytes: number;
     items: number;
 };
+
+/** One backing service of a project (database, cache, storage, search), from `services:show --json`. */
+export type BackingService = {
+    kind: string;
+    label: string;
+    driver: string | null;
+    name: string | null;
+    /** commons (shared Plex Commons), managed (the cloud's own), pod, file or none. */
+    mode: 'commons' | 'managed' | 'pod' | 'file' | 'none';
+    details: { label: string; value: string | null; secret: boolean }[];
+};
+
+export type BackingServices = { commons: boolean; services: BackingService[] };

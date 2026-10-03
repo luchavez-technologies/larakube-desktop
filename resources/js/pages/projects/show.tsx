@@ -55,6 +55,8 @@ import { join as joinPlex, leave as leavePlex } from '@/routes/projects/plex';
 import { cancel, show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
 import type {
+    BackingService,
+    BackingServices,
     NewAppAnswers,
     NewAppQuestion,
     Project,
@@ -101,6 +103,7 @@ export default function ShowProject({
     email,
     laravelOptions,
     readyServers,
+    backing,
 }: {
     project: Project;
     server: Server | null;
@@ -113,6 +116,7 @@ export default function ShowProject({
     email: string;
     laravelOptions?: NewAppQuestion[] | null;
     readyServers: ReadyServer[];
+    backing?: Record<string, BackingServices | null>;
 }) {
     const isRunning =
         runs.some((r) => r.status === 'running') ||
@@ -349,8 +353,10 @@ export default function ShowProject({
                                     )}
 
                                     <EnvironmentBackingServicesCard
+                                        key={activeEnv}
                                         project={project}
                                         currentEnv={activeEnvConfig}
+                                        services={backing?.[activeEnv]}
                                     />
                                 </>
                             ) : (
@@ -369,8 +375,10 @@ export default function ShowProject({
                                     />
 
                                     <EnvironmentBackingServicesCard
+                                        key={activeEnv}
                                         project={project}
                                         currentEnv={activeEnvConfig}
+                                        services={backing?.[activeEnv]}
                                     />
                                 </>
                             )}
@@ -810,18 +818,45 @@ function CloudEnvironmentOverviewCard({
     );
 }
 
-/** Segregated backing services card (Database, Cache, Storage, and Plex Commons) */
+const MODE_LABEL: Record<BackingService['mode'], string> = {
+    commons: 'Plex Commons',
+    managed: 'Cloud managed',
+    pod: 'Own pod',
+    file: 'Local file',
+    none: 'Not used',
+};
+
+/** Where each backing service runs and how the app reaches it, as the CLI reports it. */
 function EnvironmentBackingServicesCard({
     project,
     currentEnv,
+    services,
 }: {
     project: Project;
     currentEnv: ProjectEnvironment;
+    /** undefined while loading, null when the CLI could not say. */
+    services?: BackingServices | null;
 }) {
-    const db = getDbProvider(project, currentEnv);
-    const cache = getCacheProvider(project, currentEnv);
-    const storage = getStorageProvider(project, currentEnv);
-    const hasPlex = (currentEnv.plex?.length ?? 0) > 0;
+    const hasPlex = services?.commons ?? (currentEnv.plex?.length ?? 0) > 0;
+    const [revealed, setRevealed] = useState<BackingServices | null>(null);
+    const [revealing, setRevealing] = useState(false);
+    const shown = revealed ?? services;
+
+    function reveal() {
+        setRevealing(true);
+        fetch(
+            `/projects/${project.id}/services?environment=${encodeURIComponent(currentEnv.name)}`,
+            { headers: { Accept: 'application/json' } },
+        )
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data: BackingServices | null) => setRevealed(data))
+            .catch(() => setRevealed(null))
+            .finally(() => setRevealing(false));
+    }
+
+    const hasSecrets = shown?.services.some((service) =>
+        service.details.some((row) => row.secret),
+    );
 
     return (
         <Card
@@ -839,46 +874,72 @@ function EnvironmentBackingServicesCard({
             }
         >
             <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {/* Database */}
-                    <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
-                        <div>
-                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
-                                Database
-                            </span>
-                            <div className="mt-1 text-xs font-semibold text-ink">
-                                {db.label}
+                {shown === undefined ? (
+                    <div className="h-32 animate-pulse rounded-xl bg-paper" />
+                ) : shown === null ? (
+                    <p className="text-xs text-warn">
+                        This LaraKube CLI can&apos;t describe the services yet.
+                        Update it from Setup.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {shown.services.map((service) => (
+                            <div
+                                key={service.kind}
+                                className="rounded-xl border border-line bg-paper/60 p-3"
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
+                                            {service.label}
+                                        </span>
+                                        <div className="mt-1 text-xs font-semibold text-ink">
+                                            {service.name ?? 'None'}
+                                        </div>
+                                    </div>
+                                    <span
+                                        className={cn(
+                                            'shrink-0 rounded px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset',
+                                            service.mode === 'commons'
+                                                ? 'bg-tools-tint text-tools ring-tools/20'
+                                                : 'bg-paper text-soft ring-line',
+                                        )}
+                                    >
+                                        {MODE_LABEL[service.mode]}
+                                    </span>
+                                </div>
+                                {service.details.length > 0 && (
+                                    <dl className="mt-3 space-y-1 text-[11px]">
+                                        {service.details.map((row) => (
+                                            <div
+                                                key={row.label}
+                                                className="flex justify-between gap-3"
+                                            >
+                                                <dt className="shrink-0 text-soft">
+                                                    {row.label}
+                                                </dt>
+                                                <dd className="min-w-0 truncate font-mono text-ink">
+                                                    {row.value ?? '••••••••'}
+                                                </dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                )}
                             </div>
-                        </div>
-                        <div className="mt-3">{renderBadge(db)}</div>
+                        ))}
                     </div>
+                )}
 
-                    {/* Cache & Queues */}
-                    <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
-                        <div>
-                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
-                                Cache &amp; Queues
-                            </span>
-                            <div className="mt-1 text-xs font-semibold text-ink">
-                                {cache.label}
-                            </div>
-                        </div>
-                        <div className="mt-3">{renderBadge(cache)}</div>
-                    </div>
-
-                    {/* Object Storage */}
-                    <div className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-3">
-                        <div>
-                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
-                                Object Storage
-                            </span>
-                            <div className="mt-1 text-xs font-semibold text-ink">
-                                {storage.label}
-                            </div>
-                        </div>
-                        <div className="mt-3">{renderBadge(storage)}</div>
-                    </div>
-                </div>
+                {hasSecrets && !revealed && (
+                    <button
+                        type="button"
+                        onClick={reveal}
+                        disabled={revealing}
+                        className="text-xs font-medium text-soft hover:text-ink"
+                    >
+                        {revealing ? 'Revealing…' : 'Reveal passwords and keys'}
+                    </button>
+                )}
 
                 {/* Plex Commons Status & Action Banner */}
                 <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -894,7 +955,7 @@ function EnvironmentBackingServicesCard({
                             </p>
                             <p className="text-[11px] text-soft">
                                 {hasPlex
-                                    ? 'Shares cluster-wide PostgreSQL, Redis, and MinIO instances to conserve CPU and RAM.'
+                                    ? 'Shares the cluster-wide database, cache and storage to conserve CPU and RAM.'
                                     : 'Connect this environment to Plex Commons to share cluster-wide services.'}
                             </p>
                         </div>
@@ -2196,166 +2257,5 @@ function ProjectTerminalCard({ run }: { run: ProjectRun }) {
                 </div>
             )}
         </Card>
-    );
-}
-
-function getDbProvider(project: Project, env: ProjectEnvironment) {
-    const db = project.database ?? 'database';
-    if (db.toLowerCase() === 'sqlite') {
-        return {
-            label: 'SQLite (Local File)',
-            badge: '📄 SQLite',
-            tone: 'default',
-        };
-    }
-    const isPlex =
-        env.plex?.includes('postgres') ||
-        env.plex?.includes('mysql') ||
-        env.plex?.includes('database') ||
-        (project.database ? env.plex?.includes(project.database) : false);
-    if (isPlex) {
-        return {
-            label: `Plex Commons (${db})`,
-            badge: `🟣 Plex ${db}`,
-            tone: 'plex',
-        };
-    }
-    const isManaged =
-        env.managed?.includes('postgres') ||
-        env.managed?.includes('mysql') ||
-        env.managed?.includes('database') ||
-        (project.database ? env.managed?.includes(project.database) : false);
-    if (isManaged) {
-        return {
-            label: `Cloud Managed (${db.toUpperCase()})`,
-            badge: `☁️ Cloud ${db}`,
-            tone: 'cloud',
-        };
-    }
-    if (project.database) {
-        return {
-            label: `In-Cluster Pod (${db})`,
-            badge: `📦 Pod (${db})`,
-            tone: 'pod',
-        };
-    }
-    return { label: 'None', badge: '—', tone: 'none' };
-}
-
-function getCacheProvider(project: Project, env: ProjectEnvironment) {
-    const isPlex =
-        env.plex?.includes('redis') ||
-        env.plex?.includes('cache') ||
-        env.plex?.includes('valkey');
-    if (isPlex) {
-        return {
-            label: 'Plex Commons (Redis)',
-            badge: '🟣 Plex Redis',
-            tone: 'plex',
-        };
-    }
-    const isManaged =
-        env.managed?.includes('redis') ||
-        env.managed?.includes('cache') ||
-        env.managed?.includes('valkey');
-    if (isManaged) {
-        return {
-            label: 'Cloud Managed (Redis)',
-            badge: '☁️ Cloud Redis',
-            tone: 'cloud',
-        };
-    }
-    if (project.cacheDriver === 'redis') {
-        return {
-            label: 'In-Cluster Pod (Redis)',
-            badge: '📦 Pod (Redis)',
-            tone: 'pod',
-        };
-    }
-    return {
-        label: 'Local File / Array',
-        badge: '📄 File / Array',
-        tone: 'default',
-    };
-}
-
-function getStorageProvider(project: Project, env: ProjectEnvironment) {
-    const isPlex =
-        env.plex?.includes('minio') ||
-        env.plex?.includes('s3') ||
-        env.plex?.includes('storage');
-    if (isPlex) {
-        return {
-            label: 'Plex Commons (MinIO S3)',
-            badge: '🟣 Plex MinIO',
-            tone: 'plex',
-        };
-    }
-    const isManaged =
-        env.managed?.includes('minio') ||
-        env.managed?.includes('s3') ||
-        env.managed?.includes('storage');
-    if (isManaged) {
-        return {
-            label: 'Cloud Managed (AWS S3 / R2)',
-            badge: '☁️ Cloud S3',
-            tone: 'cloud',
-        };
-    }
-    if (project.objectStorage === 'minio') {
-        return {
-            label: 'In-Cluster Pod (MinIO)',
-            badge: '📦 Pod (MinIO)',
-            tone: 'pod',
-        };
-    }
-    return {
-        label: 'Local Disk PVC',
-        badge: '📁 Local Disk',
-        tone: 'default',
-    };
-}
-
-function renderBadge(item: { badge: string; label: string; tone: string }) {
-    if (item.tone === 'none') {
-        return <span className="text-xs text-faint">—</span>;
-    }
-    if (item.tone === 'plex') {
-        return (
-            <span
-                className="inline-flex items-center gap-1 rounded bg-tools-tint px-2 py-0.5 font-mono text-[11px] font-medium text-tools ring-1 ring-tools/20"
-                title={item.label}
-            >
-                {item.badge}
-            </span>
-        );
-    }
-    if (item.tone === 'cloud') {
-        return (
-            <span
-                className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 font-mono text-[11px] font-medium text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800"
-                title={item.label}
-            >
-                {item.badge}
-            </span>
-        );
-    }
-    if (item.tone === 'pod') {
-        return (
-            <span
-                className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 font-mono text-[11px] text-ink ring-1 ring-line"
-                title={item.label}
-            >
-                {item.badge}
-            </span>
-        );
-    }
-    return (
-        <span
-            className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 font-mono text-[11px] text-soft ring-1 ring-line"
-            title={item.label}
-        >
-            {item.badge}
-        </span>
     );
 }

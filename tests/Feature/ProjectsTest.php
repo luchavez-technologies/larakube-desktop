@@ -652,3 +652,51 @@ test('the New project page reports the local Commons so the form can say what it
 
     File::deleteDirectory($sandbox['home']);
 });
+
+function projectsBackingFake(): void
+{
+    Process::fake(['*services:show*' => fn ($process) => Process::result(output: json_encode(['success' => true, 'commons' => true, 'services' => [
+        ['kind' => 'database', 'label' => 'Database', 'driver' => 'postgres', 'name' => 'PostgreSQL', 'mode' => 'commons', 'details' => [['label' => 'Username', 'value' => 'blog_local', 'secret' => false], ['label' => 'Password', 'value' => str_contains(is_array($process->command) ? implode(' ', $process->command) : (string) $process->command, '--reveal') ? 's3cret' : null, 'secret' => true]]],
+        ['kind' => 'storage', 'label' => 'Object storage', 'driver' => 'seaweedfs', 'name' => 'SeaweedFS', 'mode' => 'commons', 'details' => [['label' => 'Bucket', 'value' => 'blog-local', 'secret' => false]]],
+    ]]))]);
+}
+
+test('the project page shows each environment\'s backing services as the CLI reports them, with secrets withheld', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsBackingFake();
+    File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'framework' => 'laravel', 'environments' => ['local' => ['plex' => ['postgres']]]]));
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->get(route('projects.show', $project))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('backing.local.commons', true)
+                ->where('backing.local.services.0.name', 'PostgreSQL')
+                ->where('backing.local.services.0.details.1.value', null)
+                ->where('backing.local.services.1.details.0.value', 'blog-local')));
+
+    Process::assertRan(function ($process): bool {
+        $command = is_array($process->command) ? implode(' ', $process->command) : (string) $process->command;
+
+        return str_contains($command, 'services:show local --json') && ! str_contains($command, '--reveal');
+    });
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('revealing asks the CLI again with --reveal and never caches the answer', function () {
+    $sandbox = projectsSandbox();
+    projectsBackingFake();
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->getJson(route('projects.services', ['project' => $project, 'environment' => 'local']))
+        ->assertOk()
+        ->assertHeader('Cache-Control', 'no-store, private')
+        ->assertJsonPath('services.0.details.1.value', 's3cret');
+
+    $this->getJson(route('projects.services', ['project' => $project]))->assertUnprocessable();
+
+    File::deleteDirectory($sandbox['home']);
+});
