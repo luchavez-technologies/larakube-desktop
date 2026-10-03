@@ -1,6 +1,7 @@
 import { Form, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
+import BackingServicesCard from '@/components/backing-services-card';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
@@ -17,7 +18,12 @@ import {
     toolCategories,
     categoryLabel,
 } from '@/types/larakube';
-import type { ClusterTool, Server, Wiring } from '@/types/larakube';
+import type {
+    BackingServices,
+    ClusterTool,
+    Server,
+    Wiring,
+} from '@/types/larakube';
 
 const wiringLabels: Record<string, [string, Tone]> = {
     wired: ['Connected', 'ok'],
@@ -37,9 +43,12 @@ function WiringPill({ value }: { value: Wiring }) {
 export default function ShowTool({
     server,
     tool,
+    backing,
 }: {
     server: Server;
     tool: ClusterTool;
+    /** undefined while loading, null when the tool holds nothing on the Commons. */
+    backing?: BackingServices | null;
 }) {
     const [removing, setRemoving] = useState(false);
     const name = toolName(tool);
@@ -185,6 +194,22 @@ export default function ShowTool({
                     </div>
 
                     <div className="space-y-5">
+                        {backing !== null && (
+                            <BackingServicesCard
+                                label="Backing Services"
+                                services={backing}
+                                hasCommons
+                                footer={
+                                    <p className="rounded-xl border border-line bg-paper p-3 text-[11px] leading-relaxed text-soft">
+                                        {name} keeps its data on this
+                                        server&apos;s shared Plex Commons
+                                        instead of running its own copies, which
+                                        saves CPU and memory. That is chosen
+                                        when a tool is installed.
+                                    </p>
+                                }
+                            />
+                        )}
                         {integrations.length > 0 && (
                             <Card label="Integrations">
                                 {integrations.map(([title, detail, value]) => (

@@ -13,6 +13,7 @@ use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
+use App\Services\LaraKube\ToolCommons;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -89,9 +90,13 @@ class ClusterToolController extends Controller
 
         abort_if($row === null, 404);
 
+        $context = (string) $stack['context'];
+
         return Inertia::render('tools/show', [
             'server' => $stack,
             'tool' => $row,
+            // What the tool holds on the shared Commons, drawn by the same card as a project's services.
+            'backing' => Inertia::defer(fn (): ?array => app(ToolCommons::class)->describe($row, app(ClusterStatus::class)->plex($context))),
         ]);
     }
 

@@ -25,6 +25,7 @@ import {
     Server as ServerIcon,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import BackingServicesCard from '@/components/backing-services-card';
 import Card from '@/components/card';
 import FrameworkFields, {
     defaultAnswers,
@@ -56,7 +57,6 @@ import { join as joinPlex, leave as leavePlex } from '@/routes/projects/plex';
 import { cancel, show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
 import type {
-    BackingService,
     BackingServices,
     NewAppAnswers,
     NewAppQuestion,
@@ -797,14 +797,6 @@ function CloudEnvironmentOverviewCard({
     );
 }
 
-const MODE_LABEL: Record<BackingService['mode'], string> = {
-    commons: 'Plex Commons',
-    managed: 'Cloud managed',
-    pod: 'Own pod',
-    file: 'Local file',
-    none: 'Not used',
-};
-
 /** Where each backing service runs and how the app reaches it, as the CLI reports it. */
 function EnvironmentBackingServicesCard({
     project,
@@ -838,158 +830,94 @@ function EnvironmentBackingServicesCard({
     );
 
     return (
-        <Card
+        <BackingServicesCard
             label={`Backing Services · ${currentEnv.name.toUpperCase()}`}
-            action={
-                hasPlex ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-tools-tint px-2 py-0.5 font-mono text-[11px] font-medium text-tools ring-1 ring-tools/20">
-                        🟣 Plex Commons Active
-                    </span>
-                ) : (
-                    <span className="inline-flex items-center gap-1 rounded bg-line/60 px-2 py-0.5 font-mono text-[11px] text-soft">
-                        Standalone Services
-                    </span>
-                )
-            }
-        >
-            <div className="space-y-4">
-                {shown === undefined ? (
-                    <div className="h-32 animate-pulse rounded-xl bg-paper" />
-                ) : shown === null ? (
-                    <p className="text-xs text-warn">
-                        This LaraKube CLI can&apos;t describe the services yet.
-                        Update it from Setup.
-                    </p>
-                ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {shown.services.map((service) => (
-                            <div
-                                key={service.kind}
-                                className="rounded-xl border border-line bg-paper/60 p-3"
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
-                                            {service.label}
-                                        </span>
-                                        <div className="mt-1 text-xs font-semibold text-ink">
-                                            {service.name ?? 'None'}
-                                        </div>
-                                    </div>
-                                    <span
-                                        className={cn(
-                                            'shrink-0 rounded px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset',
-                                            service.mode === 'commons'
-                                                ? 'bg-tools-tint text-tools ring-tools/20'
-                                                : 'bg-paper text-soft ring-line',
-                                        )}
-                                    >
-                                        {MODE_LABEL[service.mode]}
-                                    </span>
-                                </div>
-                                {service.details.length > 0 && (
-                                    <dl className="mt-3 space-y-1 text-[11px]">
-                                        {service.details.map((row) => (
-                                            <div
-                                                key={row.label}
-                                                className="flex justify-between gap-3"
-                                            >
-                                                <dt className="shrink-0 text-soft">
-                                                    {row.label}
-                                                </dt>
-                                                <dd className="min-w-0 truncate font-mono text-ink">
-                                                    {row.value ?? '••••••••'}
-                                                </dd>
-                                            </div>
-                                        ))}
-                                    </dl>
-                                )}
+            services={shown}
+            hasCommons={hasPlex}
+            footer={
+                <>
+                    {hasSecrets && (
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={revealed !== null}
+                            onClick={() =>
+                                revealed ? setRevealed(null) : reveal()
+                            }
+                            disabled={revealing}
+                            className={cn(
+                                buttonClass('secondary', 'sm'),
+                                'h-7 gap-1.5 px-2.5 text-xs',
+                            )}
+                        >
+                            {revealed ? (
+                                <EyeOff className="size-3.5" />
+                            ) : (
+                                <Eye className="size-3.5" />
+                            )}
+                            {revealing
+                                ? 'Revealing…'
+                                : revealed
+                                  ? 'Hide passwords and keys'
+                                  : 'Show passwords and keys'}
+                        </button>
+                    )}
+
+                    {/* Plex Commons Status & Action Banner */}
+                    <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-tools-tint text-base">
+                                🟣
+                            </span>
+                            <div>
+                                <p className="text-xs font-semibold text-ink">
+                                    {hasPlex
+                                        ? `Connected to Plex Commons (${currentEnv.name})`
+                                        : `Plex Commons (${currentEnv.name})`}
+                                </p>
+                                <p className="text-[11px] text-soft">
+                                    {hasPlex
+                                        ? 'Shares the cluster-wide database, cache and storage to conserve CPU and RAM.'
+                                        : 'Connect this environment to Plex Commons to share cluster-wide services.'}
+                                </p>
                             </div>
-                        ))}
-                    </div>
-                )}
+                        </div>
 
-                {hasSecrets && (
-                    <button
-                        type="button"
-                        role="switch"
-                        aria-checked={revealed !== null}
-                        onClick={() =>
-                            revealed ? setRevealed(null) : reveal()
-                        }
-                        disabled={revealing}
-                        className={cn(
-                            buttonClass('secondary', 'sm'),
-                            'h-7 gap-1.5 px-2.5 text-xs',
-                        )}
-                    >
-                        {revealed ? (
-                            <EyeOff className="size-3.5" />
-                        ) : (
-                            <Eye className="size-3.5" />
-                        )}
-                        {revealing
-                            ? 'Revealing…'
-                            : revealed
-                              ? 'Hide passwords and keys'
-                              : 'Show passwords and keys'}
-                    </button>
-                )}
-
-                {/* Plex Commons Status & Action Banner */}
-                <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-2.5">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-tools-tint text-base">
-                            🟣
-                        </span>
-                        <div>
-                            <p className="text-xs font-semibold text-ink">
-                                {hasPlex
-                                    ? `Connected to Plex Commons (${currentEnv.name})`
-                                    : `Plex Commons (${currentEnv.name})`}
-                            </p>
-                            <p className="text-[11px] text-soft">
-                                {hasPlex
-                                    ? 'Shares the cluster-wide database, cache and storage to conserve CPU and RAM.'
-                                    : 'Connect this environment to Plex Commons to share cluster-wide services.'}
-                            </p>
+                        <div className="shrink-0">
+                            {hasPlex ? (
+                                <Link
+                                    href={leavePlex(project.id).url}
+                                    method="post"
+                                    data={{ environment: currentEnv.name }}
+                                    as="button"
+                                    className={cn(
+                                        buttonClass('danger', 'sm'),
+                                        'h-7 px-2.5 text-xs',
+                                    )}
+                                    title={`Disconnect ${currentEnv.name} from Plex Commons`}
+                                >
+                                    Disconnect Commons
+                                </Link>
+                            ) : (
+                                <Link
+                                    href={joinPlex(project.id).url}
+                                    method="post"
+                                    data={{ environment: currentEnv.name }}
+                                    as="button"
+                                    className={cn(
+                                        buttonClass('tools', 'sm'),
+                                        'h-7 px-2.5 text-xs',
+                                    )}
+                                    title={`Join ${currentEnv.name} to Plex Commons`}
+                                >
+                                    Join Commons
+                                </Link>
+                            )}
                         </div>
                     </div>
-
-                    <div className="shrink-0">
-                        {hasPlex ? (
-                            <Link
-                                href={leavePlex(project.id).url}
-                                method="post"
-                                data={{ environment: currentEnv.name }}
-                                as="button"
-                                className={cn(
-                                    buttonClass('danger', 'sm'),
-                                    'h-7 px-2.5 text-xs',
-                                )}
-                                title={`Disconnect ${currentEnv.name} from Plex Commons`}
-                            >
-                                Disconnect Commons
-                            </Link>
-                        ) : (
-                            <Link
-                                href={joinPlex(project.id).url}
-                                method="post"
-                                data={{ environment: currentEnv.name }}
-                                as="button"
-                                className={cn(
-                                    buttonClass('tools', 'sm'),
-                                    'h-7 px-2.5 text-xs',
-                                )}
-                                title={`Join ${currentEnv.name} to Plex Commons`}
-                            >
-                                Join Commons
-                            </Link>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </Card>
+                </>
+            }
+        />
     );
 }
 

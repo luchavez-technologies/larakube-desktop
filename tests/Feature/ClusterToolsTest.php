@@ -461,3 +461,33 @@ test('removing a tool passes --domain only when the CLI says the tool can run mo
     'a single-instance tool' => [false, false],
     'a multi-instance tool' => [true, true],
 ]);
+
+test('a tool\'s page carries what it holds on the Commons, for the shared backing services card', function () {
+    $bin = clusterToolsFakeCli();
+    File::put("{$bin}/kubectl", "#!/bin/sh\n");
+    chmod("{$bin}/kubectl", 0755);
+    $row = [
+        'tool' => 'outline', 'instance' => 'wiki', 'icon' => '*', 'brand' => 'Outline', 'label' => 'Wiki', 'installed' => true,
+        'commons' => ['databases' => ['outline_wiki'], 'redis' => [], 'buckets' => []],
+        'namespace' => 'larakube-shared', 'host' => 'wiki.example.com', 'aliases' => [], 'url' => 'https://wiki.example.com',
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+        '*plex-commons*' => Process::result(output: json_encode(['services' => ['postgres' => ['enabled' => true]]])),
+        '*plex-registry*' => Process::result(output: json_encode(['tenants' => ['outline_wiki' => ['db' => 'outline_wiki', 'db_service' => 'postgres']]])),
+    ]);
+
+    $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'outline', 'domain' => 'wiki.example.com']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('tools/show')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('backing.commons', true)
+                ->where('backing.services.0.name', 'Postgres')
+                ->where('backing.services.0.details.0.value', 'outline_wiki')));
+
+    File::deleteDirectory($bin);
+});
