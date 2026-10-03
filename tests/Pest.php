@@ -48,3 +48,26 @@ function something()
 {
     // ..
 }
+
+/**
+ * Every TypeScript source Desktop ships (minus generated and vendored UI), by path under resources/js.
+ *
+ * @return array<string, string>
+ */
+function desktopSources(): array
+{
+    $skip = ['/routes/', '/wayfinder/', '/actions/', '/components/ui/'];
+    $files = [];
+
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(resource_path('js'), FilesystemIterator::SKIP_DOTS)) as $file) {
+        $path = str_replace('\\', '/', $file->getPathname());
+
+        if (! preg_match('/\.(ts|tsx)$/', $path) || array_filter($skip, fn (string $part): bool => str_contains($path, $part)) !== []) {
+            continue;
+        }
+
+        $files[substr($path, strlen(str_replace('\\', '/', resource_path('js'))) + 1)] = (string) file_get_contents($file->getPathname());
+    }
+
+    return $files;
+}

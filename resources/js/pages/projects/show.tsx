@@ -25,10 +25,10 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
-import LaravelOptions, {
+import FrameworkFields, {
     defaultAnswers,
     reconcile,
-} from '@/components/laravel-options';
+} from '@/components/framework-fields';
 import LogPanel from '@/components/log-panel';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
@@ -1580,8 +1580,9 @@ function InitForm({
             {isLaravel &&
                 (questions ? (
                     <div className="space-y-3">
-                        <LaravelOptions
-                            questions={questions}
+                        <FrameworkFields
+                            fields={questions}
+                            errorPrefix="laravel"
                             answers={form.data.laravel}
                             errors={errors}
                             onChange={(answers) => setData('laravel', answers)}

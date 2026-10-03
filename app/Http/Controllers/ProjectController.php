@@ -9,6 +9,8 @@ use App\Models\Run;
 use App\Services\EditorLauncher;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\FrameworkCatalog;
+use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
@@ -32,124 +34,7 @@ class ProjectController extends Controller
     /** The Let's Encrypt email last used for a new Laravel app, prefilled next time. */
     private const EMAIL_CACHE_KEY = 'desktop.new-app.email';
 
-    /**
-     * The apps the desktop can start from scratch, and the CLI command that
-     * scaffolds each. `--fast` takes each scaffolder's scripted defaults; a
-     * Laravel app adds the answers from its form (see LaravelOptions).
-     * `--no-plex` keeps a Next.js app self-contained, so deploying it doesn't
-     * also need the Plex Commons on the server.
-     *
-     * @var array<string, array{label: string, category: string, description: string, command: list<string>, comingSoon?: bool, hidden?: bool}>
-     */
-    public const SCAFFOLDERS = [
-        'laravel' => [
-            'label' => 'Laravel',
-            'category' => 'fullstack',
-            'description' => 'A full PHP web app with a database and background queue.',
-            'command' => ['new', '--fast'],
-        ],
-        'statamic' => [
-            'label' => 'Statamic',
-            'category' => 'cms',
-            'description' => 'A flat-file or database CMS built on top of Laravel.',
-            'command' => ['statamic:new', '--fast', '--no-plex'],
-        ],
-        'wordpress' => [
-            'label' => 'WordPress (Bedrock)',
-            'category' => 'cms',
-            'description' => 'Modern WordPress with Composer and 12-factor configuration.',
-            'command' => ['wordpress:new', '--fast', '--no-plex'],
-            // Not offered for now: most WordPress sites live on managed hosts, so a local repo has little pull.
-            'hidden' => true,
-        ],
-        'emdash' => [
-            'label' => 'Emdash',
-            'category' => 'cms',
-            'description' => 'Modern Astro and TypeScript-powered publishing CMS.',
-            'command' => ['emdash:new', '--fast'],
-            'comingSoon' => true,
-        ],
-        'nextjs' => [
-            'label' => 'Next.js',
-            'category' => 'fullstack',
-            'description' => 'A React app with server rendering and API routes.',
-            'command' => ['nextjs:new', '--fast', '--no-plex'],
-        ],
-        'django' => [
-            'label' => 'Django',
-            'category' => 'fullstack',
-            'description' => 'High-level Python web framework with batteries included.',
-            'command' => ['django:new', '--fast'],
-        ],
-        'fastapi' => [
-            'label' => 'FastAPI',
-            'category' => 'fullstack',
-            'description' => 'Modern, fast (high-performance) Python API framework.',
-            'command' => ['fastapi:new', '--fast'],
-        ],
-        'nestjs' => [
-            'label' => 'NestJS',
-            'category' => 'fullstack',
-            'description' => 'Progressive Node.js framework with TypeScript and architecture.',
-            'command' => ['nestjs:new', '--fast'],
-        ],
-        'adonisjs' => [
-            'label' => 'AdonisJS',
-            'category' => 'fullstack',
-            'description' => 'TypeScript-first MVC web framework for Node.js.',
-            'command' => ['adonisjs:new', '--fast'],
-        ],
-        'springboot' => [
-            'label' => 'Spring Boot',
-            'category' => 'fullstack',
-            'description' => 'Production-ready Java application framework.',
-            'command' => ['springboot:new', '--fast'],
-        ],
-        'dotnet' => [
-            'label' => '.NET Core',
-            'category' => 'fullstack',
-            'description' => 'Cross-platform, high-performance .NET web application.',
-            'command' => ['dotnet:new', '--fast'],
-        ],
-        'gin' => [
-            'label' => 'Gin (Go)',
-            'category' => 'fullstack',
-            'description' => 'Ultra-fast HTTP web framework written in Go.',
-            'command' => ['gin:new', '--fast'],
-        ],
-        'axum' => [
-            'label' => 'Axum (Rust)',
-            'category' => 'fullstack',
-            'description' => 'Ergonomic and modular web framework built with Tokio and Rust.',
-            'command' => ['axum:new', '--fast'],
-        ],
-        'vite' => [
-            'label' => 'Vite',
-            'category' => 'frontend',
-            'description' => 'A React single-page app, served as static files.',
-            'command' => ['vite:new', '--fast'],
-        ],
-        'astro' => [
-            'label' => 'Astro',
-            'category' => 'frontend',
-            'description' => 'A content site, served as static files.',
-            'command' => ['astro:new', '--fast'],
-        ],
-        'docusaurus' => [
-            'label' => 'Docusaurus',
-            'category' => 'docs',
-            'description' => 'A documentation site, served as static files.',
-            'command' => ['docs:new', '--fast'],
-        ],
-    ];
-
     public function __construct(private ProjectInspector $inspector) {}
-
-    /**
-     * The frameworks whose `init` runs the PHP wizard, which asks for a
-     * Let's Encrypt email. Laravel also takes the full options form.
-     */
-    public const WIZARD_FRAMEWORKS = ['laravel', 'statamic', 'wordpress'];
 
     public function index(ToolLocator $locator): Response
     {
@@ -210,13 +95,12 @@ class ProjectController extends Controller
         return to_route('projects.show', $project);
     }
 
-    public function create(Request $request, LaravelOptions $laravel): Response
+    public function create(Request $request, FrameworkCatalog $frameworks): Response
     {
         $parent = (string) $request->query('parent', '');
         $requestedFramework = (string) $request->query('framework', '');
-        $defaultFramework = array_key_exists($requestedFramework, self::SCAFFOLDERS) && empty(self::SCAFFOLDERS[$requestedFramework]['comingSoon']) && empty(self::SCAFFOLDERS[$requestedFramework]['hidden'])
-            ? $requestedFramework
-            : 'laravel';
+        $offered = array_column($frameworks->visible(), 'slug');
+        $defaultFramework = in_array($requestedFramework, $offered, true) ? $requestedFramework : 'laravel';
 
         $activeRun = null;
         if ($request->filled('run')) {
@@ -236,14 +120,11 @@ class ProjectController extends Controller
         }
 
         return Inertia::render('projects/create', [
-            'laravelOptions' => Inertia::defer(fn (): ?array => $laravel->questions()),
+            'catalog' => Inertia::defer(fn (): ?array => $frameworks->catalog() === null ? null : [
+                'categories' => $frameworks->catalog()['categories'],
+                'frameworks' => $frameworks->visible(),
+            ]),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
-            'frameworks' => array_map(fn (array $scaffolder): array => [
-                'label' => $scaffolder['label'],
-                'description' => $scaffolder['description'],
-                'category' => $scaffolder['category'],
-                'comingSoon' => ! empty($scaffolder['comingSoon']),
-            ], array_filter(self::SCAFFOLDERS, fn (array $scaffolder): bool => empty($scaffolder['hidden']))),
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
             'framework' => $defaultFramework,
@@ -267,26 +148,31 @@ class ProjectController extends Controller
         return to_route('projects.create', $query + array_filter(['parent' => $path === null ? null : (realpath($path) ?: $path)]));
     }
 
-    public function scaffold(Request $request, CliRunner $runner, LaravelOptions $laravel): RedirectResponse
+    public function scaffold(Request $request, CliRunner $runner, FrameworkCatalog $frameworks, FrameworkForm $form): RedirectResponse
     {
         $input = $request->validate([
-            'name' => ['required', 'string', 'max:50', 'regex:/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/', Rule::notIn(['console'])],
-            'framework' => ['required', Rule::in(array_keys(self::SCAFFOLDERS))],
+            'framework' => ['required', 'string'],
             'parent' => ['required', 'string'],
-        ], [
-            'name.regex' => 'Use lowercase letters, numbers and dashes, starting with a letter.',
-            'name.not_in' => 'The name "console" is reserved.',
+            'answers' => ['array'],
         ]);
 
-        $scaffolder = self::SCAFFOLDERS[$input['framework']];
+        $framework = $frameworks->framework($input['framework']);
 
-        if (! empty($scaffolder['hidden'])) {
-            return back()->withErrors(['framework' => "{$scaffolder['label']} can't be created from Desktop yet."]);
+        if ($framework === null || ! empty($framework['hidden'])) {
+            return back()->withErrors(['framework' => 'Update the LaraKube CLI from Setup to create this app.']);
         }
 
-        if (! empty($scaffolder['comingSoon'])) {
-            return back()->withErrors(['framework' => "{$scaffolder['label']} is coming soon!"]);
+        if (! empty($framework['comingSoon'])) {
+            return back()->withErrors(['framework' => "{$framework['label']} is coming soon!"]);
         }
+
+        $resolved = $form->resolve($framework['fields'], (array) ($input['answers'] ?? []));
+
+        if ($resolved['errors'] !== []) {
+            return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["answers.{$key}" => $error])->all());
+        }
+
+        $name = (string) $resolved['positional'];
 
         $parent = realpath($input['parent']) ?: $input['parent'];
 
@@ -294,50 +180,38 @@ class ProjectController extends Controller
             return back()->withErrors(['parent' => 'Choose a folder inside your home folder.']);
         }
 
-        $path = "{$parent}/{$input['name']}";
+        $path = "{$parent}/{$name}";
 
         if (file_exists($path)) {
-            return back()->withErrors(['name' => "{$input['name']} already exists in this folder."]);
+            return back()->withErrors(['answers.name' => "{$name} already exists in this folder."]);
         }
 
-        $extra = [];
-
-        if ($input['framework'] === 'laravel') {
-            $extra = $this->wizardFlags($request, $laravel, withOptions: true);
-
-            if ($extra instanceof RedirectResponse) {
-                return $extra;
-            }
-        } elseif ($input['framework'] === 'statamic') {
-            if ($request->filled('email')) {
-                $email = $request->validate(['email' => ['required', 'email']])['email'];
-                Cache::forever(self::EMAIL_CACHE_KEY, $email);
-                $extra = ["--email={$email}"];
-            }
+        if (is_string($email = $input['answers']['email'] ?? null)) {
+            Cache::forever(self::EMAIL_CACHE_KEY, trim($email));
         }
 
         $project = Project::firstOrCreate(['path' => $path]);
-        $arguments = [$scaffolder['command'][0], $input['name'], ...array_slice($scaffolder['command'], 1), ...$extra];
+        $arguments = $frameworks->scaffoldArguments($framework, $name, $resolved['flags']);
 
         // The arguments and folder are kept so a failed create can be retried as is.
         $run = $runner->start(
-            label: "Create {$scaffolder['label']} app {$input['name']}",
+            label: "Create {$framework['label']} app {$name}",
             arguments: $arguments,
             kind: RunKind::NewProject,
             subject: "project:{$project->id}",
             meta: ['project' => (string) $project->id, 'arguments' => (string) json_encode($arguments), 'cwd' => $parent],
             cwd: $parent,
             targetType: 'project',
-            targetName: $input['name'],
+            targetName: $name,
             projectId: $project->id,
-            projectName: $input['name'],
+            projectName: $name,
             environment: 'local',
         );
 
         return to_route('projects.create', [
             'run' => $run->id,
             'parent' => $parent,
-            'name' => $input['name'],
+            'name' => $name,
             'framework' => $input['framework'],
         ]);
     }
@@ -368,7 +242,7 @@ class ProjectController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel, ToolLocator $locator): Response
+    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel, FrameworkCatalog $frameworks, ToolLocator $locator): Response
     {
         $scaffold = $this->lastScaffold($project);
 
@@ -434,7 +308,7 @@ class ProjectController extends Controller
             'editors' => $editors->available(),
             'readyServers' => array_map(fn (array $stack): array => ['name' => $stack['name'], 'ip' => $stack['ip']], $servers),
             'scaffold' => $scaffold === null ? null : ['id' => $scaffold->id, 'status' => $scaffold->status, 'canRetry' => $this->canRetry($project, $scaffold)],
-            'wizardFrameworks' => self::WIZARD_FRAMEWORKS,
+            'wizardFrameworks' => $this->initEmailFrameworks($frameworks),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'laravelOptions' => Inertia::optional(fn (): ?array => $laravel->questions()),
         ]);
@@ -458,12 +332,12 @@ class ProjectController extends Controller
         return to_route('projects.index');
     }
 
-    public function init(Request $request, Project $project, CliRunner $runner, LaravelOptions $laravel): RedirectResponse
+    public function init(Request $request, Project $project, CliRunner $runner, LaravelOptions $laravel, FrameworkCatalog $frameworks): RedirectResponse
     {
         $framework = $request->validate(['framework' => ['required', Rule::in(array_keys(ProjectInspector::DEPLOYABLE))]])['framework'];
         $extra = [];
 
-        if (in_array($framework, self::WIZARD_FRAMEWORKS, true)) {
+        if (in_array($framework, $this->initEmailFrameworks($frameworks), true)) {
             // An existing app's frontend is detected, never set from the form.
             $extra = $this->wizardFlags($request, $laravel, withOptions: $framework === 'laravel', skip: ['frontend']);
 
@@ -688,6 +562,16 @@ class ProjectController extends Controller
         $resolved = realpath($path) ?: $path;
 
         return $home !== '' && $path !== '' && (str_starts_with($resolved, $home.'/') || ($allowHome && $resolved === $home));
+    }
+
+    /**
+     * The frameworks whose `init` wizard asks for a Let's Encrypt email, as the CLI says.
+     *
+     * @return list<string>
+     */
+    private function initEmailFrameworks(FrameworkCatalog $frameworks): array
+    {
+        return array_column(array_filter($frameworks->catalog()['frameworks'] ?? [], fn (array $framework): bool => ! empty($framework['initEmail'])), 'slug');
     }
 
     /**

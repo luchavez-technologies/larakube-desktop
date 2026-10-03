@@ -5,24 +5,6 @@
  * stack, logo and whether it is paid. Soon that comes from LaraKube Cloud through
  * the CLI, so a second copy in Desktop would drift. Desktop draws what it is sent.
  */
-function desktopSources(): array
-{
-    $skip = ['/routes/', '/wayfinder/', '/actions/', '/components/ui/'];
-    $files = [];
-
-    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(resource_path('js'), FilesystemIterator::SKIP_DOTS)) as $file) {
-        $path = str_replace('\\', '/', $file->getPathname());
-
-        if (! preg_match('/\.(ts|tsx)$/', $path) || array_filter($skip, fn (string $part): bool => str_contains($path, $part)) !== []) {
-            continue;
-        }
-
-        $files[substr($path, strlen(str_replace('\\', '/', resource_path('js'))) + 1)] = (string) file_get_contents($file->getPathname());
-    }
-
-    return $files;
-}
-
 test('Desktop keeps no table of tool names, taglines, categories or stacks', function (): void {
     $forbidden = ['TOOL_DISPLAY_NAMES', 'TOOL_TAGLINES', 'TOOL_STACKS', 'TOOL_CATEGORIES_MAP', 'GENERIC_CATEGORY_NAMES'];
     $found = [];

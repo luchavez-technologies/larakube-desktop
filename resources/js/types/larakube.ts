@@ -375,24 +375,54 @@ export type Project = {
     } | null;
 };
 
-/** One question `larakube new` asks, from `larakube new:options --json`. */
-export type NewAppQuestion = {
+/** One field of a framework's creation form, from `larakube new:frameworks --json`. */
+export type FrameworkField = {
     key: string;
+    type: 'text' | 'select' | 'multiselect' | 'confirm';
     label: string;
-    multiple: boolean;
-    nullable: boolean;
-    default: string | null;
-    options: {
+    description?: string;
+    placeholder?: string;
+    format?: string;
+    arg?: string;
+    group?: 'essential' | 'advanced';
+    multiple?: boolean;
+    nullable?: boolean;
+    default?: string | boolean | null;
+    /** What a first-time user should start with, where it differs from `default`. */
+    suggested?: string;
+    options?: {
         value: string;
         label: string;
-        flag: string;
-        unavailableWith: string[];
+        flag?: string;
+        unavailableWith?: string[];
     }[];
+    optionHints?: Record<string, string>;
     conflicts?: string[][];
-    requiresFeature?: string;
+    visibleWhen?: Record<string, string>;
+    forcedWhen?: { when: Record<string, string>; value: string }[];
+    defaultWhen?: { when: Record<string, string>; value: string }[];
+    implies?: Record<string, Record<string, string>>;
 };
 
-export type NewAppAnswers = Record<string, string | string[] | null>;
+export type FrameworkInfo = {
+    slug: string;
+    label: string;
+    description: string;
+    category: string;
+    tech: string;
+    comingSoon?: boolean;
+    fields: FrameworkField[];
+};
+
+export type FrameworkCatalog = {
+    categories: { id: string; label: string }[];
+    frameworks: FrameworkInfo[];
+};
+
+/** A select or multiselect question, as the existing-app setup form uses them. */
+export type NewAppQuestion = FrameworkField;
+
+export type NewAppAnswers = Record<string, string | string[] | boolean | null>;
 
 export type BackupSchedule = {
     scheduled: boolean;

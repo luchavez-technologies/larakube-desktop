@@ -180,12 +180,13 @@ test('framework detection preselects the right deployable framework', function (
     'unknown' => [['README.md' => ''], null],
 ]);
 
-test('a new project runs its framework\'s scaffolder in the chosen folder', function (string $framework, array $arguments) {
+test('a new project runs its framework\'s scaffolder in the chosen folder', function (string $framework, array $answers, array $arguments) {
     $sandbox = projectsSandbox();
     $parent = dirname($sandbox['app']);
+    projectsFrameworks();
     $fake = ChildProcess::fake();
 
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => $framework, 'parent' => $parent])->assertRedirect();
+    $this->post(route('projects.scaffold'), ['framework' => $framework, 'parent' => $parent, 'answers' => ['name' => 'blog'] + $answers])->assertRedirect();
 
     $bin = "{$sandbox['bin']}/larakube";
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, ...$arguments, '--no-interaction'] && $cwd === $parent);
@@ -197,22 +198,22 @@ test('a new project runs its framework\'s scaffolder in the chosen folder', func
 
     File::deleteDirectory($sandbox['home']);
 })->with([
-    'nextjs' => ['nextjs', ['nextjs:new', 'blog', '--fast', '--no-plex']],
-    'vite' => ['vite', ['vite:new', 'blog', '--fast']],
-    'astro' => ['astro', ['astro:new', 'blog', '--fast']],
-    'docusaurus' => ['docusaurus', ['docs:new', 'blog', '--fast']],
+    'vite' => ['vite', ['template' => 'react-ts'], ['vite:new', 'blog', '--fast', '--template=react-ts']],
+    'astro' => ['astro', [], ['astro:new', 'blog', '--fast']],
 ]);
 
 test('a new project refuses bad names, taken folders and folders outside home', function () {
     $sandbox = projectsSandbox();
     $parent = dirname($sandbox['app']);
+    projectsFrameworks();
     ChildProcess::fake();
+    $answers = fn (string $name): array => ['name' => $name, 'template' => 'react-ts'];
 
-    $this->post(route('projects.scaffold'), ['name' => 'My App', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
-    $this->post(route('projects.scaffold'), ['name' => 'console', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
-    $this->post(route('projects.scaffold'), ['name' => 'shop', 'framework' => 'vite', 'parent' => $parent])->assertSessionHasErrors('name');
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'rails', 'parent' => $parent])->assertSessionHasErrors('framework');
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'vite', 'parent' => '/tmp'])->assertSessionHasErrors('parent');
+    $this->post(route('projects.scaffold'), ['framework' => 'vite', 'parent' => $parent, 'answers' => $answers('My App')])->assertSessionHasErrors('answers.name');
+    $this->post(route('projects.scaffold'), ['framework' => 'vite', 'parent' => $parent, 'answers' => $answers('console')])->assertSessionHasErrors('answers.name');
+    $this->post(route('projects.scaffold'), ['framework' => 'vite', 'parent' => $parent, 'answers' => $answers('shop')])->assertSessionHasErrors('answers.name');
+    $this->post(route('projects.scaffold'), ['framework' => 'rails', 'parent' => $parent, 'answers' => $answers('blog')])->assertSessionHasErrors('framework');
+    $this->post(route('projects.scaffold'), ['framework' => 'vite', 'parent' => '/tmp', 'answers' => $answers('blog')])->assertSessionHasErrors('parent');
 
     expect(Project::count())->toBe(0)->and(Run::count())->toBe(0);
 
@@ -230,53 +231,85 @@ test('choosing where to create a project keeps what was typed', function () {
     projectsPicker('/etc');
     $this->post(route('projects.choose-folder'), ['name' => 'blog'])->assertSessionHasErrors('parent');
 
+    projectsFrameworks();
     $this->get(route('projects.create', ['parent' => $parent, 'name' => 'blog', 'framework' => 'astro']))
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('projects/create')
             ->where('parent', $parent)
             ->where('name', 'blog')
-            ->where('framework', 'astro')
-            ->has('frameworks', 15));
+            ->where('framework', 'astro'));
 
     File::deleteDirectory($sandbox['home']);
 });
 
-function projectsLaravelOptions(bool $available = true): void
+/**
+ * What `new:frameworks --json` sends: a trimmed catalog with the shapes the form depends on.
+ */
+function projectsFrameworks(bool $available = true): void
 {
     $option = fn (string $value, array $unavailableWith = []): array => ['value' => $value, 'label' => ucfirst($value), 'flag' => "--{$value}", 'unavailableWith' => $unavailableWith];
+    $name = ['key' => 'name', 'type' => 'text', 'label' => 'App name', 'description' => 'Lowercase letters, numbers and dashes.', 'required' => true, 'arg' => 'positional', 'pattern' => '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', 'maxLength' => 50, 'reserved' => ['console'], 'group' => 'essential'];
+    $email = ['key' => 'email', 'type' => 'text', 'label' => 'Your email', 'required' => true, 'flag' => '--email=', 'format' => 'email', 'group' => 'essential'];
+    $select = fn (string $key, string $label, array $options, array $extra = []): array => array_replace(['key' => $key, 'type' => 'select', 'label' => $label, 'required' => true, 'multiple' => false, 'nullable' => false, 'default' => null, 'options' => $options, 'group' => 'advanced'], $extra);
+    $framework = fn (string $slug, string $label, string $category, array $fields, array $extra = []): array => array_replace(['slug' => $slug, 'label' => $label, 'description' => "{$label} app", 'category' => $category, 'tech' => 'PHP', 'logo' => $slug, 'deployable' => true, 'hidden' => false, 'comingSoon' => false, 'command' => "{$slug}:new", 'args' => ['--fast'], 'fields' => $fields], $extra);
 
-    Process::fake(['*new:options*' => $available
-        ? Process::result(output: json_encode(['success' => true, 'questions' => [
-            ['key' => 'server', 'label' => 'Server variation', 'multiple' => false, 'nullable' => false, 'default' => 'frankenphp', 'options' => [$option('fpm-nginx'), $option('frankenphp')]],
-            ['key' => 'frontend', 'label' => 'Frontend stack', 'multiple' => false, 'nullable' => true, 'default' => null, 'options' => [$option('react'), $option('vue')]],
-            ['key' => 'features', 'label' => 'Laravel features', 'multiple' => true, 'nullable' => false, 'default' => null, 'options' => [$option('queues'), $option('horizon'), $option('scout'), $option('octane', ['frankenphp'])], 'conflicts' => [['horizon', 'queues']]],
-            ['key' => 'search', 'label' => 'Search driver for Scout', 'multiple' => false, 'nullable' => false, 'default' => 'meilisearch', 'options' => [$option('meilisearch')], 'requiresFeature' => 'scout'],
-            ['key' => 'database', 'label' => 'Database', 'multiple' => false, 'nullable' => false, 'default' => 'mysql', 'options' => [$option('mysql'), $option('postgres'), $option('sqlite', ['frankenphp'])]],
-        ]]))
-        : Process::result(errorOutput: 'Command "new:options" is not defined.', exitCode: 1)]);
+    $laravel = $framework('laravel', 'Laravel', 'fullstack', [
+        $name, $email,
+        $select('server', 'Server variation', [$option('fpm-nginx'), $option('frankenphp')], ['default' => 'frankenphp', 'suggested' => 'fpm-nginx', 'implies' => ['frankenphp' => ['features' => 'octane']]]),
+        $select('frontend', 'Frontend stack', [$option('react'), $option('vue')], ['required' => false, 'nullable' => true, 'suggested' => 'react', 'group' => 'essential']),
+        ['key' => 'features', 'type' => 'multiselect', 'label' => 'Laravel features', 'required' => false, 'multiple' => true, 'nullable' => false, 'default' => null, 'options' => [$option('queues'), $option('horizon'), $option('scout'), $option('octane', ['frankenphp'])], 'conflicts' => [['horizon', 'queues']], 'group' => 'advanced'],
+        $select('search', 'Search driver for Scout', [$option('meilisearch')], ['default' => 'meilisearch', 'visibleWhen' => ['features' => 'scout'], 'requiresFeature' => 'scout']),
+        $select('database', 'Database', [$option('mysql'), $option('postgres'), $option('sqlite', ['frankenphp'])], ['default' => 'mysql', 'suggested' => 'postgres', 'group' => 'essential']),
+    ], ['command' => 'new', 'initEmail' => true]);
+    $statamic = $framework('statamic', 'Statamic', 'cms', [$name, $email, $select('content', 'Where content lives', [['value' => 'database', 'label' => 'Database'], ['value' => 'files', 'label' => 'Files']], ['default' => 'database', 'flag' => '--content='])], ['args' => ['--fast', '--no-plex'], 'initEmail' => true]);
+    $vite = $framework('vite', 'Vite', 'frontend', [$name, $select('template', 'Template', [['value' => 'react-ts', 'label' => 'React'], ['value' => 'vue-ts', 'label' => 'Vue']], ['default' => 'react-ts', 'flag' => '--template=', 'group' => 'essential']), ['key' => 'typescript', 'type' => 'confirm', 'label' => 'Use TypeScript', 'required' => false, 'default' => true, 'flag' => '--typescript', 'group' => 'essential']]);
+    $astro = $framework('astro', 'Astro', 'frontend', [$name]);
+    $wordpress = $framework('wordpress', 'WordPress', 'cms', [$name], ['hidden' => true]);
+    $emdash = $framework('emdash', 'Emdash', 'cms', [$name], ['comingSoon' => true]);
+
+    Process::fake(['*new:frameworks*' => $available
+        ? Process::result(output: json_encode(['success' => true, 'categories' => [['id' => 'fullstack', 'label' => 'Full Stack'], ['id' => 'cms', 'label' => 'CMS'], ['id' => 'frontend', 'label' => 'Frontend']], 'frameworks' => [$laravel, $statamic, $vite, $astro, $wordpress, $emdash]]))
+        : Process::result(errorOutput: 'Command "new:frameworks" is not defined.', exitCode: 1)]);
 }
 
-test('the Laravel form starts from the workshop defaults, not new --fast', function () {
+test('the New project page lists what the CLI offers, minus what it hides', function () {
+    $sandbox = projectsSandbox();
+    projectsFrameworks();
+
+    $this->get(route('projects.create', ['framework' => 'wordpress']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/create')
+            ->where('framework', 'laravel')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->has('catalog.frameworks', 5)
+                ->has('catalog.categories', 3)
+                ->where('catalog.frameworks.0.slug', 'laravel')));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('the Laravel form starts from what the CLI suggests, not its --fast defaults', function () {
     projectsSandbox();
-    projectsLaravelOptions();
+    projectsFrameworks();
 
     $questions = collect(app(LaravelOptions::class)->questions())->keyBy('key');
 
     expect($questions['server']['default'])->toBe('fpm-nginx')
         ->and($questions['database']['default'])->toBe('postgres')
         ->and($questions['frontend']['default'])->toBe('react')
-        ->and($questions['features']['default'])->toBeNull();
+        ->and($questions['features']['default'])->toBeNull()
+        ->and($questions->has('name'))->toBeFalse();
 });
 
 test('a new Laravel app turns the form answers into new flags', function () {
     $sandbox = projectsSandbox();
     $parent = dirname($sandbox['app']);
-    projectsLaravelOptions();
+    projectsFrameworks();
     $fake = ChildProcess::fake();
 
     $this->post(route('projects.scaffold'), [
-        'name' => 'blog', 'framework' => 'laravel', 'parent' => $parent, 'email' => 'dev@example.com',
-        'laravel' => ['server' => 'fpm-nginx', 'frontend' => 'react', 'features' => ['queues', 'octane'], 'database' => 'postgres'],
+        'framework' => 'laravel', 'parent' => $parent,
+        'answers' => ['name' => 'blog', 'email' => 'dev@example.com', 'server' => 'fpm-nginx', 'frontend' => 'react', 'features' => ['queues', 'octane'], 'database' => 'postgres'],
     ])->assertRedirect();
 
     $bin = "{$sandbox['bin']}/larakube";
@@ -287,45 +320,69 @@ test('a new Laravel app turns the form answers into new flags', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
-test('a new Laravel app refuses answers the CLI would not offer', function (array $overrides, string $error) {
+test('any framework is created from its own schema: its command, fixed arguments and flags', function () {
     $sandbox = projectsSandbox();
-    projectsLaravelOptions();
+    $parent = dirname($sandbox['app']);
+    projectsFrameworks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), ['framework' => 'statamic', 'parent' => $parent, 'answers' => ['name' => 'site', 'email' => 'dev@example.com', 'content' => 'files']])->assertRedirect();
+    $this->post(route('projects.scaffold'), ['framework' => 'vite', 'parent' => $parent, 'answers' => ['name' => 'spa', 'template' => 'vue-ts', 'typescript' => true]])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, 'statamic:new', 'site', '--fast', '--no-plex', '--email=dev@example.com', '--content=files', '--no-interaction']);
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [$bin, 'vite:new', 'spa', '--fast', '--template=vue-ts', '--typescript', '--no-interaction']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a new app refuses answers the CLI would not offer', function (array $overrides, string $error) {
+    $sandbox = projectsSandbox();
+    projectsFrameworks();
     ChildProcess::fake();
 
     $this->post(route('projects.scaffold'), array_replace_recursive([
-        'name' => 'blog', 'framework' => 'laravel', 'parent' => dirname($sandbox['app']), 'email' => 'dev@example.com',
-        'laravel' => ['server' => 'frankenphp', 'frontend' => null, 'features' => [], 'database' => 'mysql'],
+        'framework' => 'laravel', 'parent' => dirname($sandbox['app']),
+        'answers' => ['name' => 'blog', 'email' => 'dev@example.com', 'server' => 'frankenphp', 'frontend' => null, 'features' => [], 'database' => 'mysql'],
     ], $overrides))->assertSessionHasErrors($error);
 
     expect(Run::count())->toBe(0)->and(Project::count())->toBe(0);
 
     File::deleteDirectory($sandbox['home']);
 })->with([
-    'SQLite on FrankenPHP' => [['laravel' => ['database' => 'sqlite']], 'laravel.database'],
-    'Octane named on FrankenPHP' => [['laravel' => ['features' => ['octane']]], 'laravel.features'],
-    'Horizon with Queues' => [['laravel' => ['features' => ['horizon', 'queues']]], 'laravel.features'],
-    'no database' => [['laravel' => ['database' => null]], 'laravel.database'],
-    'no email' => [['email' => ''], 'email'],
+    'SQLite on FrankenPHP' => [['answers' => ['database' => 'sqlite']], 'answers.database'],
+    'Octane named on FrankenPHP' => [['answers' => ['features' => ['octane']]], 'answers.features'],
+    'Horizon with Queues' => [['answers' => ['features' => ['horizon', 'queues']]], 'answers.features'],
+    'no database' => [['answers' => ['database' => null]], 'answers.database'],
+    'no email' => [['answers' => ['email' => '']], 'answers.email'],
+    'a bad email' => [['answers' => ['email' => 'nope']], 'answers.email'],
+    'a bad name' => [['answers' => ['name' => 'My App']], 'answers.name'],
+    'the reserved name' => [['answers' => ['name' => 'console']], 'answers.name'],
 ]);
 
-test('a new Laravel app needs a LaraKube CLI that lists its options', function () {
+test('a new app needs a LaraKube CLI that lists its frameworks, and never a hidden one', function (string $framework, bool $available) {
     $sandbox = projectsSandbox();
-    projectsLaravelOptions(available: false);
+    projectsFrameworks($available);
     ChildProcess::fake();
 
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'laravel', 'parent' => dirname($sandbox['app']), 'email' => 'dev@example.com'])
+    $this->post(route('projects.scaffold'), ['framework' => $framework, 'parent' => dirname($sandbox['app']), 'answers' => ['name' => 'blog', 'email' => 'dev@example.com']])
         ->assertSessionHasErrors('framework');
 
     expect(Run::count())->toBe(0);
 
     File::deleteDirectory($sandbox['home']);
-});
+})->with([
+    'an old CLI' => ['laravel', false],
+    'a hidden framework' => ['wordpress', true],
+    'an unknown framework' => ['cobol', true],
+]);
 
 test('a new project can go straight into the home folder, the form\'s default', function () {
     $sandbox = projectsSandbox();
     $fake = ChildProcess::fake();
 
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'vite', 'parent' => $sandbox['home']])->assertRedirect();
+    projectsFrameworks();
+    $this->post(route('projects.scaffold'), ['framework' => 'vite', 'parent' => $sandbox['home'], 'answers' => ['name' => 'blog', 'template' => 'react-ts']])->assertRedirect();
 
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => $cwd === $sandbox['home']);
     expect(Project::sole()->path)->toBe("{$sandbox['home']}/blog");
@@ -391,7 +448,7 @@ test('a create is not retried while running, once its folder exists, or without 
 
 test('setting up a PHP app passes the email, and Laravel also its options minus the detected frontend', function () {
     $sandbox = projectsSandbox();
-    projectsLaravelOptions();
+    projectsFrameworks();
     $project = Project::create(['path' => $sandbox['app']]);
     $fake = ChildProcess::fake();
 
@@ -507,67 +564,14 @@ test('linking a server supports custom environments like staging', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
-test('frameworks are categorized, emdash is marked coming soon and WordPress is not offered', function () {
-    $sandbox = projectsSandbox();
-    $parent = dirname($sandbox['app']);
-
-    $this->get(route('projects.create', ['parent' => $parent]))
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('projects/create')
-            ->where('frameworks.statamic.category', 'cms')
-            ->missing('frameworks.wordpress')
-            ->where('frameworks.emdash.category', 'cms')
-            ->where('frameworks.emdash.comingSoon', true)
-            ->where('frameworks.statamic.comingSoon', false)
-            ->where('frameworks.laravel.category', 'fullstack')
-            ->where('frameworks.vite.category', 'frontend')
-            ->where('frameworks.docusaurus.category', 'docs'));
-
-    File::deleteDirectory($sandbox['home']);
-});
-
 test('a coming soon framework cannot be scaffolded', function () {
     $sandbox = projectsSandbox();
-    $parent = dirname($sandbox['app']);
-
-    $this->post(route('projects.scaffold'), [
-        'name' => 'my-emdash-blog',
-        'framework' => 'emdash',
-        'parent' => $parent,
-    ])->assertSessionHasErrors(['framework']);
-
-    File::deleteDirectory($sandbox['home']);
-});
-
-test('scaffolding Statamic passes super user email when provided', function () {
-    $sandbox = projectsSandbox();
-    $parent = dirname($sandbox['app']);
-    $fake = ChildProcess::fake();
-
-    $this->post(route('projects.scaffold'), [
-        'name' => 'my-statamic-site',
-        'framework' => 'statamic',
-        'parent' => $parent,
-        'email' => 'admin@example.com',
-    ])->assertRedirect();
-
-    $bin = "{$sandbox['bin']}/larakube";
-    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        $bin, 'statamic:new', 'my-statamic-site', '--fast', '--no-plex', '--email=admin@example.com', '--no-interaction',
-    ]);
-
-    File::deleteDirectory($sandbox['home']);
-});
-
-test('WordPress cannot be started from Desktop, even by posting the form directly', function () {
-    $sandbox = projectsSandbox();
-    $parent = dirname($sandbox['app']);
+    projectsFrameworks();
     ChildProcess::fake();
 
-    $this->post(route('projects.scaffold'), ['name' => 'blog', 'framework' => 'wordpress', 'parent' => $parent])
-        ->assertSessionHasErrors('framework');
+    $this->post(route('projects.scaffold'), ['framework' => 'emdash', 'parent' => dirname($sandbox['app']), 'answers' => ['name' => 'my-emdash-blog']])->assertSessionHasErrors('framework');
 
-    expect(Run::count())->toBe(0)->and(Project::count())->toBe(0);
+    expect(Run::count())->toBe(0);
 
     File::deleteDirectory($sandbox['home']);
 });

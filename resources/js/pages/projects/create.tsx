@@ -1,4 +1,4 @@
-import { Deferred, Link, router, useForm, usePoll } from '@inertiajs/react';
+import { Link, router, useForm, usePoll } from '@inertiajs/react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -14,10 +14,10 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import FrameworkLogo from '@/components/framework-logo';
-import LaravelOptions, {
+import FrameworkFields, {
     defaultAnswers,
     reconcile,
-} from '@/components/laravel-options';
+} from '@/components/framework-fields';
 import LogPanel from '@/components/log-panel';
 import PageHeader from '@/components/page-header';
 import StatusPill, { type Tone } from '@/components/status-pill';
@@ -26,135 +26,11 @@ import { runStatus } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import { chooseFolder, create, index, scaffold, show } from '@/routes/projects';
 import { cancel, show as showRun } from '@/routes/runs';
-import type { NewAppAnswers, NewAppQuestion } from '@/types/larakube';
-
-type Framework = {
-    label: string;
-    description: string;
-    category: string;
-    comingSoon?: boolean;
-};
-
-const CATEGORIES: { id: string; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'cms', label: 'CMS' },
-    { id: 'fullstack', label: 'Full Stack' },
-    { id: 'frontend', label: 'Frontend' },
-    { id: 'docs', label: 'Docs' },
-];
-
-const FRAMEWORK_META: Record<string, { tech: string; keywords: string[] }> = {
-    laravel: {
-        tech: 'PHP',
-        keywords: ['php', 'fullstack', 'artisan', 'blade', 'eloquent'],
-    },
-    statamic: {
-        tech: 'PHP',
-        keywords: ['php', 'cms', 'flat-file', 'laravel', 'content'],
-    },
-    wordpress: {
-        tech: 'PHP',
-        keywords: ['php', 'cms', 'bedrock', 'roots', 'blog', 'wordpress'],
-    },
-    emdash: {
-        tech: 'Astro',
-        keywords: [
-            'astro',
-            'typescript',
-            'cms',
-            'publishing',
-            'blog',
-            'content',
-        ],
-    },
-    nextjs: {
-        tech: 'React',
-        keywords: [
-            'react',
-            'typescript',
-            'javascript',
-            'ssr',
-            'fullstack',
-            'next',
-        ],
-    },
-    django: {
-        tech: 'Python',
-        keywords: ['python', 'fullstack', 'orm', 'django'],
-    },
-    fastapi: {
-        tech: 'Python',
-        keywords: ['python', 'api', 'rest', 'pydantic', 'async'],
-    },
-    nestjs: {
-        tech: 'Node',
-        keywords: [
-            'typescript',
-            'node',
-            'nodejs',
-            'backend',
-            'express',
-            'nest',
-        ],
-    },
-    adonisjs: {
-        tech: 'Node',
-        keywords: [
-            'typescript',
-            'node',
-            'nodejs',
-            'mvc',
-            'fullstack',
-            'adonis',
-        ],
-    },
-    springboot: {
-        tech: 'Java',
-        keywords: ['java', 'spring', 'jvm', 'enterprise', 'backend'],
-    },
-    dotnet: {
-        tech: '.NET',
-        keywords: ['c#', 'csharp', 'dotnet', '.net', 'microsoft'],
-    },
-    gin: {
-        tech: 'Go',
-        keywords: ['go', 'golang', 'api', 'microservice'],
-    },
-    axum: {
-        tech: 'Rust',
-        keywords: ['rust', 'tokio', 'async', 'performance'],
-    },
-    vite: {
-        tech: 'React',
-        keywords: ['react', 'frontend', 'spa', 'vite', 'typescript'],
-    },
-    astro: {
-        tech: 'Astro',
-        keywords: ['astro', 'frontend', 'content', 'static', 'ssg'],
-    },
-    docusaurus: {
-        tech: 'Docs',
-        keywords: ['react', 'docs', 'documentation', 'markdown', 'mdx'],
-    },
-};
-
-function categoryBadgeLabel(cat: string): string {
-    switch (cat) {
-        case 'cms':
-            return 'CMS';
-        case 'fullstack':
-            return 'Full Stack';
-        case 'frontend':
-            return 'Frontend';
-        case 'docs':
-            return 'Docs';
-        default:
-            return cat;
-    }
-}
-
-const inputClass =
-    'w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-brand';
+import type {
+    FrameworkCatalog,
+    FrameworkInfo,
+    NewAppAnswers,
+} from '@/types/larakube';
 
 type ActiveRun = {
     id: number;
@@ -168,29 +44,32 @@ type ActiveRun = {
 };
 
 export default function CreateProject({
-    frameworks,
+    catalog,
     parent,
     name,
     framework,
     email,
-    laravelOptions,
     activeRun,
 }: {
-    frameworks: Record<string, Framework>;
+    catalog?: FrameworkCatalog | null;
     parent: string;
     name: string;
     framework: string;
     email: string;
-    laravelOptions?: NewAppQuestion[] | null;
     activeRun?: ActiveRun | null;
 }) {
     const form = useForm<{
-        name: string;
         framework: string;
         parent: string;
-        email: string;
-        laravel: NewAppAnswers;
-    }>({ name, framework, parent, email, laravel: {} });
+        answers: NewAppAnswers;
+    }>({ framework, parent, answers: {} });
+    const frameworks = useMemo(() => catalog?.frameworks ?? [], [catalog]);
+    const categories = useMemo(
+        () => [{ id: 'all', label: 'All' }, ...(catalog?.categories ?? [])],
+        [catalog],
+    );
+    const categoryLabel = (id: string) =>
+        categories.find((category) => category.id === id)?.label ?? id;
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -234,42 +113,41 @@ export default function CreateProject({
           ])
         : ['Ready', 'muted'];
 
-    const isLaravel = form.data.framework === 'laravel';
-    const isStatamic = form.data.framework === 'statamic';
-    const needsEmail = isLaravel || isStatamic;
     const { setData } = form;
 
     const filteredFrameworks = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
-        return Object.entries(frameworks).filter(([slug, option]) => {
-            const matchesCat =
-                selectedCategory === 'all' ||
-                option.category === selectedCategory;
-            if (!matchesCat) return false;
 
-            if (!query) return true;
+        return frameworks.filter((option) => {
+            if (
+                selectedCategory !== 'all' &&
+                option.category !== selectedCategory
+            ) {
+                return false;
+            }
 
-            const meta = FRAMEWORK_META[slug];
-            const matchesBasic =
-                slug.toLowerCase().includes(query) ||
-                option.label.toLowerCase().includes(query) ||
-                option.description.toLowerCase().includes(query) ||
-                option.category.toLowerCase().includes(query);
-
-            const matchesMeta =
-                meta &&
-                (meta.tech.toLowerCase().includes(query) ||
-                    meta.keywords.some((kw) => kw.includes(query)));
-
-            return matchesBasic || Boolean(matchesMeta);
+            return (
+                query === '' ||
+                [
+                    option.slug,
+                    option.label,
+                    option.description,
+                    option.category,
+                    option.tech,
+                ].some((text) => text.toLowerCase().includes(query))
+            );
         });
     }, [frameworks, selectedCategory, searchQuery]);
 
-    const selectedOption = frameworks[form.data.framework] ?? {
-        label: form.data.framework,
-        description: '',
-        category: 'fullstack',
-    };
+    const selectedOption: FrameworkInfo | undefined = frameworks.find(
+        (option) => option.slug === form.data.framework,
+    );
+    const nameField = selectedOption?.fields.find(
+        (field) => field.arg === 'positional',
+    );
+    const chosenName = nameField
+        ? String(form.data.answers[nameField.key] ?? '')
+        : '';
 
     const listRef = useRef<HTMLDivElement>(null);
     const [canScrollUp, setCanScrollUp] = useState(false);
@@ -321,14 +199,35 @@ export default function CreateProject({
         return {};
     }, [canScrollUp, canScrollDown]);
 
+    // Start each framework from the answers the CLI suggests, keeping the name and
+    // email already typed, and the email last used.
     useEffect(() => {
-        if (laravelOptions) {
-            setData(
-                'laravel',
-                reconcile(laravelOptions, defaultAnswers(laravelOptions)),
-            );
-        }
-    }, [laravelOptions, setData]);
+        if (!selectedOption) return;
+
+        const defaults = reconcile(
+            selectedOption.fields,
+            defaultAnswers(selectedOption.fields),
+        );
+
+        setData((data) => {
+            const previous = data.answers;
+            const kept: NewAppAnswers = {};
+
+            for (const field of selectedOption.fields) {
+                const typed = previous[field.key];
+
+                if (field.type === 'text' && typeof typed === 'string') {
+                    kept[field.key] = typed;
+                } else if (field.arg === 'positional' && name !== '') {
+                    kept[field.key] = name;
+                } else if (field.format === 'email' && email !== '') {
+                    kept[field.key] = email;
+                }
+            }
+
+            return { ...data, answers: { ...defaults, ...kept } };
+        });
+    }, [selectedOption, setData, name, email]);
 
     function submit(event: FormEvent) {
         event.preventDefault();
@@ -340,7 +239,7 @@ export default function CreateProject({
         // response rather than relying on a remount.
         router.post(
             chooseFolder().url,
-            { name: form.data.name, framework: form.data.framework },
+            { name: chosenName, framework: form.data.framework },
             {
                 onSuccess: (page) =>
                     form.setData('parent', String(page.props.parent)),
@@ -380,11 +279,11 @@ export default function CreateProject({
 
                     {/* Category tabs */}
                     <div className="flex [scrollbar-width:none] items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                        {CATEGORIES.map((cat) => {
+                        {categories.map((cat) => {
                             const count =
                                 cat.id === 'all'
-                                    ? Object.keys(frameworks).length
-                                    : Object.values(frameworks).filter(
+                                    ? frameworks.length
+                                    : frameworks.filter(
                                           (f) => f.category === cat.id,
                                       ).length;
                             const active = selectedCategory === cat.id;
@@ -470,9 +369,9 @@ export default function CreateProject({
                                 </button>
                             </div>
                         ) : (
-                            filteredFrameworks.map(([slug, option]) => {
+                            filteredFrameworks.map((option) => {
+                                const slug = option.slug;
                                 const isSelected = slug === form.data.framework;
-                                const meta = FRAMEWORK_META[slug];
 
                                 return (
                                     <button
@@ -513,11 +412,9 @@ export default function CreateProject({
                                                     >
                                                         {option.label}
                                                     </span>
-                                                    {meta && (
-                                                        <span className="py-0.2 shrink-0 rounded-md bg-paper px-1.5 text-[10px] font-medium text-soft ring-1 ring-line/70">
-                                                            {meta.tech}
-                                                        </span>
-                                                    )}
+                                                    <span className="py-0.2 shrink-0 rounded-md bg-paper px-1.5 text-[10px] font-medium text-soft ring-1 ring-line/70">
+                                                        {option.tech}
+                                                    </span>
                                                     {option.comingSoon ? (
                                                         <span className="py-0.2 shrink-0 rounded-full bg-amber-500/15 px-1.5 text-[9px] font-semibold text-amber-600 ring-1 ring-amber-500/25">
                                                             Soon
@@ -560,10 +457,9 @@ export default function CreateProject({
                     {/* Framework list footer info & scroll hint */}
                     <div className="flex shrink-0 items-center justify-between px-1 text-[11px] text-faint">
                         <span>
-                            {filteredFrameworks.length ===
-                            Object.keys(frameworks).length
+                            {filteredFrameworks.length === frameworks.length
                                 ? `${filteredFrameworks.length} frameworks`
-                                : `${filteredFrameworks.length} of ${Object.keys(frameworks).length} frameworks`}
+                                : `${filteredFrameworks.length} of ${frameworks.length} frameworks`}
                         </span>
                         {canScrollDown && (
                             <button
@@ -741,164 +637,95 @@ export default function CreateProject({
                         </div>
                     ) : (
                         <div className="overflow-hidden rounded-2xl bg-surface shadow-xs ring-1 ring-line ring-inset">
-                            {/* Header banner showing active framework */}
-                            <div className="flex items-start gap-4 border-b border-line bg-paper/40 px-6 py-4.5">
-                                <FrameworkLogo
-                                    slug={form.data.framework}
-                                    size="md"
-                                    className="mt-0.5 shrink-0"
-                                />
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-base font-semibold text-ink">
-                                            {selectedOption.label}
-                                        </span>
-                                        <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-soft ring-1 ring-line">
-                                            {categoryBadgeLabel(
-                                                selectedOption.category,
-                                            )}
-                                        </span>
-                                        {FRAMEWORK_META[
-                                            form.data.framework
-                                        ] && (
-                                            <span className="rounded-md bg-paper px-2 py-0.5 text-[11px] font-medium text-soft ring-1 ring-line">
-                                                {
-                                                    FRAMEWORK_META[
-                                                        form.data.framework
-                                                    ].tech
-                                                }
-                                            </span>
-                                        )}
-                                        {selectedOption.comingSoon && (
-                                            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-500/25">
-                                                Coming soon
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="mt-1 text-xs leading-relaxed text-soft">
-                                        {selectedOption.description}
+                            {!selectedOption ? (
+                                catalog === null ? (
+                                    <p className="p-5.5 text-sm text-warn">
+                                        This LaraKube CLI is too old to list
+                                        frameworks. Update it from Setup, then
+                                        come back.
                                     </p>
-                                </div>
-                            </div>
-                            <div className="space-y-4 p-5.5">
-                                <div
-                                    className={cn(
-                                        'grid gap-4',
-                                        needsEmail && 'sm:grid-cols-2',
-                                    )}
-                                >
-                                    <Field
-                                        label="App name"
-                                        error={form.errors.name}
-                                        hint="Lowercase letters, numbers and dashes."
-                                    >
-                                        <input
-                                            value={form.data.name}
-                                            onChange={(event) =>
-                                                setData(
-                                                    'name',
-                                                    event.target.value,
-                                                )
-                                            }
-                                            placeholder="my-first-app"
-                                            autoFocus
-                                            spellCheck={false}
-                                            className={inputClass}
+                                ) : (
+                                    <div className="m-5.5 h-40 animate-pulse rounded-lg bg-paper" />
+                                )
+                            ) : (
+                                <>
+                                    {/* Header banner showing active framework */}
+                                    <div className="flex items-start gap-4 border-b border-line bg-paper/40 px-6 py-4.5">
+                                        <FrameworkLogo
+                                            slug={selectedOption.slug}
+                                            size="md"
+                                            className="mt-0.5 shrink-0"
                                         />
-                                    </Field>
-                                    {needsEmail && (
-                                        <Field
-                                            label={
-                                                isStatamic
-                                                    ? 'Admin / SSL email'
-                                                    : 'Your email'
-                                            }
-                                            error={form.errors.email}
-                                            hint={
-                                                isStatamic
-                                                    ? 'For your Statamic super user & SSL certificate.'
-                                                    : "For your site's SSL certificate."
-                                            }
-                                        >
-                                            <input
-                                                type="email"
-                                                value={form.data.email}
-                                                onChange={(event) =>
-                                                    setData(
-                                                        'email',
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                placeholder="you@example.com"
-                                                spellCheck={false}
-                                                className={inputClass}
-                                            />
-                                        </Field>
-                                    )}
-                                </div>
-                                <Field
-                                    label="Create it in"
-                                    error={form.errors.parent}
-                                    labelled={false}
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <p className="min-w-0 flex-1 truncate rounded-lg bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line ring-inset">
-                                            {form.data.parent}
-                                            <span className="text-faint">
-                                                /
-                                                {form.data.name ||
-                                                    'my-first-app'}
-                                            </span>
-                                        </p>
-                                        <button
-                                            type="button"
-                                            onClick={pickFolder}
-                                            className={buttonClass(
-                                                'secondary',
-                                                'sm',
-                                            )}
-                                        >
-                                            Change…
-                                        </button>
-                                    </div>
-                                </Field>
-                            </div>
-
-                            {isLaravel && (
-                                <div className="space-y-4 border-t border-line p-5.5">
-                                    <p className="text-[13px] font-medium">
-                                        Laravel options
-                                    </p>
-                                    <Deferred
-                                        data="laravelOptions"
-                                        fallback={
-                                            <div className="h-16 animate-pulse rounded-lg bg-paper" />
-                                        }
-                                    >
-                                        {laravelOptions ? (
-                                            <LaravelOptions
-                                                questions={laravelOptions}
-                                                answers={form.data.laravel}
-                                                errors={
-                                                    form.errors as Record<
-                                                        string,
-                                                        string
-                                                    >
-                                                }
-                                                onChange={(answers) =>
-                                                    setData('laravel', answers)
-                                                }
-                                            />
-                                        ) : (
-                                            <p className="text-sm text-warn">
-                                                This LaraKube CLI is too old to
-                                                create Laravel apps from here.
-                                                Update it from Setup, then come
-                                                back.
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-base font-semibold text-ink">
+                                                    {selectedOption.label}
+                                                </span>
+                                                <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-soft ring-1 ring-line">
+                                                    {categoryLabel(
+                                                        selectedOption.category,
+                                                    )}
+                                                </span>
+                                                <span className="rounded-md bg-paper px-2 py-0.5 text-[11px] font-medium text-soft ring-1 ring-line">
+                                                    {selectedOption.tech}
+                                                </span>
+                                                {selectedOption.comingSoon && (
+                                                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-500/25">
+                                                        Coming soon
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 text-xs leading-relaxed text-soft">
+                                                {selectedOption.description}
                                             </p>
-                                        )}
-                                    </Deferred>
-                                </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4 p-5.5">
+                                        <FrameworkFields
+                                            fields={selectedOption.fields}
+                                            answers={form.data.answers}
+                                            errors={
+                                                form.errors as Record<
+                                                    string,
+                                                    string
+                                                >
+                                            }
+                                            errorPrefix="answers"
+                                            onChange={(answers) =>
+                                                setData('answers', answers)
+                                            }
+                                            autoFocus
+                                            afterEssential={
+                                                <Field
+                                                    label="Create it in"
+                                                    error={form.errors.parent}
+                                                    labelled={false}
+                                                >
+                                                    <div className="flex items-center gap-2.5">
+                                                        <p className="min-w-0 flex-1 truncate rounded-lg bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line ring-inset">
+                                                            {form.data.parent}
+                                                            <span className="text-faint">
+                                                                /
+                                                                {chosenName ||
+                                                                    'my-first-app'}
+                                                            </span>
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={pickFolder}
+                                                            className={buttonClass(
+                                                                'secondary',
+                                                                'sm',
+                                                            )}
+                                                        >
+                                                            Change…
+                                                        </button>
+                                                    </div>
+                                                </Field>
+                                            }
+                                        />
+                                    </div>
+                                </>
                             )}
 
                             <div className="flex shrink-0 items-center justify-between gap-4 border-t border-line bg-paper/60 px-5.5 py-3.5">
@@ -918,11 +745,8 @@ export default function CreateProject({
                                         size="sm"
                                         disabled={
                                             form.processing ||
-                                            form.data.name.trim() === '' ||
-                                            (isLaravel &&
-                                                (!laravelOptions ||
-                                                    form.data.email.trim() ===
-                                                        ''))
+                                            !selectedOption ||
+                                            chosenName.trim() === ''
                                         }
                                     >
                                         {form.processing
