@@ -381,3 +381,28 @@ test('a failed install leaves the list as it was', function () {
 
     File::deleteDirectory($bin);
 });
+
+test('whether a tool gets an admin email comes from the fields the CLI sends for it', function (array $initFields, ?string $expected) {
+    $bin = clusterToolsFakeCli();
+    $row = [
+        'tool' => 'crm', 'instance' => '', 'icon' => '*', 'brand' => 'CRM', 'label' => 'CRM', 'installed' => false, 'initFields' => $initFields,
+        'namespace' => 'larakube-shared', 'host' => null, 'aliases' => [], 'url' => null,
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'crm']), ['domain' => 'crm.example.com'])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array("--admin-email={$expected}", $cmd, true) === ($expected !== null));
+
+    File::deleteDirectory($bin);
+})->with([
+    'it asks for one' => [[['key' => 'domain', 'type' => 'text', 'label' => 'Domain', 'flag' => '--domain='], ['key' => 'adminEmail', 'type' => 'text', 'label' => 'Admin email', 'flag' => '--admin-email=']], 'admin@crm.example.com'],
+    'it does not' => [[['key' => 'domain', 'type' => 'text', 'label' => 'Domain', 'flag' => '--domain=']], null],
+]);

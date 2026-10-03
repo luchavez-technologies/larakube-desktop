@@ -188,6 +188,8 @@ export type ClusterTool = {
     sync: Wiring;
     rotation: Wiring;
     requiresAdminEmail?: boolean;
+    /** What the CLI asks when installing this tool, in the same shape as a framework's fields. */
+    initFields?: FrameworkField[];
 };
 
 export function toolCategories(tool: {

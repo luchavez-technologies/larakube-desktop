@@ -1818,30 +1818,10 @@ function InstallDialog({
     const tagline = toolTagline(tool);
     const name = toolName(tool);
 
-    const needsAdminEmail =
-        tool.requiresAdminEmail ??
-        [
-            'pocketbase',
-            'directus',
-            'data',
-            'sso',
-            'zitadel',
-            'mail',
-            'stalwart',
-            'notes',
-            'outline',
-            'support',
-            'chatwoot',
-            'errors',
-            'glitchtip',
-            'metabase',
-            'git',
-            'forgejo',
-            'design',
-            'penpot',
-            'vpn',
-            'netbird',
-        ].includes(tool.tool);
+    // The CLI names the fields a tool's install asks; an older CLI only sends the flag.
+    const needsAdminEmail = tool.initFields
+        ? tool.initFields.some((field) => field.key === 'adminEmail')
+        : Boolean(tool.requiresAdminEmail);
 
     const defaultAdminEmail = useMemo(() => {
         if (server.account && server.account.includes('@')) {

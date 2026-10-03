@@ -105,11 +105,11 @@ class ClusterToolController extends Controller
         $domain = $request->string('domain')->trim()->lower()->toString();
 
         $adminEmail = $request->string('admin_email')->trim()->toString();
-        $needsAdminEmail = (bool) ($row['requiresAdminEmail'] ?? false) || in_array($tool, [
-            'pocketbase', 'directus', 'data', 'sso', 'zitadel', 'mail', 'stalwart', 'notes',
-            'outline', 'support', 'chatwoot', 'errors', 'glitchtip', 'metabase', 'git',
-            'forgejo', 'design', 'penpot', 'vpn', 'netbird',
-        ], true);
+        // Whether the tool takes an admin email is the CLI's answer: its install fields
+        // name it. A CLI too old to send fields falls back to its older flag.
+        $needsAdminEmail = is_array($row['initFields'] ?? null)
+            ? collect($row['initFields'])->contains('key', 'adminEmail')
+            : (bool) ($row['requiresAdminEmail'] ?? false);
 
         if ($adminEmail === '' && $needsAdminEmail) {
             $adminEmail = is_string($stack['account'] ?? null) && str_contains((string) $stack['account'], '@')

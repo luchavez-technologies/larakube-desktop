@@ -51,3 +51,13 @@ test('Desktop does not branch on a specific tool, apart from the known leftovers
 
     expect($found)->toBe($known, 'Desktop branches on a tool slug; send it from the CLI instead.');
 });
+
+test('whether a tool needs an admin email is read from the CLI, never from a list of tool names', function (): void {
+    $controller = (string) file_get_contents(app_path('Http/Controllers/ClusterToolController.php'));
+    $form = desktopSources()['pages/tools/index.tsx'];
+
+    // The old lists named most of these side by side.
+    expect($controller)->not->toContain("'glitchtip', 'metabase'")
+        ->and($form)->not->toMatch("/'glitchtip',\\s*'metabase'/")
+        ->and($form)->toContain('initFields');
+});
