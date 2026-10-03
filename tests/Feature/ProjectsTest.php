@@ -255,13 +255,15 @@ function projectsFrameworks(bool $available = true): void
     $select = fn (string $key, string $label, array $options, array $extra = []): array => array_replace(['key' => $key, 'type' => 'select', 'label' => $label, 'required' => true, 'multiple' => false, 'nullable' => false, 'default' => null, 'options' => $options, 'group' => 'advanced'], $extra);
     $framework = fn (string $slug, string $label, string $category, array $fields, array $extra = []): array => array_replace(['slug' => $slug, 'label' => $label, 'description' => "{$label} app", 'category' => $category, 'tech' => 'PHP', 'logo' => $slug, 'deployable' => true, 'hidden' => false, 'comingSoon' => false, 'command' => "{$slug}:new", 'args' => ['--fast'], 'fields' => $fields], $extra);
 
+    $optOut = ['key' => 'selfContained', 'type' => 'confirm', 'role' => 'commons-opt-out', 'label' => 'Keep this app self-contained', 'required' => false, 'default' => false, 'flag' => '--no-plex', 'group' => 'essential'];
     $laravel = $framework('laravel', 'Laravel', 'fullstack', [
         $name, $email,
         $select('server', 'Server variation', [$option('fpm-nginx'), $option('frankenphp')], ['default' => 'frankenphp', 'suggested' => 'fpm-nginx', 'implies' => ['frankenphp' => ['features' => 'octane']]]),
         $select('frontend', 'Frontend stack', [$option('react'), $option('vue')], ['required' => false, 'nullable' => true, 'suggested' => 'react', 'group' => 'essential']),
         ['key' => 'features', 'type' => 'multiselect', 'label' => 'Laravel features', 'required' => false, 'multiple' => true, 'nullable' => false, 'default' => null, 'options' => [$option('queues'), $option('horizon'), $option('scout'), $option('octane', ['frankenphp'])], 'conflicts' => [['horizon', 'queues']], 'group' => 'advanced'],
         $select('search', 'Search driver for Scout', [$option('meilisearch')], ['default' => 'meilisearch', 'visibleWhen' => ['features' => 'scout'], 'requiresFeature' => 'scout']),
-        $select('database', 'Database', [$option('mysql'), $option('postgres'), $option('sqlite', ['frankenphp'])], ['default' => 'mysql', 'suggested' => 'postgres', 'group' => 'essential']),
+        $select('database', 'Database', [$option('mysql') + ['commons' => 'mysql'], $option('postgres') + ['commons' => 'postgres'], $option('sqlite', ['frankenphp'])], ['default' => 'mysql', 'suggested' => 'postgres', 'group' => 'essential']),
+        $optOut,
     ], ['command' => 'new', 'initEmail' => true]);
     $statamic = $framework('statamic', 'Statamic', 'cms', [$name, $email, $select('content', 'Where content lives', [['value' => 'database', 'label' => 'Database'], ['value' => 'files', 'label' => 'Files']], ['default' => 'database', 'flag' => '--content='])], ['args' => ['--fast', '--no-plex'], 'initEmail' => true]);
     $vite = $framework('vite', 'Vite', 'frontend', [$name, $select('template', 'Template', [['value' => 'react-ts', 'label' => 'React'], ['value' => 'vue-ts', 'label' => 'Vue']], ['default' => 'react-ts', 'flag' => '--template=', 'group' => 'essential']), ['key' => 'typescript', 'type' => 'confirm', 'label' => 'Use TypeScript', 'required' => false, 'default' => true, 'flag' => '--typescript', 'group' => 'essential']]);
@@ -605,6 +607,48 @@ test('purging every local project needs "purge all" typed', function () {
 
     $this->post(route('projects.down-all'), ['purge' => true])->assertSessionHasErrors('confirm');
     expect(Run::count())->toBe(0);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a new Laravel app joins the Commons unless the form says it is self-contained', function (bool $selfContained) {
+    $sandbox = projectsSandbox();
+    projectsFrameworks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.scaffold'), [
+        'framework' => 'laravel', 'parent' => dirname($sandbox['app']),
+        'answers' => ['name' => 'blog', 'email' => 'dev@example.com', 'server' => 'fpm-nginx', 'frontend' => null, 'features' => [], 'database' => 'postgres', 'selfContained' => $selfContained],
+    ])->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'new', 'blog', '--fast', '--email=dev@example.com', '--fpm-nginx', '--postgres', ...($selfContained ? ['--no-plex'] : []), '--no-interaction',
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+})->with([[false], [true]]);
+
+test('the New project page reports the local Commons so the form can say what it will start', function () {
+    $sandbox = projectsSandbox();
+    File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/kubectl", 0755);
+    projectsFrameworks();
+    Process::fake([
+        '*current-context*' => Process::result(output: "orbstack\n"),
+        '*cluster-info*' => Process::result(output: 'ok'),
+        '*plex-commons*' => Process::result(output: json_encode(['services' => ['postgres' => ['enabled' => true], 'redis' => ['enabled' => false]]])),
+        '*plex-registry*' => Process::result(output: json_encode(['tenants' => ['blog' => []]])),
+        '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
+    ]);
+
+    $this->get(route('projects.create'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('commons.context', 'orbstack')
+                ->where('commons.initialized', true)
+                ->where('commons.services.postgres.enabled', true)
+                ->where('commons.services.redis.enabled', false)));
 
     File::deleteDirectory($sandbox['home']);
 });

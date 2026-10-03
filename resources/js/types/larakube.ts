@@ -385,6 +385,8 @@ export type FrameworkField = {
     format?: string;
     arg?: string;
     group?: 'essential' | 'advanced';
+    /** `commons-opt-out`: ticking it keeps the app out of the shared Commons. */
+    role?: string;
     multiple?: boolean;
     nullable?: boolean;
     default?: string | boolean | null;
@@ -395,6 +397,8 @@ export type FrameworkField = {
         label: string;
         flag?: string;
         unavailableWith?: string[];
+        /** The Commons service this choice would share. */
+        commons?: string;
     }[];
     optionHints?: Record<string, string>;
     conflicts?: string[][];
@@ -413,6 +417,13 @@ export type FrameworkInfo = {
     comingSoon?: boolean;
     fields: FrameworkField[];
 };
+
+/** The local Commons, as it is now: `null` when there is no local cluster to ask. */
+export type CommonsState = {
+    context: string;
+    initialized: boolean;
+    services: Record<string, { enabled?: boolean }>;
+} | null;
 
 export type FrameworkCatalog = {
     categories: { id: string; label: string }[];

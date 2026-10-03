@@ -13,6 +13,7 @@ import {
     X,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import CommonsNotice from '@/components/commons-notice';
 import FrameworkLogo from '@/components/framework-logo';
 import FrameworkFields, {
     defaultAnswers,
@@ -27,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { chooseFolder, create, index, scaffold, show } from '@/routes/projects';
 import { cancel, show as showRun } from '@/routes/runs';
 import type {
+    CommonsState,
     FrameworkCatalog,
     FrameworkInfo,
     NewAppAnswers,
@@ -45,6 +47,7 @@ type ActiveRun = {
 
 export default function CreateProject({
     catalog,
+    commons,
     parent,
     name,
     framework,
@@ -52,6 +55,7 @@ export default function CreateProject({
     activeRun,
 }: {
     catalog?: FrameworkCatalog | null;
+    commons?: CommonsState;
     parent: string;
     name: string;
     framework: string;
@@ -696,32 +700,50 @@ export default function CreateProject({
                                             }
                                             autoFocus
                                             afterEssential={
-                                                <Field
-                                                    label="Create it in"
-                                                    error={form.errors.parent}
-                                                    labelled={false}
-                                                >
-                                                    <div className="flex items-center gap-2.5">
-                                                        <p className="min-w-0 flex-1 truncate rounded-lg bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line ring-inset">
-                                                            {form.data.parent}
-                                                            <span className="text-faint">
-                                                                /
-                                                                {chosenName ||
-                                                                    'my-first-app'}
-                                                            </span>
-                                                        </p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={pickFolder}
-                                                            className={buttonClass(
-                                                                'secondary',
-                                                                'sm',
-                                                            )}
-                                                        >
-                                                            Change…
-                                                        </button>
-                                                    </div>
-                                                </Field>
+                                                <>
+                                                    <CommonsNotice
+                                                        fields={
+                                                            selectedOption.fields
+                                                        }
+                                                        answers={
+                                                            form.data.answers
+                                                        }
+                                                        commons={commons}
+                                                    />
+                                                    <Field
+                                                        label="Create it in"
+                                                        error={
+                                                            form.errors.parent
+                                                        }
+                                                        labelled={false}
+                                                    >
+                                                        <div className="flex items-center gap-2.5">
+                                                            <p className="min-w-0 flex-1 truncate rounded-lg bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line ring-inset">
+                                                                {
+                                                                    form.data
+                                                                        .parent
+                                                                }
+                                                                <span className="text-faint">
+                                                                    /
+                                                                    {chosenName ||
+                                                                        'my-first-app'}
+                                                                </span>
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={
+                                                                    pickFolder
+                                                                }
+                                                                className={buttonClass(
+                                                                    'secondary',
+                                                                    'sm',
+                                                                )}
+                                                            >
+                                                                Change…
+                                                            </button>
+                                                        </div>
+                                                    </Field>
+                                                </>
                                             }
                                         />
                                     </div>

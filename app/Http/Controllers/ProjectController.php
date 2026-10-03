@@ -9,9 +9,11 @@ use App\Models\Run;
 use App\Services\EditorLauncher;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\LaravelOptions;
+use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
@@ -95,7 +97,7 @@ class ProjectController extends Controller
         return to_route('projects.show', $project);
     }
 
-    public function create(Request $request, FrameworkCatalog $frameworks): Response
+    public function create(Request $request, FrameworkCatalog $frameworks, LocalCluster $local, ClusterStatus $status): Response
     {
         $parent = (string) $request->query('parent', '');
         $requestedFramework = (string) $request->query('framework', '');
@@ -124,6 +126,13 @@ class ProjectController extends Controller
                 'categories' => $frameworks->catalog()['categories'],
                 'frameworks' => $frameworks->visible(),
             ]),
+            // The local Commons as it is now, so the form can say what creating the app will start.
+            'commons' => Inertia::defer(function () use ($local, $status): ?array {
+                $context = $local->detect()['context'];
+                $plex = $context === null ? null : $status->plex($context);
+
+                return $plex === null ? null : ['context' => $context, 'initialized' => $plex['initialized'], 'services' => $plex['services']];
+            }),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
