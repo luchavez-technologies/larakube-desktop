@@ -174,7 +174,9 @@ class ClusterToolController extends Controller
         abort_if($row === null || ! $row['installed'], 404);
 
         // The host is an instance's identity, so --domain removes exactly this one.
-        $host = is_string($row['host'] ?? null) && $row['host'] !== '' ? $row['host'] : null;
+        // Only a tool that can run more than once takes --domain; the others refuse it. A CLI too
+        // old to say is treated as multi-instance, as before.
+        $host = is_string($row['host'] ?? null) && $row['host'] !== '' && ($row['multiInstance'] ?? true) !== false ? $row['host'] : null;
         $displayName = $this->displayName($row);
         // The CLI names the command for this exact instance (its engine included), never its category.
         $command = is_string($row['removeCommand'] ?? null) && $row['removeCommand'] !== '' ? $row['removeCommand'] : "{$tool}:remove";

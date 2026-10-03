@@ -168,21 +168,9 @@ const CATEGORY_FILTERS = [
     { value: 'storage', label: 'Storage' },
 ] as const;
 
-const MULTI_INSTANCE_TOOLS = new Set([
-    'data',
-    'pocketbase',
-    'directus',
-    'drive',
-    'minio',
-    'ocis',
-    'flow',
-    'n8n',
-    'windmill',
-    'sheets',
-    'teable',
-    'notes',
-    'outline',
-]);
+/** Whether the CLI says this tool can run as more than one instance. */
+const isMultiInstance = (tool: ClusterTool): boolean =>
+    tool.multiInstance === true;
 
 export default function ToolsIndex({
     server,
@@ -293,7 +281,7 @@ export default function ToolsIndex({
             }
 
             // 3. Single-instance tools: only allow one entry per tool (preferring entries with host/url)
-            if (!MULTI_INSTANCE_TOOLS.has(t.tool)) {
+            if (!isMultiInstance(t)) {
                 if (seenSingleTools.has(t.tool)) {
                     continue;
                 }
@@ -851,8 +839,8 @@ export default function ToolsIndex({
                                                                 </td>
                                                                 <td className="py-3.5 text-right">
                                                                     <div className="flex items-center justify-end gap-3">
-                                                                        {MULTI_INSTANCE_TOOLS.has(
-                                                                            tool.tool,
+                                                                        {isMultiInstance(
+                                                                            tool,
                                                                         ) && (
                                                                             <button
                                                                                 type="button"
@@ -1230,7 +1218,7 @@ function InstalledCard({
 }) {
     const url = tool.url?.split(' ')[0] ?? null;
     const href = detailUrl(server, tool);
-    const canMulti = MULTI_INSTANCE_TOOLS.has(tool.tool);
+    const canMulti = isMultiInstance(tool);
     const name = toolName(tool);
     const tagline = toolTagline(tool);
     const cats = toolCategories(tool);
@@ -1359,7 +1347,7 @@ function AvailableCard({
     const tagline = toolTagline(tool);
     const cats = toolCategories(tool);
     const stack = toolStack(tool);
-    const canMulti = MULTI_INSTANCE_TOOLS.has(tool.tool);
+    const canMulti = isMultiInstance(tool);
 
     return (
         <article className="group relative flex flex-col justify-between rounded-2xl bg-surface p-5 shadow-2xs ring-1 ring-line transition-all duration-150 hover:shadow-md hover:ring-line/80">

@@ -194,6 +194,8 @@ export type ClusterTool = {
     sync: Wiring;
     rotation: Wiring;
     requiresAdminEmail?: boolean;
+    /** Whether more than one instance of the tool can run on a server. */
+    multiInstance?: boolean;
     /** What the CLI asks when installing this tool, in the same shape as a framework's fields. */
     initFields?: FrameworkField[];
 };

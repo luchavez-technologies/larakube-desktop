@@ -436,3 +436,28 @@ test('a tool\'s own options reach the install as flags, the way the CLI describe
 
     File::deleteDirectory($bin);
 });
+
+test('removing a tool passes --domain only when the CLI says the tool can run more than once', function (bool $multi, bool $expectsDomain) {
+    $bin = clusterToolsFakeCli();
+    $row = [
+        'tool' => 'stalwart', 'instance' => '', 'icon' => '*', 'brand' => 'Stalwart', 'label' => 'Mail', 'installed' => true, 'multiInstance' => $multi,
+        'removeCommand' => 'stalwart:remove', 'namespace' => 'larakube-shared', 'host' => 'send.test', 'aliases' => [], 'url' => 'https://send.test',
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'stalwart']), ['confirm' => 'stalwart', 'domain' => 'send.test'])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--domain=send.test', $cmd, true) === $expectsDomain && in_array('stalwart:remove', $cmd, true));
+
+    File::deleteDirectory($bin);
+})->with([
+    'a single-instance tool' => [false, false],
+    'a multi-instance tool' => [true, true],
+]);
