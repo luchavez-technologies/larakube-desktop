@@ -9,10 +9,12 @@ use App\Http\Requests\StoreServerRequest;
 use App\Models\Project;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\ContextHealth;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -179,6 +181,37 @@ class ServerController extends Controller
         abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
 
         return $stack['context'];
+    }
+
+    /** Reboots a server LaraKube made. Nothing else can be restarted: a kubeconfig cannot reboot a machine. */
+    public function restart(string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $stack = $catalog->find($server);
+
+        abort_if($stack === null || $stack['kind'] !== 'vps' || $stack['status'] !== 'ready', 404);
+
+        $run = $runner->start(
+            label: "Restart server {$server}",
+            arguments: ['cloud:restart', "--stack={$server}", '--force'],
+            kind: RunKind::RestartServer,
+            subject: $server,
+            meta: ['server' => $server],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    /**
+     * Which of the given Kubernetes contexts still answer, for the list to flag the ones that never will.
+     */
+    public function health(Request $request, ContextHealth $health): JsonResponse
+    {
+        $contexts = array_values(array_filter((array) $request->query('contexts', []), fn (mixed $context): bool => is_string($context) && preg_match('/^[A-Za-z0-9][A-Za-z0-9._:@\/-]*$/', $context) === 1));
+
+        return response()->json($health->check($contexts))->header('Cache-Control', 'no-store');
     }
 
     public function destroy(DestroyServerRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse

@@ -32,6 +32,7 @@ function backLink(run: Run): { href: string; label: string } {
                 : { href: serversIndex().url, label: 'Servers' };
         case 'destroy-server':
             return { href: serversIndex().url, label: 'Servers' };
+        case 'restart-server':
         case 'connect-domain':
         case 'enable-ssl':
             return server

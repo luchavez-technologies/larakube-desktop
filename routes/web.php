@@ -38,8 +38,10 @@ Route::post('/servers', [ServerController::class, 'store'])->name('servers.store
 Route::pattern('server', '[a-z0-9][a-z0-9-]*');
 Route::pattern('tool', '[a-z][a-z0-9-]*');
 
+Route::get('/servers/health', [ServerController::class, 'health'])->name('servers.health');
 Route::get('/servers/{server}', [ServerController::class, 'show'])->name('servers.show');
 Route::delete('/servers/{server}', [ServerController::class, 'destroy'])->name('servers.destroy');
+Route::post('/servers/{server}/restart', [ServerController::class, 'restart'])->name('servers.restart');
 Route::post('/servers/{server}/dns', [ServerController::class, 'connectDomain'])->name('servers.dns');
 Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->name('servers.tls');
 Route::post('/servers/{server}/plex/init', [PlexController::class, 'initServer'])->name('servers.plex.init');

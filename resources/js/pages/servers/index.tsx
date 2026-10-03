@@ -10,6 +10,7 @@ import {
     X,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
@@ -40,6 +41,32 @@ export default function ServersIndex({
 
     const leftovers =
         servers?.filter((server) => server.status !== 'ready') ?? [];
+
+    // Which discovered clusters still answer, so the ones that never will can be offered for removal.
+    const [health, setHealth] = useState<Record<string, boolean>>({});
+    const discoveredContexts = (servers ?? [])
+        .filter((server) => server.kind === 'discovered' && server.context)
+        .map((server) => server.context as string);
+    const discoveredKey = discoveredContexts.join('|');
+
+    useEffect(() => {
+        if (discoveredContexts.length === 0) return;
+
+        const query = discoveredContexts
+            .map((context) => `contexts[]=${encodeURIComponent(context)}`)
+            .join('&');
+
+        fetch(`/servers/health?${query}`, {
+            headers: { Accept: 'application/json' },
+        })
+            .then((res) => (res.ok ? res.json() : {}))
+            .then((answers: Record<string, boolean>) => setHealth(answers))
+            .catch(() => undefined);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [discoveredKey]);
+
+    const reachable = (server: Server): boolean | undefined =>
+        server.context ? health[server.context] : undefined;
 
     return (
         <AppLayout title="Servers">
@@ -103,6 +130,7 @@ export default function ServersIndex({
                                                 'Region',
                                                 'IP address',
                                                 'Status',
+                                                'Quick actions',
                                                 '',
                                             ].map((heading) => (
                                                 <th
@@ -151,6 +179,13 @@ export default function ServersIndex({
                                                                     Discovered
                                                                 </span>
                                                             )}
+                                                            {reachable(
+                                                                server,
+                                                            ) === false && (
+                                                                <span className="rounded bg-warn-tint px-1.5 py-0.5 text-[10px] font-semibold text-warn">
+                                                                    Unreachable
+                                                                </span>
+                                                            )}
                                                             {server.isCurrent && (
                                                                 <span className="rounded bg-ok-tint px-1.5 py-0.5 text-[10px] font-semibold text-ok">
                                                                     Active
@@ -168,6 +203,14 @@ export default function ServersIndex({
                                                         <StatusPill tone={tone}>
                                                             {label}
                                                         </StatusPill>
+                                                    </td>
+                                                    <td className="py-2">
+                                                        <ServerActions
+                                                            server={server}
+                                                            reachable={reachable(
+                                                                server,
+                                                            )}
+                                                        />
                                                     </td>
                                                     <td className="text-right">
                                                         <Link
@@ -196,52 +239,70 @@ export default function ServersIndex({
                                         serverStatus[server.status];
 
                                     return (
-                                        <Link
+                                        <div
                                             key={server.name}
-                                            href={show(server.name).url}
                                             className="rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
                                         >
-                                            <div className="flex items-center justify-between gap-3">
-                                                <span className="truncate text-sm font-semibold">
-                                                    {server.name}
-                                                </span>
-                                                <StatusPill tone={tone}>
-                                                    {label}
-                                                </StatusPill>
-                                            </div>
-                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-soft">
-                                                <span>
-                                                    {providerLabels[
-                                                        server.provider
-                                                    ] ?? server.provider}
-                                                </span>
-                                                {server.kind ===
-                                                    'discovered' && (
-                                                    <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
-                                                        Discovered
+                                            <Link
+                                                href={show(server.name).url}
+                                                className="block"
+                                            >
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="truncate text-sm font-semibold">
+                                                        {server.name}
                                                     </span>
-                                                )}
-                                                {server.isCurrent && (
-                                                    <span className="rounded bg-ok-tint px-1.5 py-0.5 text-[10px] font-semibold text-ok">
-                                                        Active
-                                                    </span>
-                                                )}
-                                                {server.region && (
+                                                    <StatusPill tone={tone}>
+                                                        {label}
+                                                    </StatusPill>
+                                                </div>
+                                                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-soft">
                                                     <span>
-                                                        · {server.region}
+                                                        {providerLabels[
+                                                            server.provider
+                                                        ] ?? server.provider}
                                                     </span>
-                                                )}
+                                                    {server.kind ===
+                                                        'discovered' && (
+                                                        <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
+                                                            Discovered
+                                                        </span>
+                                                    )}
+                                                    {reachable(server) ===
+                                                        false && (
+                                                        <span className="rounded bg-warn-tint px-1.5 py-0.5 text-[10px] font-semibold text-warn">
+                                                            Unreachable
+                                                        </span>
+                                                    )}
+                                                    {server.isCurrent && (
+                                                        <span className="rounded bg-ok-tint px-1.5 py-0.5 text-[10px] font-semibold text-ok">
+                                                            Active
+                                                        </span>
+                                                    )}
+                                                    {server.region && (
+                                                        <span>
+                                                            · {server.region}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="mt-3 flex items-center justify-between">
+                                                    <span className="font-mono text-[11px] text-faint">
+                                                        {server.ip ??
+                                                            'Provisioning IP…'}
+                                                    </span>
+                                                    <span className="text-sm font-medium text-brand hover:underline">
+                                                        View →
+                                                    </span>
+                                                </div>
+                                            </Link>
+                                            <div className="mt-3 border-t border-line pt-3">
+                                                <ServerActions
+                                                    server={server}
+                                                    reachable={reachable(
+                                                        server,
+                                                    )}
+                                                />
                                             </div>
-                                            <div className="mt-3 flex items-center justify-between">
-                                                <span className="font-mono text-[11px] text-faint">
-                                                    {server.ip ??
-                                                        'Provisioning IP…'}
-                                                </span>
-                                                <span className="text-sm font-medium text-brand hover:underline">
-                                                    View →
-                                                </span>
-                                            </div>
-                                        </Link>
+                                        </div>
                                     );
                                 })}
                             </div>

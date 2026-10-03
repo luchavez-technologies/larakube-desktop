@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, usePoll } from '@inertiajs/react';
 import { FolderPlus, Plus, ArrowRight } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import PageHeader from '@/components/page-header';
+import ProjectActions from '@/components/project-actions';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
@@ -10,8 +11,21 @@ import AppLayout from '@/layouts/app-layout';
 import { create, show, store } from '@/routes/projects';
 import type { Project } from '@/types/larakube';
 
-export default function ProjectsIndex({ projects }: { projects: Project[] }) {
+export default function ProjectsIndex({
+    projects,
+    hasActiveRuns = false,
+}: {
+    projects: Project[];
+    hasActiveRuns?: boolean;
+}) {
     const { errors } = usePage().props as { errors: Record<string, string> };
+
+    // Follow a running up, down, start or stop until it finishes.
+    usePoll(
+        2000,
+        { only: ['projects', 'hasActiveRuns'] },
+        { autoStart: hasActiveRuns, keepAlive: false },
+    );
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
 
     useEffect(() => {
@@ -75,30 +89,36 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
                 /* Card Grid View */
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
                     {projects.map((project) => (
-                        <Link
+                        <div
                             key={project.id}
-                            href={show(project.id).url}
                             className="rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
                         >
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="truncate text-sm font-semibold">
-                                    {project.name}
-                                </span>
-                                <StatusPill tone={projectStatus(project)[1]}>
-                                    {projectStatus(project)[0]}
-                                </StatusPill>
+                            <Link href={show(project.id).url} className="block">
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="truncate text-sm font-semibold">
+                                        {project.name}
+                                    </span>
+                                    <StatusPill
+                                        tone={projectStatus(project)[1]}
+                                    >
+                                        {projectStatus(project)[0]}
+                                    </StatusPill>
+                                </div>
+                                <p className="mt-1 text-xs text-soft">
+                                    {project.framework ??
+                                        project.detectedFramework ??
+                                        (project.exists
+                                            ? 'Unknown framework'
+                                            : '—')}
+                                </p>
+                                <p className="mt-2 truncate font-mono text-[11px] text-faint">
+                                    {project.path}
+                                </p>
+                            </Link>
+                            <div className="mt-3 border-t border-line pt-3">
+                                <ProjectActions project={project} />
                             </div>
-                            <p className="mt-1 text-xs text-soft">
-                                {project.framework ??
-                                    project.detectedFramework ??
-                                    (project.exists
-                                        ? 'Unknown framework'
-                                        : '—')}
-                            </p>
-                            <p className="mt-2 truncate font-mono text-[11px] text-faint">
-                                {project.path}
-                            </p>
-                        </Link>
+                        </div>
                     ))}
                 </div>
             ) : (
@@ -113,6 +133,7 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
                                     'Host / Path',
                                     'Server',
                                     'Status',
+                                    'Quick actions',
                                     '',
                                 ].map((heading) => (
                                     <th
@@ -163,6 +184,9 @@ export default function ProjectsIndex({ projects }: { projects: Project[] }) {
                                             <StatusPill tone={statusTone}>
                                                 {statusLabel}
                                             </StatusPill>
+                                        </td>
+                                        <td className="py-2">
+                                            <ProjectActions project={project} />
                                         </td>
                                         <td className="text-right">
                                             <Link

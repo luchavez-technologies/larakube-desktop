@@ -6,6 +6,8 @@ enum RunKind: string
 {
     case CreateServer = 'create-server';
     case DestroyServer = 'destroy-server';
+    /** A server made with cloud:create, rebooted over SSH. */
+    case RestartServer = 'restart-server';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */
     case InstallTool = 'install-tool';
     /** The CLI's local setup (container runtime and a local k3s cluster), run with temporary passwordless sudo. */

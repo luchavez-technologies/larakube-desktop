@@ -33,6 +33,7 @@ export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type RunKind =
     | 'create-server'
     | 'destroy-server'
+    | 'restart-server'
     | 'install-tool'
     | 'install-cluster-tool'
     | 'remove-cluster-tool'
