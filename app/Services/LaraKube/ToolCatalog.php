@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
@@ -203,7 +204,12 @@ class ToolCatalog
         set_time_limit(240);
 
         $isolated = $this->locator->isolate([$cli, 'tool:list', "--context={$context}", ...($registryOnly ? ['--registry-only'] : []), '--json', '--no-interaction']);
-        $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
+        try {
+            $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
+
         $decoded = json_decode(trim($result->output()), true);
 
         if (! $result->successful() || ! is_array($decoded) || ! array_is_list($decoded)) {

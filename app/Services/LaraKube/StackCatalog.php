@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -30,7 +31,11 @@ class StackCatalog
         }
 
         $isolated = $this->locator->isolate([$cli, 'cloud:stacks', '--json', '--no-interaction']);
-        $result = Process::env($isolated['environment'])->timeout(30)->run($isolated['command']);
+        try {
+            $result = Process::env($isolated['environment'])->timeout(30)->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
 
         $lines = preg_split('/\R/', trim($result->output())) ?: [];
         $decoded = json_decode((string) end($lines), true);

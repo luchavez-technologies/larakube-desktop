@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -25,7 +26,11 @@ class ProjectServices
         }
 
         $isolated = $this->locator->isolate([$cli, 'services:show', $environment, '--json', '--no-interaction', ...($reveal ? ['--reveal'] : [])]);
-        $result = Process::path($projectPath)->env($isolated['environment'])->timeout(30)->run($isolated['command']);
+        try {
+            $result = Process::path($projectPath)->env($isolated['environment'])->timeout(30)->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
 
         $lines = preg_split('/\R/', trim($result->output())) ?: [];
         $decoded = json_decode((string) end($lines), true);

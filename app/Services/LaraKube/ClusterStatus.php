@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
@@ -303,7 +304,12 @@ class ClusterStatus
             return $cached;
         }
 
-        $value = $resolve();
+        // A server that is gone or still starting does not answer: that is "unknown", never an error page.
+        try {
+            $value = $resolve();
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
 
         if ($value !== null) {
             Cache::put($key, $value, self::TTL_SECONDS);
