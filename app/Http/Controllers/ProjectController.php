@@ -280,7 +280,7 @@ class ProjectController extends Controller
         return Inertia::render('projects/show', [
             'project' => ['id' => $project->id, 'localStatus' => $this->resolveLocalStatus($project, $inspection, $latestRun, $this->localWorkloadStatuses($locator))] + $inspection,
             'server' => $server,
-            'frameworks' => ProjectInspector::DEPLOYABLE,
+            'frameworks' => $this->inspector->deployableFrameworks(),
             'runs' => Run::query()
                 ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('subject', "project:{$project->id}"))
                 ->latest('id')
@@ -334,7 +334,7 @@ class ProjectController extends Controller
 
     public function init(Request $request, Project $project, CliRunner $runner, LaravelOptions $laravel, FrameworkCatalog $frameworks): RedirectResponse
     {
-        $framework = $request->validate(['framework' => ['required', Rule::in(array_keys(ProjectInspector::DEPLOYABLE))]])['framework'];
+        $framework = $request->validate(['framework' => ['required', Rule::in(array_keys($this->inspector->deployableFrameworks()))]])['framework'];
         $extra = [];
 
         if (in_array($framework, $this->initEmailFrameworks($frameworks), true)) {

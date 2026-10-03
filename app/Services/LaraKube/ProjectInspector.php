@@ -9,18 +9,26 @@ namespace App\Services\LaraKube;
  */
 class ProjectInspector
 {
-    /** The frameworks `cloud:deploy` can ship, matching the CLI's AppFramework::isDeployable(). */
-    public const DEPLOYABLE = [
-        'laravel' => 'Laravel',
-        'statamic' => 'Statamic',
-        'wordpress' => 'WordPress',
-        'nextjs' => 'Next.js',
-        'vite' => 'Vite',
-        'astro' => 'Astro',
-        'docusaurus' => 'Docusaurus',
-    ];
+    public function __construct(private FrameworkCatalog $catalog, private ?GlobalSettings $globalSettings = null) {}
 
-    public function __construct(private ?GlobalSettings $globalSettings = null) {}
+    /**
+     * The frameworks `cloud:deploy` can ship, as the CLI says (slug => label).
+     * Empty when the CLI is missing or too old to say.
+     *
+     * @return array<string, string>
+     */
+    public function deployableFrameworks(): array
+    {
+        $deployable = [];
+
+        foreach ($this->catalog->catalog()['frameworks'] ?? [] as $framework) {
+            if (! empty($framework['deployable'])) {
+                $deployable[(string) $framework['slug']] = (string) $framework['label'];
+            }
+        }
+
+        return $deployable;
+    }
 
     /**
      * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, plex: list<string>, managed: list<string>}>}
@@ -78,7 +86,7 @@ class ProjectInspector
             'webHost' => is_string($host) && $host !== '' ? $host : null,
             'serverIp' => is_string($ip) && $ip !== '' ? $ip : null,
             'serverContext' => is_string($context) && $context !== '' ? $context : null,
-            'deployable' => $framework !== null && array_key_exists($framework, self::DEPLOYABLE),
+            'deployable' => $framework !== null && array_key_exists($framework, $this->deployableFrameworks()),
             'localTld' => $projectLocalTld,
             'globalTld' => $globalTld,
             'effectiveTld' => $effectiveTld,

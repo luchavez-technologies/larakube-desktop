@@ -71,6 +71,7 @@ test('adding a project takes a folder inside the home folder only', function () 
 test('a project page reads its framework, host and bound server from the .larakube files', function () {
     $sandbox = projectsSandbox();
     projectsStacks();
+    projectsFrameworks();
     File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'framework' => 'astro', 'environments' => ['production' => ['hosts' => ['web' => 'shop.example.com']]]]));
     File::put("{$sandbox['app']}/.larakube.local.json", json_encode(['environments' => ['production' => ['cloud' => ['ip' => '203.0.113.21']]]]));
     $project = Project::create(['path' => $sandbox['app']]);
@@ -89,6 +90,7 @@ test('a project page reads its framework, host and bound server from the .laraku
 
 test('set up, address and deploy run the CLI inside the project folder', function () {
     $sandbox = projectsSandbox();
+    projectsFrameworks();
     $project = Project::create(['path' => $sandbox['app']]);
     $fake = ChildProcess::fake();
 
@@ -473,6 +475,7 @@ test('setting up a PHP app passes the email, and Laravel also its options minus 
 
 test('a blueprint with no framework reads as Laravel, as the LaraKube CLI does', function () {
     $sandbox = projectsSandbox();
+    projectsFrameworks();
     File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'framework' => null, 'blueprints' => ['laravel']]));
 
     expect(app(ProjectInspector::class)->inspect($sandbox['app']))
