@@ -2,12 +2,13 @@ import { Link, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import CopyButton from '@/components/copy-button';
 import LogPanel from '@/components/log-panel';
 import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
-import { readiness } from '@/routes';
+import { open, readiness } from '@/routes';
 import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
 import { index as devBoxesIndex } from '@/routes/devboxes';
@@ -163,6 +164,10 @@ export default function ShowRun({ run }: { run: Run }) {
                 ) : (
                     <CreatedCard run={run} />
                 ))}
+            {run.status === 'succeeded' &&
+                run.kind === 'share-dev-box-project' && (
+                    <SharedLinkCard run={run} />
+                )}
             {run.status === 'failed' && (
                 <Card tone="error" className="mb-4">
                     <p className="text-base font-semibold text-accent">
@@ -210,6 +215,53 @@ export default function ShowRun({ run }: { run: Run }) {
                 </button>
             )}
         </AppLayout>
+    );
+}
+
+/** The temporary public link `share` made, with what it means to hand it out. */
+function SharedLinkCard({ run }: { run: Run }) {
+    const result = run.result ?? {};
+    const urls = (
+        typeof result.urls === 'object' && result.urls !== null
+            ? result.urls
+            : {}
+    ) as Record<string, string>;
+    const web = urls.web;
+
+    return (
+        <Card className="mb-4 p-5.5">
+            <h2 className="text-[11px] font-medium tracking-[0.06em] text-ok uppercase">
+                Your preview link
+            </h2>
+            {web ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <span className="font-mono text-sm font-medium break-all">
+                        {web}
+                    </span>
+                    <CopyButton value={web} />
+                    <Link
+                        href={open().url}
+                        method="post"
+                        data={{ url: web }}
+                        as="button"
+                        className={buttonClass('dark', 'sm')}
+                    >
+                        Open it
+                    </Link>
+                </div>
+            ) : (
+                <p className="mt-3 text-sm text-soft">
+                    The link was made but is not in the result. See the log.
+                </p>
+            )}
+            <p className="mt-4 text-[13px] leading-relaxed text-soft">
+                Anyone with this link can open the app, and it changes each time
+                you share. It is for trying the app out, not for production: no
+                uptime guarantee, at most 200 requests at once, and streamed
+                (server-sent) events arrive all at once. Take it down from the
+                dev box page when you are done.
+            </p>
+        </Card>
     );
 }
 

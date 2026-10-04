@@ -10,6 +10,9 @@ enum RunKind: string
     case CreateDevBox = 'create-dev-box';
     /** A new app scaffolded on a dev box over SSH. */
     case NewDevBoxProject = 'new-dev-box-project';
+    /** A temporary public link to an app on a dev box, made with `share`, and taking it down again. */
+    case ShareDevBoxProject = 'share-dev-box-project';
+    case UnshareDevBoxProject = 'unshare-dev-box-project';
     /** A server made with cloud:create, rebooted over SSH. */
     case RestartServer = 'restart-server';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */

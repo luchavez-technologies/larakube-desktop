@@ -63,7 +63,10 @@ Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 
 Route::get('/dev-boxes', [DevBoxController::class, 'index'])->name('devboxes.index');
 Route::get('/dev-boxes/create', [DevBoxController::class, 'create'])->name('devboxes.create');
 Route::post('/dev-boxes', [DevBoxController::class, 'store'])->name('devboxes.store');
+Route::post('/dev-boxes/{box}/projects/{project}/share', [DevBoxController::class, 'share'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.share');
+Route::delete('/dev-boxes/{box}/projects/{project}/share', [DevBoxController::class, 'unshare'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.unshare');
 
+Route::pattern('box', '[a-z0-9][a-z0-9-]*');
 Route::pattern('workspace', '[a-z0-9][a-z0-9-]*');
 Route::get('/workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index');
 Route::post('/workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store');

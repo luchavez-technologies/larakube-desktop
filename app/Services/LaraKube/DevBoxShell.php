@@ -23,9 +23,10 @@ class DevBoxShell
      *
      * @param  array{ip?: ?string, sshKey?: ?string}  $box  a dev box from the stack list
      * @param  list<string>  $arguments  CLI arguments after the binary
+     * @param  string|null  $project  a project folder under the projects folder to run in, for commands that act on the project in the current directory
      * @return list<string>
      */
-    public function command(array $box, array $arguments): array
+    public function command(array $box, array $arguments, ?string $project = null): array
     {
         $ip = (string) ($box['ip'] ?? '');
         $key = (string) ($box['sshKey'] ?? '');
@@ -34,7 +35,13 @@ class DevBoxShell
             throw new InvalidArgumentException('This dev box has no address or SSH key on this computer.');
         }
 
-        $remote = 'export PATH="$PATH:/usr/local/bin"; mkdir -p "$HOME/'.self::PROJECTS_DIRECTORY.'" && cd "$HOME/'.self::PROJECTS_DIRECTORY.'" && larakube '
+        if ($project !== null && preg_match('/^[a-z0-9][a-z0-9-]*$/', $project) !== 1) {
+            throw new InvalidArgumentException('That is not a project name.');
+        }
+
+        $folder = self::PROJECTS_DIRECTORY.($project !== null ? "/{$project}" : '');
+
+        $remote = 'export PATH="$PATH:/usr/local/bin"; mkdir -p "$HOME/'.self::PROJECTS_DIRECTORY.'" && cd "$HOME/'.$folder.'" && larakube '
             .implode(' ', array_map('escapeshellarg', [...$arguments, '--no-interaction']));
 
         return [

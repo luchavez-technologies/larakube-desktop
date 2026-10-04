@@ -1,5 +1,5 @@
 import { Deferred, Link } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Plus, Share2 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -9,7 +9,7 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
-import { create } from '@/routes/devboxes';
+import { create, share, unshare } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
@@ -211,15 +211,58 @@ function BoxProjects({
                                         .join(', ')}
                                 </span>
                             </span>
-                            <StatusPill
-                                tone={
-                                    project.local === 'running' ? 'ok' : 'muted'
-                                }
-                            >
-                                {project.local === 'running'
-                                    ? 'Running'
-                                    : 'Stopped'}
-                            </StatusPill>
+                            <div className="flex shrink-0 items-center gap-2">
+                                {project.local === 'running' && (
+                                    <>
+                                        <Link
+                                            href={
+                                                share({
+                                                    box,
+                                                    project: project.name,
+                                                }).url
+                                            }
+                                            method="post"
+                                            as="button"
+                                            title="Make a temporary public link to this app"
+                                            className={buttonClass(
+                                                'secondary',
+                                                'sm',
+                                            )}
+                                        >
+                                            <Share2 className="size-3.5" />
+                                            <span>Share preview</span>
+                                        </Link>
+                                        <Link
+                                            href={
+                                                unshare({
+                                                    box,
+                                                    project: project.name,
+                                                }).url
+                                            }
+                                            method="delete"
+                                            as="button"
+                                            title="Take the public link down"
+                                            className={buttonClass(
+                                                'ghost',
+                                                'sm',
+                                            )}
+                                        >
+                                            Stop sharing
+                                        </Link>
+                                    </>
+                                )}
+                                <StatusPill
+                                    tone={
+                                        project.local === 'running'
+                                            ? 'ok'
+                                            : 'muted'
+                                    }
+                                >
+                                    {project.local === 'running'
+                                        ? 'Running'
+                                        : 'Stopped'}
+                                </StatusPill>
+                            </div>
                         </li>
                     ))}
                 </ul>
