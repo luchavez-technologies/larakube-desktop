@@ -75,10 +75,10 @@ export default function ShareDomain({
     };
 
     return (
-        <AppLayout title="Share with my domain">
+        <AppLayout title="Share">
             <PageHeader
-                title="Share with my domain"
-                subtitle={`Stable public names for ${project} on ${box}: the app, Vite hot reload, Reverb and file storage, under a domain you own on Cloudflare.`}
+                title="Share"
+                subtitle={`Public names for ${project} on ${box} that stay the same: the app, Vite hot reload, Reverb and file storage, under a domain you own on Cloudflare.`}
                 badge={<StatusPill tone="warn">Experimental</StatusPill>}
             />
             <Card className="max-w-3xl space-y-4 p-5.5">
@@ -164,7 +164,7 @@ export default function ShareDomain({
                                     )
                                 }
                             >
-                                Remove this app&apos;s public names
+                                Remove this app&apos;s names
                             </Button>
                         </div>
                     </>

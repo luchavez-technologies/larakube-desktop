@@ -184,39 +184,14 @@ test('the New project page offers the ready dev boxes, and none when experimenta
     'off' => [false, []],
 ]);
 
-test('sharing an app starts `share --detach --json` over SSH inside that project\'s folder, and stopping runs `share --stop`', function (string $method, string $route, RunKind $kind, string $expected) {
-    $bin = devBoxProjectsCli();
-    devBoxProjectsExperimental(true);
-    Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
-        ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
-    ]]))]);
-    $fake = ChildProcess::fake();
-
-    $this->{$method}(route($route, ['box' => 'my-dev-box', 'project' => 'shop']))->assertRedirect(route('runs.show', Run::sole()));
-
-    expect(Run::sole()->kind)->toBe($kind);
-
-    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($expected): bool {
-        $script = str_replace("'\\''", "'", end($cmd));
-
-        return in_array('larakube@203.0.113.50', $cmd, true)
-            && str_contains($script, 'cd "$HOME/projects/shop" && larakube '.$expected);
-    });
-
-    File::deleteDirectory($bin);
-})->with([
-    'share' => ['post', 'devboxes.share', RunKind::ShareDevBoxProject, "'share' '--detach' '--json' '--no-interaction'"],
-    'stop' => ['delete', 'devboxes.unshare', RunKind::UnshareDevBoxProject, "'share' '--stop' '--json' '--no-interaction'"],
-]);
-
 test('a project name that is not a plain folder name can never reach the box\'s shell', function () {
     devBoxProjectsExperimental(true);
 
-    $this->post('/dev-boxes/my-dev-box/projects/shop;rm/share')->assertNotFound();
+    $this->post('/dev-boxes/my-dev-box/projects/shop;rm/up')->assertNotFound();
     expect(fn () => app(DevBoxShell::class)->command(['ip' => '203.0.113.50', 'sshKey' => '/k'], ['share'], '../etc'))->toThrow(InvalidArgumentException::class);
 });
 
-test('sharing needs a ready dev box and experimental features on', function (bool $experimental, string $status) {
+test('sharing under a domain needs a ready dev box and experimental features on', function (bool $experimental, string $status) {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental($experimental);
     Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
@@ -224,7 +199,7 @@ test('sharing needs a ready dev box and experimental features on', function (boo
     ]]))]);
     ChildProcess::fake();
 
-    $this->post(route('devboxes.share', ['box' => 'my-dev-box', 'project' => 'shop']))->assertNotFound();
+    $this->post(route('devboxes.share-domain', ['box' => 'my-dev-box', 'project' => 'shop']), ['token' => 'abc', 'domain' => 'example.com'])->assertNotFound();
     expect(Run::count())->toBe(0);
 
     File::deleteDirectory($bin);
@@ -306,13 +281,13 @@ test('sharing under a domain sends the Cloudflare token to the box on standard i
         return ! str_contains($joined, 'cf_Secret-token_123')
             && str_contains($joined, 'printf')
             && str_contains($script, 'IFS= read -r CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN')
-            && str_contains($script, 'cd "$HOME/projects/shop" && larakube \'share:domain\' \'--domain=example.com\' \'--box=my-dev-box\' \'--json\' \'--no-interaction\'');
+            && str_contains($script, 'cd "$HOME/projects/shop" && larakube \'share\' \'--domain=example.com\' \'--box=my-dev-box\' \'--json\' \'--no-interaction\'');
     });
 
     File::deleteDirectory($bin);
 });
 
-test('removing the public names runs share:domain-remove on the box with the token on standard input', function () {
+test('removing the public names runs share:remove on the box with the token on standard input', function () {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental(true);
     devBoxDomainStacks();
@@ -323,7 +298,7 @@ test('removing the public names runs share:domain-remove on the box with the tok
 
     expect(Run::sole()->kind)->toBe(RunKind::RemoveDomainDevBoxProject);
 
-    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "larakube 'share:domain-remove' '--force' '--json'"));
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "larakube 'share:remove' '--force' '--json'"));
 
     File::deleteDirectory($bin);
 });

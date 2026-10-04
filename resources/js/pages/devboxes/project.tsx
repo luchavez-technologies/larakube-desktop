@@ -1,5 +1,4 @@
 import { Deferred, Link, usePoll } from '@inertiajs/react';
-import { Share2 } from 'lucide-react';
 import BackingServicesCard from '@/components/backing-services-card';
 import BoxProjectActions from '@/components/box-project-actions';
 import { buttonClass } from '@/components/button';
@@ -14,12 +13,7 @@ import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { open } from '@/routes';
-import {
-    show as showBox,
-    share,
-    shareDomainPage,
-    unshare,
-} from '@/routes/devboxes';
+import { show as showBox, shareDomainPage } from '@/routes/devboxes';
 import { index } from '@/routes/projects';
 import type { BackingServices, DevBoxProject } from '@/types/larakube';
 
@@ -233,7 +227,7 @@ function SharingCard({
 
     return (
         <Card
-            label="See it from your computer"
+            label="Share"
             action={
                 hasNames ? (
                     <StatusPill tone={sharing?.running ? 'ok' : 'warn'}>
@@ -277,43 +271,16 @@ function SharingCard({
             )}
             {!running && !hasNames ? (
                 <p className="text-sm text-soft">
-                    Start the app first, then share a link to it.
+                    Start the app first, then share it.
                 </p>
             ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                    {running && !hasNames && (
-                        <Link
-                            href={share({ box, project: project.name }).url}
-                            method="post"
-                            as="button"
-                            title="Make a temporary public link to this app"
-                            className={buttonClass('secondary', 'sm')}
-                        >
-                            <Share2 className="size-3.5" />
-                            <span>Share preview</span>
-                        </Link>
-                    )}
-                    <Link
-                        href={
-                            shareDomainPage({ box, project: project.name }).url
-                        }
-                        title="Stable public names under your own Cloudflare domain: app, Vite, Reverb and storage"
-                        className={buttonClass('secondary', 'sm')}
-                    >
-                        {hasNames ? 'Change or remove names' : 'Use my domain'}
-                    </Link>
-                    {running && !hasNames && (
-                        <Link
-                            href={unshare({ box, project: project.name }).url}
-                            method="delete"
-                            as="button"
-                            title="Take the public link down"
-                            className={buttonClass('ghost', 'sm')}
-                        >
-                            Stop sharing
-                        </Link>
-                    )}
-                </div>
+                <Link
+                    href={shareDomainPage({ box, project: project.name }).url}
+                    title="Public names under your own Cloudflare domain: app, Vite, Reverb and storage"
+                    className={buttonClass('secondary', 'sm')}
+                >
+                    {hasNames ? 'Remove or change names' : 'Share'}
+                </Link>
             )}
         </Card>
     );

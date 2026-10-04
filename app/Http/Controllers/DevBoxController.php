@@ -148,41 +148,6 @@ class DevBoxController extends Controller
         return to_route('runs.show', $run);
     }
 
-    /** Starts a temporary public link to the app, from the box. The link is on the run's page when it finishes. */
-    public function share(string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
-    {
-        return $this->shareRun($box, $project, $catalog, $runner, RunKind::ShareDevBoxProject, "Share {$project} from {$box}", ['share', '--detach', '--json']);
-    }
-
-    public function unshare(string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
-    {
-        return $this->shareRun($box, $project, $catalog, $runner, RunKind::UnshareDevBoxProject, "Stop sharing {$project} from {$box}", ['share', '--stop', '--json']);
-    }
-
-    /** @param  list<string>  $arguments */
-    private function shareRun(string $box, string $project, StackCatalog $catalog, CliRunner $runner, RunKind $kind, string $label, array $arguments): RedirectResponse
-    {
-        $this->ensureEnabled();
-
-        $stack = collect($catalog->devBoxes() ?? [])->firstWhere('name', $box);
-        abort_if($stack === null || $stack['status'] !== 'ready', 404);
-
-        $run = $runner->start(
-            label: $label,
-            arguments: $arguments,
-            kind: $kind,
-            subject: $project,
-            meta: ['server' => $box, 'role' => 'dev', 'app' => $project],
-            targetType: 'server',
-            targetName: $box,
-            serverName: $box,
-            devBox: $stack,
-            devBoxProject: $project,
-        );
-
-        return to_route('runs.show', $run);
-    }
-
     /** One dev box: its apps, its Commons, how to connect. The cluster cards need the tunnel the CLI opens. */
     public function show(string $box, StackCatalog $catalog, DevBoxShell $shell, DevBoxTunnel $tunnel, ClusterStatus $status): Response
     {
@@ -292,12 +257,12 @@ class DevBoxController extends Controller
     {
         $request->validate(['domain' => ['required', 'string', 'max:253', 'regex:/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/']]);
 
-        return $this->domainRun($request, $box, $project, $catalog, $runner, RunKind::ShareDomainDevBoxProject, "Share {$project} under {$request->string('domain')->toString()}", ['share:domain', '--domain='.$request->string('domain')->toString(), '--box='.$box, '--json']);
+        return $this->domainRun($request, $box, $project, $catalog, $runner, RunKind::ShareDomainDevBoxProject, "Share {$project} under {$request->string('domain')->toString()}", ['share', '--domain='.$request->string('domain')->toString(), '--box='.$box, '--json']);
     }
 
     public function removeDomain(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
-        return $this->domainRun($request, $box, $project, $catalog, $runner, RunKind::RemoveDomainDevBoxProject, "Remove the public names of {$project}", ['share:domain-remove', '--force', '--json']);
+        return $this->domainRun($request, $box, $project, $catalog, $runner, RunKind::RemoveDomainDevBoxProject, "Remove the public names of {$project}", ['share:remove', '--force', '--json']);
     }
 
     /** @param  list<string>  $arguments */

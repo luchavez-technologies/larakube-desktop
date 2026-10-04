@@ -1,5 +1,5 @@
 import { Deferred, Link } from '@inertiajs/react';
-import { FolderGit2, Plus, Share2 } from 'lucide-react';
+import { FolderGit2, Plus } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -10,13 +10,7 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
-import {
-    index,
-    share,
-    shareDomainPage,
-    unshare,
-    updateCli,
-} from '@/routes/devboxes';
+import { index, shareDomainPage, updateCli } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
 import {
     create as projectsCreate,
@@ -279,47 +273,20 @@ function BoxProjects({
                         </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                        {project.local === 'running' ? (
-                            <>
-                                <Link
-                                    href={
-                                        share({ box, project: project.name })
-                                            .url
-                                    }
-                                    method="post"
-                                    as="button"
-                                    title="Make a temporary public link to this app"
-                                    className={buttonClass('secondary', 'sm')}
-                                >
-                                    <Share2 className="size-3.5" />
-                                    <span>Share preview</span>
-                                </Link>
-                                <Link
-                                    href={
-                                        shareDomainPage({
-                                            box,
-                                            project: project.name,
-                                        }).url
-                                    }
-                                    title="Stable public names under your own Cloudflare domain: app, Vite, Reverb and storage"
-                                    className={buttonClass('secondary', 'sm')}
-                                >
-                                    Use my domain
-                                </Link>
-                                <Link
-                                    href={
-                                        unshare({ box, project: project.name })
-                                            .url
-                                    }
-                                    method="delete"
-                                    as="button"
-                                    title="Take the public link down"
-                                    className={buttonClass('ghost', 'sm')}
-                                >
-                                    Stop sharing
-                                </Link>
-                            </>
-                        ) : null}
+                        {project.local === 'running' && (
+                            <Link
+                                href={
+                                    shareDomainPage({
+                                        box,
+                                        project: project.name,
+                                    }).url
+                                }
+                                title="Public names under your own Cloudflare domain: app, Vite, Reverb and storage"
+                                className={buttonClass('secondary', 'sm')}
+                            >
+                                Share
+                            </Link>
+                        )}
                         <StatusPill
                             tone={project.local === 'running' ? 'ok' : 'muted'}
                         >

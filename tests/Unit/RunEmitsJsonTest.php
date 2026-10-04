@@ -8,8 +8,8 @@ test('a run that asks the CLI for --json keeps stdout for the result, locally an
 
     $shell = app(DevBoxShell::class);
     $box = ['ip' => '203.0.113.50', 'sshKey' => '/k'];
-    $onBox = new Run(['command' => $shell->command($box, ['share:domain', '--domain=example.com', '--json'], 'shop')]);
-    $fedOnBox = new Run(['command' => $shell->feeding($shell->command($box, ['share:domain', '--json'], 'shop', 'CLOUDFLARE_API_TOKEN'), 'CLOUDFLARE_API_TOKEN')]);
+    $onBox = new Run(['command' => $shell->command($box, ['share', '--domain=example.com', '--json'], 'shop')]);
+    $fedOnBox = new Run(['command' => $shell->feeding($shell->command($box, ['share', '--json'], 'shop', 'CLOUDFLARE_API_TOKEN'), 'CLOUDFLARE_API_TOKEN')]);
 
     expect($local->emitsJsonResult())->toBeTrue()
         ->and($onBox->emitsJsonResult())->toBeTrue()
