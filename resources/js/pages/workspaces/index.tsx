@@ -39,6 +39,7 @@ type Options = {
         value: string;
         label: string;
         runtime: string;
+        available: boolean;
         devCommand: string;
         devPorts: DevPort[];
     }[];
@@ -288,8 +289,15 @@ function NewWorkspace({
                         className={inputClass}
                     >
                         {(options?.frameworks ?? []).map((f) => (
-                            <option key={f.value} value={f.value}>
+                            <option
+                                key={f.value}
+                                value={f.value}
+                                disabled={!f.available}
+                            >
                                 {f.label}
+                                {f.available
+                                    ? ''
+                                    : ' (image not published yet)'}
                             </option>
                         ))}
                     </select>
