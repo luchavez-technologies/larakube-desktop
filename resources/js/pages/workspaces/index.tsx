@@ -26,9 +26,24 @@ type ServerOption = {
     ip: string | null;
     bindings: string[];
 };
+type DevPort = { name: string; port: number };
 type Options = {
     sizes: { value: string; label: string }[];
+    runtimes: {
+        value: string;
+        label: string;
+        versions: string[];
+        defaultVersion: string;
+    }[];
+    frameworks: {
+        value: string;
+        label: string;
+        runtime: string;
+        devCommand: string;
+        devPorts: DevPort[];
+    }[];
     defaultSize: string;
+    defaultFramework: string;
     defaultBranch: string;
 };
 type Workspace = {
@@ -36,6 +51,11 @@ type Workspace = {
     repo: string;
     branch: string;
     size: string;
+    framework: string;
+    runtime: string;
+    runtimeVersion: string;
+    devCommand: string;
+    devPorts: DevPort[];
     status: 'running' | 'suspended' | 'starting';
     publicKey: string;
     password?: string | null;
@@ -59,7 +79,11 @@ export default function Workspaces({
 }: {
     servers: ServerOption[];
     server: string | null;
-    editor: { workspace: string; url: string } | null;
+    editor: {
+        workspace: string;
+        url: string;
+        apps: Record<string, number>;
+    } | null;
     options?: Options | null;
     workspaces?: Workspace[] | null;
 }) {
@@ -166,9 +190,9 @@ export default function Workspaces({
                                         key={workspace.name}
                                         workspace={workspace}
                                         server={server}
-                                        editorUrl={
+                                        editor={
                                             editor?.workspace === workspace.name
-                                                ? editor.url
+                                                ? editor
                                                 : null
                                         }
                                     />
@@ -195,7 +219,15 @@ function NewWorkspace({
         repo: '',
         branch: options?.defaultBranch ?? 'main',
         size: options?.defaultSize ?? '',
+        framework: options?.defaultFramework ?? 'laravel',
+        runtimeVersion: '',
     });
+    const framework = options?.frameworks.find(
+        (f) => f.value === form.data.framework,
+    );
+    const runtime = options?.runtimes.find(
+        (r) => r.value === framework?.runtime,
+    );
 
     function submit(event: FormEvent) {
         event.preventDefault();
@@ -239,6 +271,50 @@ function NewWorkspace({
                             ssh://git@host:2222/owner/repo.git.
                         </span>
                     )}
+                </label>
+                <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-soft">
+                        Framework
+                    </span>
+                    <select
+                        value={form.data.framework}
+                        onChange={(e) => {
+                            form.setData((data) => ({
+                                ...data,
+                                framework: e.target.value,
+                                runtimeVersion: '',
+                            }));
+                        }}
+                        className={inputClass}
+                    >
+                        {(options?.frameworks ?? []).map((f) => (
+                            <option key={f.value} value={f.value}>
+                                {f.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-soft">
+                        {runtime?.label ?? 'Runtime'} version
+                    </span>
+                    <select
+                        value={
+                            form.data.runtimeVersion ||
+                            runtime?.defaultVersion ||
+                            ''
+                        }
+                        onChange={(e) =>
+                            form.setData('runtimeVersion', e.target.value)
+                        }
+                        className={inputClass}
+                    >
+                        {(runtime?.versions ?? []).map((version) => (
+                            <option key={version} value={version}>
+                                {version}
+                            </option>
+                        ))}
+                    </select>
                 </label>
                 <label className="block">
                     <span className="mb-1 block text-xs font-medium text-soft">
@@ -293,12 +369,13 @@ function NewWorkspace({
 function WorkspaceRow({
     workspace,
     server,
-    editorUrl,
+    editor,
 }: {
     workspace: Workspace;
     server: string | null;
-    editorUrl: string | null;
+    editor: { url: string; apps: Record<string, number> } | null;
 }) {
+    const editorUrl = editor?.url ?? null;
     const [label, tone] = statusTone[workspace.status];
     const data = { server };
 
@@ -313,7 +390,8 @@ function WorkspaceRow({
                         <StatusPill tone={tone}>{label}</StatusPill>
                     </div>
                     <p className="mt-0.5 truncate font-mono text-xs text-soft">
-                        {workspace.repo} · {workspace.branch} · {workspace.size}
+                        {workspace.repo} · {workspace.branch} · {workspace.size}{' '}
+                        · {workspace.runtime} {workspace.runtimeVersion}
                     </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -391,6 +469,27 @@ function WorkspaceRow({
                     when you stop it in Activity.
                 </p>
             )}
+            {editor && workspace.devPorts.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-soft">
+                    <span>Once the app is running, open it here:</span>
+                    {workspace.devPorts.map((dev) => {
+                        const local = editor.apps[String(dev.port)];
+
+                        return local ? (
+                            <Link
+                                key={dev.port}
+                                href={open().url}
+                                method="post"
+                                data={{ url: `http://127.0.0.1:${local}/` }}
+                                as="button"
+                                className={buttonClass('secondary', 'sm')}
+                            >
+                                {dev.name} ({local})
+                            </Link>
+                        ) : null;
+                    })}
+                </div>
+            )}
             <div className="mt-2">
                 {workspace.password && (
                     <ListRow action={<CopyButton value={workspace.password} />}>
@@ -400,6 +499,12 @@ function WorkspaceRow({
                         />
                     </ListRow>
                 )}
+                <ListRow action={<CopyButton value={workspace.devCommand} />}>
+                    <TwoLine
+                        title="Start the app"
+                        detail={`Run this in the editor's terminal: ${workspace.devCommand}`}
+                    />
+                </ListRow>
                 <ListRow action={<CopyButton value={workspace.publicKey} />}>
                     <TwoLine
                         title="Deploy key"

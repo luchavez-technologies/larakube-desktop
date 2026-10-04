@@ -14,7 +14,7 @@ class WorkspaceCatalog
     public function __construct(private ToolLocator $locator) {}
 
     /**
-     * @return array{sizes: list<array{value: string, label: string, memory: string, cpu: string, storage: string}>, defaultSize: string, defaultBranch: string}|null
+     * @return array{sizes: list<array{value: string, label: string, memory: string, cpu: string, storage: string}>, runtimes: list<array{value: string, label: string, versions: list<string>, defaultVersion: string}>, frameworks: list<array{value: string, label: string, runtime: string, devCommand: string, devPorts: list<array{name: string, port: int}>}>, defaultSize: string, defaultFramework: string, defaultBranch: string}|null
      */
     public function options(): ?array
     {
@@ -22,14 +22,17 @@ class WorkspaceCatalog
 
         return is_array($decoded['sizes'] ?? null) ? [
             'sizes' => array_values($decoded['sizes']),
+            'runtimes' => array_values(is_array($decoded['runtimes'] ?? null) ? $decoded['runtimes'] : []),
+            'frameworks' => array_values(is_array($decoded['frameworks'] ?? null) ? $decoded['frameworks'] : []),
             'defaultSize' => (string) ($decoded['defaultSize'] ?? ''),
+            'defaultFramework' => (string) ($decoded['defaultFramework'] ?? ''),
             'defaultBranch' => (string) ($decoded['defaultBranch'] ?? 'main'),
         ] : null;
     }
 
     /**
      * @param  list<string>  $serverFlags  `--stack=name` or `--context=name`
-     * @return list<array{name: string, namespace: string, repo: string, branch: string, size: string, status: string, publicKey: string, password?: ?string}>|null null when the server could not be reached
+     * @return list<array{name: string, namespace: string, repo: string, branch: string, size: string, framework: string, runtime: string, runtimeVersion: string, devCommand: string, devPorts: list<array{name: string, port: int}>, status: string, publicKey: string, password?: ?string}>|null null when the server could not be reached
      */
     public function list(array $serverFlags, bool $reveal = false): ?array
     {

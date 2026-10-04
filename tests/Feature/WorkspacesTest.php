@@ -34,8 +34,8 @@ function workspacesFakeCli(): void
         '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
             ['name' => 'dev-box', 'provider' => 'do', 'kind' => 'vps', 'region' => 'sgp1', 'ip' => '203.0.113.9', 'context' => 'larakube-203.0.113.9', 'bindings' => ['shop/production'], 'account' => null, 'projectId' => null, 'status' => 'ready'],
         ]])),
-        '*workspace:options*' => Process::result(output: json_encode(['success' => true, 'sizes' => [['value' => 'standard', 'label' => 'Standard', 'memory' => '4Gi', 'cpu' => '2', 'storage' => '20Gi']], 'defaultSize' => 'standard', 'defaultBranch' => 'main'])),
-        '*workspace:list*' => Process::result(output: json_encode(['success' => true, 'workspaces' => [['name' => 'api', 'namespace' => 'ws-api', 'repo' => 'https://github.com/acme/app', 'branch' => 'main', 'size' => 'standard', 'status' => 'running', 'publicKey' => 'ssh-ed25519 AAAA']]])),
+        '*workspace:options*' => Process::result(output: json_encode(['success' => true, 'sizes' => [['value' => 'standard', 'label' => 'Standard', 'memory' => '4Gi', 'cpu' => '2', 'storage' => '20Gi']], 'runtimes' => [['value' => 'php', 'label' => 'PHP', 'versions' => ['8.4', '8.3'], 'defaultVersion' => '8.4']], 'frameworks' => [['value' => 'laravel', 'label' => 'Laravel', 'runtime' => 'php', 'devCommand' => 'composer run dev', 'devPorts' => [['name' => 'App', 'port' => 8000]]]], 'defaultSize' => 'standard', 'defaultFramework' => 'laravel', 'defaultBranch' => 'main'])),
+        '*workspace:list*' => Process::result(output: json_encode(['success' => true, 'workspaces' => [['name' => 'api', 'namespace' => 'ws-api', 'repo' => 'https://github.com/acme/app', 'branch' => 'main', 'size' => 'standard', 'framework' => 'laravel', 'runtime' => 'php', 'runtimeVersion' => '8.4', 'devCommand' => 'composer run dev', 'devPorts' => [['name' => 'App', 'port' => 8000]], 'status' => 'running', 'publicKey' => 'ssh-ed25519 AAAA']]])),
     ]);
 }
 
@@ -73,13 +73,13 @@ test('creating a workspace starts workspace:create on the chosen server', functi
     workspacesFakeCli();
     $fake = ChildProcess::fake();
 
-    $this->post(route('workspaces.store'), ['server' => 'dev-box', 'name' => 'api', 'repo' => 'https://github.com/acme/app', 'branch' => 'feature/x', 'size' => 'standard'])
+    $this->post(route('workspaces.store'), ['server' => 'dev-box', 'name' => 'api', 'repo' => 'https://github.com/acme/app', 'branch' => 'feature/x', 'size' => 'standard', 'framework' => 'django', 'runtimeVersion' => '3.13'])
         ->assertRedirect(route('runs.show', Run::sole()));
 
     expect(Run::sole()->kind)->toBe(RunKind::WorkspaceCreate);
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        "{$bin}/larakube", 'workspace:create', '--stack=dev-box', '--name=api', '--repo=https://github.com/acme/app', '--branch=feature/x', '--size=standard', '--no-interaction',
+        "{$bin}/larakube", 'workspace:create', '--stack=dev-box', '--name=api', '--repo=https://github.com/acme/app', '--branch=feature/x', '--size=standard', '--framework=django', '--runtime-version=3.13', '--no-interaction',
     ]);
 
     File::deleteDirectory($bin);
@@ -139,14 +139,17 @@ test('connecting starts the tunnel on a chosen port and returns to the page with
     $bin = workspacesCli();
     workspacesExperimental(true);
     workspacesFakeCli();
-    ChildProcess::fake();
+    $fake = ChildProcess::fake();
 
     $response = $this->post(route('workspaces.open', 'api'), ['server' => 'dev-box']);
     $response->assertRedirect();
 
     parse_str((string) parse_url($response->headers->get('Location'), PHP_URL_QUERY), $query);
 
-    expect($query['editor'])->toBe('api')->and((int) $query['port'])->toBeGreaterThan(1023);
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--app-port='.$query['apps'][8000].':8000', $cmd, true));
+
+    expect($query['editor'])->toBe('api')->and((int) $query['port'])->toBeGreaterThan(1023)
+        ->and((int) $query['apps'][8000])->toBeGreaterThan(1023);
 
     File::deleteDirectory($bin);
 });

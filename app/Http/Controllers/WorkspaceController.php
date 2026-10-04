@@ -28,7 +28,12 @@ class WorkspaceController extends Controller
         $port = (int) $request->query('port');
 
         return Inertia::render('workspaces/index', [
-            'editor' => $request->query('editor') !== null && $port > 0 ? ['workspace' => (string) $request->query('editor'), 'url' => "http://127.0.0.1:{$port}/"] : null,
+            'editor' => $request->query('editor') !== null && $port > 0 ? [
+                'workspace' => (string) $request->query('editor'),
+                'url' => "http://127.0.0.1:{$port}/",
+                // remote dev port => the port it has on this computer
+                'apps' => collect((array) $request->query('apps'))->filter(fn (mixed $local, mixed $remote): bool => is_numeric($local) && is_numeric($remote))->map(fn (mixed $local): int => (int) $local)->all(),
+            ] : null,
             'servers' => array_map(fn (array $s): array => ['name' => $s['name'], 'kind' => $s['kind'], 'ip' => $s['ip'] ?? null, 'bindings' => $s['bindings'] ?? []], $servers),
             'server' => $chosen['name'] ?? null,
             'options' => Inertia::defer(fn (): ?array => $catalog->options()),
@@ -46,6 +51,8 @@ class WorkspaceController extends Controller
             'repo' => ['required', 'string', 'max:300', 'regex:#^(https://[A-Za-z0-9.-]+/[\w.\-/]+|git@[A-Za-z0-9.-]+:[\w.\-/]+|ssh://[\w.-]+@[A-Za-z0-9.-]+(:\d{1,5})?/[\w.\-/]+)$#'],
             'branch' => ['nullable', 'string', 'max:100', 'regex:#^[A-Za-z0-9][A-Za-z0-9._/-]*$#'],
             'size' => ['nullable', 'string', 'regex:/^[a-z0-9-]+$/'],
+            'framework' => ['nullable', 'string', 'regex:/^[a-z]+$/'],
+            'runtimeVersion' => ['nullable', 'string', 'regex:/^[0-9][0-9.]*$/'],
         ]);
 
         $server = $this->server($stacks->all() ?? [], $data['server']);
@@ -55,6 +62,8 @@ class WorkspaceController extends Controller
             'workspace:create', '--name='.$data['name'], '--repo='.$data['repo'],
             ...($data['branch'] ?? '' ? ['--branch='.$data['branch']] : []),
             ...($data['size'] ?? '' ? ['--size='.$data['size']] : []),
+            ...($data['framework'] ?? '' ? ['--framework='.$data['framework']] : []),
+            ...($data['runtimeVersion'] ?? '' ? ['--runtime-version='.$data['runtimeVersion']] : []),
         ], $data['name']);
     }
 
@@ -74,7 +83,7 @@ class WorkspaceController extends Controller
     }
 
     /** Starts the tunnel on a port chosen here, so the page can link to the editor without parsing the run's output. */
-    public function open(Request $request, string $workspace, StackCatalog $stacks, CliRunner $runner): RedirectResponse
+    public function open(Request $request, string $workspace, StackCatalog $stacks, CliRunner $runner, WorkspaceCatalog $catalog): RedirectResponse
     {
         $this->ensureEnabled();
 
@@ -83,9 +92,16 @@ class WorkspaceController extends Controller
 
         $port = $this->freePort();
 
+        // The app's dev ports come from the CLI; each gets a free port here so the page can link to it.
+        $found = collect($catalog->list($this->flags($server)) ?? [])->firstWhere('name', $workspace);
+        $apps = [];
+        foreach ($found['devPorts'] ?? [] as $dev) {
+            $apps[(int) $dev['port']] = $this->freePort();
+        }
+
         $runner->start(
             label: "Editor tunnel for {$workspace}",
-            arguments: ['workspace:open', ...$this->flags($server), '--name='.$workspace, '--port='.$port],
+            arguments: ['workspace:open', ...$this->flags($server), '--name='.$workspace, '--port='.$port, ...array_map(fn (int $remote, int $local): string => "--app-port={$local}:{$remote}", array_keys($apps), $apps)],
             kind: RunKind::WorkspaceOpen,
             subject: $workspace,
             meta: ['server' => $server['name']],
@@ -94,7 +110,7 @@ class WorkspaceController extends Controller
             serverName: $server['name'],
         );
 
-        return to_route('workspaces.index', ['server' => $server['name'], 'editor' => $workspace, 'port' => $port]);
+        return to_route('workspaces.index', ['server' => $server['name'], 'editor' => $workspace, 'port' => $port, 'apps' => $apps]);
     }
 
     /** @param  list<string>  $arguments */
