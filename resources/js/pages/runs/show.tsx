@@ -218,7 +218,7 @@ export default function ShowRun({ run }: { run: Run }) {
     );
 }
 
-/** The temporary public link `share` made, with what it means to hand it out. */
+/** The public link `share` made, and what it means to hand it out. */
 function SharedLinkCard({ run }: { run: Run }) {
     const result = run.result ?? {};
     const urls = (
@@ -227,11 +227,12 @@ function SharedLinkCard({ run }: { run: Run }) {
             : {}
     ) as Record<string, string>;
     const web = urls.web;
+    const stable = result.mode === 'named';
 
     return (
         <Card className="mb-4 p-5.5">
             <h2 className="text-[11px] font-medium tracking-[0.06em] text-ok uppercase">
-                Your preview link
+                {stable ? 'Your link (stays the same)' : 'Your preview link'}
             </h2>
             {web ? (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -254,13 +255,39 @@ function SharedLinkCard({ run }: { run: Run }) {
                     The link was made but is not in the result. See the log.
                 </p>
             )}
-            <p className="mt-4 text-[13px] leading-relaxed text-soft">
-                Anyone with this link can open the app, and it changes each time
-                you share. It is for trying the app out, not for production: no
-                uptime guarantee, at most 200 requests at once, and streamed
-                (server-sent) events arrive all at once. Take it down from the
-                dev box page when you are done.
-            </p>
+            {stable ? (
+                <p className="mt-4 text-[13px] leading-relaxed text-soft">
+                    This is the address from your Cloudflare tunnel. Who can
+                    open it is set in Cloudflare; add a login there (Cloudflare
+                    Access) if the app should not be open to everyone. Take it
+                    down from the dev box page when you are done.
+                </p>
+            ) : (
+                <>
+                    <p className="mt-4 text-[13px] leading-relaxed text-soft">
+                        Anyone with this link can open the app, and it changes
+                        each time you share. It is for trying the app out, not
+                        for production: no uptime guarantee, at most 200
+                        requests at once, and streamed (server-sent) events
+                        arrive all at once. Take it down from the dev box page
+                        when you are done.
+                    </p>
+                    <div className="mt-4 rounded-lg bg-paper px-3.5 py-3 text-[13px] leading-relaxed text-soft ring-1 ring-line ring-inset">
+                        <p className="font-medium text-ink">
+                            Want a link that stays the same?
+                        </p>
+                        <p className="mt-1">
+                            Create a tunnel in Cloudflare, then on the box, in
+                            the project&apos;s folder, run{' '}
+                            <span className="font-mono text-ink">
+                                larakube share --token &lt;the tunnel token&gt;
+                            </span>{' '}
+                            once. It asks for the public address and keeps it,
+                            so Share preview uses it from then on.
+                        </p>
+                    </div>
+                </>
+            )}
         </Card>
     );
 }

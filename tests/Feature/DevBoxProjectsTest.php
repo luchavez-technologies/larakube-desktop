@@ -249,6 +249,7 @@ test('updating the CLI on a box runs the installer there on the channel Desktop 
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('larakube@203.0.113.50', $cmd, true)
         && str_contains(end($cmd), $installer)
+        && str_contains(str_replace("'\\''", "'", end($cmd)), "printf '%s\\n' 'my-dev-box' > \"\$HOME/.larakube/devbox\"")
         && ! str_contains(end($cmd), 'cd "$HOME/projects"'));
 
     File::deleteDirectory($bin);

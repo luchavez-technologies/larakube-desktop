@@ -111,7 +111,10 @@ class DevBoxController extends Controller
             targetName: $box,
             serverName: $box,
             devBox: $stack,
-            devBoxScript: 'curl -fsSL https://cli.larakube.app/install.sh | bash'.$channel.' && /usr/local/bin/larakube --version',
+            // Also leaves the marker that tells the CLI on the box it is a dev box, for boxes made before it existed.
+            devBoxScript: 'curl -fsSL https://cli.larakube.app/install.sh | bash'.$channel
+                .' && mkdir -p "$HOME/.larakube" && printf \'%s\\n\' '.escapeshellarg($box).' > "$HOME/.larakube/devbox"'
+                .' && /usr/local/bin/larakube --version',
         );
 
         return to_route('runs.show', $run);
