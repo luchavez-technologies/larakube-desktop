@@ -276,6 +276,42 @@ export default function CreateProject({
                 title="New project"
                 subtitle="Start an app from scratch, already set up for LaraKube. It runs in a container, so you don't need PHP or Node on this computer."
             />
+            {/* Where the app is made comes before everything else, so it is not missed below the form. */}
+            {devBoxes.length > 0 && (
+                <div className="mb-6 max-w-6xl">
+                    <p className="mb-2 text-[13px] font-semibold text-ink">
+                        Where do you want to make it?
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { name: '', label: 'This computer' },
+                            ...devBoxes.map((box) => ({
+                                name: box.name,
+                                label: `Dev box ${box.name}`,
+                            })),
+                        ].map((option) => (
+                            <button
+                                key={option.name}
+                                type="button"
+                                onClick={() => setData('box', option.name)}
+                                className={cn(
+                                    'rounded-lg px-3.5 py-2 text-sm font-medium transition',
+                                    form.data.box === option.name
+                                        ? 'bg-ink text-white'
+                                        : 'bg-surface text-ink ring-1 ring-line hover:bg-paper',
+                                )}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                    {form.errors.box && (
+                        <p className="mt-1.5 text-xs text-accent">
+                            {form.errors.box}
+                        </p>
+                    )}
+                </div>
+            )}
             {/* The framework on the left, what depends on it in one card on the right; stacks when narrow. */}
             <form
                 onSubmit={submit}
@@ -728,62 +764,6 @@ export default function CreateProject({
                                             autoFocus
                                             afterEssential={
                                                 <>
-                                                    {devBoxes.length > 0 && (
-                                                        <Field
-                                                            label="Where"
-                                                            error={
-                                                                form.errors.box
-                                                            }
-                                                            labelled={false}
-                                                        >
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {[
-                                                                    {
-                                                                        name: '',
-                                                                        label: 'This computer',
-                                                                    },
-                                                                    ...devBoxes.map(
-                                                                        (
-                                                                            box,
-                                                                        ) => ({
-                                                                            name: box.name,
-                                                                            label: `Dev box ${box.name}`,
-                                                                        }),
-                                                                    ),
-                                                                ].map(
-                                                                    (
-                                                                        option,
-                                                                    ) => (
-                                                                        <button
-                                                                            key={
-                                                                                option.name
-                                                                            }
-                                                                            type="button"
-                                                                            onClick={() =>
-                                                                                setData(
-                                                                                    'box',
-                                                                                    option.name,
-                                                                                )
-                                                                            }
-                                                                            className={cn(
-                                                                                'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-                                                                                form
-                                                                                    .data
-                                                                                    .box ===
-                                                                                    option.name
-                                                                                    ? 'bg-ink text-white'
-                                                                                    : 'bg-surface text-ink ring-1 ring-line hover:bg-paper',
-                                                                            )}
-                                                                        >
-                                                                            {
-                                                                                option.label
-                                                                            }
-                                                                        </button>
-                                                                    ),
-                                                                )}
-                                                            </div>
-                                                        </Field>
-                                                    )}
                                                     {onBox && (
                                                         <p className="rounded-lg bg-paper px-3 py-2 text-xs leading-relaxed text-soft ring-1 ring-line ring-inset">
                                                             Created on{' '}
