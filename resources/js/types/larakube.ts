@@ -19,6 +19,7 @@ export type Provider = {
     defaultRegion: string;
     vpsSizes: PickerOption[];
     defaultVpsSize: string;
+    defaultDevBoxSize?: string;
     /** Where the regions and prices come from: the provider's own list now, an earlier copy of it, or the CLI's built-in estimate. */
     pricing?: {
         source: 'live' | 'cached' | 'builtin';
@@ -32,6 +33,7 @@ export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 export type RunKind =
     | 'create-server'
+    | 'create-dev-box'
     | 'destroy-server'
     | 'restart-server'
     | 'install-tool'
@@ -90,6 +92,8 @@ export type Run = {
         server?: string;
         context?: string;
         tool?: string;
+        /** 'dev' when the run acts on a dev box. */
+        role?: string;
         project?: string;
     } | null;
     status: RunStatus;
@@ -129,6 +133,8 @@ export type Server = {
     context: string | null;
     account?: string | null;
     projectId?: string | null;
+    /** 'dev' for a dev box; a server apps run on is 'deploy' (or absent). */
+    role?: string;
     status: ServerStatus;
     isCurrent?: boolean;
 };

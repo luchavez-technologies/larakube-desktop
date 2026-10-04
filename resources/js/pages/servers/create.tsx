@@ -8,6 +8,10 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { open } from '@/routes';
+import {
+    index as devBoxesIndex,
+    store as storeDevBox,
+} from '@/routes/devboxes';
 import { index, store } from '@/routes/servers';
 import type { Provider } from '@/types/larakube';
 
@@ -16,15 +20,23 @@ const tokenProviders = ['do', 'hetzner'];
 export default function CreateServer({
     providers,
     project,
+    kind = 'server',
 }: {
     providers?: Provider[] | null;
     project: { id: number; name: string } | null;
+    kind?: 'server' | 'dev-box';
 }) {
+    const devBox = kind === 'dev-box';
+
     return (
-        <AppLayout title="Create a server">
+        <AppLayout title={devBox ? 'Create a dev box' : 'Create a server'}>
             <PageHeader
-                title="Create a server"
-                subtitle="A single-node Kubernetes server (k3s), hardened and ready for Cluster Tools. Takes about 5 minutes and is billed by your provider."
+                title={devBox ? 'Create a dev box' : 'Create a server'}
+                subtitle={
+                    devBox
+                        ? 'A server to work on, with Podman, a local cluster and the LaraKube CLI set up. Takes about 10 minutes and is billed by your provider.'
+                        : 'A single-node Kubernetes server (k3s), hardened and ready for Cluster Tools. Takes about 5 minutes and is billed by your provider.'
+                }
             />
             {project && (
                 <p className="mb-5 max-w-3xl rounded-lg bg-busy-tint px-3 py-2 text-sm text-busy">
@@ -42,6 +54,7 @@ export default function CreateServer({
                     <ServerForm
                         providers={providers}
                         projectId={project?.id ?? null}
+                        devBox={devBox}
                     />
                 ) : (
                     <p className="text-sm text-soft">
@@ -56,10 +69,16 @@ export default function CreateServer({
 function ServerForm({
     providers,
     projectId,
+    devBox,
 }: {
     providers: Provider[];
     projectId: number | null;
+    devBox: boolean;
 }) {
+    const startSize = (candidate: Provider) =>
+        devBox
+            ? (candidate.defaultDevBoxSize ?? candidate.defaultVpsSize)
+            : candidate.defaultVpsSize;
     const initial =
         providers.find((provider) => provider.credentials.ready) ??
         providers[0];
@@ -67,7 +86,7 @@ function ServerForm({
         provider: initial.slug,
         stack_name: '',
         region: initial.defaultRegion,
-        size: initial.defaultVpsSize,
+        size: startSize(initial),
         api_token: '',
         cloudflare_token: '',
         aws_access_key_id: '',
@@ -97,7 +116,7 @@ function ServerForm({
             ...form.data,
             provider: next.slug,
             region: next.defaultRegion,
-            size: next.defaultVpsSize,
+            size: startSize(next),
             api_token: '',
             aws_access_key_id: '',
             aws_secret_access_key: '',
@@ -106,7 +125,7 @@ function ServerForm({
 
     function submit(event: FormEvent) {
         event.preventDefault();
-        form.post(store().url);
+        form.post((devBox ? storeDevBox() : store()).url);
     }
 
     return (
@@ -174,7 +193,7 @@ function ServerForm({
 
             <div className="mt-5 space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
                 <Field
-                    label="Server name"
+                    label={devBox ? 'Dev box name' : 'Server name'}
                     hint="Lowercase letters, numbers and dashes."
                     error={form.errors.stack_name}
                 >
@@ -271,13 +290,15 @@ function ServerForm({
                     </div>
                 )}
 
-                <CloudflareOption
-                    value={form.data.cloudflare_token}
-                    error={form.errors.cloudflare_token}
-                    onChange={(value) =>
-                        form.setData('cloudflare_token', value)
-                    }
-                />
+                {!devBox && (
+                    <CloudflareOption
+                        value={form.data.cloudflare_token}
+                        error={form.errors.cloudflare_token}
+                        onChange={(value) =>
+                            form.setData('cloudflare_token', value)
+                        }
+                    />
+                )}
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-4">
@@ -287,7 +308,10 @@ function ServerForm({
                         : `Billed by ${provider.label}. You can destroy it any time.`}
                 </p>
                 <div className="flex items-center gap-2.5">
-                    <Link href={index().url} className={buttonClass('ghost')}>
+                    <Link
+                        href={(devBox ? devBoxesIndex() : index()).url}
+                        className={buttonClass('ghost')}
+                    >
                         Cancel
                     </Link>
                     <Button
@@ -303,7 +327,11 @@ function ServerForm({
                                         ''))
                         }
                     >
-                        {form.processing ? 'Starting…' : 'Create server'}
+                        {form.processing
+                            ? 'Starting…'
+                            : devBox
+                              ? 'Create dev box'
+                              : 'Create server'}
                     </Button>
                 </div>
             </div>

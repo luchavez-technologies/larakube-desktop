@@ -16,7 +16,7 @@ import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
 import { show as settingsShow } from '@/routes/settings';
-import { index as workspacesIndex } from '@/routes/workspaces';
+import { index as devBoxesIndex } from '@/routes/devboxes';
 
 type NavItem = {
     label: string;
@@ -55,10 +55,11 @@ const navigation: NavItem[] = [
         icon: FolderGit2,
     },
     {
-        label: 'Workspaces',
+        label: 'Dev Boxes',
         description: 'Experimental',
-        href: workspacesIndex().url,
-        active: (url) => url.startsWith('/workspaces'),
+        href: devBoxesIndex().url,
+        active: (url) =>
+            url.startsWith('/dev-boxes') || url.startsWith('/workspaces'),
         accent: 'bg-brand',
         icon: Code2,
         experimental: true,

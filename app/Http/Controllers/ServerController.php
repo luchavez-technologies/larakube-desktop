@@ -84,7 +84,7 @@ class ServerController extends Controller
     ): Response {
         $stack = $catalog->find($server);
 
-        abort_if($stack === null, 404);
+        abort_if($stack === null || ($stack['role'] ?? 'deploy') === 'dev', 404);
 
         $context = $stack['status'] === 'ready' ? $stack['context'] : null;
 
@@ -195,7 +195,7 @@ class ServerController extends Controller
             arguments: ['cloud:restart', "--stack={$server}", '--force'],
             kind: RunKind::RestartServer,
             subject: $server,
-            meta: ['server' => $server],
+            meta: ['server' => $server, 'role' => $stack['role'] ?? 'deploy'],
             targetType: 'server',
             targetName: $server,
             serverName: $server,
@@ -216,13 +216,16 @@ class ServerController extends Controller
 
     public function destroy(DestroyServerRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
-        abort_if($catalog->find($server) === null, 404);
+        $stack = $catalog->find($server);
+
+        abort_if($stack === null, 404);
 
         $run = $runner->start(
             label: "Destroy server {$server}",
             arguments: ['cloud:destroy', $server, '--force'],
             kind: RunKind::DestroyServer,
             subject: $server,
+            meta: ['role' => $stack['role'] ?? 'deploy'],
             targetType: 'server',
             targetName: $server,
             serverName: $server,

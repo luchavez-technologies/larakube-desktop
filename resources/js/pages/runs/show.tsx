@@ -10,6 +10,7 @@ import { runStatus } from '@/lib/servers';
 import { readiness } from '@/routes';
 import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
+import { index as devBoxesIndex } from '@/routes/devboxes';
 import { index as serversIndex, show as showServer } from '@/routes/servers';
 import { index as toolsIndex } from '@/routes/servers/tools';
 import type { Run } from '@/types/larakube';
@@ -23,6 +24,10 @@ function backLink(run: Run): { href: string; label: string } {
             href: showProject(Number(run.meta.project)).url,
             label: 'Project',
         };
+    }
+
+    if (run.meta?.role === 'dev' || run.kind === 'create-dev-box') {
+        return { href: devBoxesIndex().url, label: 'Dev boxes' };
     }
 
     switch (run.kind) {
@@ -69,7 +74,8 @@ export default function ShowRun({ run }: { run: Run }) {
     const { stop } = usePoll(1000, { only: ['run'] });
     const [showLog, setShowLog] = useState(run.status !== 'succeeded');
     const [label, tone] = runStatus[run.status];
-    const isCreate = run.kind === 'create-server';
+    const isDevBox = run.kind === 'create-dev-box';
+    const isCreate = run.kind === 'create-server' || isDevBox;
 
     useEffect(() => {
         if (!running) stop();
@@ -111,10 +117,14 @@ export default function ShowRun({ run }: { run: Run }) {
                         run.subject &&
                         run.status !== 'failed' && (
                             <Link
-                                href={showServer(run.subject).url}
+                                href={
+                                    isDevBox
+                                        ? devBoxesIndex().url
+                                        : showServer(run.subject).url
+                                }
                                 className={buttonClass('secondary')}
                             >
-                                View server
+                                {isDevBox ? 'View dev boxes' : 'View server'}
                             </Link>
                         )}
                     {run.kind === 'new-project' &&
@@ -138,16 +148,26 @@ export default function ShowRun({ run }: { run: Run }) {
                 </div>
             </header>
 
-            {isCreate && <RunSteps output={run.output} status={run.status} />}
-
-            {run.status === 'succeeded' && isCreate && (
-                <CreatedCard run={run} />
+            {isCreate && (
+                <RunSteps
+                    output={run.output}
+                    status={run.status}
+                    kind={isDevBox ? 'dev-box' : 'server'}
+                />
             )}
+
+            {run.status === 'succeeded' &&
+                isCreate &&
+                (isDevBox ? (
+                    <DevBoxCreatedCard run={run} />
+                ) : (
+                    <CreatedCard run={run} />
+                ))}
             {run.status === 'failed' && (
                 <Card tone="error" className="mb-4">
                     <p className="text-base font-semibold text-accent">
                         {isCreate
-                            ? "The server couldn't be created"
+                            ? `The ${isDevBox ? 'dev box' : 'server'} couldn't be created`
                             : 'This run failed'}
                     </p>
                     <p className="mt-1 text-[13px] leading-relaxed">
@@ -190,6 +210,41 @@ export default function ShowRun({ run }: { run: Run }) {
                 </button>
             )}
         </AppLayout>
+    );
+}
+
+function DevBoxCreatedCard({ run }: { run: Run }) {
+    const result = run.result ?? {};
+    const name = run.subject ?? '';
+
+    return (
+        <Card className="mb-4 p-5.5">
+            <h2 className="text-[11px] font-medium tracking-[0.06em] text-ok uppercase">
+                Your dev box is ready
+            </h2>
+            <dl className="mt-3 flex flex-wrap gap-10">
+                {typeof result.ip === 'string' && (
+                    <div>
+                        <dt className="text-xs text-soft">IP address</dt>
+                        <dd className="mt-1 font-mono text-sm font-medium">
+                            {result.ip}
+                        </dd>
+                    </div>
+                )}
+                <div>
+                    <dt className="text-xs text-soft">Connect</dt>
+                    <dd className="mt-1 font-mono text-sm font-medium">
+                        ssh {name}
+                    </dd>
+                </div>
+                <div>
+                    <dt className="text-xs text-soft">Make an app there</dt>
+                    <dd className="mt-1 font-mono text-sm font-medium">
+                        larakube new my-app
+                    </dd>
+                </div>
+            </dl>
+        </Card>
     );
 }
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\ClusterToolController;
 use App\Http\Controllers\CompanionController;
 use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
@@ -58,6 +59,10 @@ Route::post('/servers/{server}/backups/prune', [BackupController::class, 'prune'
 Route::post('/servers/{server}/backups/recovery-card', [BackupController::class, 'recoveryCard'])->name('servers.backups.recovery-card');
 Route::post('/servers/{server}/access/grant', [ClusterAccessController::class, 'grant'])->name('servers.access.grant');
 Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 'revoke'])->name('servers.access.revoke');
+
+Route::get('/dev-boxes', [DevBoxController::class, 'index'])->name('devboxes.index');
+Route::get('/dev-boxes/create', [DevBoxController::class, 'create'])->name('devboxes.create');
+Route::post('/dev-boxes', [DevBoxController::class, 'store'])->name('devboxes.store');
 
 Route::pattern('workspace', '[a-z0-9][a-z0-9-]*');
 Route::get('/workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index');

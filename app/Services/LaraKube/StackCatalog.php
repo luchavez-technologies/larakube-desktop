@@ -20,9 +20,33 @@ class StackCatalog
     }
 
     /**
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, isCurrent?: bool}>|null
+     * The servers apps and tools run on. Dev boxes, which are machines to work on, are listed by devBoxes().
+     *
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
     public function all(): ?array
+    {
+        $everything = $this->everything();
+
+        return $everything === null ? null : array_values(array_filter($everything, fn (array $stack): bool => ($stack['role'] ?? 'deploy') !== 'dev'));
+    }
+
+    /**
+     * Development machines made with `devbox:create`.
+     *
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
+     */
+    public function devBoxes(): ?array
+    {
+        $everything = $this->everything();
+
+        return $everything === null ? null : array_values(array_filter($everything, fn (array $stack): bool => ($stack['role'] ?? 'deploy') === 'dev'));
+    }
+
+    /**
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
+     */
+    private function everything(): ?array
     {
         $cli = $this->locator->find('larakube');
 
@@ -74,11 +98,11 @@ class StackCatalog
     }
 
     /**
-     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}|null
+     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string}|null
      */
     public function find(string $name): ?array
     {
-        foreach ($this->all() ?? [] as $stack) {
+        foreach ($this->everything() ?? [] as $stack) {
             if ($stack['name'] === $name) {
                 return $stack;
             }

@@ -6,7 +6,7 @@ import type { RunStatus } from '@/types/larakube';
  * in the log. Matches log text, so it degrades to "unknown progress" rather than
  * breaking if a message changes.
  */
-const STEPS: { label: string; done: RegExp }[] = [
+const SERVER_STEPS: { label: string; done: RegExp }[] = [
     { label: 'Provision', done: /Apply complete!/ },
     { label: 'Wait for SSH', done: /SSH is up/ },
     { label: 'Harden', done: /Hardened:/ },
@@ -15,13 +15,25 @@ const STEPS: { label: string; done: RegExp }[] = [
     { label: 'Traefik', done: /Traefik deployed|Traefik is already installed/ },
 ];
 
+/** devbox:create: the same server work, then the local stack set up on the box. */
+const DEV_BOX_STEPS: { label: string; done: RegExp }[] = [
+    { label: 'Provision', done: /Apply complete!/ },
+    { label: 'Wait for SSH', done: /SSH is up/ },
+    { label: 'Harden', done: /Hardened:/ },
+    { label: 'Install CLI', done: /Setting up Podman and a local cluster/ },
+    { label: 'Podman and cluster', done: /Native k3s cluster is ready!/ },
+];
+
 export default function RunSteps({
     output,
     status,
+    kind = 'server',
 }: {
     output: string;
     status: RunStatus;
+    kind?: 'server' | 'dev-box';
 }) {
+    const STEPS = kind === 'dev-box' ? DEV_BOX_STEPS : SERVER_STEPS;
     const doneCount =
         status === 'succeeded'
             ? STEPS.length
