@@ -122,7 +122,7 @@ export default function ShowServer({
                 </Card>
             )}
 
-            <div className="grid grid-cols-[1fr_360px] gap-4.5">
+            <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">
                 <div className="flex flex-col gap-4.5">
                     <Card label="Domain & SSL">
                         <Deferred

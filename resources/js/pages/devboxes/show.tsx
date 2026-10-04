@@ -57,7 +57,7 @@ export default function ShowDevBox({
                     ))}
             />
 
-            <div className="grid grid-cols-[1fr_360px] gap-4.5">
+            <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">
                 <div className="flex flex-col gap-4.5">
                     <Card
                         label={`Projects${projects && projects.length > 0 ? ` · ${projects.length}` : ''}`}
@@ -131,8 +131,8 @@ export default function ShowDevBox({
                         </ListRow>
                         <ListRow>
                             <TwoLine
-                                title="See an app"
-                                detail="Share preview makes a temporary public link; Use my domain gives stable names for the app, Vite, Reverb and storage."
+                                title="See an app from your computer"
+                                detail="Share gives the app names under your own Cloudflare domain that stay the same: the app, Vite, Reverb and storage."
                             />
                         </ListRow>
                     </Card>
