@@ -20,7 +20,7 @@ class StackCatalog
     }
 
     /**
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string, isCurrent?: bool}>|null
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, isCurrent?: bool}>|null
      */
     public function all(): ?array
     {
@@ -56,7 +56,7 @@ class StackCatalog
     /**
      * Return only registered cloud stacks provisioned via LaraKube.
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string}>
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}>
      */
     public function cloudStacks(): array
     {
@@ -66,7 +66,7 @@ class StackCatalog
     /**
      * Return only discovered clusters from ~/.kube/config.
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string}>
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}>
      */
     public function discoveredClusters(): array
     {
@@ -74,7 +74,7 @@ class StackCatalog
     }
 
     /**
-     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, account: ?string, projectId: ?string, status: string}|null
+     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}|null
      */
     public function find(string $name): ?array
     {

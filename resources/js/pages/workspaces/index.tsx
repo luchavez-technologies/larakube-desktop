@@ -20,7 +20,12 @@ import {
     suspend,
 } from '@/routes/workspaces';
 
-type ServerOption = { name: string; kind: string; ip: string | null };
+type ServerOption = {
+    name: string;
+    kind: string;
+    ip: string | null;
+    bindings: string[];
+};
 type Options = {
     sizes: { value: string; label: string }[];
     defaultSize: string;
@@ -114,6 +119,17 @@ export default function Workspaces({
                 </div>
             ) : (
                 <div className="space-y-5">
+                    {(servers.find((s) => s.name === server)?.bindings.length ??
+                        0) > 0 && (
+                        <p className="rounded-lg bg-warn-tint px-3 py-2 text-sm text-warn">
+                            {server} already runs{' '}
+                            {servers
+                                .find((s) => s.name === server)
+                                ?.bindings.join(', ')}
+                            . A workspace here shares its memory and disk with
+                            it. A separate dev server is safer.
+                        </p>
+                    )}
                     <Deferred
                         data="options"
                         fallback={<Card label="New workspace">Loading…</Card>}
@@ -218,7 +234,9 @@ function NewWorkspace({
                     />
                     {form.errors.repo && (
                         <span className="text-xs text-accent">
-                            Use an https or git@ repository address.
+                            Use an https://, git@ or ssh:// repository address.
+                            A server of your own with SSH on another port is
+                            ssh://git@host:2222/owner/repo.git.
                         </span>
                     )}
                 </label>

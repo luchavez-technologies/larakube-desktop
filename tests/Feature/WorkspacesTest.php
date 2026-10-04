@@ -32,7 +32,7 @@ function workspacesFakeCli(): void
 {
     Process::fake([
         '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
-            ['name' => 'dev-box', 'provider' => 'do', 'kind' => 'vps', 'region' => 'sgp1', 'ip' => '203.0.113.9', 'context' => 'larakube-203.0.113.9', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+            ['name' => 'dev-box', 'provider' => 'do', 'kind' => 'vps', 'region' => 'sgp1', 'ip' => '203.0.113.9', 'context' => 'larakube-203.0.113.9', 'bindings' => ['shop/production'], 'account' => null, 'projectId' => null, 'status' => 'ready'],
         ]])),
         '*workspace:options*' => Process::result(output: json_encode(['success' => true, 'sizes' => [['value' => 'standard', 'label' => 'Standard', 'memory' => '4Gi', 'cpu' => '2', 'storage' => '20Gi']], 'defaultSize' => 'standard', 'defaultBranch' => 'main'])),
         '*workspace:list*' => Process::result(output: json_encode(['success' => true, 'workspaces' => [['name' => 'api', 'namespace' => 'ws-api', 'repo' => 'https://github.com/acme/app', 'branch' => 'main', 'size' => 'standard', 'status' => 'running', 'publicKey' => 'ssh-ed25519 AAAA']]])),
@@ -57,6 +57,7 @@ test('with experimental on, the page offers the servers and loads sizes and work
             ->component('workspaces/index')
             ->where('server', 'dev-box')
             ->where('servers.0.name', 'dev-box')
+            ->where('servers.0.bindings', ['shop/production'])
             ->loadDeferredProps(fn (AssertableInertia $page) => $page
                 ->where('options.defaultSize', 'standard')
                 ->where('workspaces.0.name', 'api')

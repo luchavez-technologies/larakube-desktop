@@ -29,7 +29,7 @@ class WorkspaceController extends Controller
 
         return Inertia::render('workspaces/index', [
             'editor' => $request->query('editor') !== null && $port > 0 ? ['workspace' => (string) $request->query('editor'), 'url' => "http://127.0.0.1:{$port}/"] : null,
-            'servers' => array_map(fn (array $s): array => ['name' => $s['name'], 'kind' => $s['kind'], 'ip' => $s['ip'] ?? null], $servers),
+            'servers' => array_map(fn (array $s): array => ['name' => $s['name'], 'kind' => $s['kind'], 'ip' => $s['ip'] ?? null, 'bindings' => $s['bindings'] ?? []], $servers),
             'server' => $chosen['name'] ?? null,
             'options' => Inertia::defer(fn (): ?array => $catalog->options()),
             'workspaces' => Inertia::defer(fn (): ?array => $chosen === null ? [] : $catalog->list($this->flags($chosen), reveal: true)),
@@ -43,7 +43,7 @@ class WorkspaceController extends Controller
         $data = $request->validate([
             'server' => ['required', 'string'],
             'name' => ['required', 'regex:/^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$/'],
-            'repo' => ['required', 'string', 'max:300', 'regex:#^(https://[A-Za-z0-9.-]+/[\w.\-/]+|git@[A-Za-z0-9.-]+:[\w.\-/]+)$#'],
+            'repo' => ['required', 'string', 'max:300', 'regex:#^(https://[A-Za-z0-9.-]+/[\w.\-/]+|git@[A-Za-z0-9.-]+:[\w.\-/]+|ssh://[\w.-]+@[A-Za-z0-9.-]+(:\d{1,5})?/[\w.\-/]+)$#'],
             'branch' => ['nullable', 'string', 'max:100', 'regex:#^[A-Za-z0-9][A-Za-z0-9._/-]*$#'],
             'size' => ['nullable', 'string', 'regex:/^[a-z0-9-]+$/'],
         ]);
