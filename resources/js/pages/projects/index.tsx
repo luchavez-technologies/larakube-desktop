@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link, usePage, usePoll } from '@inertiajs/react';
-import { FolderPlus, Plus, ArrowRight } from 'lucide-react';
+import { Deferred, Link, usePage, usePoll } from '@inertiajs/react';
+import { FolderPlus, Plus, ArrowRight, Server } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import PageHeader from '@/components/page-header';
 import ProjectActions from '@/components/project-actions';
@@ -8,15 +8,18 @@ import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
+import { show as showDevBox } from '@/routes/devboxes';
 import { create, show, store } from '@/routes/projects';
-import type { Project } from '@/types/larakube';
+import type { DevBoxProject, Project } from '@/types/larakube';
 
 export default function ProjectsIndex({
     projects,
     hasActiveRuns = false,
+    devBoxProjects,
 }: {
     projects: Project[];
     hasActiveRuns?: boolean;
+    devBoxProjects?: (DevBoxProject & { box: string })[];
 }) {
     const { errors } = usePage().props as { errors: Record<string, string> };
 
@@ -205,7 +208,58 @@ export default function ProjectsIndex({
                     </table>
                 </div>
             )}
+            <Deferred data="devBoxProjects" fallback={null}>
+                {devBoxProjects && devBoxProjects.length > 0 ? (
+                    <DevBoxProjects projects={devBoxProjects} />
+                ) : null}
+            </Deferred>
         </AppLayout>
+    );
+}
+
+/** The apps that live on dev boxes, each opening its box. */
+function DevBoxProjects({
+    projects,
+}: {
+    projects: (DevBoxProject & { box: string })[];
+}) {
+    return (
+        <div className="mt-8">
+            <p className="mb-2.5 text-[13px] font-semibold text-ink">
+                On dev boxes
+            </p>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+                {projects.map((project) => (
+                    <Link
+                        key={`${project.box}/${project.name}`}
+                        href={showDevBox({ box: project.box }).url}
+                        className="block rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
+                    >
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="truncate text-sm font-semibold">
+                                {project.name}
+                            </span>
+                            <StatusPill
+                                tone={
+                                    project.local === 'running' ? 'ok' : 'muted'
+                                }
+                            >
+                                {project.local === 'running'
+                                    ? 'Running'
+                                    : 'Stopped'}
+                            </StatusPill>
+                        </div>
+                        <p className="mt-1 text-xs text-soft">
+                            {project.framework ?? 'Unknown framework'}
+                        </p>
+                        <p className="mt-2 flex items-center gap-1.5 truncate font-mono text-[11px] text-faint">
+                            <Server className="size-3" />
+                            <span>{project.box}</span>
+                        </p>
+                    </Link>
+                ))}
+            </div>
+        </div>
     );
 }
 

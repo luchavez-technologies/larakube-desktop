@@ -10,6 +10,7 @@ use App\Services\EditorLauncher;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\DevBoxShell;
 use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\GlobalSettings;
@@ -79,6 +80,24 @@ class ProjectController extends Controller
         return Inertia::render('projects/index', [
             'projects' => $projects,
             'hasActiveRuns' => $activeRuns->isNotEmpty(),
+            // The apps on each dev box (experimental), asked of the boxes themselves; none when a box does not answer.
+            'devBoxProjects' => Inertia::defer(function (): array {
+                if (! app(GlobalSettings::class)->experimental()) {
+                    return [];
+                }
+
+                $found = [];
+
+                foreach (app(StackCatalog::class)->devBoxes() ?? [] as $box) {
+                    $result = $box['status'] === 'ready' ? app(DevBoxShell::class)->json($box, ['project:list', '--json']) : null;
+
+                    foreach (is_array($result['projects'] ?? null) ? $result['projects'] : [] as $project) {
+                        $found[] = ['box' => $box['name']] + $project;
+                    }
+                }
+
+                return $found;
+            }, 'devBoxProjects'),
             'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => $p['localStatus']['state'] === 'running'),
         ]);
     }

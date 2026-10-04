@@ -433,3 +433,38 @@ test('the dev box page is off with experimental features off', function () {
 
     File::deleteDirectory($bin);
 });
+
+test('the projects page lists the apps on dev boxes beside the ones on this computer', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*project:list*' => Process::result(output: json_encode(['success' => true, 'path' => '/home/larakube/projects', 'projects' => [['name' => 'shop', 'path' => '/home/larakube/projects/shop', 'framework' => 'laravel', 'environments' => [['name' => 'local', 'host' => 'shop.kube']], 'local' => 'stopped']]])),
+    ]);
+
+    $this->get(route('projects.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps('devBoxProjects', fn (AssertableInertia $page) => $page
+                ->has('devBoxProjects', 1)
+                ->where('devBoxProjects.0.box', 'my-dev-box')
+                ->where('devBoxProjects.0.name', 'shop')
+            )
+        );
+
+    File::deleteDirectory($bin);
+});
+
+test('the projects page lists no dev box apps with experimental features off', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(false);
+    Process::fake();
+
+    $this->get(route('projects.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps('devBoxProjects', fn (AssertableInertia $page) => $page->where('devBoxProjects', []))
+        );
+
+    File::deleteDirectory($bin);
+});
