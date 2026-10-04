@@ -94,7 +94,14 @@ class Run extends Model
     /** Under --json the CLI keeps stdout for one result line; otherwise stdout IS the log. */
     public function emitsJsonResult(): bool
     {
-        return in_array('--json', $this->command, true);
+        // On a dev box the CLI command is one quoted string inside the ssh command, so look inside the strings too.
+        foreach ($this->command as $part) {
+            if (preg_match('/(?<![\w-])--json(?![\w-])/', $part) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** The NativePHP child-process alias for this run. */
