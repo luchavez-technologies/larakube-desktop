@@ -8,7 +8,9 @@ import {
     CheckCircle2,
     ChevronDown,
     ExternalLink,
+    Laptop,
     Search,
+    Server,
     Terminal,
     X,
 } from 'lucide-react';
@@ -276,42 +278,6 @@ export default function CreateProject({
                 title="New project"
                 subtitle="Start an app from scratch, already set up for LaraKube. It runs in a container, so you don't need PHP or Node on this computer."
             />
-            {/* Where the app is made comes before everything else, so it is not missed below the form. */}
-            {devBoxes.length > 0 && (
-                <div className="mb-6 max-w-6xl">
-                    <p className="mb-2 text-[13px] font-semibold text-ink">
-                        Where do you want to make it?
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                        {[
-                            { name: '', label: 'This computer' },
-                            ...devBoxes.map((box) => ({
-                                name: box.name,
-                                label: `Dev box ${box.name}`,
-                            })),
-                        ].map((option) => (
-                            <button
-                                key={option.name}
-                                type="button"
-                                onClick={() => setData('box', option.name)}
-                                className={cn(
-                                    'rounded-lg px-3.5 py-2 text-sm font-medium transition',
-                                    form.data.box === option.name
-                                        ? 'bg-ink text-white'
-                                        : 'bg-surface text-ink ring-1 ring-line hover:bg-paper',
-                                )}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-                    {form.errors.box && (
-                        <p className="mt-1.5 text-xs text-accent">
-                            {form.errors.box}
-                        </p>
-                    )}
-                </div>
-            )}
             {/* The framework on the left, what depends on it in one card on the right; stacks when narrow. */}
             <form
                 onSubmit={submit}
@@ -747,6 +713,80 @@ export default function CreateProject({
                                             </p>
                                         </div>
                                     </div>
+                                    {devBoxes.length > 0 && (
+                                        <div className="space-y-2 px-5.5 pt-5.5">
+                                            <p className="text-[13px] font-semibold text-ink">
+                                                Where do you want to make it?
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-2.5">
+                                                {[
+                                                    {
+                                                        name: '',
+                                                        label: 'This computer',
+                                                        detail: 'Runs on your machine',
+                                                        Icon: Laptop,
+                                                    },
+                                                    ...devBoxes.map((box) => ({
+                                                        name: box.name,
+                                                        label: box.name,
+                                                        detail: 'Dev box',
+                                                        Icon: Server,
+                                                    })),
+                                                ].map(
+                                                    ({
+                                                        name,
+                                                        label,
+                                                        detail,
+                                                        Icon,
+                                                    }) => (
+                                                        <button
+                                                            key={name}
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setData(
+                                                                    'box',
+                                                                    name,
+                                                                )
+                                                            }
+                                                            className={cn(
+                                                                'flex items-center gap-3 rounded-xl px-3.5 py-3 text-left transition',
+                                                                form.data
+                                                                    .box ===
+                                                                    name
+                                                                    ? 'bg-ink text-white'
+                                                                    : 'bg-surface text-ink ring-1 ring-line hover:bg-paper',
+                                                            )}
+                                                        >
+                                                            <Icon className="size-5 shrink-0" />
+                                                            <span className="min-w-0">
+                                                                <span className="block truncate text-sm font-medium">
+                                                                    {label}
+                                                                </span>
+                                                                <span
+                                                                    className={cn(
+                                                                        'block text-xs',
+                                                                        form
+                                                                            .data
+                                                                            .box ===
+                                                                            name
+                                                                            ? 'text-white/70'
+                                                                            : 'text-soft',
+                                                                    )}
+                                                                >
+                                                                    {detail}
+                                                                </span>
+                                                            </span>
+                                                        </button>
+                                                    ),
+                                                )}
+                                            </div>
+                                            {form.errors.box && (
+                                                <p className="text-xs text-accent">
+                                                    {form.errors.box}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="space-y-4 p-5.5">
                                         <FrameworkFields
                                             fields={selectedOption.fields}
