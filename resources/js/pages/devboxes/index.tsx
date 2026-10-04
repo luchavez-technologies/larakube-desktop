@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Deferred, Link } from '@inertiajs/react';
-import { ArrowRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { buttonClass } from '@/components/button';
-import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
+import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
+import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
 import { create, show } from '@/routes/devboxes';
@@ -19,6 +21,20 @@ export default function DevBoxes({
     devBoxes?: Server[] | null;
     disabled?: boolean;
 }) {
+    const [viewMode, setViewMode] = useState<ViewMode>('table');
+
+    useEffect(() => {
+        const saved = localStorage.getItem('larakube_view_mode_devboxes');
+        if (saved === 'cards' || saved === 'table') {
+            setViewMode(saved);
+        }
+    }, []);
+
+    const handleViewModeChange = (mode: ViewMode) => {
+        setViewMode(mode);
+        localStorage.setItem('larakube_view_mode_devboxes', mode);
+    };
+
     if (disabled) {
         return (
             <AppLayout title="Dev Boxes">
@@ -54,13 +70,19 @@ export default function DevBoxes({
                 badge={<StatusPill tone="warn">Experimental</StatusPill>}
                 subtitle="A server you work on, like your own computer: Podman, a local cluster and the LaraKube CLI. Make an app there, run it, and deploy it from there. Billed by your provider."
                 actions={
-                    <Link
-                        href={create().url}
-                        className={buttonClass('primary')}
-                    >
-                        <Plus className="size-4" />
-                        <span>Create a dev box</span>
-                    </Link>
+                    <div className="flex items-center gap-2.5">
+                        <ViewToggle
+                            mode={viewMode}
+                            onChange={handleViewModeChange}
+                        />
+                        <Link
+                            href={create().url}
+                            className={buttonClass('primary')}
+                        >
+                            <Plus className="size-4" />
+                            <span>Create a dev box</span>
+                        </Link>
+                    </div>
                 }
             />
 
@@ -87,11 +109,7 @@ export default function DevBoxes({
                         </p>
                     </div>
                 ) : (
-                    <div className="space-y-5">
-                        {devBoxes.map((box) => (
-                            <DevBoxCard key={box.name} box={box} />
-                        ))}
-                    </div>
+                    <DevBoxList boxes={devBoxes} viewMode={viewMode} />
                 )}
             </Deferred>
 
@@ -109,28 +127,121 @@ export default function DevBoxes({
     );
 }
 
-function DevBoxCard({ box }: { box: Server }) {
-    const [label, tone] = serverStatus[box.status];
+function DevBoxList({
+    boxes,
+    viewMode,
+}: {
+    boxes: Server[];
+    viewMode: ViewMode;
+}) {
+    if (viewMode === 'cards') {
+        return (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+                {boxes.map((box) => {
+                    const [label, tone] = serverStatus[box.status];
+
+                    return (
+                        <div
+                            key={box.name}
+                            className="rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
+                        >
+                            <Link href={show(box.name).url} className="block">
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="truncate text-sm font-semibold">
+                                        {box.name}
+                                    </span>
+                                    <StatusPill tone={tone}>{label}</StatusPill>
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-soft">
+                                    <span>
+                                        {providerLabels[box.provider] ??
+                                            box.provider}
+                                    </span>
+                                    {box.region && <span>· {box.region}</span>}
+                                </div>
+                                <div className="mt-3 flex items-center justify-between">
+                                    <span className="font-mono text-[11px] text-faint">
+                                        {box.ip ?? 'Provisioning IP…'}
+                                    </span>
+                                    <span className="text-sm font-medium text-brand hover:underline">
+                                        View →
+                                    </span>
+                                </div>
+                            </Link>
+                            <div className="mt-3 border-t border-line pt-3">
+                                <ServerActions server={box} />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
 
     return (
-        <Card
-            label={box.name}
-            action={<StatusPill tone={tone}>{label}</StatusPill>}
-        >
-            <div className="flex items-center justify-between gap-3">
-                <p className="font-mono text-xs text-soft">
-                    {providerLabels[box.provider] ?? box.provider}
-                    {box.region ? ` · ${box.region}` : ''}
-                    {box.ip ? ` · ${box.ip}` : ''}
-                </p>
-                <Link
-                    href={show({ box: box.name }).url}
-                    className={buttonClass('secondary', 'sm')}
-                >
-                    <span>Open</span>
-                    <ArrowRight className="size-3.5" />
-                </Link>
-            </div>
-        </Card>
+        <div className="overflow-hidden rounded-2xl bg-surface px-5.5 ring-1 ring-line ring-inset">
+            <table className="w-full text-left text-sm">
+                <thead>
+                    <tr className="text-[11px] tracking-[0.06em] text-soft uppercase">
+                        {[
+                            'Name',
+                            'Provider',
+                            'Region',
+                            'IP address',
+                            'Status',
+                            'Quick actions',
+                            '',
+                        ].map((heading) => (
+                            <th key={heading} className="py-3 font-medium">
+                                {heading}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {boxes.map((box) => {
+                        const [label, tone] = serverStatus[box.status];
+
+                        return (
+                            <tr key={box.name} className="border-t border-line">
+                                <td className="py-3.5 font-medium">
+                                    <Link
+                                        href={show(box.name).url}
+                                        className="font-semibold hover:underline"
+                                    >
+                                        {box.name}
+                                    </Link>
+                                </td>
+                                <td className="text-soft">
+                                    {providerLabels[box.provider] ??
+                                        box.provider}
+                                </td>
+                                <td className="font-mono text-[13px] text-soft">
+                                    {box.region ?? '—'}
+                                </td>
+                                <td className="font-mono text-[13px]">
+                                    {box.ip ?? '—'}
+                                </td>
+                                <td>
+                                    <StatusPill tone={tone}>{label}</StatusPill>
+                                </td>
+                                <td className="py-2">
+                                    <ServerActions server={box} />
+                                </td>
+                                <td className="text-right">
+                                    <Link
+                                        href={show(box.name).url}
+                                        className="inline-flex p-1 text-faint transition-colors hover:text-ink"
+                                        aria-label={`Open ${box.name}`}
+                                    >
+                                        <ChevronRight className="size-4" />
+                                    </Link>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
     );
 }

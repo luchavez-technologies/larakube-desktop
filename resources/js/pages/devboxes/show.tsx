@@ -1,5 +1,5 @@
 import { Deferred, Link } from '@inertiajs/react';
-import { Plus, Share2 } from 'lucide-react';
+import { FolderGit2, Plus, Share2 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -17,7 +17,10 @@ import {
     unshare,
     updateCli,
 } from '@/routes/devboxes';
-import { create as projectsCreate } from '@/routes/projects';
+import {
+    create as projectsCreate,
+    index as projectsIndex,
+} from '@/routes/projects';
 import { providerLabels } from '@/types/larakube';
 import type { DevBoxProject, PlexStatus, Server } from '@/types/larakube';
 
@@ -62,15 +65,16 @@ export default function ShowDevBox({
             <div className="grid grid-cols-[1fr_360px] gap-4.5">
                 <div className="flex flex-col gap-4.5">
                     <Card
-                        label="Projects on this box"
+                        label={`Projects${projects && projects.length > 0 ? ` · ${projects.length}` : ''}`}
                         action={
-                            <Link
-                                href={projectsCreate().url}
-                                className={buttonClass('secondary', 'sm')}
-                            >
-                                <Plus className="size-3.5" />
-                                <span>New project</span>
-                            </Link>
+                            ready ? (
+                                <Link
+                                    href={projectsIndex().url}
+                                    className={buttonClass('ghost', 'sm')}
+                                >
+                                    View all
+                                </Link>
+                            ) : null
                         }
                     >
                         <Deferred
@@ -186,7 +190,7 @@ export default function ShowDevBox({
     );
 }
 
-/** The apps on the box, asked of the box itself. */
+/** The apps on the box, asked of the box itself. Laid out like a server's hosted projects. */
 function BoxProjects({
     box,
     projects,
@@ -196,7 +200,7 @@ function BoxProjects({
 }) {
     if (projects == null) {
         return (
-            <p className="text-xs text-soft">
+            <p className="py-2 text-xs text-soft">
                 The box did not answer, so its projects can&apos;t be listed
                 now.
             </p>
@@ -205,32 +209,64 @@ function BoxProjects({
 
     if (projects.length === 0) {
         return (
-            <p className="text-xs text-soft">
-                None in ~/projects yet. Create one with New project and choose
-                this box.
-            </p>
+            <div className="py-6 text-center">
+                <FolderGit2 className="mx-auto mb-2 size-8 text-faint" />
+                <p className="text-sm font-medium text-ink">
+                    No projects on this box yet
+                </p>
+                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
+                    Create one with New project and choose this box. Apps
+                    outside ~/projects are not listed.
+                </p>
+                <div className="mt-4 flex justify-center">
+                    <Link
+                        href={projectsCreate().url}
+                        className={buttonClass('primary', 'sm')}
+                    >
+                        <Plus className="size-3.5" />
+                        <span>New Project</span>
+                    </Link>
+                </div>
+            </div>
         );
     }
 
     return (
-        <ul className="divide-y divide-line">
+        <div className="divide-y divide-line">
             {projects.map((project) => (
-                <li
+                <div
                     key={project.path}
-                    className="flex items-center justify-between gap-3 py-2.5 text-sm first:pt-0 last:pb-0"
+                    className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
                 >
-                    <span className="min-w-0 truncate font-medium">
-                        {project.name}
-                        <span className="ml-2 font-mono text-xs font-normal text-soft">
-                            {project.framework ?? 'unknown'}
-                            {' · '}
-                            {project.environments
-                                .map((environment) => environment.name)
-                                .join(', ')}
-                        </span>
-                    </span>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold">
+                                {project.name}
+                            </span>
+                            <span className="rounded bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize">
+                                {project.framework ?? 'unknown'}
+                            </span>
+                            {project.environments.map((environment) => (
+                                <span
+                                    key={environment.name}
+                                    className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft"
+                                >
+                                    {environment.name}
+                                </span>
+                            ))}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-3 text-xs text-soft">
+                            {project.environments[0]?.host ? (
+                                <span className="font-mono text-ink">
+                                    {project.environments[0].host}
+                                </span>
+                            ) : (
+                                <span>No web host configured</span>
+                            )}
+                        </div>
+                    </div>
                     <div className="flex shrink-0 items-center gap-2">
-                        {project.local === 'running' && (
+                        {project.local === 'running' ? (
                             <>
                                 <Link
                                     href={
@@ -270,7 +306,7 @@ function BoxProjects({
                                     Stop sharing
                                 </Link>
                             </>
-                        )}
+                        ) : null}
                         <StatusPill
                             tone={project.local === 'running' ? 'ok' : 'muted'}
                         >
@@ -279,8 +315,8 @@ function BoxProjects({
                                 : 'Stopped'}
                         </StatusPill>
                     </div>
-                </li>
+                </div>
             ))}
-        </ul>
+        </div>
     );
 }
