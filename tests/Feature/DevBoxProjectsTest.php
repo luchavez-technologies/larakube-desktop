@@ -434,7 +434,7 @@ test('the dev box page is off with experimental features off', function () {
     File::deleteDirectory($bin);
 });
 
-test('the projects page lists the apps on dev boxes beside the ones on this computer', function () {
+test('the projects page offers a switch to each dev box, and lists the chosen box\'s apps as the box reports them', function () {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental(true);
     Process::fake([
@@ -446,25 +446,114 @@ test('the projects page lists the apps on dev boxes beside the ones on this comp
 
     $this->get(route('projects.index'))
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->loadDeferredProps('devBoxProjects', fn (AssertableInertia $page) => $page
-                ->has('devBoxProjects', 1)
-                ->where('devBoxProjects.0.box', 'my-dev-box')
-                ->where('devBoxProjects.0.name', 'shop')
+            ->where('box', null)
+            ->loadDeferredProps('devBoxes', fn (AssertableInertia $page) => $page->where('devBoxes', ['my-dev-box']))
+        );
+
+    $this->get(route('projects.index', ['box' => 'my-dev-box']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('box', 'my-dev-box')
+            ->loadDeferredProps('boxProjects', fn (AssertableInertia $page) => $page
+                ->has('boxProjects', 1)
+                ->where('boxProjects.0.name', 'shop')
             )
         );
 
     File::deleteDirectory($bin);
 });
 
-test('the projects page lists no dev box apps with experimental features off', function () {
+test('a box name that is not a plain name is ignored on the projects page', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    Process::fake();
+
+    $this->get(route('projects.index', ['box' => 'x;reboot']))->assertInertia(fn (AssertableInertia $page) => $page->where('box', null));
+
+    File::deleteDirectory($bin);
+});
+
+test('the projects page has no dev box switch with experimental features off', function () {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental(false);
     Process::fake();
 
-    $this->get(route('projects.index'))
+    $this->get(route('projects.index', ['box' => 'my-dev-box']))
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->loadDeferredProps('devBoxProjects', fn (AssertableInertia $page) => $page->where('devBoxProjects', []))
+            ->where('box', null)
+            ->loadDeferredProps('devBoxes', fn (AssertableInertia $page) => $page->where('devBoxes', []))
         );
+
+    File::deleteDirectory($bin);
+});
+
+test('up, start, stop and down of an app on a box run that command there, in the app\'s folder', function (string $action, string $expected) {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.operate', ['box' => 'my-dev-box', 'project' => 'shop', 'action' => $action]))
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    expect(Run::sole()->kind)->toBe(RunKind::OperateDevBoxProject);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), 'cd "$HOME/projects/shop" && larakube '.$expected));
+
+    File::deleteDirectory($bin);
+})->with([
+    'up' => ['up', "'up' 'local' '--no-console' '--no-test' '--no-interaction'"],
+    'down' => ['down', "'down' 'local' '--force' '--no-interaction'"],
+    'start' => ['start', "'start' 'local' '--no-interaction'"],
+    'stop' => ['stop', "'stop' 'local' '--no-interaction'"],
+]);
+
+test('only up, down, start and stop can be asked of an app on a box', function () {
+    devBoxProjectsExperimental(true);
+
+    $this->post('/dev-boxes/my-dev-box/projects/shop/rm-rf')->assertNotFound();
+});
+
+test('an app on a box has its own page, with what the box reports about it and the runs made on it', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*project:list*' => Process::result(output: json_encode(['success' => true, 'path' => '/home/larakube/projects', 'projects' => [
+            ['name' => 'shop', 'path' => '/home/larakube/projects/shop', 'framework' => 'laravel', 'environments' => [['name' => 'local', 'host' => 'shop.kube']], 'local' => 'running'],
+            ['name' => 'blog', 'path' => '/home/larakube/projects/blog', 'framework' => 'astro', 'environments' => [], 'local' => 'stopped'],
+        ]])),
+    ]);
+    ChildProcess::fake();
+    $this->post(route('devboxes.operate', ['box' => 'my-dev-box', 'project' => 'shop', 'action' => 'up']));
+
+    $this->get(route('devboxes.projects.show', ['box' => 'my-dev-box', 'project' => 'shop']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('devboxes/project')
+            ->where('box', 'my-dev-box')
+            ->where('name', 'shop')
+            ->has('runs', 1)
+            ->where('runs.0.label', 'Up shop on my-dev-box')
+            ->loadDeferredProps('details', fn (AssertableInertia $page) => $page
+                ->where('details.framework', 'laravel')
+                ->where('details.local', 'running')
+            )
+        );
+
+    $this->get(route('devboxes.projects.show', ['box' => 'my-dev-box', 'project' => 'missing']))
+        ->assertInertia(fn (AssertableInertia $page) => $page->loadDeferredProps('details', fn (AssertableInertia $page) => $page->where('details', null)));
+
+    File::deleteDirectory($bin);
+});
+
+test('the page of an app on a box needs a ready box, a plain name and experimental features', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsStacks();
+    devBoxProjectsExperimental(true);
+
+    $this->get(route('devboxes.projects.show', ['box' => 'workshop-demo', 'project' => 'shop']))->assertNotFound();
+    $this->get('/dev-boxes/my-dev-box/projects/Shop..')->assertNotFound();
 
     File::deleteDirectory($bin);
 });

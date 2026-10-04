@@ -17,6 +17,7 @@ import {
     unshare,
     updateCli,
 } from '@/routes/devboxes';
+import { show as showBoxProject } from '@/routes/devboxes/projects';
 import {
     create as projectsCreate,
     index as projectsIndex,
@@ -69,7 +70,11 @@ export default function ShowDevBox({
                         action={
                             ready ? (
                                 <Link
-                                    href={projectsIndex().url}
+                                    href={
+                                        projectsIndex({
+                                            query: { box: box.name },
+                                        }).url
+                                    }
                                     className={buttonClass('ghost', 'sm')}
                                 >
                                     View all
@@ -240,9 +245,17 @@ function BoxProjects({
                 >
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-semibold">
+                            <Link
+                                href={
+                                    showBoxProject({
+                                        box,
+                                        project: project.name,
+                                    }).url
+                                }
+                                className="truncate text-sm font-semibold hover:underline"
+                            >
                                 {project.name}
-                            </span>
+                            </Link>
                             <span className="rounded bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize">
                                 {project.framework ?? 'unknown'}
                             </span>

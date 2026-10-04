@@ -42,7 +42,7 @@ class ProjectController extends Controller
 
     public function __construct(private ProjectInspector $inspector) {}
 
-    public function index(ToolLocator $locator): Response
+    public function index(Request $request, ToolLocator $locator): Response
     {
         // The latest create run per project: keyBy keeps the last of each subject.
         $scaffolds = Run::query()->where('kind', RunKind::NewProject)->orderBy('id')->get(['subject', 'project_id', 'status'])->keyBy(fn (Run $r) => $r->project_id ? "project:{$r->project_id}" : (string) $r->subject);
@@ -80,24 +80,21 @@ class ProjectController extends Controller
         return Inertia::render('projects/index', [
             'projects' => $projects,
             'hasActiveRuns' => $activeRuns->isNotEmpty(),
-            // The apps on each dev box (experimental), asked of the boxes themselves; none when a box does not answer.
-            'devBoxProjects' => Inertia::defer(function (): array {
-                if (! app(GlobalSettings::class)->experimental()) {
-                    return [];
+            // Dev boxes to switch to (experimental), and the apps on the chosen one, asked of the box itself.
+            'devBoxes' => Inertia::defer(fn (): array => $this->readyDevBoxNames(), 'devBoxes'),
+            'box' => $this->chosenDevBox($request),
+            'boxProjects' => Inertia::defer(function () use ($request): ?array {
+                $box = $this->chosenDevBox($request);
+                $stack = $box === null ? null : collect(app(StackCatalog::class)->devBoxes() ?? [])->firstWhere('name', $box);
+
+                if ($stack === null || $stack['status'] !== 'ready') {
+                    return null;
                 }
 
-                $found = [];
+                $result = app(DevBoxShell::class)->json($stack, ['project:list', '--json']);
 
-                foreach (app(StackCatalog::class)->devBoxes() ?? [] as $box) {
-                    $result = $box['status'] === 'ready' ? app(DevBoxShell::class)->json($box, ['project:list', '--json']) : null;
-
-                    foreach (is_array($result['projects'] ?? null) ? $result['projects'] : [] as $project) {
-                        $found[] = ['box' => $box['name']] + $project;
-                    }
-                }
-
-                return $found;
-            }, 'devBoxProjects'),
+                return is_array($result['projects'] ?? null) ? array_values($result['projects']) : null;
+            }, 'boxProjects'),
             'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => $p['localStatus']['state'] === 'running'),
         ]);
     }
@@ -117,6 +114,27 @@ class ProjectController extends Controller
         $project = Project::firstOrCreate(['path' => realpath($path) ?: $path]);
 
         return to_route('projects.show', $project);
+    }
+
+    /** @return list<string> the names of the dev boxes that can be switched to, none unless experimental features are on */
+    private function readyDevBoxNames(): array
+    {
+        if (! app(GlobalSettings::class)->experimental()) {
+            return [];
+        }
+
+        return array_values(array_map(
+            fn (array $box): string => $box['name'],
+            array_filter(app(StackCatalog::class)->devBoxes() ?? [], fn (array $box): bool => $box['status'] === 'ready'),
+        ));
+    }
+
+    /** The dev box named in ?box=, when the feature is on and the name is a plain one. */
+    private function chosenDevBox(Request $request): ?string
+    {
+        $box = $request->query('box');
+
+        return is_string($box) && preg_match('/^[a-z0-9][a-z0-9-]*$/', $box) === 1 && app(GlobalSettings::class)->experimental() ? $box : null;
     }
 
     public function create(Request $request, FrameworkCatalog $frameworks, LocalCluster $local, ClusterStatus $status): Response
@@ -159,6 +177,7 @@ class ProjectController extends Controller
             'devBoxes' => Inertia::defer(fn (): array => app(GlobalSettings::class)->experimental()
                 ? array_map(fn (array $box): array => ['name' => $box['name'], 'ip' => $box['ip'] ?? null], array_values(array_filter(app(StackCatalog::class)->devBoxes() ?? [], fn (array $box): bool => $box['status'] === 'ready')))
                 : []),
+            'initialBox' => $this->chosenDevBox($request) ?? '',
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
 use App\Http\Requests\StoreServerRequest;
+use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DevBoxShell;
@@ -116,6 +117,37 @@ class DevBoxController extends Controller
         return to_route('runs.show', $run);
     }
 
+    /** Up, down, start or stop an app on the box, as `larakube <action>` in its folder. */
+    public function operate(string $box, string $project, string $action, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $arguments = match ($action) {
+            'up' => ['up', 'local', '--no-console', '--no-test'],
+            'down' => ['down', 'local', '--force'],
+            'start' => ['start', 'local'],
+            'stop' => ['stop', 'local'],
+            default => abort(404),
+        };
+
+        $run = $runner->start(
+            label: ucfirst($action)." {$project} on {$box}",
+            arguments: $arguments,
+            kind: RunKind::OperateDevBoxProject,
+            subject: $project,
+            meta: ['server' => $box, 'role' => 'dev', 'app' => $project],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
+            devBox: $stack,
+            devBoxProject: $project,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     /** Starts a temporary public link to the app, from the box. The link is on the run's page when it finishes. */
     public function share(string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
@@ -174,6 +206,33 @@ class DevBoxController extends Controller
 
                 return ['context' => $context, 'plex' => $context !== null ? $status->plex($context) : null];
             }, 'cluster'),
+        ]);
+    }
+
+    /** One app on a dev box, laid out like a local project's page. */
+    public function showProject(string $box, string $project, StackCatalog $catalog, DevBoxShell $shell): Response
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null || preg_match('/^[a-z0-9][a-z0-9-]*$/', $project) !== 1, 404);
+
+        return Inertia::render('devboxes/project', [
+            'box' => $box,
+            'name' => $project,
+            // What the box reports for this app; null when it does not answer or the app is not in ~/projects.
+            'details' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
+                $result = $shell->json($stack, ['project:list', '--json']);
+
+                return collect(is_array($result['projects'] ?? null) ? $result['projects'] : [])->firstWhere('name', $project);
+            }, 'details'),
+            'runs' => Run::query()
+                ->where('server_name', $box)
+                ->where('subject', $project)
+                ->latest('id')
+                ->limit(8)
+                ->get(['id', 'label', 'status', 'kind', 'created_at'])
+                ->map(fn (Run $run): array => ['id' => $run->id, 'label' => $run->label, 'status' => $run->status->value, 'kind' => $run->kind?->value, 'at' => $run->created_at?->diffForHumans()])
+                ->all(),
         ]);
     }
 

@@ -59,6 +59,7 @@ export default function CreateProject({
     catalog,
     commons,
     devBoxes = [],
+    initialBox = '',
     parent,
     name,
     framework,
@@ -68,6 +69,7 @@ export default function CreateProject({
     catalog?: FrameworkCatalog | null;
     commons?: CommonsState;
     devBoxes?: { name: string; ip: string | null }[];
+    initialBox?: string;
     parent: string;
     name: string;
     framework: string;
@@ -79,7 +81,7 @@ export default function CreateProject({
         parent: string;
         box: string;
         answers: NewAppAnswers;
-    }>({ framework, parent, box: '', answers: {} });
+    }>({ framework, parent, box: initialBox, answers: {} });
     // Empty means this computer; otherwise the name of a dev box the app is created on.
     const onBox = form.data.box !== '';
     const frameworks = useMemo(() => catalog?.frameworks ?? [], [catalog]);

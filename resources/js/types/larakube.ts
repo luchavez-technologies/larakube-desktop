@@ -37,6 +37,7 @@ export type RunKind =
     | 'new-dev-box-project'
     | 'share-dev-box-project'
     | 'unshare-dev-box-project'
+    | 'operate-dev-box-project'
     | 'share-domain-dev-box-project'
     | 'remove-domain-dev-box-project'
     | 'update-dev-box-cli'

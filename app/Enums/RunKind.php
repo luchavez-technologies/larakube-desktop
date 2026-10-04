@@ -14,6 +14,8 @@ enum RunKind: string
     case ShareDevBoxProject = 'share-dev-box-project';
     case UnshareDevBoxProject = 'unshare-dev-box-project';
     /** Stable public names for an app on a dev box under the person's own Cloudflare domain (`share:domain`), and removing them. */
+    /** Up, down, start or stop of an app on a dev box, run there over SSH. */
+    case OperateDevBoxProject = 'operate-dev-box-project';
     case ShareDomainDevBoxProject = 'share-domain-dev-box-project';
     case RemoveDomainDevBoxProject = 'remove-domain-dev-box-project';
     /** The LaraKube CLI on a dev box, installed again from the channel Desktop uses. */

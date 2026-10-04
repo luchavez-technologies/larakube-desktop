@@ -65,6 +65,8 @@ Route::get('/dev-boxes/create', [DevBoxController::class, 'create'])->name('devb
 Route::post('/dev-boxes', [DevBoxController::class, 'store'])->name('devboxes.store');
 Route::get('/dev-boxes/{box}', [DevBoxController::class, 'show'])->name('devboxes.show');
 Route::post('/dev-boxes/{box}/update-cli', [DevBoxController::class, 'updateCli'])->name('devboxes.update-cli');
+Route::get('/dev-boxes/{box}/projects/{project}', [DevBoxController::class, 'showProject'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.show');
+Route::post('/dev-boxes/{box}/projects/{project}/{action}', [DevBoxController::class, 'operate'])->where('project', '[a-z0-9][a-z0-9-]*')->where('action', 'up|down|start|stop')->name('devboxes.operate');
 Route::post('/dev-boxes/{box}/projects/{project}/share', [DevBoxController::class, 'share'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.share');
 Route::delete('/dev-boxes/{box}/projects/{project}/share', [DevBoxController::class, 'unshare'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.unshare');
 Route::get('/dev-boxes/{box}/projects/{project}/share-domain', [DevBoxController::class, 'shareDomainPage'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.share-domain-page');
