@@ -231,6 +231,16 @@ class DevBoxController extends Controller
 
                 return collect(is_array($result['projects'] ?? null) ? $result['projects'] : [])->firstWhere('name', $project) ?? ['state' => 'missing'];
             }, 'details'),
+            // The stable public names the app has from share:domain, and whether their tunnel is up. Null when the box's CLI is too old to say.
+            'sharing' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
+                $result = $shell->json($stack, ['share:show', '--json'], 45, null, $project);
+
+                return $result === null ? null : [
+                    'zone' => $result['zone'] ?? null,
+                    'urls' => is_array($result['urls'] ?? null) ? $result['urls'] : [],
+                    'running' => ($result['running'] ?? false) === true,
+                ];
+            }, 'sharing'),
             // The database, cache, storage and search of the app on the box, as the box's CLI reports them.
             'backing' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
                 $result = $shell->json($stack, ['services:show', 'local', '--json'], 45, null, $project);

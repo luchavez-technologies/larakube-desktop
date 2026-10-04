@@ -13,6 +13,7 @@ import ProjectTerminalCard, {
 import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
+import { open } from '@/routes';
 import {
     show as showBox,
     share,
@@ -27,6 +28,7 @@ export default function ShowDevBoxProject({
     name,
     details,
     backing,
+    sharing,
     runs,
     latestRun,
 }: {
@@ -34,6 +36,7 @@ export default function ShowDevBoxProject({
     name: string;
     details?: DevBoxProject | { state: 'unreachable' | 'missing' };
     backing?: BackingServices | null;
+    sharing?: Sharing | null;
     runs: RecentRun[];
     latestRun: ProjectRun | null;
 }) {
@@ -83,7 +86,18 @@ export default function ShowDevBoxProject({
                                     hasCommons={backing?.commons ?? false}
                                 />
                             </Deferred>
-                            <SharingCard box={box} project={details} />
+                            <Deferred
+                                data="sharing"
+                                fallback={
+                                    <div className="h-24 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                }
+                            >
+                                <SharingCard
+                                    box={box}
+                                    project={details}
+                                    sharing={sharing}
+                                />
+                            </Deferred>
                             {latestRun && (
                                 <ProjectTerminalCard run={latestRun} />
                             )}
@@ -190,33 +204,95 @@ function DevelopmentCard({
     );
 }
 
+type Sharing = {
+    zone: string | null;
+    urls: Record<string, string>;
+    running: boolean;
+};
+
+const serviceLabels: Record<string, string> = {
+    web: 'App',
+    hmr: 'Vite hot reload',
+    reverb: 'Reverb',
+    storage: 'File storage',
+    'storage-console': 'Storage console',
+};
+
 function SharingCard({
     box,
     project,
+    sharing,
 }: {
     box: string;
     project: DevBoxProject;
+    sharing?: Sharing | null;
 }) {
     const running = project.local === 'running';
+    const names = Object.entries(sharing?.urls ?? {});
+    const hasNames = names.length > 0;
 
     return (
-        <Card label="See it from your computer">
-            {!running ? (
+        <Card
+            label="See it from your computer"
+            action={
+                hasNames ? (
+                    <StatusPill tone={sharing?.running ? 'ok' : 'warn'}>
+                        {sharing?.running ? 'Active' : 'Tunnel stopped'}
+                    </StatusPill>
+                ) : undefined
+            }
+        >
+            {hasNames && (
+                <div className="mb-3 divide-y divide-line">
+                    {names.map(([key, url]) => (
+                        <div
+                            key={key}
+                            className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+                        >
+                            <div className="min-w-0">
+                                <p className="text-xs text-soft">
+                                    {serviceLabels[key] ?? key}
+                                </p>
+                                <p className="truncate font-mono text-sm">
+                                    {url}
+                                </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                                <CopyButton value={url} />
+                                {key === 'web' && (
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{ url }}
+                                        as="button"
+                                        className={buttonClass('dark', 'sm')}
+                                    >
+                                        Open
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {!running && !hasNames ? (
                 <p className="text-sm text-soft">
                     Start the app first, then share a link to it.
                 </p>
             ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                        href={share({ box, project: project.name }).url}
-                        method="post"
-                        as="button"
-                        title="Make a temporary public link to this app"
-                        className={buttonClass('secondary', 'sm')}
-                    >
-                        <Share2 className="size-3.5" />
-                        <span>Share preview</span>
-                    </Link>
+                    {running && !hasNames && (
+                        <Link
+                            href={share({ box, project: project.name }).url}
+                            method="post"
+                            as="button"
+                            title="Make a temporary public link to this app"
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            <Share2 className="size-3.5" />
+                            <span>Share preview</span>
+                        </Link>
+                    )}
                     <Link
                         href={
                             shareDomainPage({ box, project: project.name }).url
@@ -224,17 +300,19 @@ function SharingCard({
                         title="Stable public names under your own Cloudflare domain: app, Vite, Reverb and storage"
                         className={buttonClass('secondary', 'sm')}
                     >
-                        Use my domain
+                        {hasNames ? 'Change or remove names' : 'Use my domain'}
                     </Link>
-                    <Link
-                        href={unshare({ box, project: project.name }).url}
-                        method="delete"
-                        as="button"
-                        title="Take the public link down"
-                        className={buttonClass('ghost', 'sm')}
-                    >
-                        Stop sharing
-                    </Link>
+                    {running && !hasNames && (
+                        <Link
+                            href={unshare({ box, project: project.name }).url}
+                            method="delete"
+                            as="button"
+                            title="Take the public link down"
+                            className={buttonClass('ghost', 'sm')}
+                        >
+                            Stop sharing
+                        </Link>
+                    )}
                 </div>
             )}
         </Card>

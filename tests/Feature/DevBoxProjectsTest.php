@@ -524,6 +524,7 @@ test('an app on a box has its own page, with what the box reports about it and t
             ['name' => 'shop', 'path' => '/home/larakube/projects/shop', 'framework' => 'laravel', 'environments' => [['name' => 'local', 'host' => 'shop.kube']], 'local' => 'running'],
             ['name' => 'blog', 'path' => '/home/larakube/projects/blog', 'framework' => 'astro', 'environments' => [], 'local' => 'stopped'],
         ]])),
+        '*share:show*' => Process::result(output: json_encode(['success' => true, 'mode' => 'domain', 'zone' => 'example.com', 'urls' => ['web' => 'https://shop-box.example.com'], 'running' => true])),
         '*services:show*' => Process::result(output: json_encode(['success' => true, 'commons' => false, 'services' => [['kind' => 'database', 'label' => 'Database', 'name' => 'SQLite', 'details' => []]]])),
     ]);
     ChildProcess::fake();
@@ -540,6 +541,10 @@ test('an app on a box has its own page, with what the box reports about it and t
             ->loadDeferredProps('details', fn (AssertableInertia $page) => $page
                 ->where('details.framework', 'laravel')
                 ->where('details.local', 'running')
+            )
+            ->loadDeferredProps('sharing', fn (AssertableInertia $page) => $page
+                ->where('sharing.urls.web', 'https://shop-box.example.com')
+                ->where('sharing.running', true)
             )
             ->loadDeferredProps('backing', fn (AssertableInertia $page) => $page
                 ->where('backing.commons', false)
