@@ -233,7 +233,7 @@ class DevBoxController extends Controller
             }, 'details'),
             // The stable public names the app has from share:domain, and whether their tunnel is up. Null when the box's CLI is too old to say.
             'sharing' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
-                $result = $shell->json($stack, ['share:show', '--json'], 45, null, $project);
+                $result = $shell->json($stack, ['share:show', 'local', '--json'], 45, null, $project);
 
                 return $result === null ? null : [
                     'zone' => $result['zone'] ?? null,
