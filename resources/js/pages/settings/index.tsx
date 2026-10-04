@@ -23,6 +23,7 @@ type SettingsProps = {
         hasHetznerToken: boolean;
         shareToken: string | null;
         hideProjects?: boolean;
+        experimental?: boolean;
         cliChannel?: string;
         detectedAgents: Record<string, AgentInfo>;
     };
@@ -43,6 +44,7 @@ type SettingsForm = {
     hetznerToken: string;
     shareToken: string;
     hideProjects: boolean;
+    experimental: boolean;
     cliChannel: string;
 };
 
@@ -64,6 +66,7 @@ export default function SettingsIndex({
         hetznerToken: '',
         shareToken: settings.shareToken ?? '',
         hideProjects: settings.hideProjects ?? false,
+        experimental: settings.experimental ?? false,
         cliChannel: settings.cliChannel ?? 'canary',
     });
 
@@ -152,6 +155,35 @@ export default function SettingsIndex({
                                 </div>
                             </label>
                         </div>
+                    </Card>
+
+                    {/* Experimental */}
+                    <Card label="Experimental features">
+                        <label className="flex cursor-pointer items-start gap-3">
+                            <input
+                                type="checkbox"
+                                checked={form.data.experimental}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'experimental',
+                                        e.target.checked,
+                                    )
+                                }
+                                className="mt-0.5 size-4 rounded border-line text-brand accent-brand focus:ring-brand"
+                            />
+                            <div>
+                                <span className="block text-xs font-medium text-ink">
+                                    Show experimental features
+                                </span>
+                                <span className="mt-0.5 block text-xs leading-relaxed text-soft">
+                                    Adds features that are still being tried out
+                                    to the sidebar, such as Workspaces (a
+                                    browser editor with your repository on your
+                                    own server). They can change or break
+                                    between releases. Save to apply.
+                                </span>
+                            </div>
+                        </label>
                     </Card>
 
                     {/* Cloud Providers */}

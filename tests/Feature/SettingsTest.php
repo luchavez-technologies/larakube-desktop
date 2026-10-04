@@ -19,6 +19,7 @@ test('settings page renders with global configuration and AI agents', function (
 test('settings can be updated and saved to config', function () {
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
+    $settings->shouldReceive('experimental')->andReturnFalse();
     $settings->shouldReceive('update')->once()->with(Mockery::on(function (array $data): bool {
         return ($data['localTld'] ?? null) === 'test'
             && ($data['email'] ?? null) === 'admin@example.com'
@@ -36,6 +37,7 @@ test('settings can be updated and saved to config', function () {
 test('bridging an AI agent configures MCP servers', function () {
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
+    $settings->shouldReceive('experimental')->andReturnFalse();
     $settings->shouldReceive('bridge')->with('antigravity')->once()->andReturnTrue();
     app()->instance(GlobalSettings::class, $settings);
 
@@ -47,6 +49,7 @@ test('bridging an AI agent configures MCP servers', function () {
 test('hideProjects preference can be saved to config', function () {
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnTrue();
+    $settings->shouldReceive('experimental')->andReturnFalse();
     $settings->shouldReceive('update')->once()->with(Mockery::on(function (array $data): bool {
         return ($data['hideProjects'] ?? null) === true;
     }));

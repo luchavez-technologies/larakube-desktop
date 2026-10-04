@@ -8,6 +8,7 @@ import {
     Activity,
     Terminal,
     Settings,
+    Code2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboard, readiness, tools } from '@/routes';
@@ -15,6 +16,7 @@ import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
 import { show as settingsShow } from '@/routes/settings';
+import { index as workspacesIndex } from '@/routes/workspaces';
 
 type NavItem = {
     label: string;
@@ -23,6 +25,8 @@ type NavItem = {
     active: (url: string) => boolean;
     accent: string;
     icon: ComponentType<{ className?: string }>;
+    /** Only listed when Experimental features are switched on in Settings. */
+    experimental?: boolean;
 };
 
 const navigation: NavItem[] = [
@@ -49,6 +53,15 @@ const navigation: NavItem[] = [
         active: (url) => url.startsWith('/projects'),
         accent: 'bg-brand',
         icon: FolderGit2,
+    },
+    {
+        label: 'Workspaces',
+        description: 'Experimental',
+        href: workspacesIndex().url,
+        active: (url) => url.startsWith('/workspaces'),
+        accent: 'bg-brand',
+        icon: Code2,
+        experimental: true,
     },
     {
         label: 'Tools',
@@ -92,10 +105,15 @@ export default function AppLayout({
     title: string;
     children: ReactNode;
 }) {
-    const { url, props } = usePage<{ hideProjects?: boolean }>();
+    const { url, props } = usePage<{
+        hideProjects?: boolean;
+        experimental?: boolean;
+    }>();
     const hideProjects = Boolean(props.hideProjects);
     const visibleNavigation = navigation.filter(
-        (item) => !(hideProjects && item.label === 'Projects'),
+        (item) =>
+            !(hideProjects && item.label === 'Projects') &&
+            (!item.experimental || Boolean(props.experimental)),
     );
 
     return (

@@ -25,6 +25,7 @@ class GlobalSettings
      *     hasHetznerToken: bool,
      *     shareToken: ?string,
      *     hideProjects: bool,
+     *     experimental: bool,
      *     cliChannel: string,
      *     usage: ?string,
      *     detectedAgents: array<string, array{name: string, installed: bool, bridged: bool}>
@@ -63,6 +64,7 @@ class GlobalSettings
             'hasHetznerToken' => ! empty($config['hetznerToken']),
             'shareToken' => is_string($config['shareToken'] ?? null) ? $config['shareToken'] : null,
             'hideProjects' => (bool) ($config['hideProjects'] ?? false),
+            'experimental' => (bool) ($config['experimental'] ?? false),
             'cliChannel' => (string) ($config['cliChannel'] ?? 'canary'),
             'usage' => in_array($config['usage'] ?? null, self::USAGES, true) ? $config['usage'] : null,
             'detectedAgents' => $agents,
@@ -74,6 +76,12 @@ class GlobalSettings
         $config = $this->readConfig();
 
         return (bool) ($config['hideProjects'] ?? false);
+    }
+
+    /** Whether the person turned on features that are still being tried out. */
+    public function experimental(): bool
+    {
+        return (bool) ($this->readConfig()['experimental'] ?? false);
     }
 
     public function getLocalTld(): string
@@ -128,6 +136,10 @@ class GlobalSettings
 
         if (array_key_exists('hideProjects', $data)) {
             $config['hideProjects'] = (bool) $data['hideProjects'];
+        }
+
+        if (array_key_exists('experimental', $data)) {
+            $config['experimental'] = (bool) $data['experimental'];
         }
 
         if (! empty($data['aiKey']) && is_string($data['aiKey'])) {

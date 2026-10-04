@@ -52,6 +52,13 @@ enum RunKind: string
     case CompanionStart = 'companion-start';
     case CompanionStop = 'companion-stop';
     case CloudAuth = 'cloud-auth';
+    /** Experimental: a development workspace (browser editor and a clone of a repository) on a server. */
+    case WorkspaceCreate = 'workspace-create';
+    case WorkspaceSuspend = 'workspace-suspend';
+    case WorkspaceResume = 'workspace-resume';
+    case WorkspaceRemove = 'workspace-remove';
+    /** A tunnel from this computer to a workspace editor. Runs until it is stopped. */
+    case WorkspaceOpen = 'workspace-open';
 
     public function changesBackups(): bool
     {

@@ -40,6 +40,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'hideProjects' => app(GlobalSettings::class)->hideProjects(),
+            'experimental' => app(GlobalSettings::class)->experimental(),
             'auth' => [
                 'user' => $request->user(),
             ],

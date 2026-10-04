@@ -16,6 +16,7 @@ use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ToolInstallController;
+use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
@@ -57,6 +58,14 @@ Route::post('/servers/{server}/backups/prune', [BackupController::class, 'prune'
 Route::post('/servers/{server}/backups/recovery-card', [BackupController::class, 'recoveryCard'])->name('servers.backups.recovery-card');
 Route::post('/servers/{server}/access/grant', [ClusterAccessController::class, 'grant'])->name('servers.access.grant');
 Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 'revoke'])->name('servers.access.revoke');
+
+Route::pattern('workspace', '[a-z0-9][a-z0-9-]*');
+Route::get('/workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index');
+Route::post('/workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store');
+Route::post('/workspaces/{workspace}/suspend', [WorkspaceController::class, 'suspend'])->name('workspaces.suspend');
+Route::post('/workspaces/{workspace}/resume', [WorkspaceController::class, 'resume'])->name('workspaces.resume');
+Route::post('/workspaces/{workspace}/open', [WorkspaceController::class, 'open'])->name('workspaces.open');
+Route::delete('/workspaces/{workspace}', [WorkspaceController::class, 'destroy'])->name('workspaces.destroy');
 
 Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
 Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');

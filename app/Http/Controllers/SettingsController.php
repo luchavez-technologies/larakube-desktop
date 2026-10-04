@@ -54,6 +54,7 @@ class SettingsController extends Controller
             'hetznerToken' => ['nullable', 'string'],
             'shareToken' => ['nullable', 'string'],
             'hideProjects' => ['nullable', 'boolean'],
+            'experimental' => ['nullable', 'boolean'],
             'cliChannel' => ['nullable', 'string', 'in:canary,stable'],
         ]);
 
