@@ -1,33 +1,22 @@
 import { Deferred, Link } from '@inertiajs/react';
-import { Plus, Share2 } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
-import CopyButton from '@/components/copy-button';
-import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
-import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
-import {
-    create,
-    share,
-    shareDomainPage,
-    unshare,
-    updateCli,
-} from '@/routes/devboxes';
+import { create, show } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
-import type { DevBoxProject, Server } from '@/types/larakube';
+import type { Server } from '@/types/larakube';
 
 export default function DevBoxes({
     devBoxes,
-    projects,
     disabled = false,
 }: {
     devBoxes?: Server[] | null;
-    projects?: Record<string, DevBoxProject[] | null>;
     disabled?: boolean;
 }) {
     if (disabled) {
@@ -100,11 +89,7 @@ export default function DevBoxes({
                 ) : (
                     <div className="space-y-5">
                         {devBoxes.map((box) => (
-                            <DevBoxCard
-                                key={box.name}
-                                box={box}
-                                projects={projects}
-                            />
+                            <DevBoxCard key={box.name} box={box} />
                         ))}
                     </div>
                 )}
@@ -124,181 +109,28 @@ export default function DevBoxes({
     );
 }
 
-function DevBoxCard({
-    box,
-    projects,
-}: {
-    box: Server;
-    projects?: Record<string, DevBoxProject[] | null>;
-}) {
+function DevBoxCard({ box }: { box: Server }) {
     const [label, tone] = serverStatus[box.status];
-    const ssh = `ssh ${box.name}`;
-    const tunnel = `ssh -L 8443:127.0.0.1:443 ${box.name}`;
 
     return (
         <Card
             label={box.name}
-            action={
-                <div className="flex items-center gap-3">
-                    <StatusPill tone={tone}>{label}</StatusPill>
-                    {box.status === 'ready' && (
-                        <Link
-                            href={updateCli({ box: box.name }).url}
-                            method="post"
-                            as="button"
-                            title="Install the latest LaraKube CLI on this box"
-                            className={buttonClass('ghost', 'sm')}
-                        >
-                            Update CLI
-                        </Link>
-                    )}
-                    <ServerActions server={box} />
-                </div>
-            }
+            action={<StatusPill tone={tone}>{label}</StatusPill>}
         >
-            <p className="mb-2 font-mono text-xs text-soft">
-                {providerLabels[box.provider] ?? box.provider}
-                {box.region ? ` · ${box.region}` : ''}
-                {box.ip ? ` · ${box.ip}` : ''}
-            </p>
-            <BoxProjects box={box.name} projects={projects} />
-            <ListRow action={<CopyButton value={ssh} />}>
-                <TwoLine
-                    title="Connect"
-                    detail="Opens a shell on the box. Use it from your terminal, or point VS Code Remote-SSH or JetBrains Gateway at it."
-                    mono
-                />
-            </ListRow>
-            <ListRow action={<CopyButton value="larakube new my-app" />}>
-                <TwoLine
-                    title="Make an app"
-                    detail="On the box: larakube new my-app, then larakube up in its folder."
-                />
-            </ListRow>
-            <ListRow action={<CopyButton value={tunnel} />}>
-                <TwoLine
-                    title="See an app"
-                    detail="Open a tunnel to the box's ingress, then browse to the app on port 8443 (add its *.kube name to your hosts file, and accept the certificate)."
-                    mono
-                />
-            </ListRow>
+            <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-xs text-soft">
+                    {providerLabels[box.provider] ?? box.provider}
+                    {box.region ? ` · ${box.region}` : ''}
+                    {box.ip ? ` · ${box.ip}` : ''}
+                </p>
+                <Link
+                    href={show({ box: box.name }).url}
+                    className={buttonClass('secondary', 'sm')}
+                >
+                    <span>Open</span>
+                    <ArrowRight className="size-3.5" />
+                </Link>
+            </div>
         </Card>
-    );
-}
-
-/** The apps on the box, asked of the box itself. Empty until it answers. */
-function BoxProjects({
-    box,
-    projects,
-}: {
-    box: string;
-    projects?: Record<string, DevBoxProject[] | null>;
-}) {
-    const list = projects?.[box];
-
-    return (
-        <div className="mb-1 border-b border-line pb-3">
-            <p className="mb-1.5 text-[11px] font-medium tracking-[0.06em] text-soft uppercase">
-                Projects on this box
-            </p>
-            {projects === undefined ? (
-                <p className="text-xs text-soft">Asking the box…</p>
-            ) : list == null ? (
-                <p className="text-xs text-soft">
-                    The box did not answer, so its projects can't be listed now.
-                </p>
-            ) : list.length === 0 ? (
-                <p className="text-xs text-soft">
-                    None yet. Create one from New project and choose this box.
-                </p>
-            ) : (
-                <ul className="space-y-1.5">
-                    {list.map((project) => (
-                        <li
-                            key={project.path}
-                            className="flex items-center justify-between gap-3 text-sm"
-                        >
-                            <span className="min-w-0 truncate font-medium">
-                                {project.name}
-                                <span className="ml-2 font-mono text-xs font-normal text-soft">
-                                    {project.framework ?? 'unknown'}
-                                    {' · '}
-                                    {project.environments
-                                        .map((environment) => environment.name)
-                                        .join(', ')}
-                                </span>
-                            </span>
-                            <div className="flex shrink-0 items-center gap-2">
-                                {project.local === 'running' && (
-                                    <>
-                                        <Link
-                                            href={
-                                                share({
-                                                    box,
-                                                    project: project.name,
-                                                }).url
-                                            }
-                                            method="post"
-                                            as="button"
-                                            title="Make a temporary public link to this app"
-                                            className={buttonClass(
-                                                'secondary',
-                                                'sm',
-                                            )}
-                                        >
-                                            <Share2 className="size-3.5" />
-                                            <span>Share preview</span>
-                                        </Link>
-                                        <Link
-                                            href={
-                                                shareDomainPage({
-                                                    box,
-                                                    project: project.name,
-                                                }).url
-                                            }
-                                            title="Stable public names under your own Cloudflare domain: app, Vite, Reverb and storage"
-                                            className={buttonClass(
-                                                'secondary',
-                                                'sm',
-                                            )}
-                                        >
-                                            Use my domain
-                                        </Link>
-                                        <Link
-                                            href={
-                                                unshare({
-                                                    box,
-                                                    project: project.name,
-                                                }).url
-                                            }
-                                            method="delete"
-                                            as="button"
-                                            title="Take the public link down"
-                                            className={buttonClass(
-                                                'ghost',
-                                                'sm',
-                                            )}
-                                        >
-                                            Stop sharing
-                                        </Link>
-                                    </>
-                                )}
-                                <StatusPill
-                                    tone={
-                                        project.local === 'running'
-                                            ? 'ok'
-                                            : 'muted'
-                                    }
-                                >
-                                    {project.local === 'running'
-                                        ? 'Running'
-                                        : 'Stopped'}
-                                </StatusPill>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
     );
 }

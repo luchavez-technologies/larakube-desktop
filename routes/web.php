@@ -63,6 +63,7 @@ Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 
 Route::get('/dev-boxes', [DevBoxController::class, 'index'])->name('devboxes.index');
 Route::get('/dev-boxes/create', [DevBoxController::class, 'create'])->name('devboxes.create');
 Route::post('/dev-boxes', [DevBoxController::class, 'store'])->name('devboxes.store');
+Route::get('/dev-boxes/{box}', [DevBoxController::class, 'show'])->name('devboxes.show');
 Route::post('/dev-boxes/{box}/update-cli', [DevBoxController::class, 'updateCli'])->name('devboxes.update-cli');
 Route::post('/dev-boxes/{box}/projects/{project}/share', [DevBoxController::class, 'share'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.share');
 Route::delete('/dev-boxes/{box}/projects/{project}/share', [DevBoxController::class, 'unshare'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.unshare');

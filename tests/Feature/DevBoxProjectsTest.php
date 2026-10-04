@@ -70,7 +70,7 @@ test('a box with no address or key cannot be commanded', function (array $box) {
     'no key' => [['ip' => '203.0.113.50']],
 ]);
 
-test('the dev boxes page lists the projects on each box, as the box itself reports them', function () {
+test('a dev box page lists its projects, as the box itself reports them', function () {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental(true);
     devBoxProjectsStacks();
@@ -81,11 +81,13 @@ test('the dev boxes page lists the projects on each box, as the box itself repor
         '*project:list*' => Process::result(output: json_encode(['success' => true, 'path' => '/home/larakube/projects', 'projects' => [['name' => 'shop', 'path' => '/home/larakube/projects/shop', 'framework' => 'laravel', 'environments' => [['name' => 'local', 'host' => 'shop.kube']], 'local' => 'running']]])),
     ]);
 
-    $this->get(route('devboxes.index'))
+    $this->get(route('devboxes.show', ['box' => 'my-dev-box']))
         ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('devboxes/show')
+            ->where('box.name', 'my-dev-box')
             ->loadDeferredProps('projects', fn (AssertableInertia $page) => $page
-                ->where('projects.my-dev-box.0.name', 'shop')
-                ->where('projects.my-dev-box.0.local', 'running')
+                ->where('projects.0.name', 'shop')
+                ->where('projects.0.local', 'running')
             )
         );
 
@@ -104,9 +106,9 @@ test('a box that does not answer lists no projects instead of failing the page',
         '*project:list*' => Process::result(errorOutput: 'ssh: connect to host timed out', exitCode: 255),
     ]);
 
-    $this->get(route('devboxes.index'))
+    $this->get(route('devboxes.show', ['box' => 'my-dev-box']))
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->loadDeferredProps('projects', fn (AssertableInertia $page) => $page->where('projects.my-dev-box', null))
+            ->loadDeferredProps('projects', fn (AssertableInertia $page) => $page->where('projects', null))
         );
 
     File::deleteDirectory($bin);
@@ -363,4 +365,71 @@ test('the domain pages are not there with experimental features off', function (
 
     $this->get(route('devboxes.share-domain-page', ['box' => 'my-dev-box', 'project' => 'shop']))->assertNotFound();
     $this->postJson(route('devboxes.domains', ['box' => 'my-dev-box']), ['token' => 'abc'])->assertNotFound();
+});
+
+test('a dev box page opens the tunnel through the CLI and reads Plex Commons through the kube-context it made', function () {
+    $bin = devBoxProjectsCli();
+    File::put("{$bin}/kubectl", "#!/bin/sh\n");
+    chmod("{$bin}/kubectl", 0755);
+    devBoxProjectsExperimental(true);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*devbox:connect*' => Process::result(output: json_encode(['success' => true, 'context' => 'larakube-devbox-my-dev-box', 'port' => 16443])),
+        '*plex-commons*' => Process::result(output: json_encode(['services' => ['postgres' => ['host' => 'postgres.larakube-plex']]])),
+        '*plex-registry*' => Process::result(output: json_encode(['tenants' => ['shop' => ['redis_index' => 1]]])),
+    ]);
+
+    $this->get(route('devboxes.show', ['box' => 'my-dev-box']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps('cluster', fn (AssertableInertia $page) => $page
+                ->where('cluster.context', 'larakube-devbox-my-dev-box')
+                ->where('cluster.plex.initialized', true)
+            )
+        );
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'devbox:connect')
+        && str_contains(implode(' ', (array) $process->command), '--stack-name=my-dev-box'));
+
+    File::deleteDirectory($bin);
+});
+
+test('a dev box page whose tunnel cannot be opened says so instead of failing', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*devbox:connect*' => Process::result(output: json_encode(['success' => false, 'error' => 'no tunnel']), exitCode: 1),
+    ]);
+
+    $this->get(route('devboxes.show', ['box' => 'my-dev-box']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps('cluster', fn (AssertableInertia $page) => $page->where('cluster.context', null)->where('cluster.plex', null))
+        );
+
+    File::deleteDirectory($bin);
+});
+
+test('only a dev box has a dev box page', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsStacks();
+    devBoxProjectsExperimental(true);
+
+    $this->get(route('devboxes.show', ['box' => 'workshop-demo']))->assertNotFound();
+    $this->get(route('devboxes.show', ['box' => 'nope']))->assertNotFound();
+
+    File::deleteDirectory($bin);
+});
+
+test('the dev box page is off with experimental features off', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsStacks();
+    devBoxProjectsExperimental(false);
+
+    $this->get(route('devboxes.show', ['box' => 'my-dev-box']))->assertNotFound();
+
+    File::deleteDirectory($bin);
 });
