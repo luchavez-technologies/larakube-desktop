@@ -208,7 +208,7 @@ export default function ProjectsIndex({
                     </table>
                 </div>
             )}
-            <Deferred data="devBoxProjects" fallback={null}>
+            <Deferred data="devBoxProjects" fallback={<></>}>
                 {devBoxProjects && devBoxProjects.length > 0 ? (
                     <DevBoxProjects projects={devBoxProjects} />
                 ) : null}

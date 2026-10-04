@@ -147,7 +147,7 @@ export default function ShowDevBox({
                                 mono
                             />
                         </ListRow>
-                        <Deferred data="cluster" fallback={null}>
+                        <Deferred data="cluster" fallback={<></>}>
                             {cluster?.context ? (
                                 <ListRow
                                     action={
