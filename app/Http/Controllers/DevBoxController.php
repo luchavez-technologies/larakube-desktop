@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Http\Requests\StoreServerRequest;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\DevBoxShell;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
@@ -21,7 +22,7 @@ class DevBoxController extends Controller
     public function __construct(private GlobalSettings $settings) {}
 
     /** With the feature off the page says so and points to Settings, instead of failing. */
-    public function index(StackCatalog $catalog): Response
+    public function index(StackCatalog $catalog, DevBoxShell $shell): Response
     {
         if (! $this->settings->experimental()) {
             return Inertia::render('devboxes/index', ['disabled' => true]);
@@ -30,6 +31,17 @@ class DevBoxController extends Controller
         return Inertia::render('devboxes/index', [
             'disabled' => false,
             'devBoxes' => Inertia::defer(fn (): ?array => $catalog->devBoxes()),
+            // The projects on each box, asked of the box itself; a box that does not answer has none listed.
+            'projects' => Inertia::defer(function () use ($catalog, $shell): array {
+                $byBox = [];
+
+                foreach ($catalog->devBoxes() ?? [] as $box) {
+                    $result = $box['status'] === 'ready' ? $shell->json($box, ['project:list', '--json']) : null;
+                    $byBox[$box['name']] = is_array($result['projects'] ?? null) ? array_values($result['projects']) : null;
+                }
+
+                return $byBox;
+            }, 'projects'),
         ]);
     }
 

@@ -34,6 +34,7 @@ export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type RunKind =
     | 'create-server'
     | 'create-dev-box'
+    | 'new-dev-box-project'
     | 'destroy-server'
     | 'restart-server'
     | 'install-tool'
@@ -120,6 +121,15 @@ export type RunSummary = Pick<
     targetName: string | null;
     targetUrl: string | null;
     environment: string | null;
+};
+
+/** A project on a dev box, as `project:list` reports it. */
+export type DevBoxProject = {
+    name: string;
+    path: string;
+    framework: string | null;
+    environments: { name: string; host: string | null }[];
+    local: 'running' | 'stopped';
 };
 
 export type ServerStatus = 'ready' | 'incomplete' | 'unfinished';

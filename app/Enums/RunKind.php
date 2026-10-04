@@ -8,6 +8,8 @@ enum RunKind: string
     case DestroyServer = 'destroy-server';
     /** A server made as a development machine with devbox:create. */
     case CreateDevBox = 'create-dev-box';
+    /** A new app scaffolded on a dev box over SSH. */
+    case NewDevBoxProject = 'new-dev-box-project';
     /** A server made with cloud:create, rebooted over SSH. */
     case RestartServer = 'restart-server';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */

@@ -12,6 +12,7 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\FrameworkForm;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
@@ -135,6 +136,10 @@ class ProjectController extends Controller
 
                 return $plex === null ? null : ['context' => $context, 'initialized' => $plex['initialized'], 'services' => $plex['services']];
             }),
+            // Dev boxes the app can be created on instead (experimental), so the form can offer them.
+            'devBoxes' => Inertia::defer(fn (): array => app(GlobalSettings::class)->experimental()
+                ? array_map(fn (array $box): array => ['name' => $box['name'], 'ip' => $box['ip'] ?? null], array_values(array_filter(app(StackCatalog::class)->devBoxes() ?? [], fn (array $box): bool => $box['status'] === 'ready')))
+                : []),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
@@ -225,6 +230,59 @@ class ProjectController extends Controller
             'name' => $name,
             'framework' => $input['framework'],
         ]);
+    }
+
+    /**
+     * Experimental. Creates the app on a dev box over SSH, in its projects folder. The same form and answers as a local
+     * app; the project then lives on the box, so nothing is registered on this computer.
+     */
+    public function scaffoldOnDevBox(Request $request, CliRunner $runner, FrameworkCatalog $frameworks, FrameworkForm $form, StackCatalog $stacks): RedirectResponse
+    {
+        abort_unless(app(GlobalSettings::class)->experimental(), 404);
+
+        $input = $request->validate([
+            'framework' => ['required', 'string'],
+            'box' => ['required', 'string'],
+            'answers' => ['array'],
+        ]);
+
+        $box = collect($stacks->devBoxes() ?? [])->firstWhere('name', $input['box']);
+
+        if ($box === null || $box['status'] !== 'ready') {
+            return back()->withErrors(['box' => 'That dev box is not ready.']);
+        }
+
+        $framework = $frameworks->framework($input['framework']);
+
+        if ($framework === null || ! empty($framework['hidden']) || ! empty($framework['comingSoon'])) {
+            return back()->withErrors(['framework' => 'This app cannot be created yet.']);
+        }
+
+        $resolved = $form->resolve($framework['fields'], (array) ($input['answers'] ?? []));
+
+        if ($resolved['errors'] !== []) {
+            return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["answers.{$key}" => $error])->all());
+        }
+
+        $name = (string) $resolved['positional'];
+
+        if (is_string($email = $input['answers']['email'] ?? null)) {
+            Cache::forever(self::EMAIL_CACHE_KEY, trim($email));
+        }
+
+        $run = $runner->start(
+            label: "Create {$framework['label']} app {$name} on {$box['name']}",
+            arguments: $frameworks->scaffoldArguments($framework, $name, $resolved['flags']),
+            kind: RunKind::NewDevBoxProject,
+            subject: $name,
+            meta: ['server' => $box['name'], 'role' => 'dev', 'app' => $name],
+            targetType: 'server',
+            targetName: $box['name'],
+            serverName: $box['name'],
+            devBox: $box,
+        );
+
+        return to_route('projects.create', ['run' => $run->id, 'framework' => $input['framework'], 'name' => $name]);
     }
 
     /** Runs a failed or cancelled create again, with the same answers, if nothing was left behind. */

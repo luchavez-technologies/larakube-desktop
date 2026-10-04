@@ -21,6 +21,7 @@ class CliRunner
      * @param  array<string, string>  $secretEnvironment  credentials passed by env, never stored on the Run
      * @param  array<string, string>  $meta  what the run acts on (server, context, tool, project), for the UI and cache invalidation
      * @param  string|null  $cwd  a project folder, for commands that act on the project in the current directory
+     * @param  array<string, mixed>|null  $devBox  a dev box from the stack list: run the command there over SSH instead of here
      */
     public function start(
         string $label,
@@ -38,14 +39,20 @@ class CliRunner
         ?string $serverName = null,
         ?string $context = null,
         ?string $tool = null,
+        ?array $devBox = null,
     ): Run {
-        $cli = $this->locator->find('larakube');
+        if ($devBox !== null) {
+            // The same commands, run on a dev box over SSH. Its projects folder is the working directory there.
+            $command = app(DevBoxShell::class)->command($devBox, $arguments);
+        } else {
+            $cli = $this->locator->find('larakube');
 
-        if ($cli === null) {
-            throw new RuntimeException('The LaraKube CLI is not installed.');
+            if ($cli === null) {
+                throw new RuntimeException('The LaraKube CLI is not installed.');
+            }
+
+            $command = [$cli, ...$arguments, '--no-interaction'];
         }
-
-        $command = [$cli, ...$arguments, '--no-interaction'];
 
         if ($projectId === null && isset($meta['project']) && is_numeric($meta['project'])) {
             $projectId = (int) $meta['project'];

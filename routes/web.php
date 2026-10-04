@@ -77,6 +77,7 @@ Route::post('/projects', [ProjectController::class, 'store'])->name('projects.st
 Route::get('/projects/create', [ProjectController::class, 'create'])->name('projects.create');
 Route::post('/projects/create/folder', [ProjectController::class, 'chooseFolder'])->name('projects.choose-folder');
 Route::post('/projects/create', [ProjectController::class, 'scaffold'])->name('projects.scaffold');
+Route::post('/projects/create/dev-box', [ProjectController::class, 'scaffoldOnDevBox'])->name('projects.scaffold-dev-box');
 Route::post('/projects/local/stop-all', [ProjectController::class, 'stopAll'])->name('projects.stop-all');
 Route::post('/projects/local/down-all', [ProjectController::class, 'downAll'])->name('projects.down-all');
 Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');

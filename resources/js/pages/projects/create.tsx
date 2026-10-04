@@ -25,7 +25,15 @@ import StatusPill, { type Tone } from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
 import { cn } from '@/lib/utils';
-import { chooseFolder, create, index, scaffold, show } from '@/routes/projects';
+import { index as devBoxesIndex } from '@/routes/devboxes';
+import {
+    chooseFolder,
+    create,
+    index,
+    scaffold,
+    scaffoldDevBox,
+    show,
+} from '@/routes/projects';
 import { cancel, show as showRun } from '@/routes/runs';
 import type {
     CommonsState,
@@ -48,6 +56,7 @@ type ActiveRun = {
 export default function CreateProject({
     catalog,
     commons,
+    devBoxes = [],
     parent,
     name,
     framework,
@@ -56,6 +65,7 @@ export default function CreateProject({
 }: {
     catalog?: FrameworkCatalog | null;
     commons?: CommonsState;
+    devBoxes?: { name: string; ip: string | null }[];
     parent: string;
     name: string;
     framework: string;
@@ -65,8 +75,11 @@ export default function CreateProject({
     const form = useForm<{
         framework: string;
         parent: string;
+        box: string;
         answers: NewAppAnswers;
-    }>({ framework, parent, answers: {} });
+    }>({ framework, parent, box: '', answers: {} });
+    // Empty means this computer; otherwise the name of a dev box the app is created on.
+    const onBox = form.data.box !== '';
     const frameworks = useMemo(() => catalog?.frameworks ?? [], [catalog]);
     const categories = useMemo(
         () => [{ id: 'all', label: 'All' }, ...(catalog?.categories ?? [])],
@@ -235,7 +248,7 @@ export default function CreateProject({
 
     function submit(event: FormEvent) {
         event.preventDefault();
-        form.post(scaffold().url);
+        form.post((onBox ? scaffoldDevBox() : scaffold()).url);
     }
 
     function pickFolder() {
@@ -584,6 +597,20 @@ export default function CreateProject({
                                             >
                                                 Create another
                                             </Link>
+                                            {activeRun.meta?.role === 'dev' && (
+                                                <Link
+                                                    href={devBoxesIndex().url}
+                                                    className={buttonClass(
+                                                        'primary',
+                                                        'sm',
+                                                    )}
+                                                >
+                                                    <span>
+                                                        Open the dev box
+                                                    </span>
+                                                    <ArrowRight className="size-3.5" />
+                                                </Link>
+                                            )}
                                             {activeRun.meta?.project && (
                                                 <Link
                                                     href={
@@ -701,48 +728,128 @@ export default function CreateProject({
                                             autoFocus
                                             afterEssential={
                                                 <>
-                                                    <CommonsNotice
-                                                        fields={
-                                                            selectedOption.fields
-                                                        }
-                                                        answers={
-                                                            form.data.answers
-                                                        }
-                                                        commons={commons}
-                                                    />
-                                                    <Field
-                                                        label="Create it in"
-                                                        error={
-                                                            form.errors.parent
-                                                        }
-                                                        labelled={false}
-                                                    >
-                                                        <div className="flex items-center gap-2.5">
-                                                            <p className="min-w-0 flex-1 truncate rounded-lg bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line ring-inset">
-                                                                {
-                                                                    form.data
-                                                                        .parent
-                                                                }
-                                                                <span className="text-faint">
-                                                                    /
-                                                                    {chosenName ||
-                                                                        'my-first-app'}
-                                                                </span>
-                                                            </p>
-                                                            <button
-                                                                type="button"
-                                                                onClick={
-                                                                    pickFolder
-                                                                }
-                                                                className={buttonClass(
-                                                                    'secondary',
-                                                                    'sm',
+                                                    {devBoxes.length > 0 && (
+                                                        <Field
+                                                            label="Where"
+                                                            error={
+                                                                form.errors.box
+                                                            }
+                                                            labelled={false}
+                                                        >
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {[
+                                                                    {
+                                                                        name: '',
+                                                                        label: 'This computer',
+                                                                    },
+                                                                    ...devBoxes.map(
+                                                                        (
+                                                                            box,
+                                                                        ) => ({
+                                                                            name: box.name,
+                                                                            label: `Dev box ${box.name}`,
+                                                                        }),
+                                                                    ),
+                                                                ].map(
+                                                                    (
+                                                                        option,
+                                                                    ) => (
+                                                                        <button
+                                                                            key={
+                                                                                option.name
+                                                                            }
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                setData(
+                                                                                    'box',
+                                                                                    option.name,
+                                                                                )
+                                                                            }
+                                                                            className={cn(
+                                                                                'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                                                                                form
+                                                                                    .data
+                                                                                    .box ===
+                                                                                    option.name
+                                                                                    ? 'bg-ink text-white'
+                                                                                    : 'bg-surface text-ink ring-1 ring-line hover:bg-paper',
+                                                                            )}
+                                                                        >
+                                                                            {
+                                                                                option.label
+                                                                            }
+                                                                        </button>
+                                                                    ),
                                                                 )}
-                                                            >
-                                                                Change…
-                                                            </button>
-                                                        </div>
-                                                    </Field>
+                                                            </div>
+                                                        </Field>
+                                                    )}
+                                                    {onBox && (
+                                                        <p className="rounded-lg bg-paper px-3 py-2 text-xs leading-relaxed text-soft ring-1 ring-line ring-inset">
+                                                            Created on{' '}
+                                                            <span className="font-mono text-ink">
+                                                                {form.data.box}
+                                                            </span>{' '}
+                                                            in{' '}
+                                                            <span className="font-mono text-ink">
+                                                                ~/projects/
+                                                                {chosenName ||
+                                                                    'my-first-app'}
+                                                            </span>
+                                                            . Its database and
+                                                            cache run on that
+                                                            box.
+                                                        </p>
+                                                    )}
+                                                    {!onBox && (
+                                                        <CommonsNotice
+                                                            fields={
+                                                                selectedOption.fields
+                                                            }
+                                                            answers={
+                                                                form.data
+                                                                    .answers
+                                                            }
+                                                            commons={commons}
+                                                        />
+                                                    )}
+                                                    {!onBox && (
+                                                        <Field
+                                                            label="Create it in"
+                                                            error={
+                                                                form.errors
+                                                                    .parent
+                                                            }
+                                                            labelled={false}
+                                                        >
+                                                            <div className="flex items-center gap-2.5">
+                                                                <p className="min-w-0 flex-1 truncate rounded-lg bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line ring-inset">
+                                                                    {
+                                                                        form
+                                                                            .data
+                                                                            .parent
+                                                                    }
+                                                                    <span className="text-faint">
+                                                                        /
+                                                                        {chosenName ||
+                                                                            'my-first-app'}
+                                                                    </span>
+                                                                </p>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={
+                                                                        pickFolder
+                                                                    }
+                                                                    className={buttonClass(
+                                                                        'secondary',
+                                                                        'sm',
+                                                                    )}
+                                                                >
+                                                                    Change…
+                                                                </button>
+                                                            </div>
+                                                        </Field>
+                                                    )}
                                                 </>
                                             }
                                         />

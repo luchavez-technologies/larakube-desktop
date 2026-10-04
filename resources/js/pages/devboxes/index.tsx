@@ -13,13 +13,15 @@ import { create } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
-import type { Server } from '@/types/larakube';
+import type { DevBoxProject, Server } from '@/types/larakube';
 
 export default function DevBoxes({
     devBoxes,
+    projects,
     disabled = false,
 }: {
     devBoxes?: Server[] | null;
+    projects?: Record<string, DevBoxProject[] | null>;
     disabled?: boolean;
 }) {
     if (disabled) {
@@ -92,7 +94,11 @@ export default function DevBoxes({
                 ) : (
                     <div className="space-y-5">
                         {devBoxes.map((box) => (
-                            <DevBoxCard key={box.name} box={box} />
+                            <DevBoxCard
+                                key={box.name}
+                                box={box}
+                                projects={projects}
+                            />
                         ))}
                     </div>
                 )}
@@ -112,7 +118,13 @@ export default function DevBoxes({
     );
 }
 
-function DevBoxCard({ box }: { box: Server }) {
+function DevBoxCard({
+    box,
+    projects,
+}: {
+    box: Server;
+    projects?: Record<string, DevBoxProject[] | null>;
+}) {
     const [label, tone] = serverStatus[box.status];
     const ssh = `ssh ${box.name}`;
     const tunnel = `ssh -L 8443:127.0.0.1:443 ${box.name}`;
@@ -132,6 +144,7 @@ function DevBoxCard({ box }: { box: Server }) {
                 {box.region ? ` · ${box.region}` : ''}
                 {box.ip ? ` · ${box.ip}` : ''}
             </p>
+            <BoxProjects box={box.name} projects={projects} />
             <ListRow action={<CopyButton value={ssh} />}>
                 <TwoLine
                     title="Connect"
@@ -153,5 +166,64 @@ function DevBoxCard({ box }: { box: Server }) {
                 />
             </ListRow>
         </Card>
+    );
+}
+
+/** The apps on the box, asked of the box itself. Empty until it answers. */
+function BoxProjects({
+    box,
+    projects,
+}: {
+    box: string;
+    projects?: Record<string, DevBoxProject[] | null>;
+}) {
+    const list = projects?.[box];
+
+    return (
+        <div className="mb-1 border-b border-line pb-3">
+            <p className="mb-1.5 text-[11px] font-medium tracking-[0.06em] text-soft uppercase">
+                Projects on this box
+            </p>
+            {projects === undefined ? (
+                <p className="text-xs text-soft">Asking the box…</p>
+            ) : list == null ? (
+                <p className="text-xs text-soft">
+                    The box did not answer, so its projects can't be listed now.
+                </p>
+            ) : list.length === 0 ? (
+                <p className="text-xs text-soft">
+                    None yet. Create one from New project and choose this box.
+                </p>
+            ) : (
+                <ul className="space-y-1.5">
+                    {list.map((project) => (
+                        <li
+                            key={project.path}
+                            className="flex items-center justify-between gap-3 text-sm"
+                        >
+                            <span className="min-w-0 truncate font-medium">
+                                {project.name}
+                                <span className="ml-2 font-mono text-xs font-normal text-soft">
+                                    {project.framework ?? 'unknown'}
+                                    {' · '}
+                                    {project.environments
+                                        .map((environment) => environment.name)
+                                        .join(', ')}
+                                </span>
+                            </span>
+                            <StatusPill
+                                tone={
+                                    project.local === 'running' ? 'ok' : 'muted'
+                                }
+                            >
+                                {project.local === 'running'
+                                    ? 'Running'
+                                    : 'Stopped'}
+                            </StatusPill>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }
