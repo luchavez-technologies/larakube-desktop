@@ -191,24 +191,6 @@ export default function ShowTool({
                                 ))}
                             </Card>
                         )}
-                        {integrations.length > 0 && (
-                            <Card label="Integrations">
-                                {integrations.map(([title, detail, value]) => (
-                                    <ListRow
-                                        key={title}
-                                        action={<WiringPill value={value} />}
-                                    >
-                                        <TwoLine
-                                            title={title}
-                                            detail={detail}
-                                        />
-                                    </ListRow>
-                                ))}
-                            </Card>
-                        )}
-                    </div>
-
-                    <div className="space-y-5">
                         {backing !== null && (
                             <BackingServicesCard
                                 label="Backing Services"
@@ -224,6 +206,24 @@ export default function ShowTool({
                                     </p>
                                 }
                             />
+                        )}
+                    </div>
+
+                    <div className="space-y-5">
+                        {integrations.length > 0 && (
+                            <Card label="Integrations">
+                                {integrations.map(([title, detail, value]) => (
+                                    <ListRow
+                                        key={title}
+                                        action={<WiringPill value={value} />}
+                                    >
+                                        <TwoLine
+                                            title={title}
+                                            detail={detail}
+                                        />
+                                    </ListRow>
+                                ))}
+                            </Card>
                         )}
                         <Card label="Danger zone" tone="danger">
                             <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
