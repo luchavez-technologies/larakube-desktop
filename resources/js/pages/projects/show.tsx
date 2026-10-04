@@ -16,9 +16,6 @@ import {
     ExternalLink,
     Plus,
     ArrowRight,
-    Terminal,
-    ChevronDown,
-    ChevronUp,
     Laptop,
     Cloud,
     X,
@@ -26,16 +23,18 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
+import ProjectTerminalCard, {
+    type ProjectRun,
+} from '@/components/project-terminal-card';
+import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
 import Card from '@/components/card';
 import FrameworkFields, {
     defaultAnswers,
     reconcile,
 } from '@/components/framework-fields';
-import LogPanel from '@/components/log-panel';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
-import { runStatus } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import {
@@ -54,7 +53,7 @@ import {
     up,
 } from '@/routes/projects';
 import { join as joinPlex, leave as leavePlex } from '@/routes/projects/plex';
-import { cancel, show as showRun } from '@/routes/runs';
+import { show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
 import type {
     BackingServices,
@@ -65,26 +64,6 @@ import type {
     RunStatus,
     Server,
 } from '@/types/larakube';
-
-type RecentRun = {
-    id: number;
-    label: string;
-    kind?: string;
-    status: RunStatus;
-    created_at: string;
-    environment?: string | null;
-};
-
-type ProjectRun = {
-    id: number;
-    label: string;
-    kind: string | null;
-    status: RunStatus;
-    output: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-    environment?: string | null;
-};
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
 
@@ -1951,100 +1930,6 @@ function ProjectTldForm({ project }: { project: Project }) {
     );
 }
 
-function RecentRunsCard({
-    runs,
-    activeEnv,
-}: {
-    runs: RecentRun[];
-    activeEnv: string;
-}) {
-    const [filterByEnv, setFilterByEnv] = useState(true);
-
-    const filteredRuns = useMemo(() => {
-        if (!filterByEnv) return runs;
-        return runs.filter((run) => {
-            const runEnv = run.environment?.toLowerCase();
-            if (runEnv) {
-                return runEnv === activeEnv.toLowerCase();
-            }
-
-            if (activeEnv === 'local') {
-                return (
-                    !runEnv ||
-                    runEnv === 'local' ||
-                    [
-                        'up-project',
-                        'down-project',
-                        'start-project',
-                        'stop-project',
-                        'init-project',
-                        'new-project',
-                    ].includes(run.kind ?? '')
-                );
-            }
-            return (
-                runEnv === activeEnv.toLowerCase() ||
-                run.label
-                    .toLowerCase()
-                    .includes(`(${activeEnv.toLowerCase()})`) ||
-                (!run.label.includes('(') &&
-                    activeEnv.toLowerCase() === 'production' &&
-                    ['deploy-app', 'link-server', 'configure-host'].includes(
-                        run.kind ?? '',
-                    ))
-            );
-        });
-    }, [runs, activeEnv, filterByEnv]);
-
-    return (
-        <Card
-            label={
-                filterByEnv
-                    ? `Recent runs · ${activeEnv.toUpperCase()}`
-                    : 'Recent runs (All)'
-            }
-            action={
-                <button
-                    type="button"
-                    onClick={() => setFilterByEnv(!filterByEnv)}
-                    className="cursor-pointer text-[11px] text-soft transition-colors hover:text-ink"
-                    title={
-                        filterByEnv
-                            ? 'Show all project runs'
-                            : `Filter runs for ${activeEnv}`
-                    }
-                >
-                    {filterByEnv ? 'Show all' : `Filter ${activeEnv}`}
-                </button>
-            }
-        >
-            {filteredRuns.length === 0 ? (
-                <p className="py-2 text-xs text-soft">
-                    {filterByEnv
-                        ? `No recent runs for ${activeEnv}.`
-                        : 'Nothing yet.'}
-                </p>
-            ) : (
-                filteredRuns.map((run) => {
-                    const [label, tone] = runStatus[run.status];
-                    return (
-                        <Link
-                            key={run.id}
-                            href={showRun(run.id).url}
-                            className="-mx-1 flex items-center justify-between gap-3 rounded border-t border-line px-1 py-2 transition-colors first:border-t-0 hover:bg-paper"
-                        >
-                            <span className="truncate text-[13px]">
-                                {run.label}
-                            </span>
-                            <StatusPill tone={tone}>{label}</StatusPill>
-                        </Link>
-                    );
-                })
-            )}
-        </Card>
-    );
-}
-
 function ProjectSettingsCard({ project }: { project: Project }) {
     return (
         <Card label="Project Settings">
@@ -2067,91 +1952,6 @@ function ProjectSettingsCard({ project }: { project: Project }) {
                     database, and cloud servers stay untouched.
                 </p>
             </div>
-        </Card>
-    );
-}
-
-function ProjectTerminalCard({ run }: { run: ProjectRun }) {
-    const running = run.status === 'running';
-    const [label, tone] = runStatus[run.status];
-    const [collapsed, setCollapsed] = useState(false);
-
-    useEffect(() => {
-        if (running) {
-            setCollapsed(false);
-        }
-    }, [running, run.id]);
-
-    return (
-        <Card>
-            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
-                <div className="flex min-w-0 items-center gap-2">
-                    <span className="relative flex size-6 shrink-0 items-center justify-center rounded-lg bg-term text-white shadow-2xs">
-                        <Terminal className="size-3 text-brand" />
-                        {running && (
-                            <span className="absolute -top-0.5 -right-0.5 size-2 animate-ping rounded-full bg-brand" />
-                        )}
-                    </span>
-                    <span
-                        className="truncate text-xs font-semibold text-ink"
-                        title={run.label}
-                    >
-                        {run.label}
-                    </span>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2.5">
-                    <StatusPill tone={tone}>{label}</StatusPill>
-                    {running && (
-                        <Link
-                            href={cancel(run.id).url}
-                            method="post"
-                            as="button"
-                            className="text-xs font-medium text-accent hover:underline"
-                        >
-                            Cancel
-                        </Link>
-                    )}
-                    <Link
-                        href={showRun(run.id).url}
-                        className="inline-flex items-center gap-1 text-xs text-soft hover:text-ink hover:underline"
-                        title="View in Activity"
-                    >
-                        <span>Activity</span>
-                        <ExternalLink className="size-3" />
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => setCollapsed(!collapsed)}
-                        className="ml-1 inline-flex cursor-pointer items-center gap-1 text-xs text-soft transition-colors hover:text-ink"
-                        title={
-                            collapsed
-                                ? 'Expand terminal output'
-                                : 'Collapse terminal output'
-                        }
-                    >
-                        <span>{collapsed ? 'Expand' : 'Collapse'}</span>
-                        {collapsed ? (
-                            <ChevronDown className="size-3" />
-                        ) : (
-                            <ChevronUp className="size-3" />
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {!collapsed && (
-                <div className="pt-3">
-                    <LogPanel
-                        output={run.output}
-                        placeholder={
-                            running ? 'Running command…' : 'No output recorded.'
-                        }
-                        follow={running}
-                        className="h-72 max-h-96 min-h-[160px]"
-                    />
-                </div>
-            )}
         </Card>
     );
 }

@@ -524,6 +524,7 @@ test('an app on a box has its own page, with what the box reports about it and t
             ['name' => 'shop', 'path' => '/home/larakube/projects/shop', 'framework' => 'laravel', 'environments' => [['name' => 'local', 'host' => 'shop.kube']], 'local' => 'running'],
             ['name' => 'blog', 'path' => '/home/larakube/projects/blog', 'framework' => 'astro', 'environments' => [], 'local' => 'stopped'],
         ]])),
+        '*services:show*' => Process::result(output: json_encode(['success' => true, 'commons' => false, 'services' => [['kind' => 'database', 'label' => 'Database', 'name' => 'SQLite', 'details' => []]]])),
     ]);
     ChildProcess::fake();
     $this->post(route('devboxes.operate', ['box' => 'my-dev-box', 'project' => 'shop', 'action' => 'up']));
@@ -535,11 +536,19 @@ test('an app on a box has its own page, with what the box reports about it and t
             ->where('name', 'shop')
             ->has('runs', 1)
             ->where('runs.0.label', 'Up shop on my-dev-box')
+            ->where('latestRun.label', 'Up shop on my-dev-box')
             ->loadDeferredProps('details', fn (AssertableInertia $page) => $page
                 ->where('details.framework', 'laravel')
                 ->where('details.local', 'running')
             )
+            ->loadDeferredProps('backing', fn (AssertableInertia $page) => $page
+                ->where('backing.commons', false)
+                ->where('backing.services.0.label', 'Database')
+            )
         );
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'cd "$HOME/projects/shop" && larakube')
+        && str_contains(implode(' ', (array) $process->command), 'services:show'));
 
     $this->get(route('devboxes.projects.show', ['box' => 'my-dev-box', 'project' => 'missing']))
         ->assertInertia(fn (AssertableInertia $page) => $page->loadDeferredProps('details', fn (AssertableInertia $page) => $page->where('details', null)));

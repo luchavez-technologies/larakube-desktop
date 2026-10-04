@@ -98,12 +98,13 @@ class DevBoxShell
      * @param  array{ip?: ?string, sshKey?: ?string}  $box
      * @param  list<string>  $arguments
      * @param  array{0: string, 1: string}|null  $secret  [environment variable name, value] handed to the command on standard input
+     * @param  string|null  $project  a project folder under the projects folder to run in
      * @return array<string, mixed>|null
      */
-    public function json(array $box, array $arguments, int $timeoutSeconds = 45, ?array $secret = null): ?array
+    public function json(array $box, array $arguments, int $timeoutSeconds = 45, ?array $secret = null, ?string $project = null): ?array
     {
         try {
-            $isolated = $this->locator->isolate($this->command($box, $arguments, null, $secret[0] ?? null));
+            $isolated = $this->locator->isolate($this->command($box, $arguments, $project, $secret[0] ?? null));
             $process = Process::env($isolated['environment'])->timeout($timeoutSeconds);
 
             if ($secret !== null) {

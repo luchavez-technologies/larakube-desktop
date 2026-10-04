@@ -216,6 +216,8 @@ class DevBoxController extends Controller
         $stack = $this->readyBox($box, $catalog);
         abort_if($stack === null || preg_match('/^[a-z0-9][a-z0-9-]*$/', $project) !== 1, 404);
 
+        $runs = Run::query()->where('server_name', $box)->where('subject', $project)->latest('id')->limit(10)->get();
+
         return Inertia::render('devboxes/project', [
             'box' => $box,
             'name' => $project,
@@ -225,14 +227,24 @@ class DevBoxController extends Controller
 
                 return collect(is_array($result['projects'] ?? null) ? $result['projects'] : [])->firstWhere('name', $project);
             }, 'details'),
-            'runs' => Run::query()
-                ->where('server_name', $box)
-                ->where('subject', $project)
-                ->latest('id')
-                ->limit(8)
-                ->get(['id', 'label', 'status', 'kind', 'created_at'])
-                ->map(fn (Run $run): array => ['id' => $run->id, 'label' => $run->label, 'status' => $run->status->value, 'kind' => $run->kind?->value, 'at' => $run->created_at?->diffForHumans()])
-                ->all(),
+            // The database, cache, storage and search of the app on the box, as the box's CLI reports them.
+            'backing' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
+                $result = $shell->json($stack, ['services:show', 'local', '--json'], 45, null, $project);
+
+                return is_array($result['services'] ?? null)
+                    ? ['commons' => ($result['commons'] ?? false) === true, 'services' => array_values(array_filter($result['services'], is_array(...)))]
+                    : null;
+            }, 'backing'),
+            'runs' => $runs->map(fn (Run $run): array => ['id' => $run->id, 'label' => $run->label, 'kind' => $run->kind?->value, 'status' => $run->status->value, 'created_at' => $run->created_at?->toISOString(), 'environment' => 'local'])->all(),
+            'latestRun' => $runs->first() ? [
+                'id' => $runs->first()->id,
+                'label' => $runs->first()->label,
+                'kind' => $runs->first()->kind?->value,
+                'status' => $runs->first()->status->value,
+                'output' => (string) $runs->first()->output,
+                'startedAt' => $runs->first()->created_at?->toISOString(),
+                'finishedAt' => $runs->first()->finished_at?->toISOString(),
+            ] : null,
         ]);
     }
 

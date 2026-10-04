@@ -1,11 +1,16 @@
-import { Deferred, Link } from '@inertiajs/react';
+import { Deferred, Link, usePoll } from '@inertiajs/react';
 import { Share2 } from 'lucide-react';
+import BackingServicesCard from '@/components/backing-services-card';
 import BoxProjectActions from '@/components/box-project-actions';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
+import ProjectTerminalCard, {
+    type ProjectRun,
+} from '@/components/project-terminal-card';
+import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import {
@@ -15,28 +20,30 @@ import {
     unshare,
 } from '@/routes/devboxes';
 import { index } from '@/routes/projects';
-import { show as showRun } from '@/routes/runs';
-import type { DevBoxProject } from '@/types/larakube';
-
-type BoxRun = {
-    id: number;
-    label: string;
-    status: string;
-    kind: string | null;
-    at: string | null;
-};
+import type { BackingServices, DevBoxProject } from '@/types/larakube';
 
 export default function ShowDevBoxProject({
     box,
     name,
     details,
+    backing,
     runs,
+    latestRun,
 }: {
     box: string;
     name: string;
     details?: DevBoxProject | null;
-    runs: BoxRun[];
+    backing?: BackingServices | null;
+    runs: RecentRun[];
+    latestRun: ProjectRun | null;
 }) {
+    // Follow an action that is still running until it finishes.
+    usePoll(
+        2000,
+        { only: ['runs', 'latestRun', 'details'] },
+        { autoStart: latestRun?.status === 'running', keepAlive: false },
+    );
+
     return (
         <AppLayout title={name}>
             <Link
@@ -61,10 +68,29 @@ export default function ShowDevBoxProject({
                 }
             >
                 {details ? (
-                    <div className="space-y-5">
-                        <DevelopmentCard box={box} project={details} />
-                        <SharingCard box={box} project={details} />
-                        <RunsCard runs={runs} />
+                    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+                        <div className="flex flex-col gap-5">
+                            <DevelopmentCard box={box} project={details} />
+                            <Deferred
+                                data="backing"
+                                fallback={
+                                    <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                }
+                            >
+                                <BackingServicesCard
+                                    label="Backing Services · LOCAL"
+                                    services={backing}
+                                    hasCommons={backing?.commons ?? false}
+                                />
+                            </Deferred>
+                            <SharingCard box={box} project={details} />
+                            {latestRun && (
+                                <ProjectTerminalCard run={latestRun} />
+                            )}
+                        </div>
+                        <div className="flex flex-col gap-5">
+                            <RecentRunsCard runs={runs} activeEnv="local" />
+                        </div>
                     </div>
                 ) : (
                     <Card tone="warn">
@@ -204,48 +230,6 @@ function SharingCard({
                     >
                         Stop sharing
                     </Link>
-                </div>
-            )}
-        </Card>
-    );
-}
-
-function RunsCard({ runs }: { runs: BoxRun[] }) {
-    return (
-        <Card label="Recent runs">
-            {runs.length === 0 ? (
-                <p className="text-sm text-soft">
-                    Nothing has been run on this app from LaraKube Desktop yet.
-                </p>
-            ) : (
-                <div className="divide-y divide-line">
-                    {runs.map((run) => (
-                        <div
-                            key={run.id}
-                            className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                        >
-                            <Link
-                                href={showRun(run.id).url}
-                                className="truncate text-sm font-medium hover:underline"
-                            >
-                                {run.label}
-                            </Link>
-                            <div className="flex shrink-0 items-center gap-3 text-xs text-soft">
-                                <span>{run.at}</span>
-                                <StatusPill
-                                    tone={
-                                        run.status === 'succeeded'
-                                            ? 'ok'
-                                            : run.status === 'failed'
-                                              ? 'bad'
-                                              : 'muted'
-                                    }
-                                >
-                                    {run.status}
-                                </StatusPill>
-                            </div>
-                        </div>
-                    ))}
                 </div>
             )}
         </Card>
