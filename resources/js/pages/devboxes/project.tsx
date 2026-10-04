@@ -269,18 +269,41 @@ function SharingCard({
                     ))}
                 </div>
             )}
-            {!running && !hasNames ? (
+            {!running ? (
                 <p className="text-sm text-soft">
-                    Start the app first, then share it.
+                    {hasNames
+                        ? 'Start the app to use these names.'
+                        : 'Start the app first, then share it.'}
                 </p>
             ) : (
-                <Link
-                    href={shareDomainPage({ box, project: project.name }).url}
-                    title="Public names under your own Cloudflare domain: app, Vite, Reverb and storage"
-                    className={buttonClass('secondary', 'sm')}
-                >
-                    {hasNames ? 'Remove or change names' : 'Share'}
-                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                        href={
+                            shareDomainPage({ box, project: project.name }).url
+                        }
+                        title="Public names under your own Cloudflare domain: app, Vite, Reverb and storage"
+                        className={buttonClass(
+                            hasNames ? 'secondary' : 'primary',
+                            'sm',
+                        )}
+                    >
+                        Share
+                    </Link>
+                    {hasNames && (
+                        <Link
+                            href={
+                                shareDomainPage({
+                                    box,
+                                    project: project.name,
+                                }).url
+                            }
+                            title="Take the public names down"
+                            className={buttonClass('ghost', 'sm')}
+                        >
+                            Remove names
+                        </Link>
+                    )}
+                </div>
             )}
         </Card>
     );
