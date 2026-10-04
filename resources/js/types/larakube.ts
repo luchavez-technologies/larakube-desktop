@@ -102,6 +102,7 @@ export type Run = {
         /** 'dev' when the run acts on a dev box. */
         role?: string;
         project?: string;
+        app?: string;
     } | null;
     status: RunStatus;
     exitCode: number | null;

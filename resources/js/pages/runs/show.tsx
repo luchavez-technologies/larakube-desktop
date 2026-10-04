@@ -12,6 +12,7 @@ import { open, readiness } from '@/routes';
 import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
 import { index as devBoxesIndex } from '@/routes/devboxes';
+import { show as showBoxProject } from '@/routes/devboxes/projects';
 import { index as serversIndex, show as showServer } from '@/routes/servers';
 import { index as toolsIndex } from '@/routes/servers/tools';
 import type { Run } from '@/types/larakube';
@@ -24,6 +25,25 @@ function backLink(run: Run): { href: string; label: string } {
         return {
             href: showProject(Number(run.meta.project)).url,
             label: 'Project',
+        };
+    }
+
+    // What was done to an app on a dev box goes back to that app's page.
+    if (
+        run.meta?.role === 'dev' &&
+        server &&
+        run.meta.app &&
+        [
+            'operate-dev-box-project',
+            'share-dev-box-project',
+            'unshare-dev-box-project',
+            'share-domain-dev-box-project',
+            'remove-domain-dev-box-project',
+        ].includes(run.kind ?? '')
+    ) {
+        return {
+            href: showBoxProject({ box: server, project: run.meta.app }).url,
+            label: run.meta.app,
         };
     }
 
