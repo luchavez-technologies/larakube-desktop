@@ -12,6 +12,14 @@ use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 use Native\Desktop\Facades\Shell;
 
+/** Keeps a tool list the way the app does, tagged with the installed CLI build. */
+function clusterToolsSeed(string $key, array $tools, ?int $checkedAt): void
+{
+    $cli = app(ToolLocator::class)->find('larakube');
+
+    Cache::forever($key, ['tools' => $tools, 'checkedAt' => $checkedAt, 'build' => $cli !== null ? (string) @filemtime($cli) : '']);
+}
+
 function clusterToolsFakeCli(): string
 {
     $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
@@ -103,7 +111,7 @@ test('the fast registry list and the verified list are separate deferred props',
 });
 
 test('forgetting a server marks its verified list stale but keeps it to show meanwhile', function () {
-    Cache::forever('cluster-tools:ctx', ['tools' => [['tool' => 'sso']], 'checkedAt' => now()->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:ctx', [['tool' => 'sso']], now()->getTimestamp());
     Cache::put('cluster-tools:ctx:registered', [['tool' => 'sso']]);
 
     app(ToolCatalog::class)->forget('ctx');
@@ -115,7 +123,7 @@ test('forgetting a server marks its verified list stale but keeps it to show mea
 test('a fresh verified list renders at once, with no live check', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
-    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => clusterToolsRows(), 'checkedAt' => now()->subMinutes(5)->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', clusterToolsRows(), now()->subMinutes(5)->getTimestamp());
 
     $this->get(route('servers.tools.index', 'workshop-demo'))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -132,7 +140,7 @@ test('a fresh verified list renders at once, with no live check', function () {
 test('an old verified list shows while the live check re-runs in the background', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
-    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => [clusterToolsRows()[0]], 'checkedAt' => now()->subSeconds(ToolCatalog::FRESH_SECONDS + 60)->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', [clusterToolsRows()[0]], now()->subSeconds(ToolCatalog::FRESH_SECONDS + 60)->getTimestamp());
 
     $this->get(route('servers.tools.index', 'workshop-demo'))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -149,7 +157,7 @@ test('an old verified list shows while the live check re-runs in the background'
 test('Refresh re-checks a fresh list', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
-    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => clusterToolsRows(), 'checkedAt' => now()->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
 
     $this->post(route('servers.tools.refresh', 'workshop-demo'))->assertRedirect(route('servers.tools.index', 'workshop-demo'));
 
@@ -268,7 +276,7 @@ test('removing needs the tool name typed and only applies to installed tools', f
 });
 
 test('a finished install marks that server\'s tool list stale', function () {
-    Cache::forever('cluster-tools:larakube-203.0.113.21', ['tools' => clusterToolsRows(), 'checkedAt' => now()->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
     $run = Run::create(['label' => 'Install CRM', 'kind' => RunKind::InstallClusterTool, 'subject' => 'crm', 'meta' => ['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm'], 'command' => ['larakube']]);
 
     event(new ProcessExited($run->alias(), 0));
@@ -341,7 +349,7 @@ test('a tool that was just installed shows at once, without waiting for the live
     $bin = clusterToolsFakeCli();
     Cache::flush();
     $before = clusterToolsRows();
-    Cache::forever('cluster-tools:ctx', ['tools' => $before, 'checkedAt' => now()->subMinutes(5)->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:ctx', $before, now()->subMinutes(5)->getTimestamp());
 
     // The registry already knows the new CRM instance.
     $registry = $before;
@@ -367,7 +375,7 @@ test('a tool that was just installed shows at once, without waiting for the live
 test('a failed install leaves the list as it was', function () {
     $bin = clusterToolsFakeCli();
     Cache::flush();
-    Cache::forever('cluster-tools:ctx', ['tools' => clusterToolsRows(), 'checkedAt' => now()->getTimestamp()]);
+    clusterToolsSeed('cluster-tools:ctx', clusterToolsRows(), now()->getTimestamp());
     Process::fake();
 
     $run = Run::create([
@@ -490,4 +498,24 @@ test('a tool\'s page carries what it holds on the Commons, for the shared backin
                 ->where('backing.services.0.details.0.value', 'outline_wiki')));
 
     File::deleteDirectory($bin);
+});
+
+test('a tool list kept from an older CLI build is not used once the CLI is replaced', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/larakube", "#!/bin/sh\n");
+    chmod("{$directory}/larakube", 0755);
+    touch("{$directory}/larakube", 1_700_000_000);
+    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
+
+    Cache::forever('cluster-tools:ctx', ['tools' => [['tool' => 'twenty']], 'checkedAt' => now()->getTimestamp(), 'build' => (string) filemtime("{$directory}/larakube")]);
+
+    expect(app(ToolCatalog::class)->cached('ctx'))->toHaveCount(1);
+
+    touch("{$directory}/larakube", 1_800_000_000);
+    clearstatcache();
+
+    expect(app(ToolCatalog::class)->cached('ctx'))->toBeNull();
+
+    File::deleteDirectory($directory);
 });

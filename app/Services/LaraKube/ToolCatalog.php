@@ -37,7 +37,7 @@ class ToolCatalog
         $tools = $this->load($context, registryOnly: false);
 
         if ($tools !== null) {
-            Cache::forever($this->key($context), ['tools' => $tools, 'checkedAt' => now()->getTimestamp()]);
+            Cache::forever($this->key($context), ['tools' => $tools, 'checkedAt' => now()->getTimestamp(), 'build' => $this->build()]);
         }
 
         return $tools;
@@ -54,6 +54,12 @@ class ToolCatalog
         $cached = Cache::get($this->key($context));
 
         if (! is_array($cached) || ! is_array($cached['tools'] ?? null) || ! array_is_list($cached['tools'])) {
+            return null;
+        }
+
+        // A list an older CLI build produced may lack fields the pages now read.
+        $build = $this->build();
+        if ($build !== '' && ($cached['build'] ?? null) !== $build) {
             return null;
         }
 
@@ -139,7 +145,7 @@ class ToolCatalog
         $last = $this->lastVerified($context);
 
         if ($last !== null) {
-            Cache::forever($this->key($context), ['tools' => $last['tools'], 'checkedAt' => null]);
+            Cache::forever($this->key($context), ['tools' => $last['tools'], 'checkedAt' => null, 'build' => $this->build()]);
         }
 
         Cache::forget($this->key($context).':registered');
@@ -185,7 +191,7 @@ class ToolCatalog
             array_push($rows, ...$fresh);
         }
 
-        Cache::forever($this->key($context), ['tools' => $rows, 'checkedAt' => null]);
+        Cache::forever($this->key($context), ['tools' => $rows, 'checkedAt' => null, 'build' => $this->build()]);
         Cache::forget($this->key($context).':registered');
     }
 
@@ -218,6 +224,14 @@ class ToolCatalog
 
         /** @var list<array<string, mixed>> $decoded */
         return $decoded;
+    }
+
+    /** The installed CLI build, as its file's modification time; empty when there is no CLI. */
+    private function build(): string
+    {
+        $cli = $this->locator->find('larakube');
+
+        return $cli !== null ? (string) @filemtime($cli) : '';
     }
 
     private function key(string $context): string
