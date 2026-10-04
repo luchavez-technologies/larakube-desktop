@@ -20,18 +20,24 @@ class DevBoxController extends Controller
 {
     public function __construct(private GlobalSettings $settings) {}
 
+    /** With the feature off the page says so and points to Settings, instead of failing. */
     public function index(StackCatalog $catalog): Response
     {
-        $this->ensureEnabled();
+        if (! $this->settings->experimental()) {
+            return Inertia::render('devboxes/index', ['disabled' => true]);
+        }
 
         return Inertia::render('devboxes/index', [
+            'disabled' => false,
             'devBoxes' => Inertia::defer(fn (): ?array => $catalog->devBoxes()),
         ]);
     }
 
-    public function create(ReadinessCheck $readiness): Response
+    public function create(ReadinessCheck $readiness): Response|RedirectResponse
     {
-        $this->ensureEnabled();
+        if (! $this->settings->experimental()) {
+            return to_route('devboxes.index');
+        }
 
         return Inertia::render('servers/create', [
             'kind' => 'dev-box',

@@ -10,11 +10,46 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
 import { create } from '@/routes/devboxes';
+import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
 import type { Server } from '@/types/larakube';
 
-export default function DevBoxes({ devBoxes }: { devBoxes?: Server[] | null }) {
+export default function DevBoxes({
+    devBoxes,
+    disabled = false,
+}: {
+    devBoxes?: Server[] | null;
+    disabled?: boolean;
+}) {
+    if (disabled) {
+        return (
+            <AppLayout title="Dev Boxes">
+                <PageHeader
+                    title="Dev Boxes"
+                    badge={<StatusPill tone="warn">Experimental</StatusPill>}
+                />
+                <div className="rounded-2xl bg-surface px-8 py-14 text-center ring-1 ring-line ring-inset">
+                    <p className="text-lg font-semibold tracking-[-0.015em]">
+                        Experimental features are off
+                    </p>
+                    <p className="mx-auto mt-1.5 max-w-md text-sm text-soft">
+                        Dev boxes are still being tried out. Turn on &ldquo;Show
+                        experimental features&rdquo; in Settings and save to use
+                        them. Dev boxes you already made keep running either
+                        way.
+                    </p>
+                    <Link
+                        href={settingsShow().url}
+                        className={buttonClass('primary', 'md', 'mt-5')}
+                    >
+                        Open Settings
+                    </Link>
+                </div>
+            </AppLayout>
+        );
+    }
+
     return (
         <AppLayout title="Dev Boxes">
             <PageHeader

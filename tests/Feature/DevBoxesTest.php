@@ -37,11 +37,14 @@ function devBoxesStacks(): void
     ]]))]);
 }
 
-test('dev boxes stay hidden until experimental features are switched on', function () {
+test('dev boxes stay off until experimental features are switched on, and the page says how to turn them on', function () {
     devBoxesExperimental(false);
 
-    $this->get(route('devboxes.index'))->assertNotFound();
-    $this->get(route('devboxes.create'))->assertNotFound();
+    $this->get(route('devboxes.index'))->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('devboxes/index')
+        ->where('disabled', true)
+        ->missing('devBoxes'));
+    $this->get(route('devboxes.create'))->assertRedirect(route('devboxes.index'));
     $this->post(route('devboxes.store'), ['provider' => 'do', 'stack_name' => 'my-dev', 'region' => 'sgp1', 'size' => 's-4vcpu-8gb'])->assertNotFound();
 });
 
