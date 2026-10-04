@@ -24,9 +24,10 @@ class DevBoxShell
      * @param  array{ip?: ?string, sshKey?: ?string}  $box  a dev box from the stack list
      * @param  list<string>  $arguments  CLI arguments after the binary
      * @param  string|null  $project  a project folder under the projects folder to run in, for commands that act on the project in the current directory
+     * @param  string|null  $readSecret  the name of an environment variable the command needs; its value is read from the first line of standard input on the box, so it is never in any command line
      * @return list<string>
      */
-    public function command(array $box, array $arguments, ?string $project = null): array
+    public function command(array $box, array $arguments, ?string $project = null, ?string $readSecret = null): array
     {
         $ip = (string) ($box['ip'] ?? '');
         $key = (string) ($box['sshKey'] ?? '');
@@ -35,13 +36,19 @@ class DevBoxShell
             throw new InvalidArgumentException('This dev box has no address or SSH key on this computer.');
         }
 
+        if ($readSecret !== null && preg_match('/^[A-Z][A-Z0-9_]*$/', $readSecret) !== 1) {
+            throw new InvalidArgumentException('That is not an environment variable name.');
+        }
+
         if ($project !== null && preg_match('/^[a-z0-9][a-z0-9-]*$/', $project) !== 1) {
             throw new InvalidArgumentException('That is not a project name.');
         }
 
         $folder = self::PROJECTS_DIRECTORY.($project !== null ? "/{$project}" : '');
 
-        $remote = 'export PATH="$PATH:/usr/local/bin"; mkdir -p "$HOME/'.self::PROJECTS_DIRECTORY.'" && cd "$HOME/'.$folder.'" && larakube '
+        $read = $readSecret !== null ? "IFS= read -r {$readSecret} && export {$readSecret} && " : '';
+
+        $remote = $read.'export PATH="$PATH:/usr/local/bin"; mkdir -p "$HOME/'.self::PROJECTS_DIRECTORY.'" && cd "$HOME/'.$folder.'" && larakube '
             .implode(' ', array_map('escapeshellarg', [...$arguments, '--no-interaction']));
 
         return [
@@ -53,6 +60,22 @@ class DevBoxShell
             "larakube@{$ip}",
             'bash -lc '.escapeshellarg($remote),
         ];
+    }
+
+    /**
+     * Wraps a command so the value of the environment variable $name, which this computer's process holds, is
+     * sent to it on standard input. Pairs with command()'s $readSecret.
+     *
+     * @param  list<string>  $command
+     * @return list<string>
+     */
+    public function feeding(array $command, string $name): array
+    {
+        if (preg_match('/^[A-Z][A-Z0-9_]*$/', $name) !== 1) {
+            throw new InvalidArgumentException('That is not an environment variable name.');
+        }
+
+        return ['/bin/bash', '-c', 'printf \'%s\\n\' "$'.$name.'" | "$@"', 'larakube-desktop', ...$command];
     }
 
     /**
@@ -74,13 +97,20 @@ class DevBoxShell
      *
      * @param  array{ip?: ?string, sshKey?: ?string}  $box
      * @param  list<string>  $arguments
+     * @param  array{0: string, 1: string}|null  $secret  [environment variable name, value] handed to the command on standard input
      * @return array<string, mixed>|null
      */
-    public function json(array $box, array $arguments, int $timeoutSeconds = 45): ?array
+    public function json(array $box, array $arguments, int $timeoutSeconds = 45, ?array $secret = null): ?array
     {
         try {
-            $isolated = $this->locator->isolate($this->command($box, $arguments));
-            $result = Process::env($isolated['environment'])->timeout($timeoutSeconds)->run($isolated['command']);
+            $isolated = $this->locator->isolate($this->command($box, $arguments, null, $secret[0] ?? null));
+            $process = Process::env($isolated['environment'])->timeout($timeoutSeconds);
+
+            if ($secret !== null) {
+                $process = $process->input($secret[1]."\n");
+            }
+
+            $result = $process->run($isolated['command']);
         } catch (InvalidArgumentException|ProcessTimedOutException) {
             return null;
         }

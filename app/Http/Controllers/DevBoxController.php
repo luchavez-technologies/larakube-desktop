@@ -9,7 +9,9 @@ use App\Services\LaraKube\DevBoxShell;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,6 +21,9 @@ use Inertia\Response;
  */
 class DevBoxController extends Controller
 {
+    /** The variable the CLI reads the Cloudflare token from on the box. */
+    private const TOKEN_VARIABLE = 'CLOUDFLARE_API_TOKEN';
+
     public function __construct(private GlobalSettings $settings) {}
 
     /** With the feature off the page says so and points to Settings, instead of failing. */
@@ -153,6 +158,84 @@ class DevBoxController extends Controller
         );
 
         return to_route('runs.show', $run);
+    }
+
+    /** The page that asks for a Cloudflare API token and the domain to share an app under. */
+    public function shareDomainPage(string $box, string $project, StackCatalog $catalog): Response
+    {
+        $this->ensureEnabled();
+        abort_if($this->readyBox($box, $catalog) === null, 404);
+
+        return Inertia::render('devboxes/share-domain', ['box' => $box, 'project' => $project]);
+    }
+
+    /** The domains a Cloudflare API token can see, asked of the box. The token is sent on standard input and not kept. */
+    public function domains(Request $request, string $box, StackCatalog $catalog, DevBoxShell $shell): JsonResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $token = $this->cloudflareToken($request);
+        $result = $shell->json($stack, ['share:domains', '--json'], 60, [self::TOKEN_VARIABLE, $token]);
+
+        if ($result === null) {
+            return response()->json(['message' => 'The box could not list your domains with that token. Check it has Zone → Zone → Read, and that the box is reachable.'], 422);
+        }
+
+        return response()->json(['domains' => array_values((array) ($result['domains'] ?? []))]);
+    }
+
+    public function shareDomain(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $request->validate(['domain' => ['required', 'string', 'max:253', 'regex:/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/']]);
+
+        return $this->domainRun($request, $box, $project, $catalog, $runner, RunKind::ShareDomainDevBoxProject, "Share {$project} under {$request->string('domain')->toString()}", ['share:domain', '--domain='.$request->string('domain')->toString(), '--box='.$box, '--json']);
+    }
+
+    public function removeDomain(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        return $this->domainRun($request, $box, $project, $catalog, $runner, RunKind::RemoveDomainDevBoxProject, "Remove the public names of {$project}", ['share:domain-remove', '--force', '--json']);
+    }
+
+    /** @param  list<string>  $arguments */
+    private function domainRun(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner, RunKind $kind, string $label, array $arguments): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $token = $this->cloudflareToken($request);
+
+        $run = $runner->start(
+            label: $label,
+            arguments: $arguments,
+            secretEnvironment: [self::TOKEN_VARIABLE => $token],
+            kind: $kind,
+            subject: $project,
+            meta: ['server' => $box, 'role' => 'dev', 'app' => $project],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
+            devBox: $stack,
+            devBoxProject: $project,
+            devBoxReadSecret: self::TOKEN_VARIABLE,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    private function cloudflareToken(Request $request): string
+    {
+        return trim($request->validate(['token' => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9_-]+$/']])['token']);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function readyBox(string $box, StackCatalog $catalog): ?array
+    {
+        $stack = collect($catalog->devBoxes() ?? [])->firstWhere('name', $box);
+
+        return $stack !== null && $stack['status'] === 'ready' ? $stack : null;
     }
 
     private function ensureEnabled(): void

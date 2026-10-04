@@ -274,3 +274,93 @@ test('the CLI on a box can only be updated on a ready dev box with experimental 
     'off' => [false, 'ready'],
     'not ready' => [true, 'incomplete'],
 ]);
+
+function devBoxDomainStacks(): void
+{
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*share:domains*' => Process::result(output: json_encode(['success' => true, 'domains' => ['example.com', 'other.dev']])),
+    ]);
+}
+
+test('sharing under a domain sends the Cloudflare token to the box on standard input, never in a command line', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.share-domain', ['box' => 'my-dev-box', 'project' => 'shop']), ['token' => 'cf_Secret-token_123', 'domain' => 'example.com'])
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    expect(Run::sole()->kind)->toBe(RunKind::ShareDomainDevBoxProject)
+        ->and(json_encode(Run::sole()->command))->not->toContain('cf_Secret-token_123');
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest): bool {
+        $joined = implode(' ', (array) $cmd);
+        $script = str_replace("'\\''", "'", end($cmd));
+
+        return ! str_contains($joined, 'cf_Secret-token_123')
+            && str_contains($joined, 'printf')
+            && str_contains($script, 'IFS= read -r CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN')
+            && str_contains($script, 'cd "$HOME/projects/shop" && larakube \'share:domain\' \'--domain=example.com\' \'--box=my-dev-box\' \'--json\' \'--no-interaction\'');
+    });
+
+    File::deleteDirectory($bin);
+});
+
+test('removing the public names runs share:domain-remove on the box with the token on standard input', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->delete(route('devboxes.remove-domain', ['box' => 'my-dev-box', 'project' => 'shop']), ['token' => 'cf_Secret-token_123'])
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    expect(Run::sole()->kind)->toBe(RunKind::RemoveDomainDevBoxProject);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "larakube 'share:domain-remove' '--force' '--json'"));
+
+    File::deleteDirectory($bin);
+});
+
+test('finding the domains asks the box with the token on standard input and returns the names', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+
+    $this->postJson(route('devboxes.domains', ['box' => 'my-dev-box']), ['token' => 'cf_Secret-token_123'])
+        ->assertOk()
+        ->assertExactJson(['domains' => ['example.com', 'other.dev']]);
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'share:domains')
+        && ! str_contains(implode(' ', (array) $process->command), 'cf_Secret-token_123')
+        && $process->input === "cf_Secret-token_123\n");
+
+    File::deleteDirectory($bin);
+});
+
+test('a token or domain that could carry shell syntax is refused', function (string $field, string $value) {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    ChildProcess::fake();
+
+    $data = ['token' => 'abc', 'domain' => 'example.com', $field => $value];
+    $this->post(route('devboxes.share-domain', ['box' => 'my-dev-box', 'project' => 'shop']), $data)->assertSessionHasErrors($field);
+    expect(Run::count())->toBe(0);
+
+    File::deleteDirectory($bin);
+})->with([
+    'token' => ['token', 'abc; rm -rf /'],
+    'domain' => ['domain', 'example.com; reboot'],
+]);
+
+test('the domain pages are not there with experimental features off', function () {
+    devBoxProjectsExperimental(false);
+
+    $this->get(route('devboxes.share-domain-page', ['box' => 'my-dev-box', 'project' => 'shop']))->assertNotFound();
+    $this->postJson(route('devboxes.domains', ['box' => 'my-dev-box']), ['token' => 'abc'])->assertNotFound();
+});

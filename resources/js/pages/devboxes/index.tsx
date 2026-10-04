@@ -9,7 +9,13 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
-import { create, share, unshare, updateCli } from '@/routes/devboxes';
+import {
+    create,
+    share,
+    shareDomainPage,
+    unshare,
+    updateCli,
+} from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
@@ -242,6 +248,21 @@ function BoxProjects({
                                         >
                                             <Share2 className="size-3.5" />
                                             <span>Share preview</span>
+                                        </Link>
+                                        <Link
+                                            href={
+                                                shareDomainPage({
+                                                    box,
+                                                    project: project.name,
+                                                }).url
+                                            }
+                                            title="Stable public names under your own Cloudflare domain: app, Vite, Reverb and storage"
+                                            className={buttonClass(
+                                                'secondary',
+                                                'sm',
+                                            )}
+                                        >
+                                            Use my domain
                                         </Link>
                                         <Link
                                             href={

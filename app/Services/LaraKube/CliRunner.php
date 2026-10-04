@@ -23,6 +23,7 @@ class CliRunner
      * @param  string|null  $cwd  a project folder, for commands that act on the project in the current directory
      * @param  array<string, mixed>|null  $devBox  a dev box from the stack list: run the command there over SSH instead of here
      * @param  string|null  $devBoxProject  with a dev box, the project folder on it to run in
+     * @param  string|null  $devBoxReadSecret  with a dev box, the environment variable (set in $secretEnvironment) the command reads from standard input on the box
      * @param  string|null  $devBoxScript  with a dev box, a plain shell script to run there instead of a larakube command
      */
     public function start(
@@ -44,12 +45,18 @@ class CliRunner
         ?array $devBox = null,
         ?string $devBoxProject = null,
         ?string $devBoxScript = null,
+        ?string $devBoxReadSecret = null,
     ): Run {
         if ($devBox !== null) {
             // The same commands, run on a dev box over SSH. Its projects folder is the working directory there.
             $command = $devBoxScript !== null
                 ? app(DevBoxShell::class)->script($devBox, $devBoxScript)
-                : app(DevBoxShell::class)->command($devBox, $arguments, $devBoxProject);
+                : app(DevBoxShell::class)->command($devBox, $arguments, $devBoxProject, $devBoxReadSecret);
+
+            // The value is in this run's environment (secretEnvironment); it reaches the box on standard input.
+            if ($devBoxReadSecret !== null) {
+                $command = app(DevBoxShell::class)->feeding($command, $devBoxReadSecret);
+            }
         } else {
             $cli = $this->locator->find('larakube');
 

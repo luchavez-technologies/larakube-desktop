@@ -13,6 +13,9 @@ enum RunKind: string
     /** A temporary public link to an app on a dev box, made with `share`, and taking it down again. */
     case ShareDevBoxProject = 'share-dev-box-project';
     case UnshareDevBoxProject = 'unshare-dev-box-project';
+    /** Stable public names for an app on a dev box under the person's own Cloudflare domain (`share:domain`), and removing them. */
+    case ShareDomainDevBoxProject = 'share-domain-dev-box-project';
+    case RemoveDomainDevBoxProject = 'remove-domain-dev-box-project';
     /** The LaraKube CLI on a dev box, installed again from the channel Desktop uses. */
     case UpdateDevBoxCli = 'update-dev-box-cli';
     /** A server made with cloud:create, rebooted over SSH. */

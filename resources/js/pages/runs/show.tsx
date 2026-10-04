@@ -165,7 +165,8 @@ export default function ShowRun({ run }: { run: Run }) {
                     <CreatedCard run={run} />
                 ))}
             {run.status === 'succeeded' &&
-                run.kind === 'share-dev-box-project' && (
+                (run.kind === 'share-dev-box-project' ||
+                    run.kind === 'share-domain-dev-box-project') && (
                     <SharedLinkCard run={run} />
                 )}
             {run.status === 'failed' && (
@@ -218,6 +219,13 @@ export default function ShowRun({ run }: { run: Run }) {
     );
 }
 
+const serviceLabels: Record<string, string> = {
+    hmr: 'Vite hot reload',
+    reverb: 'Reverb',
+    storage: 'File storage',
+    'storage-console': 'Storage console',
+};
+
 /** The public link `share` made, and what it means to hand it out. */
 function SharedLinkCard({ run }: { run: Run }) {
     const result = run.result ?? {};
@@ -227,7 +235,9 @@ function SharedLinkCard({ run }: { run: Run }) {
             : {}
     ) as Record<string, string>;
     const web = urls.web;
-    const stable = result.mode === 'named';
+    const stable = result.mode === 'named' || result.mode === 'domain';
+    const domain = result.mode === 'domain';
+    const others = Object.entries(urls).filter(([key]) => key !== 'web');
 
     return (
         <Card className="mb-4 p-5.5">
@@ -255,12 +265,28 @@ function SharedLinkCard({ run }: { run: Run }) {
                     The link was made but is not in the result. See the log.
                 </p>
             )}
+            {domain && others.length > 0 && (
+                <ul className="mt-3 space-y-1 text-[13px]">
+                    {others.map(([key, url]) => (
+                        <li key={key} className="flex items-center gap-2">
+                            <span className="w-28 text-soft">
+                                {serviceLabels[key] ?? key}
+                            </span>
+                            <span className="font-mono break-all">{url}</span>
+                            <CopyButton value={url} />
+                        </li>
+                    ))}
+                </ul>
+            )}
             {stable ? (
                 <p className="mt-4 text-[13px] leading-relaxed text-soft">
-                    This is the address from your Cloudflare tunnel. Who can
-                    open it is set in Cloudflare; add a login there (Cloudflare
-                    Access) if the app should not be open to everyone. Take it
-                    down from the dev box page when you are done.
+                    {domain
+                        ? 'These names stay the same and the app is already set to use them. '
+                        : 'This is the address from your Cloudflare tunnel. '}{' '}
+                    Who can open it is set in Cloudflare; add a login there
+                    (Cloudflare Access) if the app should not be open to
+                    everyone. Take it down from the dev box page when you are
+                    done.
                 </p>
             ) : (
                 <>
