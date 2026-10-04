@@ -221,11 +221,15 @@ class DevBoxController extends Controller
         return Inertia::render('devboxes/project', [
             'box' => $box,
             'name' => $project,
-            // What the box reports for this app; null when it does not answer or the app is not in ~/projects.
-            'details' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
+            // What the box reports for this app, or a state saying why it cannot: the box did not answer, or the app is not in ~/projects.
+            'details' => Inertia::defer(function () use ($shell, $stack, $project): array {
                 $result = $shell->json($stack, ['project:list', '--json']);
 
-                return collect(is_array($result['projects'] ?? null) ? $result['projects'] : [])->firstWhere('name', $project);
+                if ($result === null) {
+                    return ['state' => 'unreachable'];
+                }
+
+                return collect(is_array($result['projects'] ?? null) ? $result['projects'] : [])->firstWhere('name', $project) ?? ['state' => 'missing'];
             }, 'details'),
             // The database, cache, storage and search of the app on the box, as the box's CLI reports them.
             'backing' => Inertia::defer(function () use ($shell, $stack, $project): ?array {

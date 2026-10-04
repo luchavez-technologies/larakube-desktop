@@ -551,7 +551,7 @@ test('an app on a box has its own page, with what the box reports about it and t
         && str_contains(implode(' ', (array) $process->command), 'services:show'));
 
     $this->get(route('devboxes.projects.show', ['box' => 'my-dev-box', 'project' => 'missing']))
-        ->assertInertia(fn (AssertableInertia $page) => $page->loadDeferredProps('details', fn (AssertableInertia $page) => $page->where('details', null)));
+        ->assertInertia(fn (AssertableInertia $page) => $page->loadDeferredProps('details', fn (AssertableInertia $page) => $page->where('details.state', 'missing')));
 
     File::deleteDirectory($bin);
 });
@@ -563,6 +563,22 @@ test('the page of an app on a box needs a ready box, a plain name and experiment
 
     $this->get(route('devboxes.projects.show', ['box' => 'workshop-demo', 'project' => 'shop']))->assertNotFound();
     $this->get('/dev-boxes/my-dev-box/projects/Shop..')->assertNotFound();
+
+    File::deleteDirectory($bin);
+});
+
+test('an app page says the box did not answer, apart from the app not being on the box', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*project:list*' => Process::result(errorOutput: 'ssh: connect to host timed out', exitCode: 255),
+    ]);
+
+    $this->get(route('devboxes.projects.show', ['box' => 'my-dev-box', 'project' => 'shop']))
+        ->assertInertia(fn (AssertableInertia $page) => $page->loadDeferredProps('details', fn (AssertableInertia $page) => $page->where('details.state', 'unreachable')));
 
     File::deleteDirectory($bin);
 });

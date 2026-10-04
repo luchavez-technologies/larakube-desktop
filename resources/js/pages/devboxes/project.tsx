@@ -32,7 +32,7 @@ export default function ShowDevBoxProject({
 }: {
     box: string;
     name: string;
-    details?: DevBoxProject | null;
+    details?: DevBoxProject | { state: 'unreachable' | 'missing' };
     backing?: BackingServices | null;
     runs: RecentRun[];
     latestRun: ProjectRun | null;
@@ -67,7 +67,7 @@ export default function ShowDevBoxProject({
                     <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
                 }
             >
-                {details ? (
+                {details && !('state' in details) ? (
                     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
                         <div className="flex flex-col gap-5">
                             <DevelopmentCard box={box} project={details} />
@@ -95,8 +95,11 @@ export default function ShowDevBoxProject({
                 ) : (
                     <Card tone="warn">
                         <p className="text-sm">
-                            {box} did not report {name}. Check the box is
-                            running and the app is in ~/projects, then reload.
+                            {details &&
+                            'state' in details &&
+                            details.state === 'missing'
+                                ? `${box} answered, but ${name} is not in ~/projects there. Only apps in that folder are listed.`
+                                : `${box} did not answer in time. It may be busy (an Up can take a while on a small box) or unreachable. Reload in a moment.`}
                         </p>
                     </Card>
                 )}
@@ -112,14 +115,16 @@ function Header({
 }: {
     box: string;
     name: string;
-    details?: DevBoxProject | null;
+    details?: DevBoxProject | { state: 'unreachable' | 'missing' };
 }) {
+    const project = details && !('state' in details) ? details : null;
+
     return (
         <PageHeader
             title={name}
             badge={
-                details?.framework ? (
-                    <StatusPill tone="muted">{details.framework}</StatusPill>
+                project?.framework ? (
+                    <StatusPill tone="muted">{project.framework}</StatusPill>
                 ) : undefined
             }
             meta={
@@ -130,7 +135,7 @@ function Header({
                     >
                         {box}
                     </Link>
-                    {details ? ` · ${details.path}` : ''}
+                    {project ? ` · ${project.path}` : ''}
                 </span>
             }
         />
