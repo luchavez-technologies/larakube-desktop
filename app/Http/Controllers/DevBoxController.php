@@ -88,6 +88,35 @@ class DevBoxController extends Controller
         return to_route('runs.show', $run);
     }
 
+    /**
+     * Installs the CLI on the box again from the channel Desktop is on. The installer is the one that put it there, so it
+     * has the permission to replace the binary and is safe to run any number of times.
+     */
+    public function updateCli(string $box, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+
+        $stack = collect($catalog->devBoxes() ?? [])->firstWhere('name', $box);
+        abort_if($stack === null || $stack['status'] !== 'ready', 404);
+
+        $channel = $this->settings->get()['cliChannel'] === 'stable' ? '' : ' -s -- --canary';
+
+        $run = $runner->start(
+            label: "Update the LaraKube CLI on {$box}",
+            arguments: [],
+            kind: RunKind::UpdateDevBoxCli,
+            subject: $box,
+            meta: ['server' => $box, 'role' => 'dev'],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
+            devBox: $stack,
+            devBoxScript: 'curl -fsSL https://cli.larakube.app/install.sh | bash'.$channel.' && /usr/local/bin/larakube --version',
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     /** Starts a temporary public link to the app, from the box. The link is on the run's page when it finishes. */
     public function share(string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {

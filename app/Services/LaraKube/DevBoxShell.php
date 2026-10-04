@@ -56,6 +56,19 @@ class DevBoxShell
     }
 
     /**
+     * The ssh command line that runs a plain shell script on the box, for what is not a larakube command.
+     *
+     * @param  array{ip?: ?string, sshKey?: ?string}  $box
+     * @return list<string>
+     */
+    public function script(array $box, string $script): array
+    {
+        $command = $this->command($box, []);
+
+        return [...array_slice($command, 0, -1), 'bash -lc '.escapeshellarg($script)];
+    }
+
+    /**
      * Runs a `--json` command on the box and returns its single result, or null when the box could not be reached
      * or answered with something else.
      *

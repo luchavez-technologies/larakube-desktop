@@ -230,3 +230,46 @@ test('sharing needs a ready dev box and experimental features on', function (boo
     'off' => [false, 'ready'],
     'not ready' => [true, 'incomplete'],
 ]);
+
+test('updating the CLI on a box runs the installer there on the channel Desktop uses, and nothing else', function (string $channel, string $installer) {
+    $bin = devBoxProjectsCli();
+    $settings = mock(GlobalSettings::class);
+    $settings->shouldReceive('hideProjects')->andReturnFalse();
+    $settings->shouldReceive('experimental')->andReturnTrue();
+    $settings->shouldReceive('get')->andReturn(['cliChannel' => $channel]);
+    app()->instance(GlobalSettings::class, $settings);
+    Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+        ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+    ]]))]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.update-cli', ['box' => 'my-dev-box']))->assertRedirect(route('runs.show', Run::sole()));
+
+    expect(Run::sole()->kind)->toBe(RunKind::UpdateDevBoxCli);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('larakube@203.0.113.50', $cmd, true)
+        && str_contains(end($cmd), $installer)
+        && ! str_contains(end($cmd), 'cd "$HOME/projects"'));
+
+    File::deleteDirectory($bin);
+})->with([
+    'canary' => ['canary', 'curl -fsSL https://cli.larakube.app/install.sh | bash -s -- --canary'],
+    'stable' => ['stable', 'curl -fsSL https://cli.larakube.app/install.sh | bash &&'],
+]);
+
+test('the CLI on a box can only be updated on a ready dev box with experimental features on', function (bool $experimental, string $status) {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental($experimental);
+    Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+        ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => $status],
+    ]]))]);
+    ChildProcess::fake();
+
+    $this->post(route('devboxes.update-cli', ['box' => 'my-dev-box']))->assertNotFound();
+    expect(Run::count())->toBe(0);
+
+    File::deleteDirectory($bin);
+})->with([
+    'off' => [false, 'ready'],
+    'not ready' => [true, 'incomplete'],
+]);

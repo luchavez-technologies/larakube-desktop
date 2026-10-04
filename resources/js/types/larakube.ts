@@ -37,6 +37,7 @@ export type RunKind =
     | 'new-dev-box-project'
     | 'share-dev-box-project'
     | 'unshare-dev-box-project'
+    | 'update-dev-box-cli'
     | 'destroy-server'
     | 'restart-server'
     | 'install-tool'

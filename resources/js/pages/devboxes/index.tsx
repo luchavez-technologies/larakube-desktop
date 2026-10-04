@@ -9,7 +9,7 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
-import { create, share, unshare } from '@/routes/devboxes';
+import { create, share, unshare, updateCli } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
@@ -135,6 +135,17 @@ function DevBoxCard({
             action={
                 <div className="flex items-center gap-3">
                     <StatusPill tone={tone}>{label}</StatusPill>
+                    {box.status === 'ready' && (
+                        <Link
+                            href={updateCli({ box: box.name }).url}
+                            method="post"
+                            as="button"
+                            title="Install the latest LaraKube CLI on this box"
+                            className={buttonClass('ghost', 'sm')}
+                        >
+                            Update CLI
+                        </Link>
+                    )}
                     <ServerActions server={box} />
                 </div>
             }
