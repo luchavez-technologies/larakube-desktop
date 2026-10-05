@@ -115,6 +115,13 @@ jobs:
           npm run plugin:build
           test -f electron-plugin/dist/index.js
 
+      # electron-vite bakes this into the main process at build time. The file is gitignored
+      # (native:install writes it locally), so without it the packaged app starts with
+      # path.resolve(..., undefined) and crashes.
+      - name: Set the packaged build path
+        shell: bash
+        run: echo "MAIN_VITE_NATIVEPHP_BUILD_PATH='../../../build'" > nativephp/electron/.env.production
+
       - name: Build ${{ matrix.target }}-${{ matrix.arch }}
         shell: bash
         run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
