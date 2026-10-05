@@ -135,14 +135,7 @@ class CliRunner
             'command' => $command,
         ]);
 
-        $isolated = $this->locator->isolate($command, $secretEnvironment);
-
-        ChildProcess::start(
-            cmd: $isolated['command'],
-            alias: $run->alias(),
-            cwd: $cwd ?? storage_path('app'),
-            env: $isolated['environment'],
-        );
+        $this->locator->start($command, $run->alias(), $secretEnvironment, $cwd);
 
         return $run;
     }

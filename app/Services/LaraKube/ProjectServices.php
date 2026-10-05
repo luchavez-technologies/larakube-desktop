@@ -3,7 +3,6 @@
 namespace App\Services\LaraKube;
 
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
-use Illuminate\Support\Facades\Process;
 
 /**
  * What a project's database, cache, storage and search are and how its app
@@ -25,9 +24,8 @@ class ProjectServices
             return null;
         }
 
-        $isolated = $this->locator->isolate([$cli, 'services:show', $environment, '--json', '--no-interaction', ...($reveal ? ['--reveal'] : [])]);
         try {
-            $result = Process::path($projectPath)->env($isolated['environment'])->timeout(30)->run($isolated['command']);
+            $result = $this->locator->run([$cli, 'services:show', $environment, '--json', '--no-interaction', ...($reveal ? ['--reveal'] : [])], 30, cwd: $projectPath);
         } catch (ProcessTimedOutException) {
             return null;
         }
