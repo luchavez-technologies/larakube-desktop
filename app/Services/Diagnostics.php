@@ -39,6 +39,11 @@ class Diagnostics
 
         $sections[] = "End of the app log:\n".$this->indent($this->logTail(40));
 
+        $sections[] = "End of the Desktop program log (where a command that would not start is reported):\n".$this->indent($this->mainLogTail(40));
+
+        $data = (string) (getenv('NATIVEPHP_USER_DATA_PATH') ?: ($_SERVER['NATIVEPHP_USER_DATA_PATH'] ?? ''));
+        $sections[] = 'Data folder: '.($data !== '' ? $data : '(not a packaged app)');
+
         return $this->redact(implode("\n\n", $sections));
     }
 
@@ -63,6 +68,18 @@ class Diagnostics
         usort($files, fn (string $a, string $b): int => filemtime($b) <=> filemtime($a));
 
         return $this->tail((string) file_get_contents($files[0]), $lines) ?: '(the log is empty)';
+    }
+
+    private function mainLogTail(int $lines): string
+    {
+        $data = (string) (getenv('NATIVEPHP_USER_DATA_PATH') ?: ($_SERVER['NATIVEPHP_USER_DATA_PATH'] ?? ''));
+        $file = $data !== '' ? $data.DIRECTORY_SEPARATOR.'logs'.DIRECTORY_SEPARATOR.'main.log' : '';
+
+        if ($file === '' || ! is_file($file)) {
+            return '(no program log yet)';
+        }
+
+        return $this->tail((string) file_get_contents($file), $lines) ?: '(the program log is empty)';
     }
 
     private function tail(string $text, int $lines): string
