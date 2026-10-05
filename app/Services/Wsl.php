@@ -2,16 +2,18 @@
 
 namespace App\Services;
 
+use App\Services\Runtime\WslDistro;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Whether this Windows computer can run the LaraKube CLI through the Windows
- * Subsystem for Linux. WSL starts on demand, so "running" is not the question:
- * it must be installed, have a WSL 2 distribution, and answer a command.
+ * The Windows side of LaraKube Desktop's own WSL distro, `larakube-ubuntu`: whether WSL and the distro are there,
+ * and the steps that create it (enable WSL, download the image, import it). Nothing else on the computer is touched;
+ * a student's own Ubuntu stays theirs.
  */
 class Wsl
 {
-    public const INSTALL_COMMAND = 'wsl --install -d Ubuntu';
+    public const ENABLE_COMMAND = 'wsl --install --no-distribution';
 
     public function __construct(private ?bool $windows = null) {}
 
@@ -28,35 +30,129 @@ class Wsl
         $status = Process::timeout(30)->run(['wsl.exe', '--status']);
 
         if (! $status->successful()) {
-            return $this->result('missing', null, null, 'Windows Subsystem for Linux (WSL) is not installed. LaraKube Desktop needs it to run.', self::INSTALL_COMMAND);
+            return $this->result('missing', null, null, 'Windows Subsystem for Linux (WSL) is not turned on yet. LaraKube Desktop needs it to run.', self::ENABLE_COMMAND);
         }
 
-        $distro = $this->defaultDistro();
+        $distro = $this->distro();
 
         if ($distro === null) {
-            return $this->result('no-distro', null, null, 'WSL is installed but has no Linux distribution yet.', self::INSTALL_COMMAND);
+            return $this->result('no-distro', null, null, 'LaraKube Desktop has not set up its Linux yet.', null);
         }
 
         if ($distro['version'] !== 2) {
-            return $this->result('old-version', $distro['name'], $distro['version'], "{$distro['name']} uses WSL 1. LaraKube Desktop needs WSL 2.", "wsl --set-version {$distro['name']} 2");
+            return $this->result('old-version', $distro['name'], $distro['version'], "{$distro['name']} uses WSL 1. LaraKube Desktop needs WSL 2.", 'wsl --set-version '.WslDistro::NAME.' 2');
         }
 
-        $answer = Process::timeout(90)->run(['wsl.exe', '-d', $distro['name'], '--', 'echo', 'ok']);
+        $answer = Process::timeout(90)->run(['wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', 'echo', 'ok']);
 
-        if (! $answer->successful() || trim($answer->output()) !== 'ok') {
-            return $this->result('broken', $distro['name'], 2, "{$distro['name']} did not start. Virtualization may be turned off in your computer's BIOS, or Windows needs a restart after installing WSL.", null);
+        if (! $answer->successful() || trim($this->text($answer->output())) !== 'ok') {
+            return $this->result('broken', WslDistro::NAME, 2, 'LaraKube Linux did not start. Virtualization may be turned off in your computer\'s BIOS, or Windows needs a restart after turning WSL on.', null);
         }
 
-        return $this->result('ready', $distro['name'], 2, "{$distro['name']} (WSL 2) is ready.", null);
+        return $this->result('ready', WslDistro::NAME, 2, 'LaraKube Linux (WSL 2) is ready.', null);
     }
 
     /**
-     * The distribution commands run in: the default one if it is usable,
-     * otherwise the first. Docker Desktop's own distributions are skipped.
-     *
-     * @return array{name: string, version: int}|null
+     * Turns WSL on without installing a distribution. Windows shows its own administrator prompt, and may ask for a restart.
      */
-    public function defaultDistro(): ?array
+    public function enable(): bool
+    {
+        $arguments = implode(',', array_map(fn (string $argument): string => "'{$argument}'", ['--install', '--no-distribution']));
+
+        return Process::timeout(900)->run([
+            'powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+            "Start-Process -FilePath wsl.exe -ArgumentList {$arguments} -Verb RunAs -Wait",
+        ])->successful();
+    }
+
+    /** Where the image is downloaded from; `LARAKUBE_ROOTFS_URL` points at a canary or a mirror. */
+    public function imageUrl(): string
+    {
+        return (string) config('larakube.rootfs_url');
+    }
+
+    /** The image's own folder under the app's data, and the one distro disk. */
+    public function installDirectory(): string
+    {
+        $base = (string) (getenv('LOCALAPPDATA') ?: sys_get_temp_dir());
+
+        return $base.DIRECTORY_SEPARATOR.'LaraKube'.DIRECTORY_SEPARATOR.'wsl';
+    }
+
+    public function imagePath(): string
+    {
+        return $this->installDirectory().DIRECTORY_SEPARATOR.'larakube-ubuntu.tar.gz';
+    }
+
+    /**
+     * Downloads the image and checks it against its published SHA-256 before anything uses it.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function download(): array
+    {
+        $directory = $this->installDirectory();
+
+        if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
+            return ['ok' => false, 'message' => "Could not create {$directory}."];
+        }
+
+        $expected = $this->expectedChecksum();
+
+        if ($expected === null) {
+            return ['ok' => false, 'message' => 'Could not read the image checksum. Check your internet connection and try again.'];
+        }
+
+        $path = $this->imagePath();
+
+        if (! is_file($path) || hash_file('sha256', $path) !== $expected) {
+            set_time_limit(0);
+            $response = Http::timeout(3600)->withOptions(['sink' => $path])->get($this->imageUrl());
+
+            if (! $response->successful()) {
+                @unlink($path);
+
+                return ['ok' => false, 'message' => 'The download failed. Check your internet connection and try again.'];
+            }
+        }
+
+        if (hash_file('sha256', $path) !== $expected) {
+            @unlink($path);
+
+            return ['ok' => false, 'message' => 'The downloaded file did not match its checksum, so it was deleted. Try again.'];
+        }
+
+        return ['ok' => true, 'message' => 'Downloaded and verified.'];
+    }
+
+    /**
+     * Imports the downloaded image as the one distro, then restarts it so its systemd and default user settings apply.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function import(): array
+    {
+        if (! is_file($this->imagePath())) {
+            return ['ok' => false, 'message' => 'The image has not been downloaded yet.'];
+        }
+
+        if ($this->distro() === null) {
+            $disk = $this->installDirectory().DIRECTORY_SEPARATOR.'disk';
+
+            $imported = Process::timeout(1800)->run(['wsl.exe', '--import', WslDistro::NAME, $disk, $this->imagePath(), '--version', '2']);
+
+            if (! $imported->successful()) {
+                return ['ok' => false, 'message' => trim($this->text($imported->errorOutput().$imported->output())) ?: 'Windows could not import the image.'];
+            }
+        }
+
+        Process::timeout(60)->run(['wsl.exe', '--terminate', WslDistro::NAME]);
+
+        return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
+    }
+
+    /** @return array{name: string, version: int}|null */
+    public function distro(): ?array
     {
         $listing = Process::timeout(30)->run(['wsl.exe', '--list', '--verbose']);
 
@@ -64,23 +160,24 @@ class Wsl
             return null;
         }
 
-        $found = [];
-
         foreach (preg_split('/\R/', $this->text($listing->output())) ?: [] as $line) {
-            if (preg_match('/^\s*(\*)?\s*(\S+)\s+(Running|Stopped|Installing|Uninstalling|Converting)\s+([12])\s*$/i', $line, $match) !== 1) {
-                continue;
+            if (preg_match('/^\s*\*?\s*(\S+)\s+(Running|Stopped|Installing|Uninstalling|Converting)\s+([12])\s*$/i', $line, $match) === 1 && $match[1] === WslDistro::NAME) {
+                return ['name' => $match[1], 'version' => (int) $match[3]];
             }
-
-            if (str_starts_with(strtolower($match[2]), 'docker-desktop')) {
-                continue;
-            }
-
-            $found[] = ['name' => $match[2], 'version' => (int) $match[4], 'default' => $match[1] === '*'];
         }
 
-        usort($found, fn (array $a, array $b): int => [$b['default'], $b['version']] <=> [$a['default'], $a['version']]);
+        return null;
+    }
 
-        return isset($found[0]) ? ['name' => $found[0]['name'], 'version' => $found[0]['version']] : null;
+    private function expectedChecksum(): ?string
+    {
+        $response = Http::timeout(30)->get($this->imageUrl().'.sha256');
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        return preg_match('/\b([a-f0-9]{64})\b/i', $response->body(), $match) === 1 ? strtolower($match[1]) : null;
     }
 
     /** wsl.exe prints UTF-16, which arrives with a NUL after every character. */

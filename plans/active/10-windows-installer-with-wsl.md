@@ -27,7 +27,7 @@
 0. **Spike on a real Windows 11 machine (half a day).** Hand-build a rootfs, import it, and from a packaged `.exe` confirm: output streams live; `ChildProcess::stop` really kills the Linux process, not just `wsl.exe`; reading `\\wsl.localhost\...` works from PHP; Windows `localhost` reaches Traefik inside the distro; systemd, Podman and k3s run in an imported distro. Write the results into this plan. GitHub-hosted Windows runners probably cannot run WSL 2 (no nested virtualization; unverified), so end-to-end checks need a real machine.
 1. The executor seam and the `ToolLocator` adapter, with tests (works on a Mac with a fake `wsl.exe`).
 2. Rootfs build job and release asset.
-3. The Windows setup flow.
+3. The Windows setup flow. **Built** (`Wsl::enable/download/import`, `POST /setup/wsl/{step}`, Setup page card): turns WSL on with one administrator prompt, downloads and SHA-256-checks the image, imports `larakube-ubuntu`. Untested on real Windows; the download shows no progress bar yet.
 4. Paths, projects, editors, pickers.
 5. Local development: `localhost` TLD and the CA in the Windows store.
 6. Installer polish, signing, updater, a Windows download page for the `.exe`, a new runbook.

@@ -18,6 +18,7 @@ use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ToolInstallController;
 use App\Http\Controllers\WorkspaceController;
+use App\Http\Controllers\WslSetupController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
@@ -26,6 +27,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
 Route::get('/readiness', [ReadinessController::class, 'show'])->name('readiness');
 Route::post('/setup/tools/{tool}/install', [ToolInstallController::class, 'store'])->name('setup.tools.install');
 Route::get('/setup/tools/{tool}/status', [ReadinessController::class, 'toolStatus'])->name('setup.tools.status');
+Route::post('/setup/wsl/{step}', [WslSetupController::class, 'store'])->whereIn('step', ['enable', 'download', 'import'])->name('setup.wsl');
 Route::post('/setup/local', [LocalSetupController::class, 'store'])->name('setup.local');
 Route::post('/setup/usage', [ReadinessController::class, 'setUsage'])->name('setup.usage');
 Route::post('/setup/cli/channel', [ReadinessController::class, 'setChannel'])->name('setup.cli.channel');
