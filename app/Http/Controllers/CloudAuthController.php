@@ -5,19 +5,15 @@ namespace App\Http\Controllers;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\GcpSignIn;
-use App\Services\LaraKube\GlobalSettings;
-use App\Services\LaraKube\ToolLocator;
-use App\Services\Runtime\WslDistro;
+use App\Services\LaraKube\CloudAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Process;
 use RuntimeException;
 
 class CloudAuthController extends Controller
 {
-    public function saveAws(Request $request, ToolLocator $locator, GlobalSettings $settings): RedirectResponse
+    public function saveAws(Request $request, CloudAccount $account): RedirectResponse
     {
         $validated = $request->validate([
             'access_key_id' => ['required', 'string', 'regex:/^[A-Z0-9]{16,32}$/'],
@@ -25,78 +21,20 @@ class CloudAuthController extends Controller
             'region' => ['required', 'string', 'regex:/^[a-z0-9-]+$/'],
         ]);
 
-        $credentialsContent = "[default]\naws_access_key_id = {$validated['access_key_id']}\naws_secret_access_key = {$validated['secret_access_key']}\n";
-        $configContent = "[default]\nregion = {$validated['region']}\noutput = json\n";
+        $result = $account->call(
+            ['cloud:credentials', '--provider=aws', "--region={$validated['region']}"],
+            ['AWS_ACCESS_KEY_ID' => $validated['access_key_id'], 'AWS_SECRET_ACCESS_KEY' => $validated['secret_access_key']],
+        );
 
-        $saved = $locator->isWindows()
-            ? $this->writeInDistro($locator, ['credentials' => $credentialsContent, 'config' => $configContent])
-            : $this->writeOnThisComputer(['credentials' => $credentialsContent, 'config' => $configContent]);
-
-        if (! $saved) {
-            return back()->withErrors(['aws' => 'Could not save the AWS credentials.']);
+        if (($result['success'] ?? false) !== true) {
+            return back()->withErrors(['aws' => (string) ($result['error'] ?? 'Could not save the AWS credentials.')]);
         }
 
-        // Verify with AWS STS if aws CLI is installed
-        $awsBin = $locator->find('aws');
-        if ($awsBin !== null) {
-            $isolated = $locator->isolate([$awsBin, 'sts', 'get-caller-identity']);
-            $res = Process::env($isolated['environment'])->timeout(15)->run($isolated['command']);
-
-            if (! $res->successful()) {
-                return back()->withErrors(['aws' => 'AWS credentials saved, but authentication verification failed: '.trim($res->errorOutput() ?: $res->output())]);
-            }
+        if (($result['verified'] ?? null) === false) {
+            return back()->withErrors(['aws' => 'AWS credentials saved, but AWS did not accept them. Check the keys.']);
         }
 
-        return back()->with('success', 'AWS credentials saved and verified successfully.');
-    }
-
-    /**
-     * The CLI runs inside the distro on Windows, so that is where its ~/.aws has to be. Each file is made empty with mode 600
-     * first, and the secret reaches `tee` on stdin, never in a command line.
-     *
-     * @param  array<string, string>  $files
-     */
-    private function writeInDistro(ToolLocator $locator, array $files): bool
-    {
-        $directory = WslDistro::HOME.'/.aws';
-
-        if (! $locator->run(['/usr/bin/install', '-d', '-m', '700', $directory])->successful()) {
-            return false;
-        }
-
-        foreach ($files as $name => $content) {
-            $path = "{$directory}/{$name}";
-
-            if (! $locator->run(['/usr/bin/install', '-m', '600', '/dev/null', $path])->successful()
-                || ! $locator->run(['/usr/bin/tee', $path], input: $content)->successful()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /** @param  array<string, string>  $files */
-    private function writeOnThisComputer(array $files): bool
-    {
-        $home = ToolLocator::home();
-
-        if ($home === '') {
-            return false;
-        }
-
-        $directory = "{$home}/.aws";
-
-        if (! is_dir($directory)) {
-            File::makeDirectory($directory, 0700, true);
-        }
-
-        foreach ($files as $name => $content) {
-            File::put("{$directory}/{$name}", $content);
-            chmod("{$directory}/{$name}", 0600);
-        }
-
-        return true;
+        return back()->with('success', 'AWS credentials saved'.(($result['verified'] ?? null) === true ? ' and verified' : '').'.');
     }
 
     public function loginGcp(GcpSignIn $signIn): JsonResponse
@@ -133,19 +71,21 @@ class CloudAuthController extends Controller
         return response()->json(['projects' => $signIn->projects()]);
     }
 
-    public function setGcpProject(Request $request, ToolLocator $locator): RedirectResponse|JsonResponse
+    public function setGcpProject(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
-            'project_id' => ['required', 'string', 'regex:/^[a-z0-9-]+$/'],
+            'project_id' => ['required', 'string', 'regex:/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/'],
         ]);
 
-        $gcloudBin = $locator->find('gcloud');
-        if ($gcloudBin !== null) {
-            $locator->run([$gcloudBin, 'config', 'set', 'project', $validated['project_id']], 10);
+        $result = $account->call(['cloud:project', '--provider=gcp', "--project={$validated['project_id']}"]);
+        $saved = ($result['success'] ?? false) === true;
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => $saved, 'message' => $saved ? null : ($result['error'] ?? null)], $saved ? 200 : 422);
         }
 
-        return $request->expectsJson()
-            ? response()->json(['ok' => $gcloudBin !== null])
-            : back()->with('success', "Google Cloud project set to {$validated['project_id']}.");
+        return $saved
+            ? back()->with('success', "Google Cloud project set to {$validated['project_id']}.")
+            : back()->withErrors(['gcp' => (string) ($result['error'] ?? 'Could not set the project.')]);
     }
 }

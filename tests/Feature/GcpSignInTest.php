@@ -11,17 +11,18 @@ function gcpSignInWindows(): void
 {
     putenv('SystemRoot=C:\\Windows');
     app()->instance(ToolLocator::class, new ToolLocator(windows: true));
-    Process::fake(['*' => Process::result(output: "/usr/bin/gcloud\n")]);
+    Process::fake(['*' => Process::result(output: "/usr/local/bin/larakube\n")]);
 }
 
-test('starting the sign-in keeps gcloud running as a run, in the distro, without a browser', function () {
+test('starting the sign-in keeps `larakube cloud:login` running as a run, in the distro', function () {
     gcpSignInWindows();
     $fake = ChildProcess::fake();
 
     $run = app(GcpSignIn::class)->start();
 
-    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--no-launch-browser', (array) $cmd, true)
-        && in_array('--update-adc', (array) $cmd, true)
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('cloud:login', (array) $cmd, true)
+        && in_array('--provider=gcp', (array) $cmd, true)
+        && in_array('--json', (array) $cmd, true)
         && in_array('--exec', (array) $cmd, true));
 
     expect($run->subject)->toBe('gcp-auth')
@@ -55,9 +56,8 @@ test('a finished or failed sign-in is reported', function () {
     $run->forceFill(['status' => RunStatus::Succeeded])->save();
     expect($signIn->state($run->refresh())['state'])->toBe('done');
 
-    $run->appendTo('output', "ERROR: invalid_grant\n");
-    $run->forceFill(['status' => RunStatus::Failed])->save();
-    expect($signIn->state($run->refresh()))->toMatchArray(['state' => 'failed', 'message' => 'ERROR: invalid_grant']);
+    $run->forceFill(['status' => RunStatus::Failed, 'result' => ['success' => false, 'error' => 'Google Cloud sign-in did not finish.']])->save();
+    expect($signIn->state($run->refresh()))->toMatchArray(['state' => 'failed', 'message' => 'Google Cloud sign-in did not finish.']);
 });
 
 test('the code is checked before it reaches the process', function () {
@@ -66,12 +66,12 @@ test('the code is checked before it reaches the process', function () {
     $this->post("/setup/cloud/gcp/login/{$run->id}/code", ['code' => 'x; rm -rf /'])->assertSessionHasErrors('code');
 });
 
-test('projects are listed from gcloud as ids and names', function () {
+test('projects are listed by the CLI as ids and names', function () {
     putenv('SystemRoot=C:\\Windows');
     app()->instance(ToolLocator::class, new ToolLocator(windows: true));
     Process::fake([
-        '*which*' => Process::result(output: "/usr/bin/gcloud\n"),
-        '*projects*' => Process::result(output: json_encode([['projectId' => 'demo-123', 'name' => 'Demo']])),
+        '*which*' => Process::result(output: "/usr/local/bin/larakube\n"),
+        '*cloud:projects*' => Process::result(output: json_encode(['success' => true, 'projects' => [['id' => 'demo-123', 'name' => 'Demo']]])),
     ]);
 
     expect(app(GcpSignIn::class)->projects())->toBe([['id' => 'demo-123', 'name' => 'Demo']]);
