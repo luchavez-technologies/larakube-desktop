@@ -9,6 +9,7 @@ use App\Services\Elevation;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolCatalog;
+use App\Services\RunNotifier;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
@@ -80,6 +81,8 @@ class RecordRunOutput
         if ($run->kind === RunKind::SetupLocal) {
             app(Elevation::class)->revoke();
         }
+
+        app(RunNotifier::class)->runFinished($run);
 
         $context = $run->meta['context'] ?? null;
 

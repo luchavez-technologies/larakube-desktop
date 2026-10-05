@@ -804,7 +804,19 @@ function DiagnosticsCard() {
                 label="Diagnostics"
                 action={
                     report ? (
-                        <CopyButton value={report} />
+                        <div className="flex items-center gap-1">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                    void sendJson('/diagnostics/folder', 'POST')
+                                }
+                            >
+                                Show log folder
+                            </Button>
+                            <CopyButton value={report} />
+                        </div>
                     ) : (
                         <Button
                             type="button"

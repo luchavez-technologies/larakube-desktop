@@ -103,6 +103,7 @@ Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->nam
 Route::post('/projects/{project}/link', [ProjectController::class, 'link'])->name('projects.link');
 Route::post('/projects/{project}/host', [ProjectController::class, 'host'])->name('projects.host');
 Route::post('/projects/{project}/retry', [ProjectController::class, 'retry'])->name('projects.retry');
+Route::post('/projects/{project}/folder', [ProjectController::class, 'showFolder'])->name('projects.folder');
 Route::post('/projects/{project}/editor', [ProjectController::class, 'openInEditor'])->name('projects.editor');
 Route::post('/projects/{project}/deploy', [ProjectController::class, 'deploy'])->name('projects.deploy');
 Route::post('/projects/{project}/up', [ProjectController::class, 'up'])->name('projects.up');
@@ -135,6 +136,7 @@ Route::post('/context/restore', [ContextController::class, 'restore'])->name('co
 Route::post('/context/remove', [ContextController::class, 'remove'])->name('context.remove');
 
 Route::get('/diagnostics', DiagnosticsController::class)->name('diagnostics');
+Route::post('/diagnostics/folder', [DiagnosticsController::class, 'folder'])->name('diagnostics.folder');
 Route::get('/updates', [UpdatesController::class, 'status'])->name('updates.status');
 Route::post('/updates/check', [UpdatesController::class, 'check'])->name('updates.check');
 Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');

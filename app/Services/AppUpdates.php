@@ -58,7 +58,10 @@ class AppUpdates
         $events->listen(UpdateNotAvailable::class, fn () => $this->remember('current'));
         $events->listen(UpdateAvailable::class, fn (UpdateAvailable $event) => $this->remember('downloading', latest: $event->version));
         $events->listen(DownloadProgress::class, fn (DownloadProgress $event) => $this->remember('downloading', percent: (int) round($event->percent)));
-        $events->listen(UpdateDownloaded::class, fn (UpdateDownloaded $event) => $this->remember('ready', latest: $event->version, percent: 100));
+        $events->listen(UpdateDownloaded::class, function (UpdateDownloaded $event): void {
+            $this->remember('ready', latest: $event->version, percent: 100);
+            app(RunNotifier::class)->updateReady($event->version);
+        });
         $events->listen(Error::class, fn (Error $event) => $this->remember('error', message: $event->message));
     }
 

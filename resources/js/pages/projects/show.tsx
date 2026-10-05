@@ -42,6 +42,7 @@ import {
     destroy,
     down,
     editor as openEditor,
+    folder as showFolder,
     host as setHost,
     index,
     init,
@@ -240,6 +241,17 @@ export default function ShowProject({
                 meta={<span>{project.path}</span>}
                 actions={
                     <div className="flex items-center gap-2.5">
+                        {project.exists && (
+                            <Link
+                                href={showFolder(project.id).url}
+                                method="post"
+                                as="button"
+                                preserveScroll
+                                className={buttonClass('secondary')}
+                            >
+                                Show folder
+                            </Link>
+                        )}
                         {project.exists && (
                             <EditorMenu project={project} editors={editors} />
                         )}

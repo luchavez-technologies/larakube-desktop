@@ -20,6 +20,7 @@ use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ProjectServices;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Runtime\WslDistro;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Native\Desktop\Facades\Shell;
 
 /**
  * Apps the user deploys. Every step runs the LaraKube CLI inside the project
@@ -443,6 +445,16 @@ class ProjectController extends Controller
         if (! $editors->open($editor, $project->path)) {
             return back()->withErrors(['editor' => EditorLauncher::EDITORS[$editor]['label']." couldn't open this folder."]);
         }
+
+        return back();
+    }
+
+    /** Shows the project's folder in Finder or File Explorer. On Windows a project inside the distro is reached through its network share. */
+    public function showFolder(Project $project, ToolLocator $locator): RedirectResponse
+    {
+        $path = $locator->isWindows() && str_starts_with($project->path, '/') ? WslDistro::unc($project->path) : $project->path;
+
+        Shell::showInFolder($path);
 
         return back();
     }

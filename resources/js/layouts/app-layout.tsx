@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import type { ComponentType, ReactNode } from 'react';
+import { useEffect, type ComponentType, type ReactNode } from 'react';
 import {
     LayoutDashboard,
     FolderGit2,
@@ -10,6 +10,7 @@ import {
     Settings,
     Code2,
 } from 'lucide-react';
+import { listenForNotificationClicks } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 import { dashboard, readiness, tools } from '@/routes';
 import { index as projectsIndex } from '@/routes/projects';
@@ -110,6 +111,8 @@ export default function AppLayout({
         hideProjects?: boolean;
         experimental?: boolean;
     }>();
+    useEffect(listenForNotificationClicks, []);
+
     const hideProjects = Boolean(props.hideProjects);
     const visibleNavigation = navigation.filter(
         (item) =>
