@@ -43,7 +43,8 @@ class ToolLocator
         }
 
         if ($this->isWindows()) {
-            return [WslDistro::HOME.'/.local/bin', WslDistro::HOME.'/.larakube/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+            // The same places as on a Mac or Linux: the CLI puts the Google Cloud SDK in ~/google-cloud-sdk, and snap tools in /snap/bin.
+            return [WslDistro::HOME.'/.local/bin', WslDistro::HOME.'/.larakube/bin', WslDistro::HOME.'/bin', WslDistro::HOME.'/google-cloud-sdk/bin', '/usr/local/bin', '/snap/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
         }
 
         $home = self::home();

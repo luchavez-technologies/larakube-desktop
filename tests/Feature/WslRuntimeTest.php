@@ -108,6 +108,10 @@ test('the PATH given to the distro is a Linux one, whatever separator this compu
         ->and(explode(':', $path))->toContain('/usr/local/bin', '/usr/bin');
 });
 
+test('tools the CLI installs in the distro are found where it puts them', function (): void {
+    expect(explode(':', windowsLocator()->path()))->toContain('/home/larakube/google-cloud-sdk/bin', '/home/larakube/.local/bin', '/snap/bin');
+});
+
 test('on a Mac or Linux nothing about a command changes', function (): void {
     $isolated = (new ToolLocator(['/usr/bin', '/bin'], windows: false))->isolate(['/usr/bin/env'], ['T' => 'v'], '/tmp');
 
