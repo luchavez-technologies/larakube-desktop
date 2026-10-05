@@ -17,6 +17,7 @@ use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ToolInstallController;
+use App\Http\Controllers\UpdatesController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\WslSetupController;
 use Illuminate\Support\Facades\Route;
@@ -128,6 +129,9 @@ Route::post('/context/backup', [ContextController::class, 'backup'])->name('cont
 Route::post('/context/restore', [ContextController::class, 'restore'])->name('context.restore');
 Route::post('/context/remove', [ContextController::class, 'remove'])->name('context.remove');
 
+Route::get('/updates', [UpdatesController::class, 'status'])->name('updates.status');
+Route::post('/updates/check', [UpdatesController::class, 'check'])->name('updates.check');
+Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');
 Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');

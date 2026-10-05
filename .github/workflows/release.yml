@@ -74,8 +74,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       NATIVEPHP_APP_VERSION: ${{ needs.checks.outputs.version }}
-      # Auto-update needs signed macOS builds; off until plan 04 lands.
-      NATIVEPHP_UPDATER_ENABLED: 'false'
+      # The updater reads latest.yml from the release assets. macOS only updates signed apps, so it stays
+      # off there until plan 04 lands.
+      NATIVEPHP_UPDATER_ENABLED: ${{ matrix.target != 'mac' && 'true' || 'false' }}
+      NATIVEPHP_UPDATER_PROVIDER: github
+      GITHUB_OWNER: ${{ github.repository_owner }}
+      GITHUB_REPO: ${{ github.event.repository.name }}
+      LARAKUBE_UPDATE_URL: ${{ needs.checks.outputs.is_canary == 'true' && format('https://github.com/{0}/releases/download/canary', github.repository) || format('https://github.com/{0}/releases/latest/download', github.repository) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -101,7 +106,7 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           echo "NATIVEPHP_APP_VERSION=${NATIVEPHP_APP_VERSION}" >> .env
-          echo "NATIVEPHP_UPDATER_ENABLED=false" >> .env
+          echo "NATIVEPHP_UPDATER_ENABLED=${NATIVEPHP_UPDATER_ENABLED}" >> .env
           npm ci
 
       # #plugin in nativephp/electron resolves to electron-plugin/dist, a
@@ -131,6 +136,8 @@ jobs:
         run: |
           mkdir -p out
           find nativephp/electron/dist -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} out/ \;
+          # The updater's feed files. Not latest-mac.yml: both macOS builds would write the same name.
+          find nativephp/electron/dist -maxdepth 1 -type f \( -name 'latest.yml' -o -name 'latest-linux.yml' \) -exec cp {} out/ \;
           # Fixed names beside the versioned ones, so the docs can link to
           # releases/latest/download/<name> and releases/download/canary/<name>
           # without asking the GitHub API (which rate-limits shared networks).

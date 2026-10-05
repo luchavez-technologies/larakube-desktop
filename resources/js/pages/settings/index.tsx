@@ -1,4 +1,5 @@
 import { Form, router, useForm } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Archive, ArrowRightLeft, Layers, Save, Trash2 } from 'lucide-react';
 import Button from '@/components/button';
@@ -85,6 +86,8 @@ export default function SettingsIndex({
                     </span>
                 }
             />
+
+            <UpdatesCard />
 
             <div className="grid grid-cols-[1fr_360px] items-start gap-6">
                 <form onSubmit={submit} className="space-y-5">
@@ -571,5 +574,111 @@ function KubeContextsCard({
                 )}
             </div>
         </Card>
+    );
+}
+
+type UpdateStatus = {
+    enabled: boolean;
+    version: string;
+    state: 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error';
+    latest: string | null;
+    percent: number;
+    message: string | null;
+};
+
+function xsrf(): string {
+    return decodeURIComponent(
+        document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] ?? '',
+    );
+}
+
+async function updatesCall(path: string, method: 'GET' | 'POST') {
+    const response = await fetch(path, {
+        method,
+        headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+    });
+
+    return response.ok ? ((await response.json()) as UpdateStatus) : null;
+}
+
+function UpdatesCard() {
+    const [status, setStatus] = useState<UpdateStatus | null>(null);
+    const busy =
+        status?.state === 'checking' || status?.state === 'downloading';
+
+    useEffect(() => {
+        let alive = true;
+        const load = () =>
+            updatesCall('/updates', 'GET').then(
+                (next) => alive && setStatus(next),
+            );
+
+        void load();
+        const timer = setInterval(load, busy ? 1500 : 10000);
+
+        return () => {
+            alive = false;
+            clearInterval(timer);
+        };
+    }, [busy]);
+
+    if (!status) {
+        return null;
+    }
+
+    const line = !status.enabled
+        ? 'Updates are off in this build.'
+        : status.state === 'checking'
+          ? 'Checking for updates…'
+          : status.state === 'downloading'
+            ? `Downloading ${status.latest ?? 'the update'}… ${status.percent}%`
+            : status.state === 'ready'
+              ? `${status.latest} is ready. Restart to finish updating.`
+              : status.state === 'current'
+                ? 'You have the latest version.'
+                : status.state === 'error'
+                  ? `The update check failed: ${status.message}`
+                  : 'LaraKube Desktop also checks each time it opens.';
+
+    return (
+        <div className="mb-5">
+            <Card
+                label="App updates"
+                action={
+                    status.enabled ? (
+                        status.state === 'ready' ? (
+                            <Button
+                                type="button"
+                                onClick={() =>
+                                    updatesCall('/updates/install', 'POST')
+                                }
+                            >
+                                Restart to update
+                            </Button>
+                        ) : (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                    updatesCall('/updates/check', 'POST').then(
+                                        setStatus,
+                                    )
+                                }
+                            >
+                                Check for updates
+                            </Button>
+                        )
+                    ) : undefined
+                }
+            >
+                <p className="text-sm">
+                    <span className="font-medium">
+                        Version {status.version}
+                    </span>
+                    <span className="text-soft"> · {line}</span>
+                </p>
+            </Card>
+        </div>
     );
 }

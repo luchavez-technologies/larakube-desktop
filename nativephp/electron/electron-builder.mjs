@@ -11,6 +11,7 @@ const appVersion = process.env.NATIVEPHP_APP_VERSION;
 const appCopyright = process.env.NATIVEPHP_APP_COPYRIGHT;
 const deepLinkProtocol = process.env.NATIVEPHP_DEEPLINK_SCHEME;
 const updaterEnabled = process.env.NATIVEPHP_UPDATER_ENABLED === 'true';
+const updateUrl = process.env.LARAKUBE_UPDATE_URL;
 const deleteAppDataOnUninstall = process.env.NATIVEPHP_NSIS_DELETE_APP_DATA === 'true';
 
 /*
@@ -107,7 +108,7 @@ export default {
             : {}),
     },
     nsis: {
-        artifactName: appName + '-${version}-setup.${ext}',
+        artifactName: fileName + '-${version}-setup.${ext}',
         shortcutName: '${productName}',
         uninstallDisplayName: '${productName}',
         createDesktopShortcut: 'always',
@@ -119,7 +120,7 @@ export default {
     },
     mac: {
         entitlementsInherit: 'build/entitlements.mac.plist',
-        artifactName: appName + '-${version}-${arch}.${ext}',
+        artifactName: fileName + '-${version}-${arch}.${ext}',
         extendInfo: {
             ...(macBundleName ? { CFBundleName: macBundleName, CFBundleDisplayName: macBundleName } : {}),
             NSCameraUsageDescription: "Application requests access to the device's camera.",
@@ -129,7 +130,7 @@ export default {
         },
     },
     dmg: {
-        artifactName: appName + '-${version}-${arch}.${ext}',
+        artifactName: fileName + '-${version}-${arch}.${ext}',
     },
     linux: {
         target: ['AppImage', 'deb'],
@@ -137,7 +138,7 @@ export default {
         category: 'Utility',
     },
     appImage: {
-        artifactName: appName + '-${version}.${ext}',
+        artifactName: fileName + '-${version}.${ext}',
     },
     npmRebuild: false,
     extraMetadata: {
@@ -160,5 +161,9 @@ export default {
             filter: ['**/*'],
         },
     ],
-    ...(updaterEnabled ? { publish: updaterConfig } : {}),
+    // A fixed feed URL (the GitHub release assets) instead of NativePHP's provider config: the updater
+    // reads latest.yml from it, and the release workflow uploads that file beside the installers.
+    ...(updaterEnabled
+        ? { publish: updateUrl ? { provider: 'generic', url: updateUrl, channel: 'latest' } : updaterConfig }
+        : {}),
 };
