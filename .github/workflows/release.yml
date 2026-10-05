@@ -174,8 +174,7 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      # Canary re-points its moving tag and replaces its release, so there is
-      # always exactly one; a v* release is created once and never moved.
+      # Canary re-points its moving tag and updates its one release in place; a v* release is created once and never moved.
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -190,8 +189,21 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git tag -f "$TAG" "$GITHUB_SHA"
             git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
-            gh release delete "$TAG" --yes || true
-            gh release create "$TAG" artifacts/* --title "Canary $VERSION ($(git rev-parse --short "$GITHUB_SHA"))" --notes-file notes.md --prerelease
+            TITLE="Canary $VERSION ($(git rev-parse --short "$GITHUB_SHA"))"
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              # Replaced in place, never deleted: installed apps read latest.yml from this release, and a release that is
+              # briefly missing makes their update check or download fail. The installers go up first and the feed files
+              # last, so the feed never names a file that is not there yet.
+              gh release edit "$TAG" --title "$TITLE" --notes-file notes.md --prerelease
+              find artifacts -maxdepth 1 -type f ! -name 'latest*.yml' -exec gh release upload "$TAG" {} --clobber \;
+              find artifacts -maxdepth 1 -type f -name 'latest*.yml' -exec gh release upload "$TAG" {} --clobber \;
+              # Then the files of earlier builds that this one no longer has.
+              for name in $(gh release view "$TAG" --json assets --jq '.assets[].name'); do
+                [ -e "artifacts/$name" ] || gh release delete-asset "$TAG" "$name" --yes
+              done
+            else
+              gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md --prerelease
+            fi
           else
             gh release create "$TAG" artifacts/* --title "LaraKube Desktop $TAG" --notes-file notes.md
           fi
