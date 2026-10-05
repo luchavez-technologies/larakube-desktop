@@ -67,10 +67,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, target: mac, arch: arm64 }
-          - { os: macos-latest, target: mac, arch: x64 }
+          # macOS builds are paused until the Windows work is done; restore these two lines to ship them again.
+          # - { os: macos-latest, target: mac, arch: arm64 }
+          # - { os: macos-latest, target: mac, arch: x64 }
           - { os: windows-latest, target: win, arch: x64 }
-          # Linux builds are paused while Windows and macOS are the focus; restore this line to ship them again.
+          # Linux builds are paused until the Windows work is done; restore this line to ship them again.
           # - { os: ubuntu-latest, target: linux, arch: x64 }
     runs-on: ${{ matrix.os }}
     env:
