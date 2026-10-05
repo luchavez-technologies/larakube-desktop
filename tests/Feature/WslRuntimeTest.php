@@ -98,6 +98,13 @@ test('run and start go through the same isolation, here and in the distro', func
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => ($cmd[0] ?? '') === 'C:\\Windows\\System32\\wsl.exe' && in_array('/home/larakube/projects/shop', (array) $cmd, true));
 });
 
+test('the PATH given to the distro is a Linux one, whatever separator this computer uses', function (): void {
+    $path = windowsLocator()->path();
+
+    expect($path)->not->toContain(';')
+        ->and(explode(':', $path))->toContain('/usr/local/bin', '/usr/bin');
+});
+
 test('on a Mac or Linux nothing about a command changes', function (): void {
     $isolated = (new ToolLocator(['/usr/bin', '/bin'], windows: false))->isolate(['/usr/bin/env'], ['T' => 'v'], '/tmp');
 

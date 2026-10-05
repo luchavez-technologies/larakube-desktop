@@ -117,7 +117,8 @@ class ToolLocator
 
     public function path(): string
     {
-        return implode(PATH_SEPARATOR, $this->directories());
+        // A Linux PATH, also when this app runs on Windows, where PHP's own separator is `;`.
+        return implode(':', $this->directories());
     }
 
     /**
