@@ -84,7 +84,7 @@ class ToolLocator
     {
         $script = 'for d in '.implode(' ', array_map('escapeshellarg', $this->directories())).'; do if [ -x "$d/'.str_replace('"', '', $binary).'" ]; then echo "$d/'.str_replace('"', '', $binary).'"; break; fi; done';
 
-        $result = Process::timeout(20)->run([self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', '/bin/sh', '-c', $script]);
+        $result = Process::timeout(90)->run([self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', '/bin/sh', '-c', $script]);
         $found = trim($result->output());
 
         return $result->successful() && $found !== '' ? $found : null;
