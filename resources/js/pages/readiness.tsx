@@ -18,7 +18,7 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { create as createServer } from '@/routes/servers';
 import { install } from '@/routes/setup/tools';
-import { useToolStatus } from '@/lib/tool-status';
+import { forgetToolStatus, useToolStatus } from '@/lib/tool-status';
 import type { Provider, Tool } from '@/types/larakube';
 
 type CatalogEntry = Omit<Tool, 'installed' | 'path' | 'version'>;
@@ -71,7 +71,7 @@ export default function Readiness({
         <AppLayout title="Setup">
             <PageHeader
                 title="Setup"
-                subtitle="Everything LaraKube Desktop needs on this Mac. Required tools must be installed before you can create a server."
+                subtitle="Everything LaraKube Desktop needs on this computer. Required tools must be installed before you can create a server."
                 actions={
                     <>
                         <Button
@@ -453,7 +453,8 @@ function WslCheck({ wsl }: { wsl?: WslState | null }) {
             return;
         }
 
-        router.reload({ only: ['wsl'] });
+        forgetToolStatus();
+        router.reload();
     };
 
     const steps: WslStep[] | null =

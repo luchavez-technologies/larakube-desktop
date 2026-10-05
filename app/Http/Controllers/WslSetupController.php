@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\LaraKube\ReadinessCheck;
 use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
 use Throwable;
@@ -9,7 +10,7 @@ use Throwable;
 /** The Windows first-run steps that create LaraKube Desktop's own WSL distro; the Setup page runs them one after another. */
 class WslSetupController extends Controller
 {
-    public function store(string $step, Wsl $wsl): JsonResponse
+    public function store(string $step, Wsl $wsl, ReadinessCheck $readiness): JsonResponse
     {
         abort_unless($wsl->isWindows(), 404);
 
@@ -26,6 +27,10 @@ class WslSetupController extends Controller
             report($e);
 
             return response()->json(['ok' => false, 'message' => "{$step} failed: {$e->getMessage()}"]);
+        }
+
+        if ($step === 'import' && $result['ok']) {
+            $readiness->forget();
         }
 
         return response()->json($result);

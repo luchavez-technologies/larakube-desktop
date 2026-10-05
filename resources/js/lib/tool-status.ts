@@ -37,6 +37,11 @@ function load(slug: string, fresh: boolean): Promise<ToolStatus> {
     return request;
 }
 
+/** Drops every remembered result, for when something changed what the checks would find. */
+export function forgetToolStatus() {
+    known.clear();
+}
+
 /**
  * One tool's state, fetched on its own so each Setup row fills in as soon as
  * its check finishes. A result stays valid for a few seconds across page
