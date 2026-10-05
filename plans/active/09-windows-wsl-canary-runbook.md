@@ -1,3 +1,5 @@
+> **Superseded by `10-windows-installer-with-wsl.md`.** This runbook tests the Linux AppImage inside WSLg, which is not how students will install the app. A new runbook for the Windows installer replaces it.
+
 # Plan 09: Windows (WSL) canary test runbook
 
 **Goal:** prove LaraKube Desktop 0.0.1 works for a Windows student through WSL, using the canary build, before tagging `v0.0.1`.

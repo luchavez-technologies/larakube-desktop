@@ -1,3 +1,5 @@
+> **Superseded by `10-windows-installer-with-wsl.md`,** which turns this spike into the plan.
+
 # Plan 03 — Windows via a bundled WSL distro (spike)
 
 **Status:** Not started. **Workshop blocker**: most students are on Windows. See ADR 0007.

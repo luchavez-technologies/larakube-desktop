@@ -1,6 +1,6 @@
 # ADR 0007: Windows runs the CLI inside a bundled WSL distro
 
-**Status:** Proposed (not built; see plans/active/03-windows-wsl-spike.md)
+**Status:** Accepted (not built; see plans/active/10-windows-installer-with-wsl.md)
 
 ## Context
 
