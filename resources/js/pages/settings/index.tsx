@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { Archive, ArrowRightLeft, Layers, Save, Trash2 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import { forgetToolStatus } from '@/lib/tool-status';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -33,6 +34,7 @@ type SettingsProps = {
     cloudProviders: Record<string, string>;
     contexts?: string[];
     currentContext?: string | null;
+    windows?: boolean;
 };
 
 type SettingsForm = {
@@ -56,6 +58,7 @@ export default function SettingsIndex({
     cloudProviders,
     contexts = [],
     currentContext = null,
+    windows = false,
 }: SettingsProps) {
     const form = useForm<SettingsForm>({
         localTld: settings.localTld,
@@ -88,6 +91,7 @@ export default function SettingsIndex({
             />
 
             <UpdatesCard />
+            {windows && <LinuxCard />}
 
             <div className="grid grid-cols-[1fr_360px] items-start gap-6">
                 <form onSubmit={submit} className="space-y-5">
@@ -678,6 +682,96 @@ function UpdatesCard() {
                     </span>
                     <span className="text-soft"> · {line}</span>
                 </p>
+            </Card>
+        </div>
+    );
+}
+
+function LinuxCard() {
+    const [confirming, setConfirming] = useState(false);
+    const [working, setWorking] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const reset = async () => {
+        setWorking(true);
+        setError(null);
+
+        const result = await fetch('/setup/wsl/reset', {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+        })
+            .then(
+                (response) =>
+                    response.json() as Promise<{
+                        ok: boolean;
+                        message: string;
+                    }>,
+            )
+            .catch(() => ({
+                ok: false,
+                message: 'LaraKube Desktop could not reach itself. Try again.',
+            }));
+
+        setWorking(false);
+
+        if (!result.ok) {
+            setError(result.message);
+
+            return;
+        }
+
+        forgetToolStatus();
+        router.visit('/readiness');
+    };
+
+    return (
+        <div className="mb-5">
+            <Card
+                label="LaraKube Linux"
+                tone={confirming ? 'danger' : 'default'}
+            >
+                {confirming ? (
+                    <div className="space-y-3 text-sm">
+                        <p>
+                            This deletes LaraKube Linux and everything inside
+                            it, including projects and data you made there. Your
+                            Windows files and any other WSL distributions are
+                            not touched. Setup will offer to install it again.
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                disabled={working}
+                                onClick={() => void reset()}
+                            >
+                                {working ? 'Deleting…' : 'Delete and reset'}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={working}
+                                onClick={() => setConfirming(false)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                        {error && <p className="text-accent">{error}</p>}
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-between gap-4 text-sm">
+                        <p className="text-soft">
+                            The small Linux LaraKube Desktop runs its tools in.
+                            Reset it to start over with a fresh copy.
+                        </p>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setConfirming(true)}
+                        >
+                            Reset LaraKube Linux…
+                        </Button>
+                    </div>
+                )}
             </Card>
         </div>
     );

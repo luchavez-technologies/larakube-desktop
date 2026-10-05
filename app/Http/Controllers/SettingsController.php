@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
@@ -12,7 +13,7 @@ use Inertia\Response;
 
 class SettingsController extends Controller
 {
-    public function show(GlobalSettings $settings, ToolLocator $locator): Response
+    public function show(GlobalSettings $settings, ToolLocator $locator, Wsl $wsl): Response
     {
         $cli = $locator->find('kubectl');
         $contexts = [];
@@ -39,6 +40,7 @@ class SettingsController extends Controller
             'cloudProviders' => GlobalSettings::CLOUD_PROVIDERS,
             'contexts' => $contexts,
             'currentContext' => $currentContext,
+            'windows' => $wsl->isWindows(),
         ]);
     }
 

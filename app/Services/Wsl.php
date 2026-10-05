@@ -151,6 +151,26 @@ class Wsl
         return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
     }
 
+    /**
+     * Deletes LaraKube Desktop's own distro and everything in it. Only ever this one distro by name; another
+     * Ubuntu on the computer is never touched. Does nothing when it is already gone.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function reset(): array
+    {
+        if ($this->distro() === null) {
+            return ['ok' => true, 'message' => 'LaraKube Linux was already removed.'];
+        }
+
+        Process::timeout(60)->run(['wsl.exe', '--terminate', WslDistro::NAME]);
+        $removed = Process::timeout(300)->run(['wsl.exe', '--unregister', WslDistro::NAME]);
+
+        return $removed->successful()
+            ? ['ok' => true, 'message' => 'LaraKube Linux was removed.']
+            : ['ok' => false, 'message' => trim($this->text($removed->errorOutput().$removed->output())) ?: 'Windows could not remove LaraKube Linux.'];
+    }
+
     /** @return array{name: string, version: int}|null */
     public function distro(): ?array
     {

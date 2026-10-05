@@ -123,3 +123,18 @@ test('importing creates the distro once and restarts it, and a second run does n
     Process::assertRanTimes(fn ($process) => in_array('--import', (array) $process->command, true), 1);
     Process::assertRanTimes(fn ($process) => in_array('--terminate', (array) $process->command, true), 2);
 });
+
+test('resetting removes only the LaraKube distro, and is harmless when it is already gone', function () {
+    Process::fake([
+        '*--list*' => Process::sequence()
+            ->push(Process::result(output: wslListing('* Ubuntu           Stopped   2', '  larakube-ubuntu   Stopped   2')))
+            ->push(Process::result(output: wslListing('* Ubuntu           Stopped   2'))),
+        '*' => Process::result(),
+    ]);
+
+    expect((new Wsl(windows: true))->reset()['ok'])->toBeTrue()
+        ->and((new Wsl(windows: true))->reset()['ok'])->toBeTrue();
+
+    Process::assertRanTimes(fn ($process) => in_array('--unregister', (array) $process->command, true), 1);
+    Process::assertNotRan(fn ($process) => in_array('Ubuntu', (array) $process->command, true));
+});
