@@ -4,6 +4,8 @@ import type { FormEvent } from 'react';
 import { Archive, ArrowRightLeft, Layers, Save, Trash2 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import CopyButton from '@/components/copy-button';
+import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
@@ -91,6 +93,7 @@ export default function SettingsIndex({
             />
 
             <UpdatesCard />
+            <DiagnosticsCard />
             {windows && <LinuxCard />}
 
             <div className="grid grid-cols-[1fr_360px] items-start gap-6">
@@ -771,6 +774,60 @@ function LinuxCard() {
                             Reset LaraKube Linux…
                         </Button>
                     </div>
+                )}
+            </Card>
+        </div>
+    );
+}
+
+function DiagnosticsCard() {
+    const [report, setReport] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    const load = async () => {
+        setLoading(true);
+        const result = await sendJson<{ report: string }>(
+            '/diagnostics',
+            'GET',
+        );
+        setReport(
+            result.ok
+                ? result.data.report
+                : 'Could not gather the details. Try again.',
+        );
+        setLoading(false);
+    };
+
+    return (
+        <div className="mb-5">
+            <Card
+                label="Diagnostics"
+                action={
+                    report ? (
+                        <CopyButton value={report} />
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={loading}
+                            onClick={() => void load()}
+                        >
+                            {loading ? 'Gathering…' : 'Show diagnostics'}
+                        </Button>
+                    )
+                }
+            >
+                {report ? (
+                    <pre className="max-h-80 overflow-auto rounded-lg bg-term px-3 py-2 font-mono text-xs whitespace-pre-wrap text-term-bright">
+                        {report}
+                    </pre>
+                ) : (
+                    <p className="text-sm text-soft">
+                        The details someone needs to help with a problem:
+                        versions, LaraKube Linux, the CLI, the last failed runs
+                        and the end of the app log. Passwords and tokens are
+                        removed.
+                    </p>
                 )}
             </Card>
         </div>

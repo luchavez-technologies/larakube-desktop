@@ -8,6 +8,7 @@ use App\Http\Controllers\CompanionController;
 use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevBoxController;
+use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
@@ -133,6 +134,7 @@ Route::post('/context/backup', [ContextController::class, 'backup'])->name('cont
 Route::post('/context/restore', [ContextController::class, 'restore'])->name('context.restore');
 Route::post('/context/remove', [ContextController::class, 'remove'])->name('context.remove');
 
+Route::get('/diagnostics', DiagnosticsController::class)->name('diagnostics');
 Route::get('/updates', [UpdatesController::class, 'status'])->name('updates.status');
 Route::post('/updates/check', [UpdatesController::class, 'check'])->name('updates.check');
 Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');
