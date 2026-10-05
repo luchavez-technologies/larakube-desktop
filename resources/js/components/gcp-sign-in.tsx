@@ -171,18 +171,16 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
                             type="button"
                             variant="secondary"
                             onClick={() =>
-                                router.post(
-                                    '/open',
-                                    { url: status.url ?? '' },
-                                    {
-                                        preserveState: true,
-                                        preserveScroll: true,
-                                        onError: () =>
-                                            setError(
-                                                'Could not open your browser. Use Copy address and paste it into one.',
-                                            ),
-                                    },
-                                )
+                                // Not an Inertia visit: that would reload the page behind this dialog and close it.
+                                void sendJson('/open', 'POST', {
+                                    url: status.url ?? '',
+                                }).then((result) => {
+                                    if (!result.ok) {
+                                        setError(
+                                            'Could not open your browser. Use Copy address and paste it into one.',
+                                        );
+                                    }
+                                })
                             }
                         >
                             Open Google sign-in

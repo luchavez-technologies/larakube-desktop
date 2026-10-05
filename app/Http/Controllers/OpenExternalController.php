@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Native\Desktop\Facades\Shell;
@@ -9,7 +10,7 @@ use Native\Desktop\Facades\Shell;
 /** Opens a tool's address (or a local tunnel's) in the user's default browser, not inside the app window. */
 class OpenExternalController extends Controller
 {
-    public function __invoke(Request $request): RedirectResponse
+    public function __invoke(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             // Sign-in addresses (Google's carries scopes and a code challenge) run past 500 characters.
@@ -22,6 +23,7 @@ class OpenExternalController extends Controller
 
         Shell::openExternal($validated['url']);
 
-        return back();
+        // A caller that keeps its own page state (a dialog) asks for JSON, so nothing about the page is reloaded.
+        return $request->expectsJson() ? response()->json(['ok' => true]) : back();
     }
 }

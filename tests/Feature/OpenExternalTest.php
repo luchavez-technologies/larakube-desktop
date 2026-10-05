@@ -16,3 +16,9 @@ test('plain http is only opened for this computer', function () {
 
     $this->post('/open', ['url' => 'http://example.com/'])->assertStatus(422);
 });
+
+test('a caller that keeps its own page state gets JSON back, not a redirect', function () {
+    Shell::shouldReceive('openExternal')->once()->with('https://example.com/a');
+
+    $this->postJson('/open', ['url' => 'https://example.com/a'])->assertOk()->assertJson(['ok' => true]);
+});
