@@ -17,11 +17,11 @@ class ToolLocator
 {
     /**
      * @param  list<string>|null  $directories
-     * @param  bool|null  $windows  force the Windows behaviour (commands run inside the LaraKube WSL distro), for tests
+     * @param  bool|null  $windows  force the Windows behaviour (commands run inside the larakube-ubuntu WSL distro), for tests
      */
     public function __construct(private ?array $directories = null, private ?bool $windows = null) {}
 
-    /** On Windows the CLI and its tools live inside the LaraKube WSL distro, so every command is run there. */
+    /** On Windows the CLI and its tools live inside the larakube-ubuntu WSL distro, so every command is run there. */
     public function isWindows(): bool
     {
         return $this->windows ?? PHP_OS_FAMILY === 'Windows';
@@ -161,7 +161,7 @@ class ToolLocator
     }
 
     /**
-     * The same isolation, run inside the LaraKube distro: `wsl.exe -d LaraKube --user larakube [--cd <dir>] -- sh -c
+     * The same isolation, run inside the larakube-ubuntu distro: `wsl.exe -d larakube-ubuntu --user larakube [--cd <dir>] -- sh -c
      * 'exec env -i ...'`. The fixed variables are written into the script; only the extra (secret) ones travel, in the
      * spawn environment, shared into the distro by WSLENV and referenced by name, so they never reach a command line.
      *

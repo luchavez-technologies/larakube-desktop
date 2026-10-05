@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the LaraKube WSL root filesystem and writes it, with its checksum, to ./dist.
+# Builds the larakube-ubuntu WSL root filesystem and writes it, with its checksum, to ./dist.
 #
 #   rootfs/build.sh [release] [platform]
 #   rootfs/build.sh canary linux/amd64
@@ -12,7 +12,7 @@ platform="${2:-linux/amd64}"
 arch="${platform#linux/}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="$here/../dist"
-name="larakube-rootfs-${release}-${arch}"
+name="larakube-ubuntu-${release}-${arch}"
 
 mkdir -p "$out"
 

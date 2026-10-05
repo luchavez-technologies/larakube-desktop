@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks an exported root filesystem the way Windows will use it: unpacked, with the tools in place.
-#   rootfs/smoke.sh dist/larakube-rootfs-canary-amd64.tar.gz [platform]
+#   rootfs/smoke.sh dist/larakube-ubuntu-canary-amd64.tar.gz [platform]
 set -euo pipefail
 
 tarball="${1:?path to the root filesystem tarball}"

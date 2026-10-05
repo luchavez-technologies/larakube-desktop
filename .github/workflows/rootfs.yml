@@ -1,6 +1,6 @@
 name: rootfs
 
-# The LaraKube WSL distro that Desktop imports on Windows (see plans/active/10-windows-installer-with-wsl.md).
+# The larakube-ubuntu WSL distro that Desktop imports on Windows (see plans/active/10-windows-installer-with-wsl.md).
 # rootfs/** on develop → rebuilt and published as the `rootfs-canary` prerelease.
 # manual              → any CLI release (canary, or a tag such as v0.34.0), for a stable rootfs.
 on:
@@ -41,7 +41,7 @@ jobs:
         run: rootfs/build.sh "$LARAKUBE_RELEASE" linux/amd64
 
       - name: Check it the way Windows will use it
-        run: rootfs/smoke.sh "dist/larakube-rootfs-${LARAKUBE_RELEASE}-amd64.tar.gz" linux/amd64
+        run: rootfs/smoke.sh "dist/larakube-ubuntu-${LARAKUBE_RELEASE}-amd64.tar.gz" linux/amd64
 
       - name: Size and checksum
         run: |
@@ -59,6 +59,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "$PUBLISH_TAG" >/dev/null 2>&1 \
-            || gh release create "$PUBLISH_TAG" --prerelease --title "LaraKube WSL root filesystem ($PUBLISH_TAG)" \
-                 --notes "The Linux system Desktop imports as the LaraKube WSL distro on Windows. Not for manual download."
+            || gh release create "$PUBLISH_TAG" --prerelease --title "larakube-ubuntu WSL root filesystem ($PUBLISH_TAG)" \
+                 --notes "The Linux system Desktop imports as the larakube-ubuntu WSL distro on Windows. Not for manual download."
           gh release upload "$PUBLISH_TAG" dist/* --clobber

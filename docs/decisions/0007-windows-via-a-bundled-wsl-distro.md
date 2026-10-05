@@ -14,6 +14,6 @@ On Windows the app enables WSL (one UAC prompt, one reboot), imports a
 LaraKube distro built from the shared **toolbox image** (larakube + kubectl
 
 - tofu + ssh + provider CLIs, plus rootless Podman for local builds), and
-  runs every command as `wsl.exe -d LaraKube -- env -i … larakube …`. A
+  runs every command as `wsl.exe -d larakube-ubuntu -- env -i … larakube …`. A
   readiness check (virtualization, admin rights, disk, network) runs before
   the workshop.

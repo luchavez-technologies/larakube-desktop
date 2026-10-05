@@ -10,12 +10,12 @@ function windowsLocator(): ToolLocator
     return new ToolLocator(windows: true);
 }
 
-test('on Windows a command runs inside the LaraKube distro as its own user, from an empty environment', function (): void {
+test('on Windows a command runs inside the larakube-ubuntu distro as its own user, from an empty environment', function (): void {
     putenv('SystemRoot=C:\\Windows');
 
     $isolated = windowsLocator()->isolate(['/usr/local/bin/larakube', 'cloud:stacks', '--json']);
 
-    expect(array_slice($isolated['command'], 0, 5))->toBe(['C:\\Windows\\System32\\wsl.exe', '-d', 'LaraKube', '--user', 'larakube'])
+    expect(array_slice($isolated['command'], 0, 5))->toBe(['C:\\Windows\\System32\\wsl.exe', '-d', 'larakube-ubuntu', '--user', 'larakube'])
         ->and($isolated['command'])->toContain('--')
         ->and(array_slice($isolated['command'], -3))->toBe(['/usr/local/bin/larakube', 'cloud:stacks', '--json'])
         ->and($isolated['command'][array_search('-c', $isolated['command'], true) + 1])->toContain("HOME='/home/larakube'")
@@ -39,14 +39,14 @@ test('a folder is given to the distro as a Linux path, whichever way Windows nam
 })->with([
     'a Linux path' => ['/home/larakube/projects/shop', '/home/larakube/projects/shop'],
     'a drive path' => ['C:\\Users\\Mia\\shop', '/mnt/c/Users/Mia/shop'],
-    'through the distro share' => ['\\\\wsl.localhost\\LaraKube\\home\\larakube\\projects\\shop', '/home/larakube/projects/shop'],
+    'through the distro share' => ['\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\shop', '/home/larakube/projects/shop'],
 ]);
 
 test('Windows paths and distro paths are written in each other\'s terms', function (): void {
-    expect(WslDistro::unc('/home/larakube/projects/shop'))->toBe('\\\\wsl.localhost\\LaraKube\\home\\larakube\\projects\\shop')
+    expect(WslDistro::unc('/home/larakube/projects/shop'))->toBe('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\shop')
         ->and(WslDistro::toLinux('D:\\work'))->toBe('/mnt/d/work')
-        ->and(WslDistro::toLinux('\\\\wsl$\\LaraKube\\home\\larakube'))->toBe('/home/larakube')
-        ->and(WslDistro::toLinux('\\\\wsl.localhost\\LaraKube'))->toBe('/')
+        ->and(WslDistro::toLinux('\\\\wsl$\\larakube-ubuntu\\home\\larakube'))->toBe('/home/larakube')
+        ->and(WslDistro::toLinux('\\\\wsl.localhost\\larakube-ubuntu'))->toBe('/')
         ->and(WslDistro::toLinux('/etc/hosts'))->toBe('/etc/hosts');
 });
 

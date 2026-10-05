@@ -3,12 +3,12 @@
 namespace App\Services\Runtime;
 
 /**
- * The WSL distro LaraKube Desktop owns on Windows, the way Docker Desktop owns `docker-desktop`: its name,
+ * The WSL distro LaraKube Desktop owns on Windows, named for what it is (Ubuntu with our tools) and the way Docker Desktop owns `docker-desktop`: its name,
  * the user commands run as, and how its files and Windows files are written in each other's terms.
  */
 final class WslDistro
 {
-    public const string NAME = 'LaraKube';
+    public const string NAME = 'larakube-ubuntu';
 
     public const string USER = 'larakube';
 

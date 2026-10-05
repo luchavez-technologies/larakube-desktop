@@ -11,8 +11,8 @@
 2. Build a minimal rootfs from the toolbox image (Debian slim + larakube
    standalone linux binary + kubectl + tofu + openssh + podman) and export
    it: `docker export` → `larakube-rootfs.tar`.
-   `wsl --import LaraKube %LOCALAPPDATA%\LaraKube\wsl larakube-rootfs.tar`.
-3. Confirm `ChildProcess::start(['wsl.exe','-d','LaraKube','--','env','-i',
+   `wsl --import larakube-ubuntu %LOCALAPPDATA%\LaraKube\wsl larakube-rootfs.tar`.
+3. Confirm `ChildProcess::start(['wsl.exe','-d','larakube-ubuntu','--','env','-i',
 …,'larakube','cloud:stacks','--json'])` streams stdout/stderr live and
    that `stop()` cancels.
 4. Build the Windows target in GitHub Actions (it can't be built on a Mac).
@@ -20,7 +20,7 @@
 ## Then implement
 
 - `ToolLocator` gets a platform adapter: on Windows, `find()` checks inside
-  the distro, and `isolate()` prefixes `wsl.exe -d LaraKube --`.
+  the distro, and `isolate()` prefixes `wsl.exe -d larakube-ubuntu --`.
 - A readiness screen (designed in Figma: Setup → "Windows — first run"):
   virtualization, admin rights, disk, network to the providers.
 - Paths: project folders live in Windows (`C:\…`), so pass them as

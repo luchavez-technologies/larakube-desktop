@@ -21,7 +21,7 @@ are resolved by scanning `ToolLocator::directories()`, never via PATH lookup.
 
 ## Consequences
 
-- The Windows adapter must do the same inside WSL (`wsl.exe -d LaraKube --
+- The Windows adapter must do the same inside WSL (`wsl.exe -d larakube-ubuntu --
 env -i …`).
 - A CLI feature that needs a new environment variable must be added to the
   allowlist deliberately.

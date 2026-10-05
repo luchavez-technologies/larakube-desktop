@@ -1,5 +1,5 @@
-# The LaraKube WSL distro, as a root filesystem. `build.sh` exports it to a tarball that Windows imports with
-# `wsl --import LaraKube <folder> larakube-rootfs-<version>-<arch>.tar.gz`. It holds what Desktop needs on Windows:
+# The larakube-ubuntu WSL distro, as a root filesystem. `build.sh` exports it to a tarball that Windows imports with
+# `wsl --import larakube-ubuntu <folder> larakube-ubuntu-<version>-<arch>.tar.gz`. It holds what Desktop needs on Windows:
 # the CLI, kubectl, OpenTofu, ssh, git and rootless Podman, and nothing for any one cloud (those install on demand).
 FROM ubuntu:24.04
 
