@@ -32,7 +32,9 @@ RUN set -eux; \
 
 # The login every command runs as: no password (nothing in the app can answer a prompt), and the sub-id ranges and
 # lingering that rootless Podman needs.
+# The Ubuntu image ships a user called `ubuntu` at UID 1000, which this login replaces.
 RUN set -eux; \
+    userdel --remove ubuntu; \
     useradd --create-home --uid 1000 --shell /bin/bash larakube; \
     echo 'larakube ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/larakube; \
     chmod 0440 /etc/sudoers.d/larakube; \
