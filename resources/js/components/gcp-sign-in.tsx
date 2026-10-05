@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import Button from '@/components/button';
+import CopyButton from '@/components/copy-button';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
 
@@ -176,12 +177,20 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
                                     {
                                         preserveState: true,
                                         preserveScroll: true,
+                                        onError: () =>
+                                            setError(
+                                                'Could not open your browser. Use Copy address and paste it into one.',
+                                            ),
                                     },
                                 )
                             }
                         >
                             Open Google sign-in
                         </Button>
+                        <CopyButton
+                            value={status.url ?? ''}
+                            label="Copy address"
+                        />
                         <input
                             value={code}
                             onChange={(event) => setCode(event.target.value)}

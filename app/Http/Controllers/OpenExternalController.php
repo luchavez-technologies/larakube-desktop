@@ -12,7 +12,8 @@ class OpenExternalController extends Controller
     public function __invoke(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'url' => ['required', 'url:http,https', 'max:500'],
+            // Sign-in addresses (Google's carries scopes and a code challenge) run past 500 characters.
+            'url' => ['required', 'url:http,https', 'max:4096'],
         ]);
 
         // Plain http is only for a tunnel on this computer, such as a workspace editor.
