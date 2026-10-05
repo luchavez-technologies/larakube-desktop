@@ -17,11 +17,21 @@ class Elevation
 {
     public const SUDOERS_FILE = '/etc/sudoers.d/larakube-desktop-setup';
 
-    public function __construct(private ?string $user = null, private ?string $distro = null) {}
+    public function __construct(private ?string $user = null, private ?string $distro = null, private ?bool $windows = null) {}
+
+    /** On Windows the commands run in the larakube-ubuntu distro, whose user already has passwordless sudo, so there is nothing to grant. */
+    private function onWindows(): bool
+    {
+        return $this->windows ?? PHP_OS_FAMILY === 'Windows';
+    }
 
     /** How root can be reached from here without a terminal, or null when it cannot. */
     public function method(): ?string
     {
+        if ($this->onWindows()) {
+            return 'distro';
+        }
+
         if ($this->distro() !== '' && $this->commandExists('wsl.exe')) {
             return 'wsl';
         }
@@ -35,6 +45,10 @@ class Elevation
 
     public function grant(): bool
     {
+        if ($this->onWindows()) {
+            return true;
+        }
+
         $user = $this->user();
 
         if ($user === null) {
@@ -46,6 +60,10 @@ class Elevation
 
     public function revoke(): bool
     {
+        if ($this->onWindows()) {
+            return true;
+        }
+
         return $this->asRoot(['rm', '-f', self::SUDOERS_FILE]);
     }
 
