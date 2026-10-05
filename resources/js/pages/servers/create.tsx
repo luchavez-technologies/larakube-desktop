@@ -7,7 +7,7 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { open } from '@/routes';
+import { open, readiness } from '@/routes';
 import {
     index as devBoxesIndex,
     store as storeDevBox,
@@ -105,6 +105,7 @@ function ServerForm({
     const needsAwsKeys = provider.slug === 'aws' && !provider.credentials.ready;
     const needsGcpLogin =
         provider.slug === 'gcp' && !provider.credentials.ready;
+    const cliMissing = /not installed/i.test(provider.credentials.hint ?? '');
 
     const size = provider.vpsSizes.find(
         (option) => option.value === form.data.size,
@@ -158,36 +159,63 @@ function ServerForm({
                 ))}
             </div>
 
-            {needsGcpLogin && (
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
-                    <span>
-                        {provider.credentials.hint} Authorize with Google to
-                        continue.
-                    </span>
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                            setIsGcpLoggingIn(true);
-                            router.post(
-                                '/setup/cloud/gcp/login',
-                                {},
-                                {
-                                    onFinish: () => setIsGcpLoggingIn(false),
-                                },
-                            );
-                        }}
-                        disabled={isGcpLoggingIn}
-                        className="shrink-0 gap-1.5"
-                    >
-                        {isGcpLoggingIn ? (
-                            <RefreshCw className="size-3.5 animate-spin" />
-                        ) : (
-                            <ExternalLink className="size-3.5" />
-                        )}
-                        <span>Sign in with Google</span>
-                    </Button>
+            {(needsGcpLogin || needsAwsKeys) && (
+                <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
+                    {cliMissing ? (
+                        <>
+                            <span>
+                                {provider.credentials.hint} Install it from
+                                Setup first, then come back here.
+                            </span>
+                            <Link
+                                href={readiness().url}
+                                className={buttonClass(
+                                    'secondary',
+                                    'sm',
+                                    'shrink-0',
+                                )}
+                            >
+                                Open Setup
+                            </Link>
+                        </>
+                    ) : needsGcpLogin ? (
+                        <>
+                            <span>
+                                {provider.credentials.hint} Authorize with
+                                Google to continue.
+                            </span>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                    setIsGcpLoggingIn(true);
+                                    router.post(
+                                        '/setup/cloud/gcp/login',
+                                        {},
+                                        {
+                                            onFinish: () =>
+                                                setIsGcpLoggingIn(false),
+                                        },
+                                    );
+                                }}
+                                disabled={isGcpLoggingIn}
+                                className="shrink-0 gap-1.5"
+                            >
+                                {isGcpLoggingIn ? (
+                                    <RefreshCw className="size-3.5 animate-spin" />
+                                ) : (
+                                    <ExternalLink className="size-3.5" />
+                                )}
+                                <span>Sign in with Google</span>
+                            </Button>
+                        </>
+                    ) : (
+                        <span>
+                            {provider.credentials.hint} Enter your AWS keys
+                            below to continue.
+                        </span>
+                    )}
                 </div>
             )}
 

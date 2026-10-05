@@ -7,6 +7,7 @@ use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Runtime\WslDistro;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -23,24 +24,16 @@ class CloudAuthController extends Controller
             'region' => ['required', 'string', 'regex:/^[a-z0-9-]+$/'],
         ]);
 
-        $home = ToolLocator::home();
-        if ($home === '') {
-            return back()->withErrors(['aws' => 'Could not determine user home directory.']);
-        }
-
-        $awsDir = "{$home}/.aws";
-        if (! is_dir($awsDir)) {
-            File::makeDirectory($awsDir, 0700, true);
-        }
-
         $credentialsContent = "[default]\naws_access_key_id = {$validated['access_key_id']}\naws_secret_access_key = {$validated['secret_access_key']}\n";
         $configContent = "[default]\nregion = {$validated['region']}\noutput = json\n";
 
-        File::put("{$awsDir}/credentials", $credentialsContent);
-        chmod("{$awsDir}/credentials", 0600);
+        $saved = $locator->isWindows()
+            ? $this->writeInDistro($locator, ['credentials' => $credentialsContent, 'config' => $configContent])
+            : $this->writeOnThisComputer(['credentials' => $credentialsContent, 'config' => $configContent]);
 
-        File::put("{$awsDir}/config", $configContent);
-        chmod("{$awsDir}/config", 0600);
+        if (! $saved) {
+            return back()->withErrors(['aws' => 'Could not save the AWS credentials.']);
+        }
 
         // Verify with AWS STS if aws CLI is installed
         $awsBin = $locator->find('aws');
@@ -54,6 +47,55 @@ class CloudAuthController extends Controller
         }
 
         return back()->with('success', 'AWS credentials saved and verified successfully.');
+    }
+
+    /**
+     * The CLI runs inside the distro on Windows, so that is where its ~/.aws has to be. Each file is made empty with mode 600
+     * first, and the secret reaches `tee` on stdin, never in a command line.
+     *
+     * @param  array<string, string>  $files
+     */
+    private function writeInDistro(ToolLocator $locator, array $files): bool
+    {
+        $directory = WslDistro::HOME.'/.aws';
+
+        if (! $locator->run(['/usr/bin/install', '-d', '-m', '700', $directory])->successful()) {
+            return false;
+        }
+
+        foreach ($files as $name => $content) {
+            $path = "{$directory}/{$name}";
+
+            if (! $locator->run(['/usr/bin/install', '-m', '600', '/dev/null', $path])->successful()
+                || ! $locator->run(['/usr/bin/tee', $path], input: $content)->successful()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param  array<string, string>  $files */
+    private function writeOnThisComputer(array $files): bool
+    {
+        $home = ToolLocator::home();
+
+        if ($home === '') {
+            return false;
+        }
+
+        $directory = "{$home}/.aws";
+
+        if (! is_dir($directory)) {
+            File::makeDirectory($directory, 0700, true);
+        }
+
+        foreach ($files as $name => $content) {
+            File::put("{$directory}/{$name}", $content);
+            chmod("{$directory}/{$name}", 0600);
+        }
+
+        return true;
     }
 
     public function loginGcp(CliRunner $runner, ToolLocator $locator): RedirectResponse
