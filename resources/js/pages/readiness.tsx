@@ -513,7 +513,22 @@ function ToolRow({
 
 function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     if (tool.installed) {
-        return <StatusPill tone="ok">Installed</StatusPill>;
+        return (
+            <div className="flex items-center gap-2">
+                {tool.slug === 'larakube' && (
+                    <Link
+                        href="/setup/cli/update"
+                        data={{ channel }}
+                        method="post"
+                        as="button"
+                        className={buttonClass('secondary', 'sm')}
+                    >
+                        Update
+                    </Link>
+                )}
+                <StatusPill tone="ok">Installed</StatusPill>
+            </div>
+        );
     }
 
     return (

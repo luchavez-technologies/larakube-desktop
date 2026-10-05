@@ -26,6 +26,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
 Route::get('/readiness', [ReadinessController::class, 'show'])->name('readiness');
+Route::post('/setup/cli/update', [ToolInstallController::class, 'updateCli'])->name('setup.cli.update');
 Route::post('/setup/tools/{tool}/install', [ToolInstallController::class, 'store'])->name('setup.tools.install');
 Route::get('/setup/tools/{tool}/status', [ReadinessController::class, 'toolStatus'])->name('setup.tools.status');
 Route::post('/setup/wsl/{step}', [WslSetupController::class, 'store'])->whereIn('step', ['enable', 'download', 'import', 'reset'])->name('setup.wsl');

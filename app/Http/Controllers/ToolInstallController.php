@@ -8,6 +8,7 @@ use App\Models\Run;
 use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ReadinessCheck;
+use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -64,6 +65,32 @@ class ToolInstallController extends Controller
             targetType: 'tool',
             targetName: $definition['label'],
             tool: $tool,
+            environment: 'local',
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    /**
+     * Brings the LaraKube CLI up to date. Inside the Windows distro that is the CLI's own `update` (its user can sudo without a
+     * password); on a Mac or Linux it is the same download that installed it, which replaces the file in place.
+     */
+    public function updateCli(CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, ToolLocator $locator, Request $request): RedirectResponse
+    {
+        if (! $locator->isWindows()) {
+            return $this->store('larakube', $runner, $installer, $readiness, $request);
+        }
+
+        $channel = in_array($request->input('channel'), CliInstaller::CHANNELS, true) ? (string) $request->input('channel') : $installer->channel();
+
+        $run = $runner->start(
+            label: "Update LaraKube CLI ({$channel})",
+            arguments: ['update', ...($channel === 'canary' ? ['--canary'] : []), '--yes'],
+            kind: RunKind::InstallTool,
+            subject: 'larakube',
+            targetType: 'tool',
+            targetName: 'LaraKube CLI',
+            tool: 'larakube',
             environment: 'local',
         );
 
