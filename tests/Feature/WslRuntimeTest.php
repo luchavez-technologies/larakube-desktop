@@ -16,10 +16,10 @@ test('on Windows a command runs inside the larakube-ubuntu distro as its own use
     $isolated = windowsLocator()->isolate(['/usr/local/bin/larakube', 'cloud:stacks', '--json']);
 
     expect(array_slice($isolated['command'], 0, 5))->toBe(['C:\\Windows\\System32\\wsl.exe', '-d', 'larakube-ubuntu', '--user', 'larakube'])
-        ->and($isolated['command'])->toContain('--')
+        ->and(array_slice($isolated['command'], 5, 2))->toBe(['--exec', '/usr/bin/env'])
         ->and(array_slice($isolated['command'], -3))->toBe(['/usr/local/bin/larakube', 'cloud:stacks', '--json'])
-        ->and($isolated['command'][array_search('-c', $isolated['command'], true) + 1])->toContain("HOME='/home/larakube'")
-        ->toContain('/usr/bin/env -i')
+        ->and($isolated['command'])->toContain('HOME=/home/larakube')
+        ->and($isolated['command'])->not->toContain('/bin/sh')
         ->and($isolated['cwd'])->toBeNull()
         ->and($isolated['environment'])->toBe([]);
 });
@@ -29,7 +29,7 @@ test('a secret reaches the distro by name through WSLENV and never appears in a 
 
     expect($isolated['environment'])->toBe(['TF_VAR_do_token' => 'dop_v1_secret', 'WSLENV' => 'TF_VAR_do_token'])
         ->and(implode(' ', $isolated['command']))->not->toContain('dop_v1_secret')
-        ->and(implode(' ', $isolated['command']))->toContain('TF_VAR_do_token="$TF_VAR_do_token"');
+        ->and($isolated['command'])->not->toContain('TF_VAR_do_token');
 });
 
 test('a folder is given to the distro as a Linux path, whichever way Windows names it', function (string $given, string $expected): void {
@@ -61,10 +61,23 @@ test('on Windows the CLI is looked for inside the distro, once', function (): vo
     Process::assertRanTimes(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'wsl.exe') && str_contains(implode(' ', (array) $process->command), 'larakube'), 1);
 });
 
-test('a tool the distro does not have is not found', function (): void {
-    Process::fake(['*' => Process::result(output: '')]);
+test('a tool the distro does not have is not found, and the reason is kept', function (): void {
+    Process::fake(['*' => Process::result(errorOutput: 'no such distro', exitCode: 1)]);
+    $locator = windowsLocator();
 
-    expect(windowsLocator()->find('nope'))->toBeNull();
+    expect($locator->find('nope'))->toBeNull()
+        ->and($locator->lastFailure())->toBe('wsl.exe exited 1: no such distro');
+});
+
+test('the lookup in the distro has no shell script to quote', function (): void {
+    putenv('SystemRoot=C:\\Windows');
+    Process::fake(['*' => Process::result(output: "/usr/local/bin/larakube\n")]);
+
+    windowsLocator()->find('larakube');
+
+    Process::assertRan(fn ($process): bool => in_array('--exec', (array) $process->command, true)
+        && in_array('/usr/bin/which', (array) $process->command, true)
+        && ! in_array('/bin/sh', (array) $process->command, true));
 });
 
 test('run and start go through the same isolation, here and in the distro', function (): void {

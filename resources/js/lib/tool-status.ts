@@ -4,6 +4,7 @@ export type ToolStatus = {
     installed: boolean;
     path: string | null;
     version: string | null;
+    diagnostic?: string | null;
 };
 
 const FRESH_FOR_MS = 15_000;

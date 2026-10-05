@@ -30,6 +30,8 @@ class ToolLocator
     /** @var array<string, string|null> Binaries already looked up in the distro. */
     private array $inDistro = [];
 
+    private ?string $failure = null;
+
     /**
      * @return list<string>
      */
@@ -79,15 +81,33 @@ class ToolLocator
         return null;
     }
 
-    /** Asks the distro where a binary is, searching the same directories as on a Mac. */
+    /**
+     * Asks the distro where a binary is, searching the same directories as on a Mac. No shell and no quoting:
+     * `env` sets PATH and `which` answers, so there is no script for wsl.exe to mangle.
+     */
     private function findInDistro(string $binary): ?string
     {
-        $script = 'for d in '.implode(' ', array_map('escapeshellarg', $this->directories())).'; do if [ -x "$d/'.str_replace('"', '', $binary).'" ]; then echo "$d/'.str_replace('"', '', $binary).'"; break; fi; done';
-
-        $result = Process::timeout(90)->run([self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', '/bin/sh', '-c', $script]);
+        $result = Process::timeout(90)->run([
+            self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER,
+            '--exec', '/usr/bin/env', 'PATH='.$this->path(), '/usr/bin/which', $binary,
+        ]);
         $found = trim($result->output());
 
-        return $result->successful() && $found !== '' ? $found : null;
+        if ($result->successful() && $found !== '') {
+            $this->failure = null;
+
+            return $found;
+        }
+
+        $this->failure = 'wsl.exe exited '.$result->exitCode().': '.(trim(str_replace("\0", '', $result->errorOutput().' '.$result->output())) ?: 'no output');
+
+        return null;
+    }
+
+    /** Why the last lookup in the distro found nothing, for the Setup screen. */
+    public function lastFailure(): ?string
+    {
+        return $this->failure;
     }
 
     public static function wslExecutable(): string
@@ -161,9 +181,10 @@ class ToolLocator
     }
 
     /**
-     * The same isolation, run inside the larakube-ubuntu distro: `wsl.exe -d larakube-ubuntu --user larakube [--cd <dir>] -- sh -c
-     * 'exec env -i ...'`. The fixed variables are written into the script; only the extra (secret) ones travel, in the
-     * spawn environment, shared into the distro by WSLENV and referenced by name, so they never reach a command line.
+     * The same isolation, run inside the larakube-ubuntu distro: `wsl.exe -d larakube-ubuntu --user larakube [--cd <dir>]
+     * --exec env VAR=value ... <command>`. No shell, so there is nothing to quote. Only variables named in WSLENV cross
+     * from Windows into the distro, so the app's own environment cannot leak in, and the extra (secret) ones travel
+     * that way by name and never reach a command line.
      *
      * @param  list<string>  $command
      * @param  array<string, string>  $extraEnvironment
@@ -173,10 +194,7 @@ class ToolLocator
     {
         $assignments = [];
         foreach ($this->environment() as $name => $value) {
-            $assignments[] = $name.'='.escapeshellarg($value);
-        }
-        foreach (array_keys($extraEnvironment) as $name) {
-            $assignments[] = $name.'="$'.$name.'"';
+            $assignments[] = "{$name}={$value}";
         }
 
         $environment = $extraEnvironment;
@@ -188,7 +206,7 @@ class ToolLocator
             'command' => [
                 self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER,
                 ...($cwd !== null ? ['--cd', WslDistro::toLinux($cwd)] : []),
-                '--', '/bin/sh', '-c', 'exec /usr/bin/env -i '.implode(' ', $assignments).' "$@"', 'larakube-desktop', ...$command,
+                '--exec', '/usr/bin/env', ...$assignments, ...$command,
             ],
             'environment' => $environment,
             'cwd' => null,

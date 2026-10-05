@@ -60,7 +60,7 @@ class ReadinessCheck
      * One tool's state on this computer. Remembered for a few minutes, because
      * running `--version` on every tool is what made the Setup page slow.
      *
-     * @return array{installed: bool, path: ?string, version: ?string}
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string}
      */
     public function status(string $slug, bool $fresh = false): array
     {
@@ -77,6 +77,7 @@ class ReadinessCheck
                 'installed' => $path !== null,
                 'path' => $path,
                 'version' => $path !== null ? $this->version($path, self::TOOLS[$slug]['versionArgs']) : null,
+                'diagnostic' => $path === null ? $this->locator->lastFailure() : null,
             ];
         });
     }
