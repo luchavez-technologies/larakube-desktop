@@ -34,6 +34,9 @@ Route::post('/setup/usage', [ReadinessController::class, 'setUsage'])->name('set
 Route::post('/setup/cli/channel', [ReadinessController::class, 'setChannel'])->name('setup.cli.channel');
 Route::post('/setup/cloud/aws', [CloudAuthController::class, 'saveAws'])->name('setup.cloud.aws');
 Route::post('/setup/cloud/gcp/login', [CloudAuthController::class, 'loginGcp'])->name('setup.cloud.gcp.login');
+Route::get('/setup/cloud/gcp/login/{run}', [CloudAuthController::class, 'gcpLoginStatus'])->name('setup.cloud.gcp.login.status');
+Route::post('/setup/cloud/gcp/login/{run}/code', [CloudAuthController::class, 'gcpLoginCode'])->name('setup.cloud.gcp.login.code');
+Route::get('/setup/cloud/gcp/projects', [CloudAuthController::class, 'gcpProjects'])->name('setup.cloud.gcp.projects');
 Route::post('/setup/cloud/gcp/project', [CloudAuthController::class, 'setGcpProject'])->name('setup.cloud.gcp.project');
 
 Route::get('/servers', [ServerController::class, 'index'])->name('servers.index');

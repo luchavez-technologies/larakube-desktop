@@ -1,8 +1,9 @@
-import { Deferred, Link, router, useForm } from '@inertiajs/react';
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, ExternalLink, RefreshCw } from 'lucide-react';
+import { Deferred, Link, useForm } from '@inertiajs/react';
+import type { FormEvent, ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
+import GcpSignIn from '@/components/gcp-sign-in';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -94,8 +95,6 @@ function ServerForm({
         project_id: projectId,
     });
 
-    const [isGcpLoggingIn, setIsGcpLoggingIn] = useState(false);
-
     const provider =
         providers.find((candidate) => candidate.slug === form.data.provider) ??
         initial;
@@ -184,31 +183,7 @@ function ServerForm({
                                 {provider.credentials.hint} Authorize with
                                 Google to continue.
                             </span>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                    setIsGcpLoggingIn(true);
-                                    router.post(
-                                        '/setup/cloud/gcp/login',
-                                        {},
-                                        {
-                                            onFinish: () =>
-                                                setIsGcpLoggingIn(false),
-                                        },
-                                    );
-                                }}
-                                disabled={isGcpLoggingIn}
-                                className="shrink-0 gap-1.5"
-                            >
-                                {isGcpLoggingIn ? (
-                                    <RefreshCw className="size-3.5 animate-spin" />
-                                ) : (
-                                    <ExternalLink className="size-3.5" />
-                                )}
-                                <span>Sign in with Google</span>
-                            </Button>
+                            <GcpSignIn label="Sign in with Google" />
                         </>
                     ) : (
                         <span>

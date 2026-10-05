@@ -1,16 +1,9 @@
 import { useState } from 'react';
 import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
-import {
-    Download,
-    ExternalLink,
-    Key,
-    RefreshCw,
-    X,
-    AlertCircle,
-    Check,
-} from 'lucide-react';
+import { Download, Key, RefreshCw, X, AlertCircle, Check } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import GcpSignIn from '@/components/gcp-sign-in';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
@@ -65,7 +58,6 @@ export default function Readiness({
 
     const [selectedChannel, setSelectedChannel] = useState(cliChannel);
     const [showAwsModal, setShowAwsModal] = useState(false);
-    const [isGcpLoggingIn, setIsGcpLoggingIn] = useState(false);
 
     return (
         <AppLayout title="Setup">
@@ -176,40 +168,7 @@ export default function Readiness({
                                                             .ready &&
                                                             provider.slug ===
                                                                 'gcp' && (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="secondary"
-                                                                    size="sm"
-                                                                    onClick={() => {
-                                                                        setIsGcpLoggingIn(
-                                                                            true,
-                                                                        );
-                                                                        router.post(
-                                                                            '/setup/cloud/gcp/login',
-                                                                            {},
-                                                                            {
-                                                                                onFinish:
-                                                                                    () =>
-                                                                                        setIsGcpLoggingIn(
-                                                                                            false,
-                                                                                        ),
-                                                                            },
-                                                                        );
-                                                                    }}
-                                                                    disabled={
-                                                                        isGcpLoggingIn
-                                                                    }
-                                                                    className="gap-1.5"
-                                                                >
-                                                                    {isGcpLoggingIn ? (
-                                                                        <RefreshCw className="size-3.5 animate-spin" />
-                                                                    ) : (
-                                                                        <ExternalLink className="size-3.5" />
-                                                                    )}
-                                                                    <span>
-                                                                        Sign in
-                                                                    </span>
-                                                                </Button>
+                                                                <GcpSignIn />
                                                             )}
                                                         <StatusPill
                                                             tone={

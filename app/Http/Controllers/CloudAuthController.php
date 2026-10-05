@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\RunKind;
+use App\Enums\RunStatus;
 use App\Models\Run;
-use App\Services\LaraKube\CliRunner;
+use App\Services\GcpSignIn;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
-use Throwable;
+use RuntimeException;
 
 class CloudAuthController extends Controller
 {
@@ -98,38 +99,41 @@ class CloudAuthController extends Controller
         return true;
     }
 
-    public function loginGcp(CliRunner $runner, ToolLocator $locator): RedirectResponse
+    public function loginGcp(GcpSignIn $signIn): JsonResponse
     {
-        $gcloudBin = $locator->find('gcloud');
-
-        if ($gcloudBin === null) {
-            return back()->withErrors(['gcp' => 'Google Cloud CLI (gcloud) is not installed. Install it first from Setup.']);
-        }
-
-        // Run gcloud auth login --update-adc
-        // This opens the browser automatically on macOS
-        $run = $runner->start(
-            label: 'Google Cloud Authentication',
-            arguments: ['cloud:providers', '--json'], // Keeps runner active
-            kind: RunKind::CloudAuth,
-            subject: 'gcp-auth',
-            targetType: 'system',
-            targetName: 'Google Cloud',
-        );
-
-        // Launch gcloud auth in background with system browser launch
         try {
-            $isolated = $locator->isolate([$gcloudBin, 'auth', 'login', '--update-adc', '--no-launch-browser']);
-            // If user clicks, browser opens with interactive flow or auth link
-            Process::env($isolated['environment'])->start("{$gcloudBin} auth login --update-adc");
-        } catch (Throwable $e) {
-            // Ignored; user can authenticate in browser
+            $run = $signIn->start();
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return back()->with('success', 'Google Cloud login initiated. Please complete authorization in your browser.');
+        return response()->json(['run' => $run->id]);
     }
 
-    public function setGcpProject(Request $request, ToolLocator $locator): RedirectResponse
+    public function gcpLoginStatus(Run $run, GcpSignIn $signIn): JsonResponse
+    {
+        abort_unless($run->subject === GcpSignIn::SUBJECT, 404);
+
+        return response()->json($signIn->state($run));
+    }
+
+    public function gcpLoginCode(Request $request, Run $run, GcpSignIn $signIn): JsonResponse
+    {
+        abort_unless($run->subject === GcpSignIn::SUBJECT && $run->status === RunStatus::Running, 404);
+
+        $validated = $request->validate(['code' => ['required', 'string', 'regex:/^[A-Za-z0-9_\/.\-]{8,512}$/']]);
+
+        $signIn->submitCode($run, $validated['code']);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function gcpProjects(GcpSignIn $signIn): JsonResponse
+    {
+        return response()->json(['projects' => $signIn->projects()]);
+    }
+
+    public function setGcpProject(Request $request, ToolLocator $locator): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'project_id' => ['required', 'string', 'regex:/^[a-z0-9-]+$/'],
@@ -137,10 +141,11 @@ class CloudAuthController extends Controller
 
         $gcloudBin = $locator->find('gcloud');
         if ($gcloudBin !== null) {
-            $isolated = $locator->isolate([$gcloudBin, 'config', 'set', 'project', $validated['project_id']]);
-            Process::env($isolated['environment'])->timeout(10)->run($isolated['command']);
+            $locator->run([$gcloudBin, 'config', 'set', 'project', $validated['project_id']], 10);
         }
 
-        return back()->with('success', "Google Cloud project set to {$validated['project_id']}.");
+        return $request->expectsJson()
+            ? response()->json(['ok' => $gcloudBin !== null])
+            : back()->with('success', "Google Cloud project set to {$validated['project_id']}.");
     }
 }
