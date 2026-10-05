@@ -1,8 +1,11 @@
 <?php
 
+use App\Enums\RunStatus;
+use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
 use Illuminate\Support\Facades\Process;
+use Native\Desktop\Events\ChildProcess\StartupError;
 use Native\Desktop\Facades\ChildProcess;
 
 function windowsLocator(): ToolLocator
@@ -16,7 +19,7 @@ test('on Windows a command runs inside the larakube-ubuntu distro as its own use
     $isolated = windowsLocator()->isolate(['/usr/local/bin/larakube', 'cloud:stacks', '--json']);
 
     expect(array_slice($isolated['command'], 0, 5))->toBe(['C:\\Windows\\System32\\wsl.exe', '-d', 'larakube-ubuntu', '--user', 'larakube'])
-        ->and(array_slice($isolated['command'], 5, 2))->toBe(['--exec', '/usr/bin/env'])
+        ->and(array_slice($isolated['command'], 5, 4))->toBe(['--cd', '~', '--exec', '/usr/bin/env'])
         ->and(array_slice($isolated['command'], -3))->toBe(['/usr/local/bin/larakube', 'cloud:stacks', '--json'])
         ->and($isolated['command'])->toContain('HOME=/home/larakube')
         ->and($isolated['command'])->not->toContain('/bin/sh')
@@ -111,4 +114,15 @@ test('on a Mac or Linux nothing about a command changes', function (): void {
     expect($isolated['command'][0])->toBe('/bin/sh')
         ->and($isolated['cwd'])->toBe('/tmp')
         ->and($isolated['environment'])->toMatchArray(['T' => 'v', 'PATH' => '/usr/bin:/bin']);
+});
+
+test('a run whose process never started ends as failed, with the reason on its log', function (): void {
+    $run = Run::create(['label' => 'x', 'command' => ['wsl.exe']]);
+
+    event(new StartupError($run->alias(), 'Startup timeout exceeded'));
+
+    $run->refresh();
+
+    expect($run->status)->toBe(RunStatus::Failed)
+        ->and($run->output)->toContain('The command could not be started: Startup timeout exceeded');
 });

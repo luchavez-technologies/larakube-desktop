@@ -12,6 +12,7 @@ use App\Services\LaraKube\ToolCatalog;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
+use Native\Desktop\Events\ChildProcess\StartupError;
 
 /**
  * Folds a LaraKube CLI child process's streams into its Run. Under --json the
@@ -30,6 +31,19 @@ class RecordRunOutput
     public function handleError(ErrorReceived $event): void
     {
         $this->run($event->alias)?->appendTo('output', $this->chunk($event->data));
+    }
+
+    /** A process that never started has no exit to wait for, so the run ends here, with the reason on its log. */
+    public function handleStartupError(StartupError $event): void
+    {
+        $run = $this->run($event->alias);
+
+        if ($run === null || $run->status !== RunStatus::Running) {
+            return;
+        }
+
+        $run->appendTo('output', "The command could not be started: {$event->error}\n");
+        $run->forceFill(['status' => RunStatus::Failed, 'finished_at' => now()])->save();
     }
 
     public function handleExit(ProcessExited $event): void

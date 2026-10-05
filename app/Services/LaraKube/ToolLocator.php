@@ -4,6 +4,7 @@ namespace App\Services\LaraKube;
 
 use App\Services\Runtime\WslDistro;
 use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Native\Desktop\Facades\ChildProcess;
 
@@ -206,7 +207,8 @@ class ToolLocator
         return [
             'command' => [
                 self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER,
-                ...($cwd !== null ? ['--cd', WslDistro::toLinux($cwd)] : []),
+                // Without --cd, wsl.exe carries this app's Windows folder into the distro; the home folder is the same every time.
+                '--cd', $cwd !== null ? WslDistro::toLinux($cwd) : '~',
                 '--exec', '/usr/bin/env', ...$assignments, ...$command,
             ],
             'environment' => $environment,
@@ -254,10 +256,13 @@ class ToolLocator
     {
         $isolated = $this->isolate($command, $environment, $cwd);
 
+        $workingDirectory = $isolated['cwd'] ?? storage_path('app');
+        File::ensureDirectoryExists($workingDirectory);
+
         ChildProcess::start(
             cmd: $isolated['command'],
             alias: $alias,
-            cwd: $isolated['cwd'] ?? storage_path('app'),
+            cwd: $workingDirectory,
             env: $isolated['environment'],
         );
     }
