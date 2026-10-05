@@ -26,6 +26,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Which request failed, and whether it carried NativePHP's secret (never its value), so a 403 can be traced to its caller.
+        $exceptions->context(fn (): array => app()->runningInConsole() ? [] : [
+            'request' => request()->method().' '.request()->path(),
+            'native_cookie' => request()->hasCookie('_php_native'),
+            'native_header' => request()->hasHeader('X-NativePHP-Secret'),
+        ]);
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
