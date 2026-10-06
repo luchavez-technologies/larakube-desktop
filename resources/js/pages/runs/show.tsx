@@ -1,4 +1,4 @@
-import { Head, Link, usePoll } from '@inertiajs/react';
+import { Head, Link, router, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -19,8 +19,13 @@ import { index as toolsIndex } from '@/routes/servers/tools';
 import {
     ArrowLeft,
     ArrowRight,
+    Check,
+    Copy,
     ExternalLink,
+    FileCode,
+    Folder,
     Globe,
+    KeyRound,
     ShieldCheck,
     Wrench,
     XCircle,
@@ -79,6 +84,8 @@ function backLink(run: Run): { href: string; label: string } {
         case 'restart-server':
         case 'connect-domain':
         case 'enable-ssl':
+        case 'cluster-grant':
+        case 'cluster-revoke':
             return server
                 ? { href: showServer(server).url, label: server }
                 : { href: serversIndex().url, label: 'Servers' };
@@ -115,6 +122,7 @@ export default function ShowRun({ run }: { run: Run }) {
     const [label, tone] = runStatus[run.status];
     const isDevBox = run.kind === 'create-dev-box';
     const isCreate = run.kind === 'create-server' || isDevBox;
+    const server = run.meta?.server ?? run.serverName ?? null;
 
     useEffect(() => {
         if (!running) stop();
@@ -209,6 +217,18 @@ export default function ShowRun({ run }: { run: Run }) {
                             <span>Back to servers</span>
                         </Link>
                     )}
+                    {!running &&
+                        (run.kind === 'cluster-grant' ||
+                            run.kind === 'cluster-revoke') &&
+                        server && (
+                            <Link
+                                href={showServer(server).url}
+                                className={buttonClass('secondary')}
+                            >
+                                <ArrowLeft className="size-4" />
+                                <span>Back to {server}</span>
+                            </Link>
+                        )}
                 </div>
             </header>
 
@@ -231,6 +251,9 @@ export default function ShowRun({ run }: { run: Run }) {
                 run.kind === 'share-domain-dev-box-project' && (
                     <SharedLinkCard run={run} />
                 )}
+            {run.status === 'succeeded' && run.kind === 'cluster-grant' && (
+                <ClusterGrantCard run={run} />
+            )}
             {run.status === 'failed' && (
                 <Card tone="error" className="mb-4">
                     <p className="text-base font-semibold text-accent">
@@ -457,6 +480,202 @@ function CreatedCard({ run }: { run: Run }) {
                     </Link>
                 </div>
             )}
+        </Card>
+    );
+}
+
+function ClusterGrantCard({ run }: { run: Run }) {
+    const server = (run.meta?.server as string) ?? run.serverName ?? '';
+    const teammate =
+        (run.meta?.teammate as string) ||
+        run.output.match(/Granted '([a-z0-9_-]+)'/i)?.[1] ||
+        'teammate';
+    const role =
+        (run.meta?.role as string) ||
+        run.output.match(/Granted '[^']+' \[([^\]]+)\]/i)?.[1] ||
+        'admin';
+    const isClusterWide =
+        Boolean(run.meta?.cluster) ||
+        run.output.includes('on the whole cluster');
+    const scope = isClusterWide
+        ? 'Cluster-wide (all namespaces)'
+        : (run.meta?.scope as string) || 'Scoped namespaces';
+
+    const kubeconfigMatch = run.output.match(
+        /Kubeconfig(?:\s+credential)?:\s*(\S+?\.kubeconfig)/i,
+    );
+    const kubeconfigPath =
+        (run.meta?.kubeconfigPath as string) || kubeconfigMatch?.[1];
+
+    const rbacMatch = run.output.match(
+        /RBAC(?:\s+manifest\s+YAML)?:\s*(\S+?-rbac\.yaml)/i,
+    );
+    const rbacPath = (run.meta?.rbacPath as string) || rbacMatch?.[1];
+
+    const [kubeconfigContent, setKubeconfigContent] = useState<string | null>(
+        null,
+    );
+    const [rbacContent, setRbacContent] = useState<string | null>(null);
+    const [copiedKube, setCopiedKube] = useState(false);
+    const [copiedRbac, setCopiedRbac] = useState(false);
+
+    const revealPath = (type: 'kubeconfig' | 'rbac') => {
+        router.post(
+            `/runs/${run.id}/reveal`,
+            { type },
+            { preserveScroll: true },
+        );
+    };
+
+    const copyFile = async (type: 'kubeconfig' | 'rbac') => {
+        try {
+            let content =
+                type === 'kubeconfig' ? kubeconfigContent : rbacContent;
+            if (!content) {
+                const res = await sendJson<{ content: string }>(
+                    `/runs/${run.id}/file?type=${type}`,
+                    'GET',
+                );
+                if (res.ok && res.data.content) {
+                    content = res.data.content;
+                    if (type === 'kubeconfig') setKubeconfigContent(content);
+                    else setRbacContent(content);
+                }
+            }
+            if (content) {
+                await navigator.clipboard.writeText(content);
+                if (type === 'kubeconfig') {
+                    setCopiedKube(true);
+                    setTimeout(() => setCopiedKube(false), 2000);
+                } else {
+                    setCopiedRbac(true);
+                    setTimeout(() => setCopiedRbac(false), 2000);
+                }
+            }
+        } catch {
+            // ignore
+        }
+    };
+
+    return (
+        <Card className="mb-4 divide-y divide-line p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-ok/10 text-ok">
+                        <ShieldCheck className="size-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-ink">
+                                Access Granted to {teammate}
+                            </h3>
+                            <span className="rounded bg-paper px-2 py-0.5 font-mono text-xs font-semibold text-ink ring-1 ring-line">
+                                {role}
+                            </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-soft">
+                            {scope}
+                            {server ? ` · ${server}` : ''}
+                        </p>
+                    </div>
+                </div>
+                {server && (
+                    <Link
+                        href={showServer(server).url}
+                        className={buttonClass('secondary', 'sm')}
+                    >
+                        <ArrowLeft className="size-3.5" />
+                        <span>Back to {server}</span>
+                    </Link>
+                )}
+            </div>
+
+            <div className="py-3 text-xs leading-relaxed text-soft">
+                Kubernetes RBAC permissions have been applied to the cluster.
+                Deliver the standalone kubeconfig file securely to{' '}
+                <strong className="text-ink">{teammate}</strong> so they can
+                import it via{' '}
+                <code className="rounded bg-paper px-1 py-0.5 font-mono text-[11px] text-ink">
+                    larakube context:import
+                </code>
+                .
+            </div>
+
+            <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-paper/60 p-3.5 ring-1 ring-line">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-ink">
+                            <KeyRound className="size-3.5 text-brand" />
+                            <span>Kubeconfig Credential</span>
+                        </div>
+                    </div>
+                    <p className="mt-1 font-mono text-[11px] break-all text-soft">
+                        {kubeconfigPath || 'Saved in Downloads'}
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                        {kubeconfigPath && (
+                            <button
+                                type="button"
+                                onClick={() => revealPath('kubeconfig')}
+                                className={buttonClass('secondary', 'sm')}
+                            >
+                                <Folder className="size-3.5" />
+                                <span>Show in Folder</span>
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => void copyFile('kubeconfig')}
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            {copiedKube ? (
+                                <Check className="size-3.5 text-ok" />
+                            ) : (
+                                <Copy className="size-3.5" />
+                            )}
+                            <span>{copiedKube ? 'Copied' : 'Copy'}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="rounded-xl bg-paper/60 p-3.5 ring-1 ring-line">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-ink">
+                            <FileCode className="size-3.5 text-soft" />
+                            <span>Applied RBAC Manifest</span>
+                        </div>
+                    </div>
+                    <p className="mt-1 font-mono text-[11px] break-all text-soft">
+                        {rbacPath || 'Applied directly to cluster'}
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                        {rbacPath && (
+                            <button
+                                type="button"
+                                onClick={() => revealPath('rbac')}
+                                className={buttonClass('secondary', 'sm')}
+                            >
+                                <Folder className="size-3.5" />
+                                <span>Show in Folder</span>
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => void copyFile('rbac')}
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            {copiedRbac ? (
+                                <Check className="size-3.5 text-ok" />
+                            ) : (
+                                <Copy className="size-3.5" />
+                            )}
+                            <span>
+                                {copiedRbac ? 'Copied YAML' : 'Copy YAML'}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </Card>
     );
 }

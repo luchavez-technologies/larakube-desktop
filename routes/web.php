@@ -152,3 +152,5 @@ Route::get('/runs/{run}', [RunController::class, 'show'])->name('runs.show');
 Route::get('/runs/{run}/stream', [RunController::class, 'stream'])->name('runs.stream');
 Route::post('/runs/{run}/detach', [RunController::class, 'detach'])->name('runs.detach');
 Route::post('/runs/{run}/cancel', [RunController::class, 'cancel'])->name('runs.cancel');
+Route::post('/runs/{run}/reveal', [RunController::class, 'reveal'])->name('runs.reveal');
+Route::get('/runs/{run}/file', [RunController::class, 'fileContent'])->name('runs.file');

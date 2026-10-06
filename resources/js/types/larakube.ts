@@ -101,6 +101,12 @@ export type Run = {
         role?: string;
         project?: string;
         app?: string;
+        teammate?: string;
+        cluster?: boolean;
+        scope?: string;
+        kubeconfigPath?: string;
+        rbacPath?: string;
+        [key: string]: unknown;
     } | null;
     status: RunStatus;
     exitCode: number | null;

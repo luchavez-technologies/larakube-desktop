@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
+use Native\Desktop\Facades\Shell;
 use Native\Desktop\Facades\Window;
 
 class RunController extends Controller
@@ -209,5 +210,46 @@ class RunController extends Controller
             ->rememberState();
 
         return response()->json(['detached' => true]);
+    }
+
+    public function reveal(Request $request, Run $run): RedirectResponse
+    {
+        $type = (string) $request->input('type', 'kubeconfig');
+        $path = $type === 'rbac'
+            ? ($run->meta['rbacPath'] ?? null)
+            : ($run->meta['kubeconfigPath'] ?? null);
+
+        if (! $path && $type === 'kubeconfig' && preg_match('/Kubeconfig:\s*(\S+?\.kubeconfig)/i', $run->output, $matches)) {
+            $path = $matches[1];
+        }
+
+        if (is_string($path) && file_exists($path)) {
+            Shell::showInFolder($path);
+        }
+
+        return back();
+    }
+
+    public function fileContent(Request $request, Run $run): JsonResponse
+    {
+        $type = (string) $request->query('type', 'kubeconfig');
+        $path = $type === 'rbac'
+            ? ($run->meta['rbacPath'] ?? null)
+            : ($run->meta['kubeconfigPath'] ?? null);
+
+        if (! $path && $type === 'kubeconfig' && preg_match('/Kubeconfig:\s*(\S+?\.kubeconfig)/i', $run->output, $matches)) {
+            $path = $matches[1];
+        }
+
+        if (! is_string($path) || ! file_exists($path)) {
+            return response()->json(['content' => null, 'error' => 'File not found on disk.'], 404);
+        }
+
+        return response()->json([
+            'type' => $type,
+            'path' => $path,
+            'filename' => basename($path),
+            'content' => file_get_contents($path),
+        ]);
     }
 }
