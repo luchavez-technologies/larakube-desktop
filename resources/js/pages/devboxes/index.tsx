@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Deferred, Link } from '@inertiajs/react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, Settings } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import PageHeader from '@/components/page-header';
 import { ServerActions } from '@/components/server-dialogs';
@@ -56,7 +56,8 @@ export default function DevBoxes({
                         href={settingsShow().url}
                         className={buttonClass('primary', 'md', 'mt-5')}
                     >
-                        Open Settings
+                        <Settings className="size-4" />
+                        <span>Open Settings</span>
                     </Link>
                 </div>
             </AppLayout>

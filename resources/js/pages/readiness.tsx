@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Download, Key, RefreshCw, X, AlertCircle, Check } from 'lucide-react';
+import {
+    Download,
+    Key,
+    RefreshCw,
+    X,
+    AlertCircle,
+    Check,
+    ArrowUpCircle,
+    Plus,
+    RotateCw,
+} from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import GcpSignIn from '@/components/gcp-sign-in';
@@ -77,14 +87,16 @@ export default function Readiness({
                                 router.reload({ only: ['providers', 'wsl'] });
                             }}
                         >
-                            Check again
+                            <RotateCw className="size-4" />
+                            <span>Check again</span>
                         </Button>
                         {!cliMissing && (
                             <Link
                                 href={createServer().url}
                                 className={buttonClass('primary')}
                             >
-                                Create a server
+                                <Plus className="size-4" />
+                                <span>Create a server</span>
                             </Link>
                         )}
                     </>
@@ -592,7 +604,8 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                         as="button"
                         className={buttonClass('secondary', 'sm')}
                     >
-                        Update
+                        <ArrowUpCircle className="size-3.5" />
+                        <span>Update</span>
                     </Link>
                 )}
                 <StatusPill tone="ok">Installed</StatusPill>
@@ -610,7 +623,8 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                     as="button"
                     className={buttonClass('secondary', 'sm')}
                 >
-                    Install
+                    <Download className="size-3.5" />
+                    <span>Install</span>
                 </Link>
             )}
             <StatusPill tone={tool.required ? 'bad' : 'muted'}>

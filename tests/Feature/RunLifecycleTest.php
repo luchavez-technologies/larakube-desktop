@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Inertia\Testing\AssertableInertia;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
@@ -169,4 +171,22 @@ test('runs.detach returns success JSON', function () {
     $this->postJson(route('runs.detach', $run))
         ->assertOk()
         ->assertJson(['detached' => true]);
+});
+
+test('runs.show renders the run details page with Inertia', function () {
+    $run = runLifecycleRun();
+    $run->update([
+        'kind' => RunKind::UpdateDevBoxCli,
+        'subject' => 'test-dev-box',
+        'server_name' => 'test-dev-box',
+        'meta' => ['server' => 'test-dev-box', 'role' => 'dev'],
+    ]);
+
+    $this->get(route('runs.show', $run))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('runs/show')
+            ->where('run.id', $run->id)
+            ->where('run.serverName', 'test-dev-box')
+            ->where('run.meta.server', 'test-dev-box')
+        );
 });

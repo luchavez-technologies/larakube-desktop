@@ -12,15 +12,24 @@ import { runStatus } from '@/lib/servers';
 import { open, readiness } from '@/routes';
 import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
-import { index as devBoxesIndex } from '@/routes/devboxes';
+import { index as devBoxesIndex, show as showDevBox } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
 import { index as serversIndex, show as showServer } from '@/routes/servers';
 import { index as toolsIndex } from '@/routes/servers/tools';
+import {
+    ArrowLeft,
+    ArrowRight,
+    ExternalLink,
+    Globe,
+    ShieldCheck,
+    Wrench,
+    XCircle,
+} from 'lucide-react';
 import type { Run } from '@/types/larakube';
 
 /** Where this run came from, so its page always has a way back. */
 function backLink(run: Run): { href: string; label: string } {
-    const server = run.meta?.server ?? null;
+    const server = run.meta?.server ?? run.serverName ?? null;
 
     if (run.meta?.project) {
         return {
@@ -46,7 +55,17 @@ function backLink(run: Run): { href: string; label: string } {
         };
     }
 
-    if (run.meta?.role === 'dev' || run.kind === 'create-dev-box') {
+    if (run.kind === 'create-dev-box') {
+        return run.status === 'succeeded' && run.subject
+            ? { href: showDevBox(run.subject).url, label: run.subject }
+            : { href: devBoxesIndex().url, label: 'Dev boxes' };
+    }
+
+    if (run.meta?.role === 'dev' && server) {
+        return { href: showDevBox(server).url, label: server };
+    }
+
+    if (run.meta?.role === 'dev') {
         return { href: devBoxesIndex().url, label: 'Dev boxes' };
     }
 
@@ -137,7 +156,8 @@ export default function ShowRun({ run }: { run: Run }) {
                             className={buttonClass('secondary')}
                             title="Detach into floating window"
                         >
-                            Detach
+                            <ExternalLink className="size-4" />
+                            <span>Detach</span>
                         </button>
                     )}
                     {running && (
@@ -147,7 +167,8 @@ export default function ShowRun({ run }: { run: Run }) {
                             as="button"
                             className={buttonClass('danger')}
                         >
-                            Cancel
+                            <XCircle className="size-4" />
+                            <span>Cancel</span>
                         </Link>
                     )}
                     {!running &&
@@ -157,12 +178,15 @@ export default function ShowRun({ run }: { run: Run }) {
                             <Link
                                 href={
                                     isDevBox
-                                        ? devBoxesIndex().url
+                                        ? showDevBox(run.subject).url
                                         : showServer(run.subject).url
                                 }
                                 className={buttonClass('secondary')}
                             >
-                                {isDevBox ? 'View dev boxes' : 'View server'}
+                                <ArrowRight className="size-4" />
+                                <span>
+                                    {isDevBox ? 'View dev box' : 'View server'}
+                                </span>
                             </Link>
                         )}
                     {run.kind === 'new-project' &&
@@ -172,7 +196,8 @@ export default function ShowRun({ run }: { run: Run }) {
                                 href={showProject(Number(run.meta.project)).url}
                                 className={buttonClass('primary')}
                             >
-                                Open project
+                                <ArrowRight className="size-4" />
+                                <span>Open project</span>
                             </Link>
                         )}
                     {!running && run.kind === 'destroy-server' && (
@@ -180,7 +205,8 @@ export default function ShowRun({ run }: { run: Run }) {
                             href={serversIndex().url}
                             className={buttonClass('secondary')}
                         >
-                            Back to servers
+                            <ArrowLeft className="size-4" />
+                            <span>Back to servers</span>
                         </Link>
                     )}
                 </div>
@@ -409,7 +435,8 @@ function CreatedCard({ run }: { run: Run }) {
                         }
                         className={buttonClass('secondary', 'sm')}
                     >
-                        Connect a domain
+                        <Globe className="size-3.5" />
+                        <span>Connect a domain</span>
                     </Link>
                     <Link
                         href={
@@ -418,13 +445,15 @@ function CreatedCard({ run }: { run: Run }) {
                         }
                         className={buttonClass('secondary', 'sm')}
                     >
-                        Automatic SSL certificates
+                        <ShieldCheck className="size-3.5" />
+                        <span>Automatic SSL certificates</span>
                     </Link>
                     <Link
                         href={toolsIndex(run.subject).url}
                         className={buttonClass('primary', 'sm')}
                     >
-                        Install Cluster Tools
+                        <Wrench className="size-3.5" />
+                        <span>Install Cluster Tools</span>
                     </Link>
                 </div>
             )}

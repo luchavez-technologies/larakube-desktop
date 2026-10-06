@@ -11,6 +11,7 @@ import {
     Plus,
     ArrowRight,
     Check,
+    Settings2,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
@@ -1321,6 +1322,7 @@ function InstalledCard({
                         href={href}
                         className={buttonClass('secondary', 'sm', 'h-8 px-3')}
                     >
+                        <Settings2 className="size-3.5" />
                         <span>Manage</span>
                     </Link>
                 </div>

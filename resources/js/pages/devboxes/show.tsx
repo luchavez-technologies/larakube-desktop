@@ -1,5 +1,5 @@
 import { Deferred, Link } from '@inertiajs/react';
-import { FolderGit2, Plus } from 'lucide-react';
+import { ArrowUpCircle, FolderGit2, Plus, Share2 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -177,7 +177,8 @@ export default function ShowDevBox({
                                     title="Install the latest LaraKube CLI on this box"
                                     className={buttonClass('secondary', 'sm')}
                                 >
-                                    Update CLI
+                                    <ArrowUpCircle className="size-3.5" />
+                                    <span>Update CLI</span>
                                 </Link>
                                 <ServerActions server={box} />
                             </div>
@@ -284,7 +285,8 @@ function BoxProjects({
                                 title="Public names under your own Cloudflare domain: app, Vite, Reverb and storage"
                                 className={buttonClass('secondary', 'sm')}
                             >
-                                Share
+                                <Share2 className="size-3.5" />
+                                <span>Share</span>
                             </Link>
                         )}
                         <StatusPill

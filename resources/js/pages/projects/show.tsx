@@ -20,6 +20,10 @@ import {
     Cloud,
     X,
     Server as ServerIcon,
+    Folder,
+    RotateCw,
+    Share2,
+    Unplug,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
@@ -249,7 +253,8 @@ export default function ShowProject({
                                 preserveScroll
                                 className={buttonClass('secondary')}
                             >
-                                Show folder
+                                <Folder className="size-4" />
+                                <span>Show folder</span>
                             </Link>
                         )}
                         {project.exists && (
@@ -303,7 +308,8 @@ export default function ShowProject({
                                 as="button"
                                 className={buttonClass('primary', 'sm')}
                             >
-                                Try again
+                                <RotateCw className="size-3.5" />
+                                <span>Try again</span>
                             </Link>
                         )}
                         <Link
@@ -312,7 +318,8 @@ export default function ShowProject({
                             as="button"
                             className={buttonClass('secondary', 'sm')}
                         >
-                            Remove
+                            <Trash2 className="size-3.5" />
+                            <span>Remove</span>
                         </Link>
                     </div>
                 </Card>
@@ -887,7 +894,8 @@ function EnvironmentBackingServicesCard({
                                     )}
                                     title={`Disconnect ${currentEnv.name} from Plex Commons`}
                                 >
-                                    Disconnect Commons
+                                    <Unplug className="size-3.5" />
+                                    <span>Disconnect Commons</span>
                                 </Link>
                             ) : (
                                 <Link
@@ -901,7 +909,8 @@ function EnvironmentBackingServicesCard({
                                     )}
                                     title={`Join ${currentEnv.name} to Plex Commons`}
                                 >
-                                    Join Commons
+                                    <Share2 className="size-3.5" />
+                                    <span>Join Commons</span>
                                 </Link>
                             )}
                         </div>
