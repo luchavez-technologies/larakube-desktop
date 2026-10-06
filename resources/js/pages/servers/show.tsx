@@ -11,6 +11,7 @@ import {
     Wrench,
     UserPlus,
     ShieldCheck,
+    XCircle,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -1001,61 +1002,77 @@ function TeamAccessCard({
                 </div>
             ) : (
                 <div className="divide-y divide-line">
-                    {userList.map((user) => (
-                        <div
-                            key={`${user.namespace}-${user.name}`}
-                            className="flex items-center justify-between py-2.5 first:pt-1 last:pb-1"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="flex size-7 items-center justify-center rounded-full bg-brand/10 text-brand">
-                                    <ShieldCheck className="size-4" />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-semibold text-ink">
-                                            {user.person || user.name}
-                                        </span>
-                                        <span className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft">
-                                            {user.name}
-                                        </span>
-                                        {user.isCluster ? (
-                                            <span className="rounded bg-brand/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-brand">
-                                                Cluster-wide
-                                                {user.role
-                                                    ? ` · ${user.role}`
-                                                    : ''}
-                                            </span>
-                                        ) : user.role ? (
-                                            <span className="rounded bg-line/60 px-1.5 py-0.5 font-mono text-[10px] text-soft">
-                                                {user.role}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <p className="font-mono text-[11px] text-faint">
-                                        {user.isCluster
-                                            ? 'scope: all namespaces (cluster-level)'
-                                            : `namespaces: ${user.scope || (user.namespaces && user.namespaces.length ? user.namespaces.join(', ') : 'all')}`}
-                                    </p>
-                                </div>
-                            </div>
-                            <Link
-                                href={`/servers/${server.name}/access/revoke`}
-                                method="post"
-                                data={{ name: user.name }}
-                                as="button"
-                                onBefore={() =>
-                                    window.confirm(
-                                        `Revoke access for ${user.name}? This will off-board this teammate from the cluster.`,
-                                    )
-                                }
-                                className={buttonClass('danger', 'sm', 'gap-1')}
-                                title="Revoke access"
+                    {userList.map((user) => {
+                        const hasDistinctPerson = Boolean(
+                            user.person &&
+                            user.person.trim() !== '' &&
+                            user.person !== user.name,
+                        );
+                        const roleLabel = user.isCluster
+                            ? user.role || 'cluster-admin'
+                            : user.role || 'edit';
+
+                        return (
+                            <div
+                                key={`${user.namespace}-${user.name}`}
+                                className="flex items-center justify-between gap-3 py-2.5 first:pt-1 last:pb-1"
                             >
-                                <Trash2 className="size-3" />
-                                <span>Revoke</span>
-                            </Link>
-                        </div>
-                    ))}
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                                        <ShieldCheck className="size-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex min-w-0 items-center gap-1.5">
+                                            <span className="truncate text-xs font-semibold text-ink">
+                                                {hasDistinctPerson
+                                                    ? user.person
+                                                    : user.name}
+                                            </span>
+                                            {hasDistinctPerson && (
+                                                <span className="shrink-0 rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft">
+                                                    @{user.name}
+                                                </span>
+                                            )}
+                                            <span
+                                                className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium whitespace-nowrap ${
+                                                    user.isCluster
+                                                        ? 'bg-brand/10 text-brand ring-1 ring-brand/20'
+                                                        : 'bg-line/60 text-soft'
+                                                }`}
+                                            >
+                                                {roleLabel}
+                                            </span>
+                                        </div>
+                                        <p className="mt-0.5 truncate font-mono text-[11px] text-faint">
+                                            {user.isCluster
+                                                ? 'Cluster-wide (all namespaces)'
+                                                : `namespaces: ${user.scope || (user.namespaces && user.namespaces.length ? user.namespaces.join(', ') : 'all')}`}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Link
+                                    href={`/servers/${server.name}/access/revoke`}
+                                    method="post"
+                                    data={{ name: user.name }}
+                                    as="button"
+                                    onBefore={() =>
+                                        window.confirm(
+                                            `Revoke access for ${user.name}? This will off-board this teammate from the cluster.`,
+                                        )
+                                    }
+                                    className={buttonClass(
+                                        'danger',
+                                        'sm',
+                                        'gap-1 shrink-0',
+                                    )}
+                                    title="Revoke access"
+                                >
+                                    <Trash2 className="size-3" />
+                                    <span>Revoke</span>
+                                </Link>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </Card>
@@ -1194,16 +1211,25 @@ function GrantAccessDialog({
                             )}
 
                             <div className="flex justify-end gap-2.5 pt-2">
-                                <Button variant="secondary" onClick={onClose}>
-                                    Cancel
+                                <Button
+                                    variant="secondary"
+                                    onClick={onClose}
+                                    className="gap-1.5"
+                                >
+                                    <XCircle className="size-3.5" />
+                                    <span>Cancel</span>
                                 </Button>
                                 <Button
                                     type="submit"
                                     disabled={processing || name.trim() === ''}
+                                    className="gap-1.5"
                                 >
-                                    {processing
-                                        ? 'Minting…'
-                                        : 'Mint & Grant Access'}
+                                    <UserPlus className="size-3.5" />
+                                    <span>
+                                        {processing
+                                            ? 'Minting…'
+                                            : 'Mint & Grant Access'}
+                                    </span>
                                 </Button>
                             </div>
                         </>
