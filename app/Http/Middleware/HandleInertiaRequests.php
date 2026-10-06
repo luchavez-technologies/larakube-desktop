@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\RunStatus;
+use App\Models\Run;
 use App\Services\LaraKube\GlobalSettings;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -41,6 +43,10 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'hideProjects' => app(GlobalSettings::class)->hideProjects(),
             'experimental' => app(GlobalSettings::class)->experimental(),
+            'activeRun' => fn () => Run::query()
+                ->where('status', RunStatus::Running)
+                ->latest('id')
+                ->first(['id', 'label', 'status', 'created_at']),
             'auth' => [
                 'user' => $request->user(),
             ],

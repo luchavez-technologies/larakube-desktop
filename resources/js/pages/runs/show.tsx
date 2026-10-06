@@ -1,8 +1,9 @@
-import { Link, usePoll } from '@inertiajs/react';
+import { Head, Link, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import { sendJson } from '@/lib/http';
 import LogPanel from '@/components/log-panel';
 import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
@@ -100,14 +101,20 @@ export default function ShowRun({ run }: { run: Run }) {
         if (!running) stop();
     }, [running, stop]);
 
-    return (
-        <AppLayout title={run.label}>
-            <Link
-                href={backLink(run).href}
-                className="mb-3 inline-block text-xs text-soft hover:text-ink"
-            >
-                ← {backLink(run).label}
-            </Link>
+    const isDetached =
+        typeof window !== 'undefined' &&
+        window.location.search.includes('detached=1');
+
+    const content = (
+        <>
+            {!isDetached && (
+                <Link
+                    href={backLink(run).href}
+                    className="mb-3 inline-block text-xs text-soft hover:text-ink"
+                >
+                    ← {backLink(run).label}
+                </Link>
+            )}
             <header className="mb-5 flex items-center justify-between gap-6">
                 <div className="min-w-0">
                     <h1 className="truncate text-[28px] leading-tight font-semibold tracking-[-0.03em]">
@@ -121,6 +128,18 @@ export default function ShowRun({ run }: { run: Run }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2.5">
+                    {!isDetached && (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                void sendJson(`/runs/${run.id}/detach`, 'POST')
+                            }
+                            className={buttonClass('secondary')}
+                            title="Detach into floating window"
+                        >
+                            Detach
+                        </button>
+                    )}
                     {running && (
                         <Link
                             href={cancel(run.id).url}
@@ -232,8 +251,19 @@ export default function ShowRun({ run }: { run: Run }) {
                     <span className="text-[13px] text-soft">Show ▾</span>
                 </button>
             )}
-        </AppLayout>
+        </>
     );
+
+    if (isDetached) {
+        return (
+            <div className="min-h-screen bg-surface p-6 text-ink">
+                <Head title={run.label} />
+                {content}
+            </div>
+        );
+    }
+
+    return <AppLayout title={run.label}>{content}</AppLayout>;
 }
 
 const serviceLabels: Record<string, string> = {

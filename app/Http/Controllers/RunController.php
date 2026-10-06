@@ -7,10 +7,12 @@ use App\Models\Project;
 use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
+use Native\Desktop\Facades\Window;
 
 class RunController extends Controller
 {
@@ -178,5 +180,33 @@ class RunController extends Controller
         }
 
         return to_route('runs.show', $run);
+    }
+
+    public function stream(Run $run): JsonResponse
+    {
+        return response()->json([
+            'id' => $run->id,
+            'label' => $run->label,
+            'kind' => $run->kind?->value,
+            'status' => $run->status->value,
+            'output' => $run->output,
+            'exitCode' => $run->exit_code,
+            'startedAt' => $run->created_at?->toIso8601String(),
+            'finishedAt' => $run->finished_at?->toIso8601String(),
+        ]);
+    }
+
+    public function detach(Run $run): JsonResponse
+    {
+        Window::open("run-{$run->id}")
+            ->title($run->label)
+            ->url(route('runs.show', ['run' => $run, 'detached' => 1]))
+            ->width(820)
+            ->height(560)
+            ->minWidth(600)
+            ->minHeight(400)
+            ->rememberState();
+
+        return response()->json(['detached' => true]);
     }
 }

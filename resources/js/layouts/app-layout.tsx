@@ -18,6 +18,7 @@ import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
 import { show as settingsShow } from '@/routes/settings';
 import { index as devBoxesIndex } from '@/routes/devboxes';
+import RunDrawer from '@/components/run-drawer';
 
 type NavItem = {
     label: string;
@@ -182,6 +183,7 @@ export default function AppLayout({
                 </nav>
             </aside>
             <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
+            <RunDrawer />
         </div>
     );
 }

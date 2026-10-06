@@ -7,6 +7,8 @@ use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\Elevation;
 use Native\Desktop\Contracts\ProvidesPhpIni;
+use Native\Desktop\Facades\Menu;
+use Native\Desktop\Facades\MenuBar;
 use Native\Desktop\Facades\Window;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
@@ -26,6 +28,18 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(960)
             ->minHeight(640)
             ->rememberState();
+
+        MenuBar::create()
+            ->icon(public_path('icon.png'))
+            ->tooltip(config('app.name', 'LaraKube'))
+            ->onlyShowContextMenu()
+            ->withContextMenu(
+                Menu::make(
+                    Menu::link(url('/'), 'Open LaraKube'),
+                    Menu::separator(),
+                    Menu::quit('Quit LaraKube'),
+                )
+            );
     }
 
     /** A local setup the app was closed during never got to remove its temporary sudo access. */

@@ -148,3 +148,25 @@ test('a run that crashes quotes the CLI\'s exception message', function () {
     expect($run->status)->toBe(RunStatus::Failed)
         ->and($run->result['error'])->toBe('The LaraKube CLI stopped with: Required.');
 });
+
+test('runs.stream returns live output and run details as JSON', function () {
+    $run = runLifecycleRun();
+    $run->update(['output' => "Building containers...\n", 'status' => RunStatus::Running]);
+
+    $this->getJson(route('runs.stream', $run))
+        ->assertOk()
+        ->assertJson([
+            'id' => $run->id,
+            'label' => 'Create server demo',
+            'status' => 'running',
+            'output' => "Building containers...\n",
+        ]);
+});
+
+test('runs.detach returns success JSON', function () {
+    $run = runLifecycleRun();
+
+    $this->postJson(route('runs.detach', $run))
+        ->assertOk()
+        ->assertJson(['detached' => true]);
+});
