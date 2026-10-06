@@ -98,6 +98,7 @@ class ProjectController extends Controller
                 return is_array($result['projects'] ?? null) ? array_values($result['projects']) : null;
             }, 'boxProjects'),
             'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => $p['localStatus']['state'] === 'running'),
+            'defaultParent' => ToolLocator::home(),
         ]);
     }
 
@@ -323,6 +324,123 @@ class ProjectController extends Controller
         );
 
         return to_route('projects.create', ['run' => $run->id, 'framework' => $input['framework'], 'name' => $name]);
+    }
+
+    public function clone(Request $request, CliRunner $runner): RedirectResponse
+    {
+        $input = $request->validate([
+            'repo' => ['required', 'string'],
+            'directory' => ['nullable', 'string', 'regex:/^[a-zA-Z0-9_.-]+$/'],
+            'branch' => ['nullable', 'string'],
+            'parent' => ['nullable', 'string'],
+        ]);
+
+        $repo = trim($input['repo']);
+        $directory = ! empty($input['directory']) ? trim($input['directory']) : $this->deriveDirectoryName($repo);
+        $parent = ! empty($input['parent']) && $this->insideHome($input['parent'], allowHome: true) && is_dir($input['parent'])
+            ? (realpath($input['parent']) ?: $input['parent'])
+            : ToolLocator::home();
+
+        $path = "{$parent}/{$directory}";
+        if (file_exists($path)) {
+            return back()->withErrors(['directory' => "Directory '{$directory}' already exists in {$parent}."]);
+        }
+
+        $project = Project::firstOrCreate(['path' => $path]);
+        $arguments = ['clone', $repo, '--directory='.$directory];
+
+        if (! empty($input['branch'])) {
+            $arguments[] = '--branch='.trim($input['branch']);
+        }
+
+        $run = $runner->start(
+            label: "Clone {$repo} into {$directory}",
+            arguments: $arguments,
+            kind: RunKind::CloneProject,
+            subject: "project:{$project->id}",
+            meta: [
+                'project' => (string) $project->id,
+                'cwd' => $parent,
+                'directory' => $directory,
+                'repo' => $repo,
+            ],
+            cwd: $parent,
+            targetType: 'project',
+            targetName: $directory,
+            projectId: $project->id,
+            projectName: $directory,
+            environment: 'local',
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function cloneOnDevBox(Request $request, CliRunner $runner, StackCatalog $stacks): RedirectResponse
+    {
+        abort_unless(app(GlobalSettings::class)->experimental(), 404);
+
+        $input = $request->validate([
+            'repo' => ['required', 'string'],
+            'box' => ['required', 'string'],
+            'directory' => ['nullable', 'string', 'regex:/^[a-zA-Z0-9_.-]+$/'],
+            'branch' => ['nullable', 'string'],
+        ]);
+
+        $box = collect($stacks->devBoxes() ?? [])->firstWhere('name', $input['box']);
+
+        if ($box === null || $box['status'] !== 'ready') {
+            return back()->withErrors(['box' => 'That dev box is not ready.']);
+        }
+
+        $repo = trim($input['repo']);
+        $directory = ! empty($input['directory']) ? trim($input['directory']) : $this->deriveDirectoryName($repo);
+
+        $arguments = ['clone', $repo, '--directory='.$directory];
+
+        if (! empty($input['branch'])) {
+            $arguments[] = '--branch='.trim($input['branch']);
+        }
+
+        $run = $runner->start(
+            label: "Clone {$repo} on {$box['name']}",
+            arguments: $arguments,
+            kind: RunKind::CloneDevBoxProject,
+            subject: $directory,
+            meta: [
+                'server' => $box['name'],
+                'role' => 'dev',
+                'app' => $directory,
+                'repo' => $repo,
+            ],
+            targetType: 'server',
+            targetName: $box['name'],
+            serverName: $box['name'],
+            devBox: $box,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function pickParentFolder(FolderPicker $picker): JsonResponse
+    {
+        $path = $picker->pick('Choose where to clone your app');
+
+        if ($path === null) {
+            return response()->json(['path' => null]);
+        }
+
+        if (! $this->insideHome($path, allowHome: true)) {
+            return response()->json(['path' => null, 'error' => 'Choose a folder inside your home folder.'], 422);
+        }
+
+        return response()->json(['path' => realpath($path) ?: $path]);
+    }
+
+    private function deriveDirectoryName(string $repo): string
+    {
+        $base = basename(rtrim($repo, '/'));
+
+        return preg_replace('/\.git$/', '', $base) ?: 'app';
     }
 
     /** Runs a failed or cancelled create again, with the same answers, if nothing was left behind. */
@@ -793,7 +911,7 @@ class ProjectController extends Controller
             return strtolower(trim($matches[1]));
         }
 
-        if (in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject], true)) {
+        if (in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
             return 'local';
         }
 

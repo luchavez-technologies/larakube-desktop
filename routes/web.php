@@ -92,6 +92,9 @@ Route::delete('/workspaces/{workspace}', [WorkspaceController::class, 'destroy']
 
 Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
 Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+Route::post('/projects/clone', [ProjectController::class, 'clone'])->name('projects.clone');
+Route::post('/projects/clone/dev-box', [ProjectController::class, 'cloneOnDevBox'])->name('projects.clone-dev-box');
+Route::post('/projects/pick-folder', [ProjectController::class, 'pickParentFolder'])->name('projects.pick-folder');
 Route::get('/projects/create', [ProjectController::class, 'create'])->name('projects.create');
 Route::post('/projects/create/folder', [ProjectController::class, 'chooseFolder'])->name('projects.choose-folder');
 Route::post('/projects/create', [ProjectController::class, 'scaffold'])->name('projects.scaffold');

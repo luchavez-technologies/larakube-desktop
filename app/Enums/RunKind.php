@@ -37,6 +37,8 @@ enum RunKind: string
     case EnableSsl = 'enable-ssl';
     /** A brand-new app scaffolded by one of the CLI's `*:new` commands. */
     case NewProject = 'new-project';
+    case CloneProject = 'clone-project';
+    case CloneDevBoxProject = 'clone-dev-box-project';
     case InitProject = 'init-project';
     /** A cloud environment created with `env`, bound to an existing server. */
     case LinkServer = 'link-server';

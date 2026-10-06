@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Deferred, Link, router, usePage, usePoll } from '@inertiajs/react';
-import { ArrowRight, FolderPlus, Laptop, Plus, Server } from 'lucide-react';
+import {
+    ArrowRight,
+    FolderPlus,
+    GitBranch,
+    Laptop,
+    Plus,
+    Server,
+} from 'lucide-react';
 import { buttonClass } from '@/components/button';
+import CloneModal from '@/components/clone-modal';
 import PageHeader from '@/components/page-header';
 import ProjectActions from '@/components/project-actions';
 import StatusPill from '@/components/status-pill';
@@ -21,12 +29,14 @@ export default function ProjectsIndex({
     devBoxes,
     box = null,
     boxProjects,
+    defaultParent = '',
 }: {
     projects: Project[];
     hasActiveRuns?: boolean;
     devBoxes?: string[];
     box?: string | null;
     boxProjects?: DevBoxProject[] | null;
+    defaultParent?: string;
 }) {
     const { errors } = usePage().props as { errors: Record<string, string> };
 
@@ -37,6 +47,7 @@ export default function ProjectsIndex({
         { autoStart: hasActiveRuns, keepAlive: false },
     );
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
+    const [isCloneOpen, setIsCloneOpen] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem('larakube_view_mode_projects');
@@ -72,6 +83,14 @@ export default function ProjectsIndex({
                                 <span>Add existing folder</span>
                             </Link>
                         )}
+                        <button
+                            type="button"
+                            onClick={() => setIsCloneOpen(true)}
+                            className={buttonClass('secondary')}
+                        >
+                            <GitBranch className="size-4" />
+                            <span>Clone repository</span>
+                        </button>
                         <Link
                             href={
                                 create(box ? { query: { box } } : undefined).url
@@ -237,6 +256,13 @@ export default function ProjectsIndex({
                     </table>
                 </div>
             )}
+            <CloneModal
+                isOpen={isCloneOpen}
+                onClose={() => setIsCloneOpen(false)}
+                devBoxes={devBoxes}
+                initialBox={box}
+                defaultParent={defaultParent}
+            />
         </AppLayout>
     );
 }
