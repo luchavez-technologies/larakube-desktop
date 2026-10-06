@@ -235,6 +235,26 @@ test('updating the CLI on a box runs the installer there on the channel Desktop 
     'stable' => ['stable', 'curl -fsSL https://cli.larakube.app/install.sh | bash &&'],
 ]);
 
+test('updating the CLI on a box via Inertia returns back to stay on the dev box page', function () {
+    $bin = devBoxProjectsCli();
+    $settings = mock(GlobalSettings::class);
+    $settings->shouldReceive('hideProjects')->andReturnFalse();
+    $settings->shouldReceive('experimental')->andReturnTrue();
+    $settings->shouldReceive('get')->andReturn(['cliChannel' => 'stable']);
+    app()->instance(GlobalSettings::class, $settings);
+    devBoxProjectsStacks();
+    ChildProcess::fake();
+
+    $this->from(route('devboxes.show', 'my-dev-box'))
+        ->withHeader('X-Inertia', 'true')
+        ->post(route('devboxes.update-cli', ['box' => 'my-dev-box']))
+        ->assertRedirect(route('devboxes.show', 'my-dev-box'));
+
+    expect(Run::sole()->kind)->toBe(RunKind::UpdateDevBoxCli);
+
+    File::deleteDirectory($bin);
+});
+
 test('the CLI on a box can only be updated on a ready dev box with experimental features on', function (bool $experimental, string $status) {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental($experimental);

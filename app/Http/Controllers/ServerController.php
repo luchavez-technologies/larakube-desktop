@@ -184,7 +184,7 @@ class ServerController extends Controller
     }
 
     /** Reboots a server LaraKube made. Nothing else can be restarted: a kubeconfig cannot reboot a machine. */
-    public function restart(string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    public function restart(Request $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
         $stack = $catalog->find($server);
 
@@ -201,7 +201,7 @@ class ServerController extends Controller
             serverName: $server,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     /**

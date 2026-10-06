@@ -89,7 +89,7 @@ class DevBoxController extends Controller
      * Installs the CLI on the box again from the channel Desktop is on. The installer is the one that put it there, so it
      * has the permission to replace the binary and is safe to run any number of times.
      */
-    public function updateCli(string $box, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    public function updateCli(Request $request, string $box, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
         $this->ensureEnabled();
 
@@ -114,11 +114,11 @@ class DevBoxController extends Controller
                 .' && /usr/local/bin/larakube --version',
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     /** Up, down, start or stop an app on the box, as `larakube <action>` in its folder. */
-    public function operate(string $box, string $project, string $action, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    public function operate(Request $request, string $box, string $project, string $action, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
         $this->ensureEnabled();
         $stack = $this->readyBox($box, $catalog);
@@ -145,7 +145,7 @@ class DevBoxController extends Controller
             devBoxProject: $project,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     /** One dev box: its apps, its Commons, how to connect. The cluster cards need the tunnel the CLI opens. */
@@ -289,7 +289,7 @@ class DevBoxController extends Controller
             devBoxReadSecret: self::TOKEN_VARIABLE,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     private function cloudflareToken(Request $request): string

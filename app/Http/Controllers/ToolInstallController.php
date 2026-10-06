@@ -54,7 +54,7 @@ class ToolInstallController extends Controller
                 ]);
             }
 
-            return to_route('runs.show', $run);
+            return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
         }
 
         $run = $runner->start(
@@ -68,7 +68,7 @@ class ToolInstallController extends Controller
             environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     /**
@@ -94,6 +94,6 @@ class ToolInstallController extends Controller
             environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 }

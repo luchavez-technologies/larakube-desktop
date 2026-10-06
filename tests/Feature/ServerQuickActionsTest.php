@@ -47,6 +47,21 @@ test('restarting a server starts cloud:restart for that server, with the confirm
     File::deleteDirectory($bin);
 });
 
+test('restarting a server via Inertia returns back to stay on the server page', function () {
+    $bin = quickActionsCli();
+    quickActionsStacks();
+    ChildProcess::fake();
+
+    $this->from(route('servers.show', 'workshop-demo'))
+        ->withHeader('X-Inertia', 'true')
+        ->post(route('servers.restart', 'workshop-demo'))
+        ->assertRedirect(route('servers.show', 'workshop-demo'));
+
+    expect(Run::sole()->kind)->toBe(RunKind::RestartServer);
+
+    File::deleteDirectory($bin);
+});
+
 test('only a ready server LaraKube made can be restarted', function (string $server) {
     $bin = quickActionsCli();
     quickActionsStacks();

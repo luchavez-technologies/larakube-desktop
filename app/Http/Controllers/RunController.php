@@ -9,6 +9,7 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -172,14 +173,14 @@ class RunController extends Controller
         ]);
     }
 
-    public function cancel(Run $run, CliRunner $runner): RedirectResponse
+    public function cancel(Request $request, Run $run, CliRunner $runner): RedirectResponse
     {
         if ($run->status === RunStatus::Running) {
             $run->update(['status' => RunStatus::Cancelled]);
             $runner->cancel($run);
         }
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function stream(Run $run): JsonResponse

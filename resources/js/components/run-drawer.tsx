@@ -43,8 +43,22 @@ export default function RunDrawer() {
     const [currentRunId, setCurrentRunId] = useState<number | null>(
         activeRunFromProps?.id ?? null,
     );
-    const [stream, setStream] = useState<StreamData | null>(null);
-    const [expanded, setExpanded] = useState(false);
+    const [stream, setStream] = useState<StreamData | null>(() => {
+        if (activeRunFromProps?.id) {
+            return {
+                id: activeRunFromProps.id,
+                label: activeRunFromProps.label,
+                kind: null,
+                status: activeRunFromProps.status,
+                output: '',
+                exitCode: null,
+                startedAt: activeRunFromProps.created_at ?? null,
+                finishedAt: null,
+            };
+        }
+        return null;
+    });
+    const [expanded, setExpanded] = useState(Boolean(activeRunFromProps?.id));
     const [dismissed, setDismissed] = useState(false);
 
     // Synchronize currentRunId with activeRun from Inertia page props
@@ -52,8 +66,28 @@ export default function RunDrawer() {
         if (activeRunFromProps?.id) {
             setCurrentRunId(activeRunFromProps.id);
             setDismissed(false);
+            setExpanded(true);
+            setStream((prev) =>
+                prev?.id === activeRunFromProps.id
+                    ? prev
+                    : {
+                          id: activeRunFromProps.id,
+                          label: activeRunFromProps.label,
+                          kind: null,
+                          status: activeRunFromProps.status,
+                          output: '',
+                          exitCode: null,
+                          startedAt: activeRunFromProps.created_at ?? null,
+                          finishedAt: null,
+                      },
+            );
         }
-    }, [activeRunFromProps?.id]);
+    }, [
+        activeRunFromProps?.id,
+        activeRunFromProps?.label,
+        activeRunFromProps?.status,
+        activeRunFromProps?.created_at,
+    ]);
 
     // Poll current run while it is active
     useEffect(() => {
@@ -90,7 +124,12 @@ export default function RunDrawer() {
         };
     }, [currentRunId, stream?.status, dismissed]);
 
-    if (!currentRunId || dismissed || !stream) {
+    if (
+        page.component === 'runs/show' ||
+        !currentRunId ||
+        dismissed ||
+        !stream
+    ) {
         return null;
     }
 

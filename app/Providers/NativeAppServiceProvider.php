@@ -32,6 +32,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         MenuBar::create()
             ->icon(public_path('icon.png'))
             ->tooltip(config('app.name', 'LaraKube'))
+            ->showDockIcon(true)
             ->onlyShowContextMenu()
             ->withContextMenu(
                 Menu::make(
