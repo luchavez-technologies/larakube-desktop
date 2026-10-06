@@ -1,12 +1,23 @@
 import { Form, router, useForm } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Archive, ArrowRightLeft, Layers, Save, Trash2 } from 'lucide-react';
+import {
+    Archive,
+    ArrowRightLeft,
+    Check,
+    Laptop,
+    Layers,
+    Moon,
+    Save,
+    Sun,
+    Trash2,
+} from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
+import { cn } from '@/lib/utils';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -17,8 +28,11 @@ type AgentInfo = {
     bridged: boolean;
 };
 
+type ThemeMode = 'system' | 'light' | 'dark';
+
 type SettingsProps = {
     settings: {
+        theme?: ThemeMode;
         localTld: string;
         email: string | null;
         aiProvider: string;
@@ -40,6 +54,7 @@ type SettingsProps = {
 };
 
 type SettingsForm = {
+    theme?: ThemeMode;
     localTld: string;
     email: string;
     aiProvider: string;
@@ -53,6 +68,32 @@ type SettingsForm = {
     cliChannel: string;
 };
 
+const themeOptions: {
+    id: ThemeMode;
+    label: string;
+    description: string;
+    icon: typeof Laptop;
+}[] = [
+    {
+        id: 'system',
+        label: 'System',
+        description: 'Sync with OS theme',
+        icon: Laptop,
+    },
+    {
+        id: 'light',
+        label: 'Light',
+        description: 'Crisp light mode',
+        icon: Sun,
+    },
+    {
+        id: 'dark',
+        label: 'Dark',
+        description: 'High-contrast dark mode',
+        icon: Moon,
+    },
+];
+
 export default function SettingsIndex({
     settings,
     allowedTlds,
@@ -62,7 +103,18 @@ export default function SettingsIndex({
     currentContext = null,
     windows = false,
 }: SettingsProps) {
+    const [activeTheme, setActiveTheme] = useState<ThemeMode>(
+        settings.theme ?? 'system',
+    );
+
+    useEffect(() => {
+        if (settings.theme) {
+            setActiveTheme(settings.theme);
+        }
+    }, [settings.theme]);
+
     const form = useForm<SettingsForm>({
+        theme: settings.theme ?? 'system',
         localTld: settings.localTld,
         email: settings.email ?? '',
         aiProvider: settings.aiProvider,
@@ -75,6 +127,33 @@ export default function SettingsIndex({
         experimental: settings.experimental ?? false,
         cliChannel: settings.cliChannel ?? 'canary',
     });
+
+    function selectTheme(theme: ThemeMode) {
+        setActiveTheme(theme);
+        form.setData('theme', theme);
+
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const isDark =
+            theme === 'dark' || (theme === 'system' && media.matches);
+
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+        } else {
+            document.documentElement.classList.remove('dark');
+            if (theme === 'light') {
+                document.documentElement.classList.add('light');
+            } else {
+                document.documentElement.classList.remove('light');
+            }
+        }
+
+        router.post(
+            '/settings/theme',
+            { theme },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
 
     function submit(e: FormEvent) {
         e.preventDefault();
@@ -98,6 +177,72 @@ export default function SettingsIndex({
 
             <div className="grid grid-cols-[1fr_360px] items-start gap-6">
                 <form onSubmit={submit} className="space-y-5">
+                    {/* Appearance & Theme */}
+                    <Card label="Appearance & Theme">
+                        <div className="space-y-3">
+                            <p className="text-xs text-soft">
+                                Choose your interface theme preference. System
+                                automatically synchronizes with your operating
+                                system's light or dark mode.
+                            </p>
+                            <div className="grid grid-cols-3 gap-3">
+                                {themeOptions.map((option) => {
+                                    const Icon = option.icon;
+                                    const isSelected =
+                                        activeTheme === option.id;
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() =>
+                                                selectTheme(option.id)
+                                            }
+                                            className={cn(
+                                                'group relative flex flex-col items-start gap-2.5 rounded-xl border p-3.5 text-left transition-all',
+                                                isSelected
+                                                    ? 'border-brand/60 bg-brand/[0.04] shadow-xs ring-1 ring-brand/40'
+                                                    : 'hover:border-line-hover border-line bg-surface shadow-2xs hover:bg-paper/60',
+                                            )}
+                                        >
+                                            <div className="flex w-full items-center justify-between">
+                                                <div
+                                                    className={cn(
+                                                        'flex size-8 items-center justify-center rounded-lg border transition-colors',
+                                                        isSelected
+                                                            ? 'border-brand/30 bg-brand/10 text-brand'
+                                                            : 'border-line bg-paper text-soft group-hover:text-ink',
+                                                    )}
+                                                >
+                                                    <Icon className="size-4" />
+                                                </div>
+                                                {isSelected && (
+                                                    <span className="flex size-5 items-center justify-center rounded-full bg-brand text-white">
+                                                        <Check className="size-3 stroke-[2.5]" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <span
+                                                    className={cn(
+                                                        'block text-xs font-semibold',
+                                                        isSelected
+                                                            ? 'text-ink'
+                                                            : 'text-soft group-hover:text-ink',
+                                                    )}
+                                                >
+                                                    {option.label}
+                                                </span>
+                                                <span className="mt-0.5 block text-[11px] leading-relaxed text-soft">
+                                                    {option.description}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </Card>
+
                     {/* Domain & Networking */}
                     <Card label="Local Domain & TLD">
                         <div className="space-y-3">

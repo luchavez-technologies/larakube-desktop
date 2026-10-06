@@ -111,8 +111,36 @@ export default function AppLayout({
     const { url, props } = usePage<{
         hideProjects?: boolean;
         experimental?: boolean;
+        theme?: string;
     }>();
     useEffect(listenForNotificationClicks, []);
+
+    useEffect(() => {
+        const theme = props.theme || 'system';
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const apply = () => {
+            const isDark =
+                theme === 'dark' || (theme === 'system' && media.matches);
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                document.documentElement.classList.remove('light');
+            } else {
+                document.documentElement.classList.remove('dark');
+                if (theme === 'light') {
+                    document.documentElement.classList.add('light');
+                } else {
+                    document.documentElement.classList.remove('light');
+                }
+            }
+        };
+
+        apply();
+
+        if (theme === 'system') {
+            media.addEventListener('change', apply);
+            return () => media.removeEventListener('change', apply);
+        }
+    }, [props.theme]);
 
     const hideProjects = Boolean(props.hideProjects);
     const visibleNavigation = navigation.filter(

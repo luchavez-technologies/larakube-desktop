@@ -2,12 +2,12 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 const variants = {
-    primary: 'bg-ink text-white hover:bg-ink/90 active:bg-ink/95 shadow-xs',
+    primary: 'bg-ink text-surface hover:bg-ink/90 active:bg-ink/95 shadow-xs',
     secondary: 'bg-surface text-ink ring-1 ring-line ring-inset hover:bg-paper',
     danger: 'bg-surface text-accent ring-1 ring-accent-line ring-inset hover:bg-accent-tint',
     dangerFill: 'bg-accent text-white hover:bg-accent-hover',
     ghost: 'text-soft hover:bg-badge hover:text-ink',
-    dark: 'bg-ink text-white hover:bg-ink/85',
+    dark: 'bg-term text-term-bright hover:bg-term/85',
     tools: 'bg-tools text-white hover:bg-tools/90 active:bg-tools/95 shadow-xs font-medium',
 } as const;
 

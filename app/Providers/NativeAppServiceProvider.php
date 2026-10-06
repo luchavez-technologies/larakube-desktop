@@ -6,9 +6,12 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\Elevation;
+use App\Services\LaraKube\GlobalSettings;
 use Native\Desktop\Contracts\ProvidesPhpIni;
+use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\MenuBar;
+use Native\Desktop\Facades\System;
 use Native\Desktop\Facades\Window;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
@@ -20,6 +23,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     public function boot(): void
     {
         $this->closeInterruptedLocalSetup();
+        $this->syncTheme();
 
         Window::open()
             ->title(config('app.name'))
@@ -55,6 +59,20 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             }
         } catch (\Throwable) {
             // The database may not be migrated yet on a first launch.
+        }
+    }
+
+    private function syncTheme(): void
+    {
+        try {
+            $savedTheme = app(GlobalSettings::class)->getTheme();
+            $themeEnum = match ($savedTheme) {
+                'light' => SystemThemesEnum::LIGHT,
+                'dark' => SystemThemesEnum::DARK,
+                default => SystemThemesEnum::SYSTEM,
+            };
+            System::theme($themeEnum);
+        } catch (\Throwable) {
         }
     }
 

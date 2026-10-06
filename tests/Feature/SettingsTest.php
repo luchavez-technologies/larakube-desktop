@@ -75,3 +75,32 @@ test('global settings bridges only larakube-cli without larakube-console', funct
 
     File::deleteDirectory($home);
 });
+
+test('theme can be switched via dedicated endpoint', function () {
+    $this->post(route('settings.theme'), [
+        'theme' => 'dark',
+    ])->assertRedirect()
+        ->assertSessionHas('success', 'Theme updated.');
+});
+
+test('theme validation rejects invalid themes', function () {
+    $this->post(route('settings.theme'), [
+        'theme' => 'invalid-theme',
+    ])->assertSessionHasErrors(['theme']);
+});
+
+test('theme can be updated via general settings update', function () {
+    $this->post(route('settings.update'), [
+        'theme' => 'light',
+    ])->assertRedirect()
+        ->assertSessionHas('success', 'Settings updated.');
+});
+
+test('global settings gets and sets theme', function () {
+    $settings = app(GlobalSettings::class);
+    $settings->setTheme('dark');
+    expect($settings->getTheme())->toBe('dark');
+
+    $settings->setTheme('system');
+    expect($settings->getTheme())->toBe('system');
+});

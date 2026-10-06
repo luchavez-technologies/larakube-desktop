@@ -48,6 +48,7 @@ class SettingsController extends Controller
     public function update(Request $request, GlobalSettings $settings): RedirectResponse
     {
         $validated = $request->validate([
+            'theme' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::THEMES)],
             'localTld' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::ALLOWED_TLDS)],
             'email' => ['nullable', 'email'],
             'aiProvider' => ['nullable', 'string', 'in:'.implode(',', array_keys(GlobalSettings::AI_PROVIDERS))],
@@ -65,6 +66,17 @@ class SettingsController extends Controller
         $settings->update($validated);
 
         return back()->with('success', 'Settings updated.');
+    }
+
+    public function setTheme(Request $request, GlobalSettings $settings): RedirectResponse
+    {
+        $validated = $request->validate([
+            'theme' => ['required', 'string', 'in:'.implode(',', GlobalSettings::THEMES)],
+        ]);
+
+        $settings->setTheme($validated['theme']);
+
+        return back()->with('success', 'Theme updated.');
     }
 
     public function bridge(string $agent, GlobalSettings $settings): RedirectResponse

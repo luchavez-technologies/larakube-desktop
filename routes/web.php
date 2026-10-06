@@ -143,6 +143,7 @@ Route::post('/updates/check', [UpdatesController::class, 'check'])->name('update
 Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');
 Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('settings.theme');
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');
 
 Route::post('/open', OpenExternalController::class)->name('open');

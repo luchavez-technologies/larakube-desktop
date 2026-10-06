@@ -41,6 +41,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'theme' => fn () => rescue(fn () => app(GlobalSettings::class)->getTheme(), 'system', report: false),
             'hideProjects' => app(GlobalSettings::class)->hideProjects(),
             'experimental' => app(GlobalSettings::class)->experimental(),
             'activeRun' => fn () => Run::query()

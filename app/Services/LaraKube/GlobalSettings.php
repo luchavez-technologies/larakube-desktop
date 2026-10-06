@@ -2,6 +2,10 @@
 
 namespace App\Services\LaraKube;
 
+use Native\Desktop\Enums\SystemThemesEnum;
+use Native\Desktop\Facades\Settings;
+use Native\Desktop\Facades\System;
+
 class GlobalSettings
 {
     public const ALLOWED_TLDS = ['kube', 'localhost', 'test', 'local', 'internal'];
@@ -15,10 +19,13 @@ class GlobalSettings
 
     public const WSL_SHUTDOWN_MODES = ['terminate', 'shutdown', 'disabled'];
 
+    public const THEMES = ['system', 'light', 'dark'];
+
     public function __construct(private ToolLocator $locator) {}
 
     /**
      * @return array{
+     *     theme: string,
      *     localTld: string,
      *     email: ?string,
      *     aiProvider: string,
@@ -59,6 +66,7 @@ class GlobalSettings
         ];
 
         return [
+            'theme' => $this->getTheme(),
             'localTld' => (string) ($config['localTld'] ?? 'kube'),
             'email' => is_string($config['email'] ?? null) ? $config['email'] : null,
             'aiProvider' => (string) ($config['aiProvider'] ?? 'anthropic'),
@@ -73,6 +81,48 @@ class GlobalSettings
             'wslShutdownMode' => $this->wslShutdownMode(),
             'detectedAgents' => $agents,
         ];
+    }
+
+    public function getTheme(): string
+    {
+        try {
+            $val = Settings::get('theme');
+            if (is_string($val) && in_array($val, self::THEMES, true)) {
+                return $val;
+            }
+        } catch (\Throwable) {
+        }
+
+        $config = $this->readConfig();
+
+        return (string) ($config['theme'] ?? 'system');
+    }
+
+    public function setTheme(string $theme): void
+    {
+        if (! in_array($theme, self::THEMES, true)) {
+            $theme = 'system';
+        }
+
+        $config = $this->readConfig();
+        $config['theme'] = $theme;
+        $this->writeConfig($config);
+
+        try {
+            Settings::set('theme', $theme);
+        } catch (\Throwable) {
+        }
+
+        $themeEnum = match ($theme) {
+            'light' => SystemThemesEnum::LIGHT,
+            'dark' => SystemThemesEnum::DARK,
+            default => SystemThemesEnum::SYSTEM,
+        };
+
+        try {
+            System::theme($themeEnum);
+        } catch (\Throwable) {
+        }
     }
 
     public function hideProjects(): bool
@@ -109,6 +159,10 @@ class GlobalSettings
     public function update(array $data): void
     {
         $config = $this->readConfig();
+
+        if (isset($data['theme']) && in_array($data['theme'], self::THEMES, true)) {
+            $this->setTheme((string) $data['theme']);
+        }
 
         if (isset($data['localTld']) && in_array($data['localTld'], self::ALLOWED_TLDS, true)) {
             $config['localTld'] = $data['localTld'];
