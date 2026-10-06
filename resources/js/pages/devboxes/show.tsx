@@ -1,11 +1,16 @@
 import { useState } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { Deferred, Link } from '@inertiajs/react';
 import {
     ArrowUpCircle,
+    Check,
+    Copy,
+    Download,
     FolderGit2,
     Key,
     Lock,
     Plus,
+    RotateCw,
     Share2,
     Trash2,
     UserPlus,
@@ -19,7 +24,11 @@ import DevBoxGrantModal from '@/components/devbox-grant-modal';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
-import { ServerActions } from '@/components/server-dialogs';
+import {
+    DestroyServerDialog,
+    RestartServerDialog,
+    ServerActions,
+} from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
@@ -51,6 +60,9 @@ export default function ShowDevBox({
     const ssh = `ssh ${box.name}`;
     const [exportOpen, setExportOpen] = useState(false);
     const [grantOpen, setGrantOpen] = useState(false);
+    const [serverDialog, setServerDialog] = useState<
+        'restart' | 'destroy' | null
+    >(null);
 
     return (
         <AppLayout title={box.name}>
@@ -162,29 +174,58 @@ export default function ShowDevBox({
                     </Card>
 
                     <Card label="Work on this box">
-                        <ListRow action={<CopyButton value={ssh} />}>
-                            <TwoLine
+                        <ol className="mt-1 flex flex-col gap-4">
+                            <Step
+                                n={1}
                                 title="Connect"
-                                detail="Opens a shell on the box. Use it from your terminal, or point VS Code Remote-SSH or JetBrains Gateway at it."
-                                mono
+                                detail={
+                                    <>
+                                        Opens a shell on the box. Point VS Code
+                                        Remote-SSH or JetBrains Gateway at{' '}
+                                        <code className="font-mono text-ink">
+                                            {box.name}
+                                        </code>{' '}
+                                        to edit there.
+                                    </>
+                                }
+                                command={ssh}
                             />
-                        </ListRow>
-                        <ListRow
-                            action={
-                                <CopyButton value="cd ~/projects && larakube new my-app" />
-                            }
-                        >
-                            <TwoLine
-                                title="Make an app from a terminal"
-                                detail="On the box: cd ~/projects, larakube new my-app, then larakube up in its folder. Apps outside ~/projects are not listed here."
+                            <Step
+                                n={2}
+                                title="Make an app"
+                                detail={
+                                    <>
+                                        Then run{' '}
+                                        <code className="font-mono text-ink">
+                                            larakube up
+                                        </code>{' '}
+                                        in its folder. Only apps in{' '}
+                                        <code className="font-mono text-ink">
+                                            ~/projects
+                                        </code>{' '}
+                                        are listed here.
+                                    </>
+                                }
+                                command="cd ~/projects && larakube new my-app"
                             />
-                        </ListRow>
-                        <ListRow>
-                            <TwoLine
-                                title="See an app from your computer"
-                                detail="Share gives the app names under your own Cloudflare domain that stay the same: the app, Vite, Reverb and storage."
+                            <Step
+                                n={3}
+                                title="Open it from your computer"
+                                detail={
+                                    <>
+                                        Press{' '}
+                                        <span className="inline-flex items-center gap-1 font-medium text-ink">
+                                            <Share2 className="size-3" />
+                                            Share
+                                        </span>{' '}
+                                        on a running project above. It gets
+                                        stable names under your own Cloudflare
+                                        domain for the app, Vite, Reverb and
+                                        storage.
+                                    </>
+                                }
                             />
-                        </ListRow>
+                        </ol>
                     </Card>
                 </div>
 
@@ -218,34 +259,107 @@ export default function ShowDevBox({
                     </Card>
 
                     {ready && (
-                        <Card label="This box">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Link
-                                    href={updateCli({ box: box.name }).url}
-                                    method="post"
-                                    as="button"
-                                    title="Install the latest LaraKube CLI on this box"
-                                    className={buttonClass('secondary', 'sm')}
-                                >
-                                    <ArrowUpCircle className="size-3.5" />
-                                    <span>Update CLI</span>
-                                </Link>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setExportOpen(true)}
-                                    title="Export encrypted dev box bundle for migration"
-                                >
-                                    <Lock className="size-3.5" />
-                                    <span>Export bundle</span>
-                                </Button>
-                                <ServerActions server={box} />
+                        <Card label="Manage">
+                            <ActionRow
+                                icon={ArrowUpCircle}
+                                title="Update CLI"
+                                detail="Reinstall the latest LaraKube CLI on the box."
+                                action={
+                                    <Link
+                                        href={updateCli({ box: box.name }).url}
+                                        method="post"
+                                        as="button"
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                        )}
+                                    >
+                                        <ArrowUpCircle className="size-3.5" />
+                                        <span>Update</span>
+                                    </Link>
+                                }
+                            />
+                            <ActionRow
+                                icon={Lock}
+                                title="Export bundle"
+                                detail="An encrypted .devbox file to open this box on another computer."
+                                action={
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setExportOpen(true)}
+                                    >
+                                        <Download className="size-3.5" />
+                                        <span>Export</span>
+                                    </Button>
+                                }
+                            />
+                            {box.kind === 'vps' && (
+                                <ActionRow
+                                    icon={RotateCw}
+                                    title="Restart"
+                                    detail="Reboot the server. Apps come back up on their own."
+                                    action={
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                setServerDialog('restart')
+                                            }
+                                        >
+                                            <RotateCw className="size-3.5" />
+                                            <span>Restart</span>
+                                        </Button>
+                                    }
+                                />
+                            )}
+
+                            <div className="mt-3 rounded-xl bg-accent-tint/40 p-3 ring-1 ring-accent-line ring-inset">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-medium text-accent">
+                                            Destroy dev box
+                                        </div>
+                                        <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                                            Deletes the server and everything on
+                                            it. This cannot be undone.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        className="shrink-0"
+                                        onClick={() =>
+                                            setServerDialog('destroy')
+                                        }
+                                    >
+                                        <Trash2 className="size-3.5" />
+                                        <span>Destroy</span>
+                                    </Button>
+                                </div>
                             </div>
+                        </Card>
+                    )}
+                    {!ready && box.kind !== 'discovered' && (
+                        <Card label="Manage">
+                            <ServerActions server={box} />
                         </Card>
                     )}
                 </div>
             </div>
+
+            {serverDialog === 'restart' && (
+                <RestartServerDialog
+                    server={box}
+                    onClose={() => setServerDialog(null)}
+                />
+            )}
+            {serverDialog === 'destroy' && (
+                <DestroyServerDialog
+                    server={box}
+                    onClose={() => setServerDialog(null)}
+                />
+            )}
 
             <DevBoxExportModal
                 isOpen={exportOpen}
@@ -259,6 +373,91 @@ export default function ShowDevBox({
                 box={box.name}
             />
         </AppLayout>
+    );
+}
+
+/** One numbered step: what to do, why, and the exact command to copy. */
+function Step({
+    n,
+    title,
+    detail,
+    command,
+}: {
+    n: number;
+    title: string;
+    detail: ReactNode;
+    command?: string;
+}) {
+    return (
+        <li className="flex gap-3">
+            <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-badge text-[11px] font-semibold text-soft">
+                {n}
+            </span>
+            <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink">{title}</div>
+                {command && <CommandSnippet command={command} />}
+                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                    {detail}
+                </p>
+            </div>
+        </li>
+    );
+}
+
+/** A terminal command shown as-is, with a copy button inside it. */
+function CommandSnippet({ command }: { command: string }) {
+    const [copied, setCopied] = useState(false);
+
+    return (
+        <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-paper py-1.5 pr-1.5 pl-3 ring-1 ring-line ring-inset">
+            <span className="text-faint select-none">$</span>
+            <code className="min-w-0 flex-1 truncate font-mono text-xs text-ink">
+                {command}
+            </code>
+            <button
+                type="button"
+                onClick={() => {
+                    void navigator.clipboard.writeText(command);
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1500);
+                }}
+                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-soft transition hover:bg-badge hover:text-ink"
+                aria-label={`Copy ${command}`}
+            >
+                {copied ? (
+                    <Check className="size-3" />
+                ) : (
+                    <Copy className="size-3" />
+                )}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+            </button>
+        </div>
+    );
+}
+
+/** One thing that can be done to the box: what it is, what it does, and its button. */
+function ActionRow({
+    icon: Icon,
+    title,
+    detail,
+    action,
+}: {
+    icon: ComponentType<{ className?: string }>;
+    title: string;
+    detail: string;
+    action: ReactNode;
+}) {
+    return (
+        <div className="flex items-center gap-3 border-t border-line py-3 first:border-t-0 first:pt-1">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-badge text-soft">
+                <Icon className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink">{title}</div>
+                <p className="text-xs leading-relaxed text-soft">{detail}</p>
+            </div>
+            <div className="shrink-0">{action}</div>
+        </div>
     );
 }
 
