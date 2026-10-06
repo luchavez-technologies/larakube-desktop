@@ -929,6 +929,7 @@ function GrantAccessDialog({
 
                 <Form
                     action={`/servers/${server.name}/access/grant`}
+                    method="post"
                     className="mt-5 space-y-4"
                 >
                     {({ processing, errors }) => (

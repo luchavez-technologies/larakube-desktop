@@ -469,7 +469,11 @@ function ImportKubeconfigModal({ onClose }: { onClose: () => void }) {
                     making it instantly manageable in LaraKube.
                 </p>
 
-                <Form action="/context/import" className="mt-4 space-y-4">
+                <Form
+                    action="/context/import"
+                    method="post"
+                    className="mt-4 space-y-4"
+                >
                     {({ processing, errors }) => (
                         <>
                             {/* Hidden file input for web or fallback file picking */}
