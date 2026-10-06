@@ -1,9 +1,11 @@
 import { Deferred, Form, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
+    Activity,
     ArrowRight,
     ExternalLink,
     FolderGit2,
+    HardDrive,
     Plus,
     Trash2,
     Wrench,
@@ -18,6 +20,7 @@ import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
+import RadialGauge from '@/components/metrics/radial-gauge';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
 import { open } from '@/routes';
@@ -32,12 +35,13 @@ import BackupsCard from '@/pages/servers/backups-card';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
 import { providerLabels, toolName, toolTagline } from '@/types/larakube';
 import type {
+    BackupStatus,
     ClusterTool,
+    ClusterUser,
+    NodeMetrics,
+    PlexStatus,
     Project,
     Server,
-    PlexStatus,
-    ClusterUser,
-    BackupStatus,
 } from '@/types/larakube';
 
 type DnsGroup = { group: string; zones: string[]; ready: boolean };
@@ -58,6 +62,7 @@ export default function ShowServer({
     plex,
     backup,
     clusterUsers,
+    nodeMetrics,
 }: {
     server: Server;
     projects?: Project[];
@@ -68,6 +73,7 @@ export default function ShowServer({
     plex?: PlexStatus | null;
     backup?: BackupStatus | null;
     clusterUsers?: ClusterUser[] | null;
+    nodeMetrics?: NodeMetrics | null;
 }) {
     const { url } = usePage();
     const [dialog, setDialog] = useState<Dialog>(() => {
@@ -124,6 +130,19 @@ export default function ShowServer({
 
             <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">
                 <div className="flex flex-col gap-4.5">
+                    {ready && (
+                        <Deferred
+                            data="nodeMetrics"
+                            fallback={
+                                <Card label="Cluster Hardware & Capacity">
+                                    <CheckingRow title="Checking cluster hardware metrics…" />
+                                </Card>
+                            }
+                        >
+                            <NodeMetricsCard metrics={nodeMetrics} />
+                        </Deferred>
+                    )}
+
                     <Card label="Domain & SSL">
                         <Deferred
                             data="dns"
@@ -530,6 +549,127 @@ export default function ShowServer({
                 />
             )}
         </AppLayout>
+    );
+}
+
+function NodeMetricsCard({ metrics }: { metrics?: NodeMetrics | null }) {
+    if (!metrics) {
+        return null;
+    }
+
+    if (!metrics.available) {
+        return (
+            <Card label="Cluster Hardware & Capacity">
+                <div className="flex items-center gap-3 py-2 text-soft">
+                    <Activity className="size-5 shrink-0 text-faint" />
+                    <div className="min-w-0">
+                        <p className="text-xs font-medium text-ink">
+                            Hardware telemetry warming up
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-faint">
+                            Metrics Server collects hardware utilization data
+                            every 60 seconds. Telemetry will appear
+                            automatically once ready.
+                        </p>
+                    </div>
+                </div>
+            </Card>
+        );
+    }
+
+    return (
+        <Card
+            label="Cluster Hardware & Capacity"
+            action={
+                <span className="font-mono text-[10px] text-faint">
+                    Updated{' '}
+                    {new Date(metrics.updatedAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    })}
+                </span>
+            }
+        >
+            <div className="grid grid-cols-1 divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <div className="flex flex-col items-center justify-center p-2">
+                    <RadialGauge
+                        value={metrics.cpuPercent}
+                        label="Node CPU"
+                        subtext={
+                            metrics.nodes.length > 1
+                                ? `${metrics.nodes.length} nodes avg`
+                                : (metrics.nodes[0]?.cpu ?? null)
+                        }
+                        size="md"
+                        tone="auto"
+                    />
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-2">
+                    <RadialGauge
+                        value={metrics.memoryPercent}
+                        label="Node RAM"
+                        subtext={
+                            metrics.nodes.length > 1
+                                ? `${metrics.nodes.length} nodes avg`
+                                : (metrics.nodes[0]?.memory ?? null)
+                        }
+                        size="md"
+                        tone="auto"
+                    />
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-2 text-center">
+                    <div className="flex size-[92px] flex-col items-center justify-center rounded-full border border-line bg-surface/50">
+                        <HardDrive className="size-6 text-brand" />
+                        <span className="mt-1 font-mono text-xs font-semibold text-ink">
+                            {metrics.pvcCapacity ?? 'RWO'}
+                        </span>
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-ink">
+                        Persistent Storage
+                    </p>
+                    <p className="font-mono text-[11px] text-faint">
+                        {metrics.pvcCount} attached{' '}
+                        {metrics.pvcCount === 1 ? 'volume' : 'volumes'}
+                    </p>
+                </div>
+            </div>
+
+            {metrics.nodes.length > 1 && (
+                <div className="mt-3 divide-y divide-line rounded-lg border border-line bg-surface/40 p-2.5">
+                    <p className="mb-2 text-[11px] font-semibold tracking-wider text-soft uppercase">
+                        Per-Node Allocation
+                    </p>
+                    {metrics.nodes.map((node) => (
+                        <div
+                            key={node.name}
+                            className="flex items-center justify-between py-1.5 text-xs"
+                        >
+                            <span className="max-w-[200px] truncate font-mono font-medium text-ink">
+                                {node.name}
+                            </span>
+                            <div className="flex items-center gap-4 font-mono text-[11px] text-soft">
+                                <span>
+                                    CPU:{' '}
+                                    <strong className="text-ink">
+                                        {node.cpu}
+                                    </strong>{' '}
+                                    ({node.cpuPercent}%)
+                                </span>
+                                <span>
+                                    RAM:{' '}
+                                    <strong className="text-ink">
+                                        {node.memory}
+                                    </strong>{' '}
+                                    ({node.memoryPercent}%)
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </Card>
     );
 }
 

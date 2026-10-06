@@ -14,7 +14,14 @@ import {
 } from '@/routes/projects';
 import { show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
-import type { Project, RunStatus, Server } from '@/types/larakube';
+import Sparkline from '@/components/metrics/sparkline';
+import RadialGauge from '@/components/metrics/radial-gauge';
+import type {
+    FleetMetrics,
+    Project,
+    RunStatus,
+    Server,
+} from '@/types/larakube';
 
 type RecentRun = {
     id: number;
@@ -42,6 +49,7 @@ type DashboardProps = {
         status: string;
         tone: 'ok' | 'warn' | 'muted' | 'bad';
     };
+    fleetMetrics?: FleetMetrics | null;
 };
 
 export default function DashboardIndex({
@@ -52,6 +60,7 @@ export default function DashboardIndex({
     toolsReady,
     unprotectedServers,
     localCluster,
+    fleetMetrics,
 }: DashboardProps) {
     return (
         <AppLayout title="Dashboard">
@@ -77,6 +86,77 @@ export default function DashboardIndex({
                     </div>
                 }
             />
+
+            {fleetMetrics && (
+                <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <Card className="flex items-center justify-between p-4">
+                        <div>
+                            <p className="text-xs font-medium text-soft">
+                                Fleet Health Score
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                                {fleetMetrics.fleetHealthScore}%
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-faint">
+                                {fleetMetrics.readyServers} of{' '}
+                                {fleetMetrics.totalServers} clusters healthy
+                            </p>
+                        </div>
+                        <RadialGauge
+                            value={fleetMetrics.fleetHealthScore}
+                            label=""
+                            size="sm"
+                            tone="auto"
+                        />
+                    </Card>
+
+                    <Card className="flex items-center justify-between p-4">
+                        <div>
+                            <p className="text-xs font-medium text-soft">
+                                Deployment Success
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                                {fleetMetrics.deploySuccessRate}%
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-faint">
+                                {fleetMetrics.deploys30d} deploys in last 30d
+                            </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="font-mono text-[10px] text-faint">
+                                14-day activity
+                            </span>
+                            <Sparkline
+                                data={fleetMetrics.deployActivity14d}
+                                type="bar"
+                                height={28}
+                                width={100}
+                                unit=" deploys"
+                            />
+                        </div>
+                    </Card>
+
+                    <Card className="flex flex-col justify-between p-4">
+                        <div>
+                            <p className="text-xs font-medium text-soft">
+                                Average Rollout
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                                {fleetMetrics.avgDeployDurationSeconds
+                                    ? `${fleetMetrics.avgDeployDurationSeconds}s`
+                                    : '—'}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-faint">
+                                Deploy & rollout duration
+                            </p>
+                        </div>
+                        <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                            <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                            <span>Zero-downtime rolling updates</span>
+                        </div>
+                    </Card>
+                </div>
+            )}
 
             {!toolsReady && (
                 <div className="mb-6 rounded-xl border border-line bg-paper p-4">

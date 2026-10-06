@@ -1,4 +1,5 @@
 import {
+    Deferred,
     Form,
     Link,
     router,
@@ -31,6 +32,7 @@ import ProjectTerminalCard, {
     type ProjectRun,
 } from '@/components/project-terminal-card';
 import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
+import Sparkline from '@/components/metrics/sparkline';
 import Card from '@/components/card';
 import FrameworkFields, {
     defaultAnswers,
@@ -62,8 +64,11 @@ import { show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
 import type {
     BackingServices,
+    DeployMetrics,
+    HealthMetrics,
     NewAppAnswers,
     NewAppQuestion,
+    PodMetrics,
     Project,
     ProjectEnvironment,
     RunStatus,
@@ -89,6 +94,9 @@ export default function ShowProject({
     laravelOptions,
     readyServers,
     backing,
+    healthMetrics,
+    podMetrics,
+    deployMetrics,
 }: {
     project: Project;
     server: Server | null;
@@ -102,6 +110,9 @@ export default function ShowProject({
     laravelOptions?: NewAppQuestion[] | null;
     readyServers: ReadyServer[];
     backing?: Record<string, BackingServices | null>;
+    healthMetrics?: HealthMetrics | null;
+    podMetrics?: Record<string, PodMetrics | null>;
+    deployMetrics?: DeployMetrics | null;
 }) {
     const isRunning =
         runs.some((r) => r.status === 'running') ||
@@ -349,6 +360,30 @@ export default function ShowProject({
                                         />
                                     )}
 
+                                    {project.initialized && (
+                                        <Deferred
+                                            data={[
+                                                'healthMetrics',
+                                                'deployMetrics',
+                                            ]}
+                                            fallback={
+                                                <Card label="App Health & Telemetry">
+                                                    <div className="animate-pulse p-4 text-xs text-soft">
+                                                        Loading workload
+                                                        telemetry…
+                                                    </div>
+                                                </Card>
+                                            }
+                                        >
+                                            <AppPerformanceMetricsCard
+                                                activeEnv={activeEnv}
+                                                healthMetrics={healthMetrics}
+                                                podMetrics={podMetrics}
+                                                deployMetrics={deployMetrics}
+                                            />
+                                        </Deferred>
+                                    )}
+
                                     <EnvironmentBackingServicesCard
                                         key={activeEnv}
                                         project={project}
@@ -370,6 +405,28 @@ export default function ShowProject({
                                             setDeployModalOpen(true)
                                         }
                                     />
+
+                                    <Deferred
+                                        data={[
+                                            'healthMetrics',
+                                            'podMetrics',
+                                            'deployMetrics',
+                                        ]}
+                                        fallback={
+                                            <Card label="App Health & Telemetry">
+                                                <div className="animate-pulse p-4 text-xs text-soft">
+                                                    Loading workload telemetry…
+                                                </div>
+                                            </Card>
+                                        }
+                                    >
+                                        <AppPerformanceMetricsCard
+                                            activeEnv={activeEnv}
+                                            healthMetrics={healthMetrics}
+                                            podMetrics={podMetrics}
+                                            deployMetrics={deployMetrics}
+                                        />
+                                    </Deferred>
 
                                     <EnvironmentBackingServicesCard
                                         key={activeEnv}
@@ -789,6 +846,207 @@ function CloudEnvironmentOverviewCard({
                                   : 'Set up deployment'}
                         </span>
                     </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+function AppPerformanceMetricsCard({
+    activeEnv,
+    healthMetrics,
+    podMetrics,
+    deployMetrics,
+}: {
+    activeEnv: string;
+    healthMetrics?: HealthMetrics | null;
+    podMetrics?: Record<string, PodMetrics | null>;
+    deployMetrics?: DeployMetrics | null;
+}) {
+    const envPodMetrics = podMetrics?.[activeEnv];
+    const components = envPodMetrics?.components
+        ? Object.entries(envPodMetrics.components)
+        : [];
+
+    return (
+        <Card label="App Health & Telemetry">
+            <div className="grid grid-cols-1 divide-y divide-line lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+                {/* 1. Endpoint Latency */}
+                <div className="flex flex-col justify-between p-3.5">
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold tracking-wider text-soft uppercase">
+                                Endpoint Latency
+                            </span>
+                            {healthMetrics?.isUp ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                    <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                                    Healthy ({healthMetrics.status ?? 200})
+                                </span>
+                            ) : healthMetrics?.checkedAt ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-500">
+                                    <span className="size-1.5 rounded-full bg-rose-500" />
+                                    Unreachable
+                                </span>
+                            ) : (
+                                <span className="text-[11px] text-faint">
+                                    Idle
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="mt-2 flex items-baseline gap-2">
+                            <span className="font-mono text-2xl font-bold tracking-tight text-ink">
+                                {healthMetrics?.latencyMs !== null &&
+                                healthMetrics?.latencyMs !== undefined
+                                    ? `${healthMetrics.latencyMs}ms`
+                                    : '—'}
+                            </span>
+                            <span className="text-xs text-soft">
+                                response time
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-faint">
+                            Recent pings (/up)
+                        </span>
+                        {healthMetrics && healthMetrics.history.length > 0 ? (
+                            <Sparkline
+                                data={healthMetrics.history}
+                                type="line"
+                                height={24}
+                                width={100}
+                                unit="ms"
+                            />
+                        ) : (
+                            <span className="font-mono text-[10px] text-faint">
+                                No ping history
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* 2. Pod Resources */}
+                <div className="flex flex-col justify-between p-3.5">
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold tracking-wider text-soft uppercase">
+                                Pod Resources
+                            </span>
+                            <span className="font-mono text-[10px] text-faint">
+                                {components.length > 0
+                                    ? `${components.length} ${components.length === 1 ? 'service' : 'services'}`
+                                    : 'metrics-server'}
+                            </span>
+                        </div>
+
+                        {components.length > 0 ? (
+                            <div className="mt-2.5 space-y-2">
+                                {components.map(([name, stat]) => (
+                                    <div
+                                        key={name}
+                                        className="flex items-center justify-between text-xs"
+                                    >
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="size-1.5 rounded-full bg-brand" />
+                                            <span className="font-medium text-ink capitalize">
+                                                {name}
+                                            </span>
+                                            {stat.podCount > 1 && (
+                                                <span className="font-mono text-[10px] text-faint">
+                                                    (×{stat.podCount})
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 font-mono text-[11px] text-soft">
+                                            <span>{stat.cpu}</span>
+                                            <span className="text-line">/</span>
+                                            <span>{stat.memory}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="mt-3 py-2 text-center text-xs text-soft">
+                                <p>Pod telemetry warming up</p>
+                                <p className="mt-0.5 text-[10px] text-faint">
+                                    Awaiting Kubernetes metrics collection
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between border-t border-line/50 pt-1 text-[10px] text-faint">
+                        <span>CPU / Memory</span>
+                        <span className="font-mono">
+                            {envPodMetrics?.updatedAt
+                                ? new Date(
+                                      envPodMetrics.updatedAt,
+                                  ).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                  })
+                                : '—'}
+                        </span>
+                    </div>
+                </div>
+
+                {/* 3. Deployment Health */}
+                <div className="flex flex-col justify-between p-3.5">
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold tracking-wider text-soft uppercase">
+                                Deploy Health
+                            </span>
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-ink">
+                                {deployMetrics
+                                    ? `${deployMetrics.successRate}%`
+                                    : '—'}{' '}
+                                success
+                            </span>
+                        </div>
+
+                        <div className="mt-2 flex items-baseline gap-2">
+                            <span className="font-mono text-2xl font-bold tracking-tight text-ink">
+                                {deployMetrics?.totalDeploys ?? 0}
+                            </span>
+                            <span className="text-xs text-soft">
+                                {deployMetrics?.totalDeploys === 1
+                                    ? 'total deploy'
+                                    : 'total deploys'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 flex items-end justify-between">
+                        <div>
+                            <span className="font-mono text-[10px] text-faint">
+                                14-day cadence
+                            </span>
+                            <p className="text-[10px] text-soft">
+                                Avg duration:{' '}
+                                {deployMetrics?.avgDurationSeconds
+                                    ? `${deployMetrics.avgDurationSeconds}s`
+                                    : '—'}
+                            </p>
+                        </div>
+                        {deployMetrics &&
+                        deployMetrics.activity14d.length > 0 ? (
+                            <Sparkline
+                                data={deployMetrics.activity14d}
+                                type="bar"
+                                height={24}
+                                width={85}
+                                unit=" deploys"
+                            />
+                        ) : (
+                            <span className="font-mono text-[10px] text-faint">
+                                No deploy activity
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
         </Card>

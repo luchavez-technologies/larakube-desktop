@@ -524,3 +524,61 @@ export type BackingService = {
 };
 
 export type BackingServices = { commons: boolean; services: BackingService[] };
+
+export type NodeMetrics = {
+    available: boolean;
+    cpuPercent: number | null;
+    memoryPercent: number | null;
+    cpuUsage: string | null;
+    memoryUsage: string | null;
+    nodes: {
+        name: string;
+        cpu: string;
+        cpuPercent: number;
+        memory: string;
+        memoryPercent: number;
+    }[];
+    pvcCount: number;
+    pvcCapacity: string | null;
+    updatedAt: string;
+};
+
+export type HealthMetrics = {
+    isUp: boolean;
+    status: number | null;
+    latencyMs: number | null;
+    history: number[];
+    checkedAt: string;
+};
+
+export type PodMetrics = {
+    available: boolean;
+    components: Record<
+        string,
+        {
+            cpu: string;
+            memory: string;
+            podCount: number;
+        }
+    >;
+    updatedAt: string;
+};
+
+export type DeployMetrics = {
+    totalDeploys: number;
+    successRate: number;
+    avgDurationSeconds: number | null;
+    lastDeployedAt: string | null;
+    activity14d: number[];
+};
+
+export type FleetMetrics = {
+    fleetHealthScore: number;
+    totalServers: number;
+    readyServers: number;
+    totalProjects: number;
+    deploys30d: number;
+    deploySuccessRate: number;
+    avgDeployDurationSeconds: number | null;
+    deployActivity14d: number[];
+};

@@ -9,11 +9,14 @@ use App\Models\Run;
 use App\Services\EditorLauncher;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DevBoxShell;
+use App\Services\LaraKube\FleetMetrics;
 use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\HealthPing;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
@@ -469,8 +472,18 @@ class ProjectController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function show(Project $project, StackCatalog $stacks, EditorLauncher $editors, LaravelOptions $laravel, FrameworkCatalog $frameworks, ToolLocator $locator, ProjectServices $services): Response
-    {
+    public function show(
+        Project $project,
+        StackCatalog $stacks,
+        EditorLauncher $editors,
+        LaravelOptions $laravel,
+        FrameworkCatalog $frameworks,
+        ToolLocator $locator,
+        ProjectServices $services,
+        HealthPing $healthPing,
+        ClusterMetrics $clusterMetrics,
+        FleetMetrics $fleetMetrics,
+    ): Response {
         $scaffold = $this->lastScaffold($project);
 
         $inspection = $this->inspector->inspect($project->path);
@@ -542,6 +555,20 @@ class ProjectController extends Controller
             'backing' => Inertia::defer(fn (): array => collect(array_keys($inspection['environments']))
                 ->mapWithKeys(fn (string $environment): array => [$environment => $services->get($project->path, $environment)])
                 ->all()),
+            'healthMetrics' => Inertia::defer(fn (): ?array => $inspection['webHost'] ? $healthPing->check($inspection['webHost']) : null, 'healthMetrics'),
+            'podMetrics' => Inertia::defer(function () use ($clusterMetrics, $inspection): array {
+                $metrics = [];
+                foreach ($inspection['environments'] as $name => $env) {
+                    $context = $env['serverContext'] ?? null;
+                    if ($context) {
+                        $ns = "{$inspection['name']}-{$name}";
+                        $metrics[$name] = $clusterMetrics->podMetrics($context, $ns);
+                    }
+                }
+
+                return $metrics;
+            }, 'podMetrics'),
+            'deployMetrics' => Inertia::defer(fn (): array => $fleetMetrics->projectDeployStats($project->id), 'deployMetrics'),
         ]);
     }
 

@@ -8,6 +8,7 @@ use App\Http\Requests\DestroyServerRequest;
 use App\Http\Requests\StoreServerRequest;
 use App\Models\Project;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ContextHealth;
 use App\Services\LaraKube\ProjectInspector;
@@ -81,6 +82,7 @@ class ServerController extends Controller
         ClusterStatus $status,
         ProjectInspector $inspector,
         ToolCatalog $toolCatalog,
+        ClusterMetrics $clusterMetrics,
     ): Response {
         $stack = $catalog->find($server);
 
@@ -131,6 +133,7 @@ class ServerController extends Controller
             'plex' => Inertia::defer(fn (): ?array => $context !== null ? $status->plex($context) : null, 'plex'),
             'backup' => Inertia::defer(fn (): ?array => $context !== null ? $status->backup($context) : null, 'backup'),
             'clusterUsers' => Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
+            'nodeMetrics' => Inertia::defer(fn (): ?array => $context !== null ? $clusterMetrics->nodeMetrics($context) : null, 'nodeMetrics'),
         ]);
     }
 
