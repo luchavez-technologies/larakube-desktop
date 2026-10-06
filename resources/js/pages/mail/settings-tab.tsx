@@ -228,12 +228,12 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                             <div className="flex items-center justify-between">
                                 <div>
                                     <span className="font-semibold text-ink">
-                                        Browser Webmail
+                                        Bulwark Webmail
                                     </span>
                                     <p className="mt-0.5 text-soft">
                                         {info?.webmailUrl
-                                            ? 'SnappyMail is deployed on this server'
-                                            : 'Deploy Webmail via Cluster Tools'}
+                                            ? 'Bulwark webmail client is live on this server'
+                                            : 'Deploy Bulwark Webmail via Cluster Tools'}
                                     </p>
                                 </div>
                                 {info?.webmailUrl ? (

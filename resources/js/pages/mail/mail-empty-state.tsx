@@ -81,8 +81,8 @@ export default function MailEmptyState({ server, otherServers = [] }: Props) {
                             Webmail & Relays
                         </h3>
                         <p className="mt-1 text-xs text-soft">
-                            One-click SnappyMail interface plus built-in Amazon
-                            SES and Brevo relays.
+                            One-click Bulwark webmail interface plus built-in
+                            Amazon SES and Brevo relays.
                         </p>
                     </div>
                 </div>
