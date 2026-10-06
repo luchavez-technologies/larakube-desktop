@@ -28,3 +28,27 @@ test('isolated commands see only the allowlisted environment, not the parent app
 test('invalid variable names are rejected before reaching the shell', function () {
     (new ToolLocator(['/usr/bin']))->isolate(['/usr/bin/true'], ['BAD;NAME' => 'x']);
 })->throws(InvalidArgumentException::class);
+
+test('darwin refuses /usr/bin/git when xcode command line tools are missing', function () {
+    Process::fake([
+        '*/usr/bin/xcode-select*-p*' => Process::result(output: 'xcode-select: error', exitCode: 2),
+    ]);
+
+    $locator = new ToolLocator(['/usr/bin'], darwin: true);
+
+    expect($locator->find('git'))->toBeNull();
+});
+
+test('darwin accepts /usr/bin/git when xcode command line tools are present', function () {
+    if (! is_file('/usr/bin/git')) {
+        test()->markTestSkipped('/usr/bin/git does not exist on this machine');
+    }
+
+    Process::fake([
+        '*/usr/bin/xcode-select*-p*' => Process::result(output: '/Library/Developer/CommandLineTools', exitCode: 0),
+    ]);
+
+    $locator = new ToolLocator(['/usr/bin'], darwin: true);
+
+    expect($locator->find('git'))->toBe('/usr/bin/git');
+});

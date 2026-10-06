@@ -32,6 +32,7 @@ Route::post('/setup/tools/{tool}/install', [ToolInstallController::class, 'store
 Route::get('/setup/tools/{tool}/status', [ReadinessController::class, 'toolStatus'])->name('setup.tools.status');
 Route::post('/setup/wsl/{step}', [WslSetupController::class, 'store'])->whereIn('step', ['enable', 'download', 'import', 'reset'])->name('setup.wsl');
 Route::post('/setup/local', [LocalSetupController::class, 'store'])->name('setup.local');
+Route::post('/setup/terminal/install', [ReadinessController::class, 'installTerminal'])->name('setup.terminal.install');
 Route::post('/setup/usage', [ReadinessController::class, 'setUsage'])->name('setup.usage');
 Route::post('/setup/cli/channel', [ReadinessController::class, 'setChannel'])->name('setup.cli.channel');
 Route::post('/setup/cloud/aws', [CloudAuthController::class, 'saveAws'])->name('setup.cloud.aws');

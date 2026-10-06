@@ -19,13 +19,28 @@ class ToolLocator
     /**
      * @param  list<string>|null  $directories
      * @param  bool|null  $windows  force the Windows behaviour (commands run inside the larakube-ubuntu WSL distro), for tests
+     * @param  bool|null  $darwin  force the Darwin/macOS behaviour, for tests
      */
-    public function __construct(private ?array $directories = null, private ?bool $windows = null) {}
+    public function __construct(private ?array $directories = null, private ?bool $windows = null, private ?bool $darwin = null) {}
 
     /** On Windows the CLI and its tools live inside the larakube-ubuntu WSL distro, so every command is run there. */
     public function isWindows(): bool
     {
         return $this->windows ?? PHP_OS_FAMILY === 'Windows';
+    }
+
+    public function isDarwin(): bool
+    {
+        return $this->darwin ?? PHP_OS_FAMILY === 'Darwin';
+    }
+
+    public function hasXcodeCommandLineTools(): bool
+    {
+        if (! $this->isDarwin()) {
+            return false;
+        }
+
+        return Process::run(['/usr/bin/xcode-select', '-p'])->successful();
     }
 
     /** @var array<string, string|null> Binaries already looked up in the distro. */
@@ -76,6 +91,12 @@ class ToolLocator
             $candidate = "{$directory}/{$binary}";
 
             if (is_file($candidate) && is_executable($candidate)) {
+                if ($binary === 'git' && $candidate === '/usr/bin/git' && $this->isDarwin()) {
+                    if (! $this->hasXcodeCommandLineTools()) {
+                        continue;
+                    }
+                }
+
                 return $candidate;
             }
         }

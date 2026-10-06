@@ -124,5 +124,7 @@ test('only a Windows computer is asked about WSL', function () {
 
     $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
         ->where('windows', PHP_OS_FAMILY === 'Windows')
+        ->has('terminalConfigured')
+        ->has('shellProfile')
         ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
 });

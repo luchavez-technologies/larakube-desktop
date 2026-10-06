@@ -6,6 +6,7 @@ use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
+use App\Services\LaraKube\TerminalIntegration;
 use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -15,7 +16,7 @@ use Inertia\Response;
 
 class ReadinessController extends Controller
 {
-    public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl): Response
+    public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl, TerminalIntegration $terminal): Response
     {
         return Inertia::render('readiness', [
             'windows' => $wsl->isWindows(),
@@ -27,6 +28,8 @@ class ReadinessController extends Controller
             'usage' => $settings->get()['usage'],
             'localCluster' => Inertia::defer(fn (): array => $localCluster->detect()),
             'cliDownloadUrl' => $installer->downloadUrl(),
+            'terminalConfigured' => $terminal->isConfigured(),
+            'shellProfile' => basename($terminal->profilePath()),
         ]);
     }
 
@@ -58,5 +61,12 @@ class ReadinessController extends Controller
         $installer->setChannel($validated['channel']);
 
         return back()->with('success', "CLI release channel switched to {$validated['channel']}.");
+    }
+
+    public function installTerminal(TerminalIntegration $terminal): RedirectResponse
+    {
+        $result = $terminal->install();
+
+        return back()->with('success', $result['message']);
     }
 }

@@ -33,6 +33,8 @@ type Props = {
     cliChannel?: string;
     cliDownloadUrl?: string;
     usage: 'tools' | 'apps' | null;
+    terminalConfigured?: boolean;
+    shellProfile?: string;
     localCluster?: {
         engine: string;
         context: string | null;
@@ -50,6 +52,8 @@ export default function Readiness({
     cliChannel = 'canary',
     cliDownloadUrl: _cliDownloadUrl,
     usage,
+    terminalConfigured = false,
+    shellProfile = '.zshrc',
     localCluster,
 }: Props) {
     const [refresh, setRefresh] = useState(0);
@@ -108,7 +112,15 @@ export default function Readiness({
                 <>
                     <UsageChoice usage={usage} />
                     {usage === 'apps' && (
-                        <LocalDevelopment cluster={localCluster} />
+                        <>
+                            <LocalDevelopment cluster={localCluster} />
+                            {!windows && (
+                                <TerminalIntegrationCard
+                                    configured={terminalConfigured}
+                                    profile={shellProfile}
+                                />
+                            )}
+                        </>
                     )}
                     <div className="grid grid-cols-2 items-start gap-4.5">
                         <Card label="Command-line tools">
@@ -347,6 +359,63 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
                 {errors.local && (
                     <p className="mt-2 text-xs text-accent">{errors.local}</p>
                 )}
+            </Card>
+        </div>
+    );
+}
+
+function TerminalIntegrationCard({
+    configured,
+    profile,
+}: {
+    configured: boolean;
+    profile: string;
+}) {
+    const [installing, setInstalling] = useState(false);
+
+    const handleInstall = () => {
+        setInstalling(true);
+        router.post(
+            '/setup/terminal/install',
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setInstalling(false),
+            },
+        );
+    };
+
+    return (
+        <div className="mb-4.5">
+            <Card label="Terminal integration">
+                <ListRow
+                    action={
+                        configured ? (
+                            <StatusPill tone="ok">
+                                {`Added to ${profile}`}
+                            </StatusPill>
+                        ) : (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={installing}
+                                onClick={handleInstall}
+                            >
+                                {installing ? 'Adding…' : `Add to ${profile}`}
+                            </Button>
+                        )
+                    }
+                >
+                    <TwoLine
+                        title="Use CLI tools in Terminal"
+                        detail={
+                            configured
+                                ? `~/.larakube/bin is in your PATH. You can run larakube, kubectl, and tofu directly in your terminal.`
+                                : `Add ~/.larakube/bin to your ${profile} so you can run larakube, kubectl, and tofu from any shell window.`
+                        }
+                    />
+                </ListRow>
             </Card>
         </div>
     );
