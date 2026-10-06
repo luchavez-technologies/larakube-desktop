@@ -1,7 +1,8 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { Globe, Send, Settings, ExternalLink, Inbox } from 'lucide-react';
 import { buttonClass } from '@/components/button';
+import { open } from '@/routes';
 import AppLayout from '@/layouts/app-layout';
 import MailEmptyState from './mail-empty-state';
 import MailboxesTab, { type AccountRow } from './mailboxes-tab';
@@ -112,27 +113,31 @@ export default function MailIndex({
                         </label>
 
                         {isInstalled && serverInfo?.webmailUrl && (
-                            <a
-                                href={serverInfo.webmailUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                            <Link
+                                href={open().url}
+                                method="post"
+                                data={{ url: serverInfo.webmailUrl }}
+                                as="button"
                                 className={buttonClass('secondary', 'md')}
+                                title="Open Bulwark Webmail in default browser"
                             >
                                 <ExternalLink className="h-4 w-4" />
                                 Webmail
-                            </a>
+                            </Link>
                         )}
 
                         {isInstalled && serverInfo?.adminUrl && (
-                            <a
-                                href={serverInfo.adminUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                            <Link
+                                href={open().url}
+                                method="post"
+                                data={{ url: serverInfo.adminUrl }}
+                                as="button"
                                 className={buttonClass('secondary', 'md')}
+                                title="Open Stalwart Admin Console in default browser"
                             >
                                 <ExternalLink className="h-4 w-4" />
                                 Admin Console
-                            </a>
+                            </Link>
                         )}
                     </div>
                 </div>

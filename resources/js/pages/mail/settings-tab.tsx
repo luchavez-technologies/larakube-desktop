@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ExternalLink,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import { open } from '@/routes';
 import type { Server as ServerType } from '@/types/larakube';
 
 export type ServerInfo = {
@@ -158,18 +160,20 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                     Administrator Access
                                 </span>
                                 {info?.adminUrl && (
-                                    <a
-                                        href={info.adminUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{ url: info.adminUrl }}
+                                        as="button"
                                         className={buttonClass(
                                             'secondary',
                                             'sm',
                                         )}
+                                        title="Open Stalwart Admin Console in default browser"
                                     >
                                         <ExternalLink className="h-3.5 w-3.5" />
                                         Open Console
-                                    </a>
+                                    </Link>
                                 )}
                             </div>
 
@@ -237,15 +241,17 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                     </p>
                                 </div>
                                 {info?.webmailUrl ? (
-                                    <a
-                                        href={info.webmailUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{ url: info.webmailUrl }}
+                                        as="button"
                                         className={buttonClass('primary', 'sm')}
+                                        title="Open Bulwark Webmail in default browser"
                                     >
                                         <ExternalLink className="h-3.5 w-3.5" />
                                         Launch Webmail
-                                    </a>
+                                    </Link>
                                 ) : (
                                     <a
                                         href={`/servers/${server.name}/tools`}
