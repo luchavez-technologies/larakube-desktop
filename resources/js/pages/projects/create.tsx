@@ -755,7 +755,7 @@ export default function CreateProject({
                                                                 form.data
                                                                     .box ===
                                                                     name
-                                                                    ? 'bg-ink text-white'
+                                                                    ? 'bg-ink text-surface shadow-xs'
                                                                     : 'bg-surface text-ink ring-1 ring-line hover:bg-paper',
                                                             )}
                                                         >
@@ -771,7 +771,7 @@ export default function CreateProject({
                                                                             .data
                                                                             .box ===
                                                                             name
-                                                                            ? 'text-white/70'
+                                                                            ? 'text-surface/80'
                                                                             : 'text-soft',
                                                                     )}
                                                                 >

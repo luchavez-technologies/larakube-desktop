@@ -301,7 +301,7 @@ function LocationSwitch({
                     className={cn(
                         'inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-sm font-medium transition',
                         box === name
-                            ? 'bg-ink text-white'
+                            ? 'bg-ink text-surface shadow-xs'
                             : 'text-soft hover:bg-paper hover:text-ink',
                     )}
                 >

@@ -297,7 +297,7 @@ function UsageChoice({ usage }: { usage: 'tools' | 'apps' | null }) {
                             className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 text-left transition ${
                                 selected
                                     ? 'border-accent bg-accent-tint'
-                                    : 'border-line bg-white hover:border-faint hover:bg-paper'
+                                    : 'border-line bg-surface hover:border-faint hover:bg-paper'
                             }`}
                         >
                             <span
@@ -305,7 +305,7 @@ function UsageChoice({ usage }: { usage: 'tools' | 'apps' | null }) {
                                 className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 ${
                                     selected
                                         ? 'border-accent bg-accent text-white'
-                                        : 'border-faint bg-white'
+                                        : 'border-faint bg-surface'
                                 }`}
                             >
                                 {selected && <Check className="size-3" />}
