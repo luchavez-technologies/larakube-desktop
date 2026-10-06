@@ -77,6 +77,15 @@ enum RunKind: string
     /** A tunnel from this computer to a workspace editor. Runs until it is stopped. */
     case WorkspaceOpen = 'workspace-open';
 
+    /** Mail & Stalwart management. */
+    case MailDeploy = 'mail-deploy';
+    case MailCreateAccount = 'mail-create-account';
+    case MailDeleteAccount = 'mail-delete-account';
+    case MailResetPassword = 'mail-reset-password';
+    case MailAddDomain = 'mail-add-domain';
+    case MailConfigureRelay = 'mail-configure-relay';
+    case MailSendTest = 'mail-send-test';
+
     public function changesBackups(): bool
     {
         return in_array($this, [self::BackupInit, self::BackupSchedule, self::BackupUnschedule, self::BackupRun, self::BackupRestore, self::BackupPrune], true);
@@ -85,5 +94,10 @@ enum RunKind: string
     public function changesClusterTools(): bool
     {
         return in_array($this, [self::InstallClusterTool, self::RemoveClusterTool, self::ConnectDomain], true);
+    }
+
+    public function changesMail(): bool
+    {
+        return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailConfigureRelay], true);
     }
 }

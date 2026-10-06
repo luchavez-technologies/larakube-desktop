@@ -7,6 +7,7 @@ use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\Elevation;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\MailStatus;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolCatalog;
 use App\Services\RunNotifier;
@@ -107,6 +108,10 @@ class RecordRunOutput
 
         if ($context !== null && $run->kind === RunKind::EnableSsl) {
             app(ClusterStatus::class)->forgetTls($context);
+        }
+
+        if ($context !== null && $run->kind?->changesMail()) {
+            app(MailStatus::class)->forget($context);
         }
     }
 

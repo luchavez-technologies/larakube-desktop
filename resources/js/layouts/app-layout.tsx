@@ -9,10 +9,11 @@ import {
     Terminal,
     Settings,
     Code2,
+    Mail,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
-import { dashboard, readiness, tools } from '@/routes';
+import { dashboard, mail, readiness, tools } from '@/routes';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
@@ -44,7 +45,10 @@ const navigation: NavItem[] = [
         label: 'Servers',
         description: 'Create & manage',
         href: serversIndex().url,
-        active: (url) => url.startsWith('/servers') && !url.includes('/tools'),
+        active: (url) =>
+            url.startsWith('/servers') &&
+            !url.includes('/tools') &&
+            !url.includes('/mail'),
         accent: 'bg-servers',
         icon: Server,
     },
@@ -74,6 +78,15 @@ const navigation: NavItem[] = [
             url.startsWith('/tools') || /^\/servers\/[^/]+\/tools/.test(url),
         accent: 'bg-tools',
         icon: Wrench,
+    },
+    {
+        label: 'Mail',
+        description: 'Email & mailboxes',
+        href: mail().url,
+        active: (url) =>
+            url.startsWith('/mail') || /^\/servers\/[^/]+\/mail/.test(url),
+        accent: 'bg-emerald-600',
+        icon: Mail,
     },
     {
         label: 'Activity',

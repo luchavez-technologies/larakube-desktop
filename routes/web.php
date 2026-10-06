@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\LocalSetupController;
+use App\Http\Controllers\MailController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
@@ -123,6 +124,17 @@ Route::post('/projects/{project}/tld', [ProjectController::class, 'tld'])->name(
 Route::post('/projects/{project}/plex/join', [PlexController::class, 'joinProject'])->name('projects.plex.join');
 Route::get('/projects/{project}/services', [ProjectController::class, 'services'])->name('projects.services');
 Route::post('/projects/{project}/plex/leave', [PlexController::class, 'leaveProject'])->name('projects.plex.leave');
+
+Route::get('/mail', [MailController::class, 'entry'])->name('mail');
+Route::get('/servers/{server}/mail', [MailController::class, 'index'])->name('servers.mail.index');
+Route::post('/servers/{server}/mail/deploy', [MailController::class, 'deploy'])->name('servers.mail.deploy');
+Route::post('/servers/{server}/mail/accounts', [MailController::class, 'createAccount'])->name('servers.mail.accounts.store');
+Route::post('/servers/{server}/mail/accounts/password', [MailController::class, 'resetPassword'])->name('servers.mail.accounts.password');
+Route::delete('/servers/{server}/mail/accounts', [MailController::class, 'deleteAccount'])->name('servers.mail.accounts.destroy');
+Route::post('/servers/{server}/mail/domains', [MailController::class, 'addDomain'])->name('servers.mail.domains.store');
+Route::post('/servers/{server}/mail/relay', [MailController::class, 'configureRelay'])->name('servers.mail.relay.store');
+Route::post('/servers/{server}/mail/test', [MailController::class, 'sendTest'])->name('servers.mail.test');
+Route::get('/servers/{server}/mail/check-dns', [MailController::class, 'checkDns'])->name('servers.mail.check-dns');
 
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
 Route::get('/servers/{server}/tools', [ClusterToolController::class, 'index'])->name('servers.tools.index');
