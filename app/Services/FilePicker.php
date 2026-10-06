@@ -10,13 +10,13 @@ class FilePicker
     /**
      * @param  list<string>  $extensions
      */
-    public function pick(string $title, array $extensions = ['yaml', 'yml', 'conf', 'config']): ?string
+    public function pick(string $title, array $extensions = ['yaml', 'yml', 'conf', 'config'], ?string $filterName = null): ?string
     {
         try {
             $dialog = Dialog::new()->title($title)->files();
 
             if (! empty($extensions)) {
-                $dialog->filter('Kubernetes Config Files', $extensions);
+                $dialog->filter($filterName ?? 'Configuration Files', $extensions);
             }
 
             $path = $dialog->open();

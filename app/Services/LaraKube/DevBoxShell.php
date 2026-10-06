@@ -121,4 +121,42 @@ class DevBoxShell
 
         return $result->successful() && is_array($decoded) && ($decoded['success'] ?? false) === true ? $decoded : null;
     }
+
+    /**
+     * Reads collaborator keys configured on the dev box.
+     *
+     * @param  array{ip?: ?string, sshKey?: ?string}  $box
+     * @return list<array{type: string, name: string, key: string}>|null
+     */
+    public function collaborators(array $box): ?array
+    {
+        try {
+            $isolated = $this->locator->isolate($this->script($box, 'cat ~/.ssh/authorized_keys 2>/dev/null || true'));
+            $result = Process::env($isolated['environment'])->timeout(15)->run($isolated['command']);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $result->successful()) {
+            return null;
+        }
+
+        $lines = preg_split('/\R/', trim($result->output())) ?: [];
+        $collaborators = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (preg_match('/#\s*larakube:collaborator:(github|key):([a-zA-Z0-9_.-]+)/', $line, $matches)) {
+                $type = $matches[1];
+                $name = $matches[2];
+                $collaborators[] = [
+                    'type' => $type,
+                    'name' => $name,
+                    'key' => trim(substr($line, 0, (int) strpos($line, '#'))),
+                ];
+            }
+        }
+
+        return $collaborators;
+    }
 }

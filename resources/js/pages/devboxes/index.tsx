@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Deferred, Link } from '@inertiajs/react';
-import { ChevronRight, Plus, Settings } from 'lucide-react';
+import { ChevronRight, Download, Plus, Settings } from 'lucide-react';
 import { buttonClass } from '@/components/button';
+import DevBoxImportModal from '@/components/devbox-import-modal';
 import PageHeader from '@/components/page-header';
 import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
@@ -22,6 +23,7 @@ export default function DevBoxes({
     disabled?: boolean;
 }) {
     const [viewMode, setViewMode] = useState<ViewMode>('table');
+    const [importOpen, setImportOpen] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem('larakube_view_mode_devboxes');
@@ -76,6 +78,14 @@ export default function DevBoxes({
                             mode={viewMode}
                             onChange={handleViewModeChange}
                         />
+                        <button
+                            type="button"
+                            onClick={() => setImportOpen(true)}
+                            className={buttonClass('secondary')}
+                        >
+                            <Download className="size-4" />
+                            <span>Import dev box</span>
+                        </button>
                         <Link
                             href={create().url}
                             className={buttonClass('primary')}
@@ -108,11 +118,33 @@ export default function DevBoxes({
                             connect with SSH, and run{' '}
                             <span className="font-mono">larakube new</span>.
                         </p>
+                        <div className="mt-5 flex items-center justify-center gap-2.5">
+                            <button
+                                type="button"
+                                onClick={() => setImportOpen(true)}
+                                className={buttonClass('secondary')}
+                            >
+                                <Download className="size-4" />
+                                <span>Import bundle</span>
+                            </button>
+                            <Link
+                                href={create().url}
+                                className={buttonClass('primary')}
+                            >
+                                <Plus className="size-4" />
+                                <span>Create a dev box</span>
+                            </Link>
+                        </div>
                     </div>
                 ) : (
                     <DevBoxList boxes={devBoxes} viewMode={viewMode} />
                 )}
             </Deferred>
+
+            <DevBoxImportModal
+                isOpen={importOpen}
+                onClose={() => setImportOpen(false)}
+            />
 
             <p className="mt-8 text-xs text-soft">
                 Looking for browser editors on a deploy server?{' '}

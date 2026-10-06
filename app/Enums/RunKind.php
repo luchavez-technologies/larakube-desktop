@@ -17,6 +17,10 @@ enum RunKind: string
     case RemoveDomainDevBoxProject = 'remove-domain-dev-box-project';
     /** The LaraKube CLI on a dev box, installed again from the channel Desktop uses. */
     case UpdateDevBoxCli = 'update-dev-box-cli';
+    case ExportDevBox = 'export-dev-box';
+    case ImportDevBox = 'import-dev-box';
+    case GrantDevBoxAccess = 'grant-dev-box-access';
+    case RevokeDevBoxAccess = 'revoke-dev-box-access';
     /** A server made with cloud:create, rebooted over SSH. */
     case RestartServer = 'restart-server';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */

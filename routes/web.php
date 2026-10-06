@@ -70,9 +70,14 @@ Route::post('/servers/{server}/access/grant', [ClusterAccessController::class, '
 Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 'revoke'])->name('servers.access.revoke');
 
 Route::get('/dev-boxes', [DevBoxController::class, 'index'])->name('devboxes.index');
+Route::get('/dev-boxes/pick-bundle', [DevBoxController::class, 'pickBundle'])->name('devboxes.pick-bundle');
+Route::post('/dev-boxes/import', [DevBoxController::class, 'import'])->name('devboxes.import');
 Route::get('/dev-boxes/create', [DevBoxController::class, 'create'])->name('devboxes.create');
 Route::post('/dev-boxes', [DevBoxController::class, 'store'])->name('devboxes.store');
 Route::get('/dev-boxes/{box}', [DevBoxController::class, 'show'])->name('devboxes.show');
+Route::post('/dev-boxes/{box}/export', [DevBoxController::class, 'export'])->name('devboxes.export');
+Route::post('/dev-boxes/{box}/access/grant', [DevBoxController::class, 'grant'])->name('devboxes.access.grant');
+Route::post('/dev-boxes/{box}/access/revoke', [DevBoxController::class, 'revoke'])->name('devboxes.access.revoke');
 Route::post('/dev-boxes/{box}/update-cli', [DevBoxController::class, 'updateCli'])->name('devboxes.update-cli');
 Route::get('/dev-boxes/{box}/projects/{project}', [DevBoxController::class, 'showProject'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.show');
 Route::post('/dev-boxes/{box}/projects/{project}/{action}', [DevBoxController::class, 'operate'])->where('project', '[a-z0-9][a-z0-9-]*')->where('action', 'up|down|start|stop')->name('devboxes.operate');

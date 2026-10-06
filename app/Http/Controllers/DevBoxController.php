@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Http\Requests\StoreServerRequest;
 use App\Models\Run;
+use App\Services\FilePicker;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DevBoxShell;
@@ -12,9 +13,12 @@ use App\Services\LaraKube\DevBoxTunnel;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
+use App\Services\LaraKube\ToolLocator;
+use App\Services\Runtime\WslDistro;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -171,6 +175,10 @@ class DevBoxController extends Controller
 
                 return ['context' => $context, 'plex' => $context !== null ? $status->plex($context) : null];
             }, 'cluster'),
+            // Collaborators authorized to access the box via public key.
+            'collaborators' => Inertia::defer(function () use ($ready, $shell, $stack): ?array {
+                return $ready ? $shell->collaborators($stack) : null;
+            }, 'collaborators'),
         ]);
     }
 
@@ -287,6 +295,222 @@ class DevBoxController extends Controller
             devBox: $stack,
             devBoxProject: $project,
             devBoxReadSecret: self::TOKEN_VARIABLE,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function pickBundle(FilePicker $picker): JsonResponse
+    {
+        $path = $picker->pick('Select Dev Box Bundle (.devbox)', ['devbox'], 'Dev Box Bundles');
+
+        return response()->json(['path' => $path]);
+    }
+
+    public function export(Request $request, string $box, StackCatalog $catalog, CliRunner $runner, ToolLocator $locator): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'passphrase' => ['required', 'string', 'min:4'],
+            'output' => ['nullable', 'string'],
+        ]);
+
+        $isWindows = $locator->isWindows();
+        $downloadsDir = ToolLocator::hostDownloadsDirectory($isWindows);
+        $sep = $isWindows ? '\\' : DIRECTORY_SEPARATOR;
+
+        $hostOutputPath = ! empty($validated['output'])
+            ? (string) $validated['output']
+            : $downloadsDir.$sep."{$box}.devbox";
+
+        $cliOutputPath = $isWindows ? WslDistro::toLinux($hostOutputPath) : $hostOutputPath;
+
+        $run = $runner->start(
+            label: "Export dev box {$box}",
+            arguments: [
+                'devbox:export',
+                $box,
+                "--output={$cliOutputPath}",
+                "--passphrase={$validated['passphrase']}",
+                '--json',
+            ],
+            kind: RunKind::ExportDevBox,
+            subject: "server:{$box}",
+            meta: [
+                'server' => $box,
+                'role' => 'dev',
+                'outputPath' => $hostOutputPath,
+            ],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function import(Request $request, CliRunner $runner, ToolLocator $locator): RedirectResponse
+    {
+        $this->ensureEnabled();
+
+        $path = null;
+        if ($request->hasFile('bundle')) {
+            $uploaded = $request->file('bundle');
+            $tempDir = storage_path('framework/temp/devboxes');
+            File::ensureDirectoryExists($tempDir);
+            $origName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $uploaded->getClientOriginalName() ?: 'export.devbox');
+            $path = "{$tempDir}/import-".bin2hex(random_bytes(6)).'-'.$origName;
+            $uploaded->move($tempDir, basename($path));
+        } else {
+            $validated = $request->validate([
+                'file' => ['nullable', 'string'],
+                'path' => ['nullable', 'string'],
+                'name' => ['nullable', 'string', 'max:50', 'regex:/^[a-z0-9][a-z0-9-]*$/'],
+                'passphrase' => ['required', 'string', 'min:4'],
+            ]);
+
+            $path = $validated['file'] ?? $validated['path'] ?? null;
+        }
+
+        if ($path !== null && str_starts_with($path, '~/')) {
+            $path = ToolLocator::home().substr($path, 1);
+        }
+
+        if ($path === null || ! file_exists($path)) {
+            return back()->withErrors(['file' => 'Provide a valid .devbox bundle file.']);
+        }
+
+        $validated = $request->validate([
+            'name' => ['nullable', 'string', 'max:50', 'regex:/^[a-z0-9][a-z0-9-]*$/'],
+            'passphrase' => ['required', 'string', 'min:4'],
+        ]);
+
+        $isWindows = $locator->isWindows();
+        $cliPath = $isWindows ? WslDistro::toLinux($path) : $path;
+
+        $args = [
+            'devbox:import',
+            $cliPath,
+            "--passphrase={$validated['passphrase']}",
+            '--json',
+        ];
+
+        if (! empty($validated['name'])) {
+            $args[] = "--name={$validated['name']}";
+        }
+
+        $targetName = $validated['name'] ?? basename($path, '.devbox');
+
+        $run = $runner->start(
+            label: "Import dev box {$targetName}",
+            arguments: $args,
+            kind: RunKind::ImportDevBox,
+            subject: "server:{$targetName}",
+            meta: [
+                'server' => $targetName,
+                'role' => 'dev',
+                'bundlePath' => $path,
+            ],
+            targetType: 'server',
+            targetName: $targetName,
+            serverName: $targetName,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function grant(Request $request, string $box, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'github' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'pubkey' => ['nullable', 'string'],
+        ]);
+
+        $github = $validated['github'] ?? null;
+        $pubkey = $validated['pubkey'] ?? null;
+
+        if (empty($github) && empty($pubkey)) {
+            return back()->withErrors(['github' => 'Specify either a GitHub username or a public key.']);
+        }
+
+        $args = ['devbox:grant', $box, '--json'];
+        $collaboratorLabel = '';
+
+        if (! empty($github)) {
+            $args[] = "--github={$github}";
+            $collaboratorLabel = "@{$github}";
+        } else {
+            $args[] = "--pubkey={$pubkey}";
+            $collaboratorLabel = 'public key';
+        }
+
+        $run = $runner->start(
+            label: "Grant access to {$collaboratorLabel} on {$box}",
+            arguments: $args,
+            kind: RunKind::GrantDevBoxAccess,
+            subject: "server:{$box}",
+            meta: [
+                'server' => $box,
+                'role' => 'dev',
+                'collaborator' => $github ?? 'key',
+            ],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function revoke(Request $request, string $box, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'github' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'pubkey' => ['nullable', 'string'],
+        ]);
+
+        $github = $validated['github'] ?? null;
+        $pubkey = $validated['pubkey'] ?? null;
+
+        if (empty($github) && empty($pubkey)) {
+            return back()->withErrors(['github' => 'Specify either a GitHub username or a public key to revoke.']);
+        }
+
+        $args = ['devbox:revoke', $box, '--json'];
+        $collaboratorLabel = '';
+
+        if (! empty($github)) {
+            $args[] = "--github={$github}";
+            $collaboratorLabel = "@{$github}";
+        } else {
+            $args[] = "--pubkey={$pubkey}";
+            $collaboratorLabel = 'public key';
+        }
+
+        $run = $runner->start(
+            label: "Revoke access for {$collaboratorLabel} on {$box}",
+            arguments: $args,
+            kind: RunKind::RevokeDevBoxAccess,
+            subject: "server:{$box}",
+            meta: [
+                'server' => $box,
+                'role' => 'dev',
+                'collaborator' => $github ?? 'key',
+            ],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
         );
 
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);

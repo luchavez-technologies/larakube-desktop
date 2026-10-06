@@ -1,8 +1,21 @@
+import { useState } from 'react';
 import { Deferred, Link } from '@inertiajs/react';
-import { ArrowUpCircle, FolderGit2, Plus, Share2 } from 'lucide-react';
-import { buttonClass } from '@/components/button';
+import {
+    ArrowUpCircle,
+    FolderGit2,
+    Key,
+    Lock,
+    Plus,
+    Share2,
+    Trash2,
+    UserPlus,
+} from 'lucide-react';
+import { SiGithub } from '@icons-pack/react-simple-icons';
+import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import DevBoxExportModal from '@/components/devbox-export-modal';
+import DevBoxGrantModal from '@/components/devbox-grant-modal';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
@@ -20,19 +33,24 @@ import { providerLabels } from '@/types/larakube';
 import type { DevBoxProject, PlexStatus, Server } from '@/types/larakube';
 
 type Cluster = { context: string | null; plex: PlexStatus | null };
+type Collaborator = { type: 'github' | 'key'; name: string; key: string };
 
 export default function ShowDevBox({
     box,
     projects,
     cluster,
+    collaborators,
 }: {
     box: Server;
     projects?: DevBoxProject[] | null;
     cluster?: Cluster;
+    collaborators?: Collaborator[] | null;
 }) {
     const [label, tone] = serverStatus[box.status];
     const ready = box.status === 'ready';
     const ssh = `ssh ${box.name}`;
+    const [exportOpen, setExportOpen] = useState(false);
+    const [grantOpen, setGrantOpen] = useState(false);
 
     return (
         <AppLayout title={box.name}>
@@ -111,6 +129,38 @@ export default function ShowDevBox({
                         )}
                     </Deferred>
 
+                    <Card
+                        label={`Collaborators${collaborators && collaborators.length > 0 ? ` · ${collaborators.length}` : ''}`}
+                        action={
+                            ready ? (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setGrantOpen(true)}
+                                >
+                                    <UserPlus className="size-3.5" />
+                                    <span>Grant access</span>
+                                </Button>
+                            ) : null
+                        }
+                    >
+                        <Deferred
+                            data="collaborators"
+                            fallback={
+                                <p className="text-xs text-soft">
+                                    Checking authorized collaborator keys…
+                                </p>
+                            }
+                        >
+                            <CollaboratorList
+                                box={box.name}
+                                collaborators={collaborators}
+                                ready={ready}
+                            />
+                        </Deferred>
+                    </Card>
+
                     <Card label="Work on this box">
                         <ListRow action={<CopyButton value={ssh} />}>
                             <TwoLine
@@ -180,12 +230,34 @@ export default function ShowDevBox({
                                     <ArrowUpCircle className="size-3.5" />
                                     <span>Update CLI</span>
                                 </Link>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setExportOpen(true)}
+                                    title="Export encrypted dev box bundle for migration"
+                                >
+                                    <Lock className="size-3.5" />
+                                    <span>Export bundle</span>
+                                </Button>
                                 <ServerActions server={box} />
                             </div>
                         </Card>
                     )}
                 </div>
             </div>
+
+            <DevBoxExportModal
+                isOpen={exportOpen}
+                onClose={() => setExportOpen(false)}
+                box={box.name}
+            />
+
+            <DevBoxGrantModal
+                isOpen={grantOpen}
+                onClose={() => setGrantOpen(false)}
+                box={box.name}
+            />
         </AppLayout>
     );
 }
@@ -299,6 +371,95 @@ function BoxProjects({
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+function CollaboratorList({
+    box,
+    collaborators,
+    ready,
+}: {
+    box: string;
+    collaborators?: Collaborator[] | null;
+    ready: boolean;
+}) {
+    if (collaborators == null) {
+        return (
+            <p className="py-2 text-xs text-soft">
+                Could not read collaborator keys from this box.
+            </p>
+        );
+    }
+
+    if (collaborators.length === 0) {
+        return (
+            <p className="py-2 text-xs text-soft">
+                No collaborators authorized yet. Grant access to allow teammates
+                to connect over SSH without sharing root keys.
+            </p>
+        );
+    }
+
+    return (
+        <div className="divide-y divide-line">
+            {collaborators.map((collab) => {
+                const isGithub = collab.type === 'github';
+                const keySnippet =
+                    collab.key.length > 36
+                        ? `${collab.key.slice(0, 16)}…${collab.key.slice(-12)}`
+                        : collab.key;
+
+                return (
+                    <div
+                        key={`${collab.type}-${collab.name}`}
+                        className="flex items-center justify-between py-2.5 first:pt-1 last:pb-1"
+                    >
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex size-7 items-center justify-center rounded-lg bg-badge text-soft">
+                                {isGithub ? (
+                                    <SiGithub className="size-3.5" />
+                                ) : (
+                                    <Key className="size-3.5" />
+                                )}
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-ink">
+                                        {isGithub
+                                            ? `@${collab.name}`
+                                            : collab.name}
+                                    </span>
+                                    <span className="rounded bg-paper px-1 py-0.5 font-mono text-[9px] text-soft uppercase">
+                                        {collab.type}
+                                    </span>
+                                </div>
+                                <p className="font-mono text-[11px] text-faint">
+                                    {keySnippet}
+                                </p>
+                            </div>
+                        </div>
+
+                        {ready && (
+                            <Link
+                                href={`/dev-boxes/${box}/access/revoke`}
+                                method="post"
+                                data={
+                                    isGithub
+                                        ? { github: collab.name }
+                                        : { pubkey: collab.key }
+                                }
+                                as="button"
+                                className={buttonClass('danger', 'sm', 'gap-1')}
+                                title="Revoke access"
+                            >
+                                <Trash2 className="size-3" />
+                                <span>Revoke</span>
+                            </Link>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 }
