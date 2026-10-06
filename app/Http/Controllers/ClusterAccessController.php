@@ -40,6 +40,8 @@ class ClusterAccessController extends Controller
             $args[] = '--cluster';
         } elseif (! empty($scope)) {
             $args[] = "--namespaces={$scope}";
+        } else {
+            $args[] = '--namespaces=production';
         }
 
         $status->forgetClusterUsers($stack['context']);

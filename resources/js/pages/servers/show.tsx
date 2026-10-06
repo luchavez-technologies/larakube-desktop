@@ -912,7 +912,7 @@ function GrantAccessDialog({
 }) {
     const [name, setName] = useState('');
     const [role, setRole] = useState<'edit' | 'read' | 'admin'>('edit');
-    const [scope, setScope] = useState('');
+    const [scope, setScope] = useState('production');
     const [isCluster, setIsCluster] = useState(false);
 
     return (
@@ -1020,8 +1020,7 @@ function GrantAccessDialog({
                             {!isCluster && (
                                 <label className="block">
                                     <span className="mb-1.5 block text-xs font-medium text-soft">
-                                        Scoped Namespaces (optional,
-                                        comma-separated)
+                                        Scoped Namespaces (comma-separated)
                                     </span>
                                     <input
                                         name="scope"

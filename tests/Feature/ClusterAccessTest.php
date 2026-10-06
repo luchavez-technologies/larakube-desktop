@@ -48,6 +48,59 @@ test('cluster grant access starts run with scope and role arguments', function (
     File::deleteDirectory($sandbox['home']);
 });
 
+test('cluster grant access defaults to production namespace when scope is omitted', function () {
+    $sandbox = clusterAccessSandbox();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('prod-vps')->andReturn([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.access.grant', ['server' => 'prod-vps']), [
+        'name' => 'alice',
+        'role' => 'edit',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cluster:grant', '--name=alice', '--context=larakube-do-ams3', '--edit', '--namespaces=production', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('cluster grant access passes --cluster flag when cluster is true', function () {
+    $sandbox = clusterAccessSandbox();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('prod-vps')->andReturn([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.access.grant', ['server' => 'prod-vps']), [
+        'name' => 'alice',
+        'role' => 'admin',
+        'cluster' => true,
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cluster:grant', '--name=alice', '--context=larakube-do-ams3', '--admin', '--cluster', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('cluster revoke access starts run with user argument', function () {
     $sandbox = clusterAccessSandbox();
     $stacks = mock(StackCatalog::class);
