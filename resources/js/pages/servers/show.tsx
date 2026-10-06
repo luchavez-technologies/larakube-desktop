@@ -878,9 +878,23 @@ function TeamAccessCard({
                                         <span className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft">
                                             {user.name}
                                         </span>
+                                        {user.isCluster ? (
+                                            <span className="rounded bg-brand/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-brand">
+                                                Cluster-wide
+                                                {user.role
+                                                    ? ` · ${user.role}`
+                                                    : ''}
+                                            </span>
+                                        ) : user.role ? (
+                                            <span className="rounded bg-line/60 px-1.5 py-0.5 font-mono text-[10px] text-soft">
+                                                {user.role}
+                                            </span>
+                                        ) : null}
                                     </div>
                                     <p className="font-mono text-[11px] text-faint">
-                                        namespace: {user.namespace || 'all'}
+                                        {user.isCluster
+                                            ? 'scope: all namespaces (cluster-level)'
+                                            : `namespaces: ${user.scope || (user.namespaces && user.namespaces.length ? user.namespaces.join(', ') : 'all')}`}
                                     </p>
                                 </div>
                             </div>

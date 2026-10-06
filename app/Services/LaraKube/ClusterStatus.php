@@ -254,22 +254,72 @@ class ClusterStatus
             }
 
             $items = json_decode($result->output(), true)['items'] ?? [];
+            if (! is_array($items) || empty($items)) {
+                return [];
+            }
+
+            $bindingsCmd = $this->locator->isolate([$cli, "--context={$context}", 'get', 'clusterrolebinding,rolebinding', '-A', '-l', 'larakube.dev/access-user', '-o', 'json']);
+            $bindingsResult = Process::env($bindingsCmd['environment'])->timeout(15)->run($bindingsCmd['command']);
+            $bindingItems = $bindingsResult->successful() ? (json_decode($bindingsResult->output(), true)['items'] ?? []) : [];
+
+            $clusterRolesByUser = [];
+            $namespacesByUser = [];
+
+            if (is_array($bindingItems)) {
+                foreach ($bindingItems as $b) {
+                    $userSa = $b['metadata']['labels']['larakube.dev/access-user'] ?? null;
+                    if (! $userSa && ! empty($b['subjects'])) {
+                        foreach ($b['subjects'] as $sub) {
+                            if (($sub['kind'] ?? '') === 'ServiceAccount') {
+                                $userSa = $sub['name'] ?? null;
+                                break;
+                            }
+                        }
+                    }
+                    if (! $userSa) {
+                        continue;
+                    }
+
+                    $kind = $b['kind'] ?? '';
+                    $roleName = $b['roleRef']['name'] ?? 'edit';
+
+                    if ($kind === 'ClusterRoleBinding') {
+                        $clusterRolesByUser[$userSa] = $roleName;
+                    } elseif ($kind === 'RoleBinding') {
+                        $bNs = $b['metadata']['namespace'] ?? '';
+                        if ($bNs !== '') {
+                            $namespacesByUser[$userSa][$bNs] = $roleName;
+                        }
+                    }
+                }
+            }
+
             $users = [];
 
-            if (is_array($items)) {
-                foreach ($items as $sa) {
-                    $name = $sa['metadata']['name'] ?? '';
-                    $person = $sa['metadata']['annotations']['larakube.dev/person'] ?? $name;
-                    $ns = $sa['metadata']['namespace'] ?? '';
-                    $createdAt = $sa['metadata']['creationTimestamp'] ?? null;
+            foreach ($items as $sa) {
+                $name = $sa['metadata']['name'] ?? '';
+                $person = $sa['metadata']['annotations']['larakube.dev/person'] ?? $name;
+                $ns = $sa['metadata']['namespace'] ?? '';
+                $createdAt = $sa['metadata']['creationTimestamp'] ?? null;
 
-                    $users[] = [
-                        'name' => (string) $name,
-                        'person' => (string) $person,
-                        'namespace' => (string) $ns,
-                        'createdAt' => is_string($createdAt) ? $createdAt : null,
-                    ];
+                $isCluster = isset($clusterRolesByUser[$name]);
+                $role = $clusterRolesByUser[$name] ?? null;
+                $nsList = array_keys($namespacesByUser[$name] ?? []);
+
+                if (! $isCluster && ! empty($namespacesByUser[$name])) {
+                    $role = reset($namespacesByUser[$name]);
                 }
+
+                $users[] = [
+                    'name' => (string) $name,
+                    'person' => (string) $person,
+                    'namespace' => (string) $ns,
+                    'isCluster' => $isCluster,
+                    'role' => is_string($role) ? $role : null,
+                    'namespaces' => $nsList,
+                    'scope' => $isCluster ? 'cluster' : (empty($nsList) ? 'all' : implode(', ', $nsList)),
+                    'createdAt' => is_string($createdAt) ? $createdAt : null,
+                ];
             }
 
             return $users;

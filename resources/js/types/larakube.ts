@@ -350,6 +350,10 @@ export type ClusterUser = {
     name: string;
     person: string;
     namespace: string;
+    isCluster?: boolean;
+    role?: string | null;
+    scope?: string | null;
+    namespaces?: string[];
     createdAt: string | null;
 };
 
