@@ -38,6 +38,7 @@ class SettingsController extends Controller
             'allowedTlds' => GlobalSettings::ALLOWED_TLDS,
             'aiProviders' => GlobalSettings::AI_PROVIDERS,
             'cloudProviders' => GlobalSettings::CLOUD_PROVIDERS,
+            'wslShutdownModes' => GlobalSettings::WSL_SHUTDOWN_MODES,
             'contexts' => $contexts,
             'currentContext' => $currentContext,
             'windows' => $wsl->isWindows(),
@@ -58,6 +59,7 @@ class SettingsController extends Controller
             'hideProjects' => ['nullable', 'boolean'],
             'experimental' => ['nullable', 'boolean'],
             'cliChannel' => ['nullable', 'string', 'in:canary,stable'],
+            'wslShutdownMode' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::WSL_SHUTDOWN_MODES)],
         ]);
 
         $settings->update($validated);

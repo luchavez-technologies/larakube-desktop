@@ -13,6 +13,8 @@ class GlobalSettings
 
     public const CLOUD_PROVIDERS = ['do' => 'DigitalOcean', 'hetzner' => 'Hetzner Cloud', 'gcp' => 'Google Cloud', 'aws' => 'Amazon Web Services'];
 
+    public const WSL_SHUTDOWN_MODES = ['terminate', 'shutdown', 'disabled'];
+
     public function __construct(private ToolLocator $locator) {}
 
     /**
@@ -28,6 +30,7 @@ class GlobalSettings
      *     experimental: bool,
      *     cliChannel: string,
      *     usage: ?string,
+     *     wslShutdownMode: string,
      *     detectedAgents: array<string, array{name: string, installed: bool, bridged: bool}>
      * }
      */
@@ -67,6 +70,7 @@ class GlobalSettings
             'experimental' => (bool) ($config['experimental'] ?? false),
             'cliChannel' => (string) ($config['cliChannel'] ?? 'canary'),
             'usage' => in_array($config['usage'] ?? null, self::USAGES, true) ? $config['usage'] : null,
+            'wslShutdownMode' => $this->wslShutdownMode(),
             'detectedAgents' => $agents,
         ];
     }
@@ -82,6 +86,14 @@ class GlobalSettings
     public function experimental(): bool
     {
         return (bool) ($this->readConfig()['experimental'] ?? false);
+    }
+
+    public function wslShutdownMode(): string
+    {
+        $config = $this->readConfig();
+        $mode = (string) ($config['wslShutdownMode'] ?? 'terminate');
+
+        return in_array($mode, self::WSL_SHUTDOWN_MODES, true) ? $mode : 'terminate';
     }
 
     public function getLocalTld(): string
@@ -120,6 +132,10 @@ class GlobalSettings
 
         if (isset($data['usage']) && in_array($data['usage'], self::USAGES, true)) {
             $config['usage'] = $data['usage'];
+        }
+
+        if (isset($data['wslShutdownMode']) && in_array($data['wslShutdownMode'], self::WSL_SHUTDOWN_MODES, true)) {
+            $config['wslShutdownMode'] = $data['wslShutdownMode'];
         }
 
         if (! empty($data['doToken'])) {

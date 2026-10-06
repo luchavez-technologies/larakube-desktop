@@ -146,7 +146,7 @@ class Wsl
             }
         }
 
-        Process::timeout(60)->run(['wsl.exe', '--terminate', WslDistro::NAME]);
+        $this->terminate();
 
         return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
     }
@@ -163,12 +163,38 @@ class Wsl
             return ['ok' => true, 'message' => 'LaraKube Linux was already removed.'];
         }
 
-        Process::timeout(60)->run(['wsl.exe', '--terminate', WslDistro::NAME]);
+        $this->terminate();
         $removed = Process::timeout(300)->run(['wsl.exe', '--unregister', WslDistro::NAME]);
 
         return $removed->successful()
             ? ['ok' => true, 'message' => 'LaraKube Linux was removed.']
             : ['ok' => false, 'message' => trim($this->text($removed->errorOutput().$removed->output())) ?: 'Windows could not remove LaraKube Linux.'];
+    }
+
+    /**
+     * Terminates LaraKube Desktop's WSL distro (or the given distro) to cleanly stop running background services.
+     */
+    public function terminate(?string $distro = null): bool
+    {
+        if (! $this->isWindows()) {
+            return false;
+        }
+
+        $distroName = $distro ?? WslDistro::NAME;
+
+        return Process::timeout(30)->run(['wsl.exe', '--terminate', $distroName])->successful();
+    }
+
+    /**
+     * Shuts down all running WSL distributions and terminates the WSL 2 VM.
+     */
+    public function shutdown(): bool
+    {
+        if (! $this->isWindows()) {
+            return false;
+        }
+
+        return Process::timeout(30)->run(['wsl.exe', '--shutdown'])->successful();
     }
 
     /** @return array{name: string, version: int}|null */

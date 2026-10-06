@@ -138,3 +138,33 @@ test('resetting removes only the LaraKube distro, and is harmless when it is alr
     Process::assertRanTimes(fn ($process) => in_array('--unregister', (array) $process->command, true), 1);
     Process::assertNotRan(fn ($process) => in_array('Ubuntu', (array) $process->command, true));
 });
+
+test('terminate stops the larakube distro or a custom distro', function () {
+    Process::fake();
+
+    $wsl = new Wsl(windows: true);
+    expect($wsl->terminate())->toBeTrue();
+    expect($wsl->terminate('custom-distro'))->toBeTrue();
+
+    Process::assertRan(fn ($process) => (array) $process->command === ['wsl.exe', '--terminate', 'larakube-ubuntu']);
+    Process::assertRan(fn ($process) => (array) $process->command === ['wsl.exe', '--terminate', 'custom-distro']);
+});
+
+test('shutdown shuts down the entire wsl virtual machine', function () {
+    Process::fake();
+
+    $wsl = new Wsl(windows: true);
+    expect($wsl->shutdown())->toBeTrue();
+
+    Process::assertRan(fn ($process) => (array) $process->command === ['wsl.exe', '--shutdown']);
+});
+
+test('terminate and shutdown do nothing on non-windows computers', function () {
+    Process::fake();
+
+    $wsl = new Wsl(windows: false);
+    expect($wsl->terminate())->toBeFalse();
+    expect($wsl->shutdown())->toBeFalse();
+
+    Process::assertNothingRan();
+});
