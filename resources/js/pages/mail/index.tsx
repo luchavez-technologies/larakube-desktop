@@ -208,7 +208,12 @@ export default function MailIndex({
                             />
                         )}
 
-                        {activeTab === 'relay' && <RelayTab server={server} />}
+                        {activeTab === 'relay' && (
+                            <RelayTab
+                                server={server}
+                                relay={serverInfo?.relay}
+                            />
+                        )}
 
                         {activeTab === 'settings' && (
                             <SettingsTab server={server} info={serverInfo} />

@@ -17,13 +17,13 @@ class MailStatus
     public function __construct(private ToolLocator $locator) {}
 
     /**
-     * Server connection, admin credentials, webmail URL, and queue metrics.
+     * Server connection, admin credentials, webmail URL, queue metrics, and active relay.
      *
-     * @return array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int}|null
+     * @return array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int, relay?: ?array{configured: bool, provider: string, username?: ?string, region?: ?string, port?: int, host?: string}}|null
      */
     public function serverInfo(string $context): ?array
     {
-        /** @var array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int}|null $info */
+        /** @var array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int, relay?: ?array{configured: bool, provider: string, username?: ?string, region?: ?string, port?: int, host?: string}}|null $info */
         $info = $this->remember("mail:server:{$context}", function () use ($context): ?array {
             return $this->json(['mail:show', 'production', "--context={$context}", '--json'], timeout: 60);
         });

@@ -14,6 +14,15 @@ import Card from '@/components/card';
 import { open } from '@/routes';
 import type { Server as ServerType } from '@/types/larakube';
 
+export type RelayInfo = {
+    configured: boolean;
+    provider: 'brevo' | 'ses' | (string & {});
+    username?: string | null;
+    region?: string | null;
+    port?: number | null;
+    host?: string | null;
+};
+
 export type ServerInfo = {
     installed: boolean;
     host?: string | null;
@@ -24,6 +33,7 @@ export type ServerInfo = {
     imap?: { host: string; port: number; tls: boolean } | null;
     smtp?: { host: string; port: number; tls: boolean } | null;
     queue?: number;
+    relay?: RelayInfo | null;
 };
 
 type Props = {
