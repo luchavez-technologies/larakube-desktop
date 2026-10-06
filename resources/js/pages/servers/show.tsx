@@ -85,6 +85,7 @@ export default function ShowServer({
             ? step
             : null;
     });
+    const [revokingUser, setRevokingUser] = useState<ClusterUser | null>(null);
     const [label, tone] = serverStatus[server.status];
     const ready = server.status === 'ready';
 
@@ -490,10 +491,10 @@ export default function ShowServer({
                         fallback={<CheckingRow title="Checking team access…" />}
                     >
                         <TeamAccessCard
-                            server={server}
                             users={clusterUsers}
                             disabled={!ready}
                             onGrant={() => setDialog('grantAccess')}
+                            onRevoke={(user) => setRevokingUser(user)}
                         />
                     </Deferred>
 
@@ -547,6 +548,13 @@ export default function ShowServer({
                 <GrantAccessDialog
                     server={server}
                     onClose={() => setDialog(null)}
+                />
+            )}
+            {revokingUser && (
+                <RevokeAccessDialog
+                    server={server}
+                    user={revokingUser}
+                    onClose={() => setRevokingUser(null)}
                 />
             )}
         </AppLayout>
@@ -945,15 +953,15 @@ function CloudflareDialog({
 }
 
 function TeamAccessCard({
-    server,
     users,
     disabled,
     onGrant,
+    onRevoke,
 }: {
-    server: Server;
     users?: ClusterUser[] | null;
     disabled?: boolean;
     onGrant: () => void;
+    onRevoke: (user: ClusterUser) => void;
 }) {
     if (users === undefined) {
         return <CheckingRow title="Checking team access…" />;
@@ -1050,32 +1058,135 @@ function TeamAccessCard({
                                         </p>
                                     </div>
                                 </div>
-                                <Link
-                                    href={`/servers/${server.name}/access/revoke`}
-                                    method="post"
-                                    data={{ name: user.name }}
-                                    as="button"
-                                    onBefore={() =>
-                                        window.confirm(
-                                            `Revoke access for ${user.name}? This will off-board this teammate from the cluster.`,
-                                        )
-                                    }
-                                    className={buttonClass(
-                                        'danger',
-                                        'sm',
-                                        'gap-1 shrink-0',
-                                    )}
+                                <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => onRevoke(user)}
+                                    className="shrink-0 gap-1"
                                     title="Revoke access"
                                 >
                                     <Trash2 className="size-3" />
                                     <span>Revoke</span>
-                                </Link>
+                                </Button>
                             </div>
                         );
                     })}
                 </div>
             )}
         </Card>
+    );
+}
+
+function RevokeAccessDialog({
+    server,
+    user,
+    onClose,
+}: {
+    server: Server;
+    user: ClusterUser;
+    onClose: () => void;
+}) {
+    const displayName =
+        user.person && user.person !== user.name
+            ? `${user.person} (${user.name})`
+            : user.name;
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs"
+            onClick={onClose}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                className="w-full max-w-[460px] rounded-2xl bg-surface p-7 shadow-2xl ring-1 ring-line"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-center gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-tint text-accent">
+                        <Trash2 className="size-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">
+                            Revoke access for {user.name}?
+                        </h2>
+                        <p className="text-xs text-soft">
+                            Off-board teammate from {server.name}
+                        </p>
+                    </div>
+                </div>
+
+                <p className="mt-3.5 text-xs leading-relaxed text-soft">
+                    This deletes the ServiceAccount and RoleBindings for{' '}
+                    <span className="font-semibold text-ink">
+                        {displayName}
+                    </span>
+                    , and invalidates their active kubeconfig credentials on{' '}
+                    <span className="font-medium text-ink">{server.name}</span>.
+                    They will immediately lose access to cluster resources.
+                </p>
+
+                <div className="mt-4 rounded-xl border border-line bg-paper/60 p-3 text-xs">
+                    <div className="flex items-center justify-between">
+                        <span className="font-medium text-ink">
+                            {user.person || user.name}
+                        </span>
+                        <span
+                            className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+                                user.isCluster
+                                    ? 'bg-brand/10 text-brand ring-1 ring-brand/20'
+                                    : 'bg-line/60 text-soft'
+                            }`}
+                        >
+                            {user.isCluster
+                                ? user.role || 'cluster-admin'
+                                : user.role || 'edit'}
+                        </span>
+                    </div>
+                    <p className="mt-1 font-mono text-[11px] text-faint">
+                        {user.isCluster
+                            ? 'Scope: Cluster-wide (all namespaces)'
+                            : `Namespaces: ${user.scope || (user.namespaces && user.namespaces.length ? user.namespaces.join(', ') : 'all')}`}
+                    </p>
+                </div>
+
+                <Form
+                    action={`/servers/${server.name}/access/revoke`}
+                    method="post"
+                    className="mt-6 flex justify-end gap-2.5"
+                >
+                    {({ processing }) => (
+                        <>
+                            <input
+                                type="hidden"
+                                name="name"
+                                value={user.name}
+                            />
+                            <Button
+                                variant="secondary"
+                                onClick={onClose}
+                                disabled={processing}
+                                className="gap-1.5"
+                            >
+                                <XCircle className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="dangerFill"
+                                disabled={processing}
+                                className="gap-1.5"
+                            >
+                                <Trash2 className="size-3.5" />
+                                <span>
+                                    {processing ? 'Revoking…' : 'Revoke access'}
+                                </span>
+                            </Button>
+                        </>
+                    )}
+                </Form>
+            </div>
+        </div>
     );
 }
 
