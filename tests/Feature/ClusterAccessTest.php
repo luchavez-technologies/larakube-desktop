@@ -132,7 +132,7 @@ test('cluster revoke access starts run with user argument', function () {
     ])->assertRedirect();
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        $bin, 'cluster:revoke', 'bob', '--context=larakube-do-ams3', '--no-interaction',
+        $bin, 'cluster:revoke', '--name=bob', '--context=larakube-do-ams3', '--force', '--no-interaction',
     ]);
     expect(Run::sole()->kind)->toBe(RunKind::ClusterRevoke);
 

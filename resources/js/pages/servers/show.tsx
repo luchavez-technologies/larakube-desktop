@@ -889,6 +889,11 @@ function TeamAccessCard({
                                 method="post"
                                 data={{ name: user.name }}
                                 as="button"
+                                onBefore={() =>
+                                    window.confirm(
+                                        `Revoke access for ${user.name}? This will off-board this teammate from the cluster.`,
+                                    )
+                                }
                                 className={buttonClass('danger', 'sm', 'gap-1')}
                                 title="Revoke access"
                             >

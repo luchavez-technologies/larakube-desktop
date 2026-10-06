@@ -97,7 +97,7 @@ class ClusterAccessController extends Controller
 
         $run = $runner->start(
             label: "Revoke access for {$name} on {$server}",
-            arguments: ['cluster:revoke', $name, "--context={$stack['context']}"],
+            arguments: ['cluster:revoke', "--name={$name}", "--context={$stack['context']}", '--force'],
             kind: RunKind::ClusterRevoke,
             subject: "server:{$server}",
             meta: ['server' => $server, 'teammate' => $name],

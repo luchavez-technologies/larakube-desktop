@@ -649,6 +649,11 @@ function CollaboratorList({
                                         : { pubkey: collab.key }
                                 }
                                 as="button"
+                                onBefore={() =>
+                                    window.confirm(
+                                        `Revoke access for ${collab.name || 'this collaborator'} on this Dev Box?`,
+                                    )
+                                }
                                 className={buttonClass('danger', 'sm', 'gap-1')}
                                 title="Revoke access"
                             >
