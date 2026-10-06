@@ -181,3 +181,36 @@ test('runs.file returns file content as json', function () {
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('cluster grant access translates downloads path to WSL on Windows', function () {
+    $sandbox = clusterAccessSandbox();
+    app()->instance(ToolLocator::class, new ToolLocator([$sandbox['bin']], windows: true));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('prod-vps')->andReturn([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    putenv('USERPROFILE=C:\\Users\\Alice');
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.access.grant', ['server' => 'prod-vps']), [
+        'name' => 'alice',
+        'role' => 'edit',
+        'scope' => 'production',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--output=/mnt/c/Users/Alice/Downloads/alice.kubeconfig', (array) $cmd, true)
+        && in_array('--export-rbac=/mnt/c/Users/Alice/Downloads/alice-rbac.yaml', (array) $cmd, true));
+
+    $run = Run::sole();
+    expect($run->meta['kubeconfigPath'])->toBe('C:\\Users\\Alice\\Downloads\\alice.kubeconfig')
+        ->and($run->meta['rbacPath'])->toBe('C:\\Users\\Alice\\Downloads\\alice-rbac.yaml');
+
+    putenv('USERPROFILE');
+    File::deleteDirectory($sandbox['home']);
+});

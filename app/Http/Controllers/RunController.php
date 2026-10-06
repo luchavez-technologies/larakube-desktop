@@ -7,6 +7,8 @@ use App\Models\Project;
 use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
+use App\Services\LaraKube\ToolLocator;
+use App\Services\Runtime\WslDistro;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -212,7 +214,7 @@ class RunController extends Controller
         return response()->json(['detached' => true]);
     }
 
-    public function reveal(Request $request, Run $run): RedirectResponse
+    public function reveal(Request $request, Run $run, ToolLocator $locator): RedirectResponse
     {
         $type = (string) $request->input('type', 'kubeconfig');
         $path = $type === 'rbac'
@@ -223,6 +225,10 @@ class RunController extends Controller
             $path = $matches[1];
         }
 
+        if (is_string($path) && $locator->isWindows()) {
+            $path = WslDistro::toWindows($path);
+        }
+
         if (is_string($path) && file_exists($path)) {
             Shell::showInFolder($path);
         }
@@ -230,7 +236,7 @@ class RunController extends Controller
         return back();
     }
 
-    public function fileContent(Request $request, Run $run): JsonResponse
+    public function fileContent(Request $request, Run $run, ToolLocator $locator): JsonResponse
     {
         $type = (string) $request->query('type', 'kubeconfig');
         $path = $type === 'rbac'
@@ -239,6 +245,10 @@ class RunController extends Controller
 
         if (! $path && $type === 'kubeconfig' && preg_match('/Kubeconfig:\s*(\S+?\.kubeconfig)/i', $run->output, $matches)) {
             $path = $matches[1];
+        }
+
+        if (is_string($path) && $locator->isWindows()) {
+            $path = WslDistro::toWindows($path);
         }
 
         if (! is_string($path) || ! file_exists($path)) {

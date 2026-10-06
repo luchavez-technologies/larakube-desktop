@@ -7,13 +7,14 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Runtime\WslDistro;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class ClusterAccessController extends Controller
 {
-    public function grant(Request $request, string $server, StackCatalog $stacks, CliRunner $runner, ClusterStatus $status): RedirectResponse
+    public function grant(Request $request, string $server, StackCatalog $stacks, CliRunner $runner, ClusterStatus $status, ToolLocator $locator): RedirectResponse
     {
         $stack = $stacks->find($server);
         abort_unless($stack !== null && is_string($stack['context']), 404);
@@ -30,19 +31,23 @@ class ClusterAccessController extends Controller
         $isCluster = (bool) ($validated['cluster'] ?? false);
         $scope = $validated['scope'] ?? null;
 
-        $downloads = ToolLocator::home().DIRECTORY_SEPARATOR.'Downloads';
-        $destinationDir = is_dir($downloads) ? $downloads : storage_path('app');
+        $isWindows = $locator->isWindows();
+        $downloadsDir = ToolLocator::hostDownloadsDirectory($isWindows);
+        $sep = $isWindows ? '\\' : DIRECTORY_SEPARATOR;
 
-        $kubeconfigPath = $destinationDir.DIRECTORY_SEPARATOR."{$name}.kubeconfig";
-        $rbacPath = $destinationDir.DIRECTORY_SEPARATOR."{$name}-rbac.yaml";
+        $hostKubeconfigPath = $downloadsDir.$sep."{$name}.kubeconfig";
+        $hostRbacPath = $downloadsDir.$sep."{$name}-rbac.yaml";
+
+        $cliKubeconfigPath = $isWindows ? WslDistro::toLinux($hostKubeconfigPath) : $hostKubeconfigPath;
+        $cliRbacPath = $isWindows ? WslDistro::toLinux($hostRbacPath) : $hostRbacPath;
 
         $args = [
             'cluster:grant',
             "--name={$name}",
             "--context={$stack['context']}",
             "--{$role}",
-            "--output={$kubeconfigPath}",
-            "--export-rbac={$rbacPath}",
+            "--output={$cliKubeconfigPath}",
+            "--export-rbac={$cliRbacPath}",
         ];
 
         if ($isCluster) {
@@ -66,8 +71,8 @@ class ClusterAccessController extends Controller
                 'role' => $role,
                 'cluster' => $isCluster ? 'true' : 'false',
                 'scope' => $isCluster ? 'cluster' : ($scope ?: 'production'),
-                'kubeconfigPath' => $kubeconfigPath,
-                'rbacPath' => $rbacPath,
+                'kubeconfigPath' => $hostKubeconfigPath,
+                'rbacPath' => $hostRbacPath,
             ],
             targetType: 'server',
             targetName: $server,

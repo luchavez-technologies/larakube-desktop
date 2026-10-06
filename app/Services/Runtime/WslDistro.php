@@ -37,6 +37,21 @@ final class WslDistro
         return $path;
     }
 
+    public static function toWindows(string $path, string $distro = self::NAME): string
+    {
+        if (preg_match('#^/mnt/([a-zA-Z])(?:/(.*))?$#', $path, $drive) === 1) {
+            $rest = isset($drive[2]) ? str_replace('/', '\\', $drive[2]) : '';
+
+            return strtoupper($drive[1]).':\\'.$rest;
+        }
+
+        if (str_starts_with($path, '/')) {
+            return self::unc($path, $distro);
+        }
+
+        return $path;
+    }
+
     private static function mnt(string $path): string
     {
         return str_replace('\\', '/', $path);

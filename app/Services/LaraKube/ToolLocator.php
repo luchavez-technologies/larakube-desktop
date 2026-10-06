@@ -297,4 +297,33 @@ class ToolLocator
 
         return rtrim((string) ($_SERVER['HOME'] ?? getenv('HOME') ?: ''), '/');
     }
+
+    /**
+     * The host system Downloads directory for user-facing artifacts (kubeconfigs, exports).
+     * On Windows, this resolves the Windows host profile Downloads directory (e.g. C:\Users\<user>\Downloads)
+     * rather than the internal WSL filesystem.
+     */
+    public static function hostDownloadsDirectory(?bool $windows = null): string
+    {
+        $isWindows = $windows ?? (PHP_OS_FAMILY === 'Windows');
+
+        if ($isWindows) {
+            $profile = (string) ($_SERVER['USERPROFILE'] ?? getenv('USERPROFILE') ?: (getenv('HOMEDRIVE') && getenv('HOMEPATH') ? getenv('HOMEDRIVE').getenv('HOMEPATH') : ''));
+            if ($profile !== '') {
+                return rtrim($profile, '\\/').'\\Downloads';
+            }
+        }
+
+        $home = rtrim((string) ($_SERVER['HOME'] ?? getenv('HOME') ?: ''), '/');
+        if ($home !== '') {
+            $downloads = $home.'/Downloads';
+            if (is_dir($downloads)) {
+                return $downloads;
+            }
+
+            return $home;
+        }
+
+        return storage_path('app');
+    }
 }

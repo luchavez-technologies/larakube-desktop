@@ -50,7 +50,9 @@ test('Windows paths and distro paths are written in each other\'s terms', functi
         ->and(WslDistro::toLinux('D:\\work'))->toBe('/mnt/d/work')
         ->and(WslDistro::toLinux('\\\\wsl$\\larakube-ubuntu\\home\\larakube'))->toBe('/home/larakube')
         ->and(WslDistro::toLinux('\\\\wsl.localhost\\larakube-ubuntu'))->toBe('/')
-        ->and(WslDistro::toLinux('/etc/hosts'))->toBe('/etc/hosts');
+        ->and(WslDistro::toLinux('/etc/hosts'))->toBe('/etc/hosts')
+        ->and(WslDistro::toWindows('/mnt/c/Users/Mia/Downloads/alice.kubeconfig'))->toBe('C:\\Users\\Mia\\Downloads\\alice.kubeconfig')
+        ->and(WslDistro::toWindows('/home/larakube/test.txt'))->toBe('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\test.txt');
 });
 
 test('on Windows the CLI is looked for inside the distro, once', function (): void {
