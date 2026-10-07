@@ -83,6 +83,8 @@ test('a project page reads its framework, host and bound server from the .laraku
             ->where('project.webHost', 'shop.example.com')
             ->where('project.deployable', true)
             ->where('project.environments.production.serverName', 'workshop-demo')
+            ->where('project.environments.production.serverProvider', 'gcp')
+            ->where('readyServers.0.provider', 'gcp')
             ->where('server.name', 'workshop-demo'));
 
     File::deleteDirectory($sandbox['home']);

@@ -324,6 +324,7 @@ export type ProjectEnvironment = {
     serverIp: string | null;
     serverContext?: string | null;
     serverName?: string | null;
+    serverProvider?: string | null;
     plex?: string[];
     managed?: string[];
 };

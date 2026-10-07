@@ -20,7 +20,6 @@ import {
     Laptop,
     Cloud,
     X,
-    Server as ServerIcon,
     Folder,
     RotateCw,
     Share2,
@@ -35,6 +34,7 @@ import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
 import Sparkline from '@/components/metrics/sparkline';
 import Card from '@/components/card';
 import FrameworkBadge from '@/components/framework-badge';
+import ProviderLogo from '@/components/provider-logo';
 import FrameworkFields, {
     defaultAnswers,
     reconcile,
@@ -63,6 +63,7 @@ import {
 import { join as joinPlex, leave as leavePlex } from '@/routes/projects/plex';
 import { show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
+import { providerLabels } from '@/types/larakube';
 import type {
     BackingServices,
     DeployMetrics,
@@ -80,7 +81,28 @@ const STATIC = ['vite', 'astro', 'docusaurus'];
 
 type Editor = { slug: string; label: string };
 
-type ReadyServer = { name: string; ip: string | null };
+type ReadyServer = {
+    name: string;
+    ip: string | null;
+    provider?: string | null;
+};
+
+export function resolveServerProvider(
+    serverName?: string | null,
+    serverProvider?: string | null,
+    readyServers: ReadyServer[] = [],
+): string | null {
+    if (serverProvider) return serverProvider;
+    if (!serverName) return null;
+    const found = readyServers.find((s) => s.name === serverName);
+    if (found?.provider) return found.provider;
+    const lower = serverName.toLowerCase();
+    if (lower.includes('gcp') || lower.includes('google')) return 'gcp';
+    if (lower.includes('do') || lower.includes('digitalocean')) return 'do';
+    if (lower.includes('hetzner')) return 'hetzner';
+    if (lower.includes('aws') || lower.includes('amazon')) return 'aws';
+    return null;
+}
 
 export default function ShowProject({
     project,
@@ -194,6 +216,7 @@ export default function ShowProject({
             return {
                 name: activeEnvConfig.serverName ?? activeEnvConfig.serverIp,
                 ip: activeEnvConfig.serverIp,
+                provider: activeEnvConfig.serverProvider ?? null,
             };
         }
         if (activeEnv === 'production' && server) {
@@ -201,6 +224,18 @@ export default function ShowProject({
         }
         return null;
     }, [activeEnvConfig, activeEnv, server, readyServers]);
+
+    const activeServerProvider = useMemo(
+        () =>
+            resolveServerProvider(
+                activeServer?.name,
+                (activeServer && 'provider' in activeServer
+                    ? activeServer.provider
+                    : null) ?? activeEnvConfig?.serverProvider,
+                readyServers,
+            ),
+        [activeServer, activeEnvConfig, readyServers],
+    );
 
     const activeHost =
         activeEnvConfig?.webHost ??
@@ -397,6 +432,9 @@ export default function ShowProject({
                                         activeEnv={activeEnv}
                                         activeEnvConfig={activeEnvConfig}
                                         activeServer={activeServer}
+                                        activeServerProvider={
+                                            activeServerProvider
+                                        }
                                         activeHost={activeHost}
                                         readyServers={readyServers}
                                         runs={runs}
@@ -456,6 +494,7 @@ export default function ShowProject({
                         server={server}
                         activeEnv={activeCloudEnvName}
                         activeServer={activeServer}
+                        activeServerProvider={activeServerProvider}
                         activeHost={activeHost}
                         frameworks={frameworks}
                         runs={runs}
@@ -485,6 +524,7 @@ function EnvironmentSwitchBar({
     activeEnv,
     onSelectEnv,
     cloudEnvs,
+    readyServers,
     onAddEnv,
     runs,
     project,
@@ -558,6 +598,12 @@ function EnvironmentSwitchBar({
                                 (!r.label.includes('(') &&
                                     env.name === 'production')),
                     );
+                    const serverProvider = resolveServerProvider(
+                        env.serverName,
+                        env.serverProvider,
+                        readyServers,
+                    );
+
                     return (
                         <button
                             key={env.name}
@@ -570,7 +616,15 @@ function EnvironmentSwitchBar({
                                     : 'text-soft hover:bg-paper hover:text-ink',
                             )}
                         >
-                            <Cloud className="size-3.5 text-sky-500" />
+                            {serverProvider ? (
+                                <ProviderLogo
+                                    provider={serverProvider}
+                                    size="xs"
+                                    className="size-4 rounded-sm border-0 p-0 shadow-none"
+                                />
+                            ) : (
+                                <Cloud className="size-3.5 text-sky-500" />
+                            )}
                             <span className="uppercase">{env.name}</span>
                             {env.serverName && (
                                 <span className="rounded bg-line/60 px-1 text-[10px] font-normal text-soft">
@@ -631,7 +685,9 @@ function EnvironmentSwitchBar({
 function CloudEnvironmentOverviewCard({
     project,
     activeEnv,
+    activeEnvConfig,
     activeServer,
+    activeServerProvider: propProvider,
     activeHost,
     readyServers,
     runs,
@@ -641,6 +697,7 @@ function CloudEnvironmentOverviewCard({
     activeEnv: string;
     activeEnvConfig?: ProjectEnvironment;
     activeServer: ReadyServer | Server | null;
+    activeServerProvider?: string | null;
     activeHost: string | null;
     readyServers: ReadyServer[];
     runs: RecentRun[];
@@ -648,6 +705,16 @@ function CloudEnvironmentOverviewCard({
 }) {
     const [showSwitchServer, setShowSwitchServer] = useState(false);
     const [showEditHost, setShowEditHost] = useState(false);
+
+    const activeServerProvider =
+        propProvider ??
+        resolveServerProvider(
+            activeServer?.name,
+            (activeServer && 'provider' in activeServer
+                ? activeServer.provider
+                : null) ?? activeEnvConfig?.serverProvider,
+            readyServers,
+        );
 
     const activeDeploy = runs.find(
         (run) =>
@@ -706,18 +773,36 @@ function CloudEnvironmentOverviewCard({
                         </div>
 
                         {activeServer ? (
-                            <div className="mt-2 flex items-center justify-between">
-                                <div>
-                                    <Link
-                                        href={showServer(activeServer.name).url}
-                                        className="flex items-center gap-1.5 text-xs font-semibold text-ink hover:underline"
-                                    >
-                                        <ServerIcon className="size-3.5 text-brand" />
-                                        <span>{activeServer.name}</span>
-                                    </Link>
-                                    <p className="mt-0.5 font-mono text-[11px] text-soft">
-                                        {activeServer.ip ?? 'No public IP'}
-                                    </p>
+                            <div className="mt-2.5 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <ProviderLogo
+                                        provider={activeServerProvider}
+                                        size="sm"
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <Link
+                                                href={
+                                                    showServer(
+                                                        activeServer.name,
+                                                    ).url
+                                                }
+                                                className="truncate text-xs font-semibold text-ink hover:underline"
+                                            >
+                                                {activeServer.name}
+                                            </Link>
+                                            {activeServerProvider && (
+                                                <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                    {providerLabels[
+                                                        activeServerProvider
+                                                    ] ?? activeServerProvider}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="mt-0.5 font-mono text-[11px] text-soft">
+                                            {activeServer.ip ?? 'No public IP'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -1186,6 +1271,7 @@ function DeployDialog({
     server: _server,
     activeEnv,
     activeServer,
+    activeServerProvider: propProvider,
     activeHost,
     frameworks,
     runs,
@@ -1201,6 +1287,7 @@ function DeployDialog({
     server: Server | null;
     activeEnv: string;
     activeServer: ReadyServer | Server | null;
+    activeServerProvider?: string | null;
     activeHost: string | null;
     frameworks: Record<string, string>;
     runs: RecentRun[];
@@ -1211,6 +1298,16 @@ function DeployDialog({
     readyServers: ReadyServer[];
 }) {
     const [showSwitchServer, setShowSwitchServer] = useState(false);
+
+    const activeServerProvider =
+        propProvider ??
+        resolveServerProvider(
+            activeServer?.name,
+            activeServer && 'provider' in activeServer
+                ? activeServer.provider
+                : null,
+            readyServers,
+        );
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -1329,18 +1426,32 @@ function DeployDialog({
                         {activeServer ? (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <p className="text-xs text-soft">
-                                        <Link
-                                            href={
-                                                showServer(activeServer.name)
-                                                    .url
-                                            }
-                                            className="font-medium text-ink hover:underline"
-                                        >
-                                            {activeServer.name}
-                                        </Link>{' '}
-                                        · {activeServer.ip}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <ProviderLogo
+                                            provider={activeServerProvider}
+                                            size="xs"
+                                        />
+                                        <p className="text-xs text-soft">
+                                            <Link
+                                                href={
+                                                    showServer(
+                                                        activeServer.name,
+                                                    ).url
+                                                }
+                                                className="font-medium text-ink hover:underline"
+                                            >
+                                                {activeServer.name}
+                                            </Link>{' '}
+                                            · {activeServer.ip}
+                                            {activeServerProvider && (
+                                                <span className="ml-1.5 rounded bg-line/60 px-1 text-[10px] text-soft">
+                                                    {providerLabels[
+                                                        activeServerProvider
+                                                    ] ?? activeServerProvider}
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
                                     {readyServers.length > 1 && (
                                         <button
                                             type="button"
@@ -1630,7 +1741,11 @@ function AddEnvironmentDialog({
                                 >
                                     {readyServers.map((s) => (
                                         <option key={s.name} value={s.name}>
-                                            {s.name} {s.ip ? `· ${s.ip}` : ''}
+                                            {s.name}
+                                            {s.provider
+                                                ? ` (${providerLabels[s.provider] ?? s.provider})`
+                                                : ''}
+                                            {s.ip ? ` · ${s.ip}` : ''}
                                         </option>
                                     ))}
                                 </select>
@@ -1878,6 +1993,9 @@ function LinkServerForm({
                                     value={candidate.name}
                                 >
                                     {candidate.name}
+                                    {candidate.provider
+                                        ? ` (${providerLabels[candidate.provider] ?? candidate.provider})`
+                                        : ''}
                                     {candidate.ip ? ` · ${candidate.ip}` : ''}
                                 </option>
                             ))}

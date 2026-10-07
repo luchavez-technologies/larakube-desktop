@@ -491,24 +491,31 @@ class ProjectController extends Controller
         $server = null;
 
         foreach ($servers as $stack) {
-            if ($inspection['serverIp'] !== null && $stack['ip'] === $inspection['serverIp']) {
+            if (($inspection['serverIp'] !== null && $stack['ip'] === $inspection['serverIp'])
+                || ($inspection['serverContext'] !== null && is_string($stack['context'] ?? null) && $stack['context'] === $inspection['serverContext'])) {
                 $server = $stack;
+                break;
             }
         }
 
         $enrichedEnvs = [];
         foreach ($inspection['environments'] as $name => $env) {
             $matchedServerName = null;
+            $matchedServerProvider = null;
             if ($env['serverIp'] !== null || $env['serverContext'] !== null) {
                 foreach ($servers as $stack) {
                     if (($env['serverIp'] !== null && $stack['ip'] === $env['serverIp'])
                         || ($env['serverContext'] !== null && is_string($stack['context'] ?? null) && $stack['context'] === $env['serverContext'])) {
                         $matchedServerName = $stack['name'];
+                        $matchedServerProvider = $stack['provider'];
                         break;
                     }
                 }
             }
-            $enrichedEnvs[$name] = $env + ['serverName' => $matchedServerName];
+            $enrichedEnvs[$name] = $env + [
+                'serverName' => $matchedServerName,
+                'serverProvider' => $matchedServerProvider,
+            ];
         }
         $inspection['environments'] = $enrichedEnvs;
 
@@ -546,7 +553,11 @@ class ProjectController extends Controller
                 'environment' => $latestRun->environment ?: $this->resolveRunEnvironment($latestRun),
             ] : null,
             'editors' => $editors->available(),
-            'readyServers' => array_map(fn (array $stack): array => ['name' => $stack['name'], 'ip' => $stack['ip']], $servers),
+            'readyServers' => array_map(fn (array $stack): array => [
+                'name' => $stack['name'],
+                'ip' => $stack['ip'],
+                'provider' => $stack['provider'],
+            ], $servers),
             'scaffold' => $scaffold === null ? null : ['id' => $scaffold->id, 'status' => $scaffold->status, 'canRetry' => $this->canRetry($project, $scaffold)],
             'wizardFrameworks' => $this->initEmailFrameworks($frameworks),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
