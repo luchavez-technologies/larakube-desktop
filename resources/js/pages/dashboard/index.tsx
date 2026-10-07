@@ -88,6 +88,61 @@ export default function DashboardIndex({
                 }
             />
 
+            {/* Quick Metrics */}
+            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Card>
+                    <p className="text-xs font-medium text-soft">Projects</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                        {stats.projectsCount}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-soft">
+                        Active workspaces
+                    </p>
+                </Card>
+                <Card>
+                    <p className="text-xs font-medium text-soft">Servers</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                        {stats.readyServersCount}
+                        <span className="text-sm font-normal text-soft">
+                            /{stats.serversCount}
+                        </span>
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-soft">
+                        Ready clusters
+                    </p>
+                </Card>
+                <Card>
+                    <p className="text-xs font-medium text-soft">
+                        Local Cluster
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                        {localCluster.engine}
+                    </p>
+                    <p
+                        className={`mt-0.5 text-[11px] font-medium ${
+                            localCluster.tone === 'ok'
+                                ? 'text-ok'
+                                : localCluster.tone === 'warn'
+                                  ? 'text-warn'
+                                  : 'text-soft'
+                        }`}
+                    >
+                        {localCluster.status}
+                    </p>
+                </Card>
+                <Card>
+                    <p className="text-xs font-medium text-soft">
+                        System Health
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                        {toolsReady ? 'Healthy' : 'Action needed'}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-soft">
+                        All core daemons
+                    </p>
+                </Card>
+            </div>
+
             {fleetMetrics && (
                 <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <Card className="flex items-center justify-between p-4">
@@ -206,68 +261,6 @@ export default function DashboardIndex({
                     </div>
                 </div>
             )}
-
-            <QuickActionsBar servers={servers} />
-
-            <WelcomeOnboarding
-                serversCount={stats.serversCount}
-                projectsCount={stats.projectsCount}
-            />
-
-            {/* Quick Metrics */}
-            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <Card>
-                    <p className="text-xs font-medium text-soft">Projects</p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-                        {stats.projectsCount}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-soft">
-                        Active workspaces
-                    </p>
-                </Card>
-                <Card>
-                    <p className="text-xs font-medium text-soft">Servers</p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-                        {stats.readyServersCount}
-                        <span className="text-sm font-normal text-soft">
-                            /{stats.serversCount}
-                        </span>
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-soft">
-                        Ready clusters
-                    </p>
-                </Card>
-                <Card>
-                    <p className="text-xs font-medium text-soft">
-                        Local Cluster
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-                        {localCluster.engine}
-                    </p>
-                    <p
-                        className={`mt-0.5 text-[11px] font-medium ${
-                            localCluster.tone === 'ok'
-                                ? 'text-ok'
-                                : localCluster.tone === 'warn'
-                                  ? 'text-warn'
-                                  : 'text-soft'
-                        }`}
-                    >
-                        {localCluster.status}
-                    </p>
-                </Card>
-                <Card>
-                    <p className="text-xs font-medium text-soft">
-                        System Health
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-                        {toolsReady ? 'Healthy' : 'Action needed'}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-soft">
-                        All core daemons
-                    </p>
-                </Card>
-            </div>
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-[1fr_340px] items-start gap-5">
@@ -430,6 +423,15 @@ export default function DashboardIndex({
                     </Card>
                 </div>
             </div>
+
+            {/* 1-Click Companion Apps */}
+            <QuickActionsBar servers={servers} />
+
+            {/* Getting Started Walkthrough */}
+            <WelcomeOnboarding
+                serversCount={stats.serversCount}
+                projectsCount={stats.projectsCount}
+            />
         </AppLayout>
     );
 }

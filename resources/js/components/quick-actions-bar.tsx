@@ -60,20 +60,6 @@ const FEATURED_APPS: QuickActionApp[] = [
             mail: ['smtp'],
         },
     },
-    {
-        id: 'uptime-kuma',
-        name: 'Uptime Kuma',
-        tagline: 'Monitoring & Status',
-        description:
-            'Self-hosted monitoring for HTTP, TCP, Ping, and gorgeous public status pages.',
-        capabilities: {
-            databases: ['sqlite'],
-            cache: [],
-            storage: [],
-            auth: [],
-            mail: ['smtp'],
-        },
-    },
 ];
 
 type Props = {
@@ -102,7 +88,7 @@ export default function QuickActionsBar({
                 <div>
                     <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
                         <Sparkles className="size-4 text-ok dark:text-emerald-400" />
-                        <span>1-Click App Onboarding & Quick Actions</span>
+                        <span>1-Click Companion Apps</span>
                     </h2>
                     <p className="mt-0.5 text-xs text-soft">
                         Deploy production-grade companion applications with
@@ -111,7 +97,7 @@ export default function QuickActionsBar({
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {FEATURED_APPS.map((app) => (
                     <Card
                         key={app.id}

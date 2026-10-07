@@ -13,11 +13,7 @@ import Button from '@/components/button';
 import ToolLogo from '@/components/tool-logo';
 import type { Server } from '@/types/larakube';
 
-export type QuickLaunchAppId =
-    | 'pocketbase'
-    | 'n8n'
-    | 'wordpress'
-    | 'uptime-kuma';
+export type QuickLaunchAppId = 'pocketbase' | 'n8n' | 'wordpress';
 
 interface AppOption {
     id: QuickLaunchAppId;
@@ -79,14 +75,6 @@ const APPS: AppOption[] = [
                 desc: 'Standard production MySQL via shared Commons',
             },
         ],
-    },
-    {
-        id: 'uptime-kuma',
-        name: 'Uptime Kuma',
-        tagline: 'Service Monitor',
-        description:
-            'Self-hosted monitoring tool for HTTP, TCP, Ping, and public status pages.',
-        defaultSubdomain: 'status',
     },
 ];
 
@@ -256,7 +244,7 @@ export default function QuickLaunchModal({
                         <label className="mb-1.5 block text-xs font-medium text-soft">
                             Select Featured Application
                         </label>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <div className="grid grid-cols-3 gap-2">
                             {APPS.map((app) => (
                                 <button
                                     key={app.id}
