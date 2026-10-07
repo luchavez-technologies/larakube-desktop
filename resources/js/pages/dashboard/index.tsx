@@ -5,7 +5,6 @@ import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
-import QuickActionsBar from '@/components/quick-actions-bar';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
 import { readiness } from '@/routes';
@@ -88,6 +87,13 @@ export default function DashboardIndex({
                 }
             />
 
+            {/* Quickstart Onboarding & 1-Click Companions Banner */}
+            <WelcomeOnboarding
+                servers={servers}
+                serversCount={stats.serversCount}
+                projectsCount={stats.projectsCount}
+            />
+
             {/* Quick Metrics */}
             <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <Card>
@@ -163,6 +169,7 @@ export default function DashboardIndex({
                             label=""
                             size="sm"
                             tone="auto"
+                            direction="higher-is-better"
                         />
                     </Card>
 
@@ -386,50 +393,32 @@ export default function DashboardIndex({
                 </Card>
             </div>
 
-            {/* Companion Apps & Activity Grid */}
-            <div className="mb-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-                {/* 1-Click Companion Apps (2 cols) */}
-                <div className="lg:col-span-2">
-                    <QuickActionsBar servers={servers} />
-                </div>
-
-                {/* Right Column: Activity Feed (1 col) */}
-                <div className="lg:col-span-1">
-                    <Card label="Recent Activity">
-                        {runs.length === 0 ? (
-                            <p className="py-3 text-xs text-soft">
-                                No recent activity.
-                            </p>
-                        ) : (
-                            <div className="divide-y divide-line">
-                                {runs.map((run) => {
-                                    const [label, tone] = runStatus[run.status];
-                                    return (
-                                        <Link
-                                            key={run.id}
-                                            href={showRun(run.id).url}
-                                            className="flex items-center justify-between gap-3 py-2.5 hover:opacity-85"
-                                        >
-                                            <span className="truncate text-[13px] text-ink">
-                                                {run.label}
-                                            </span>
-                                            <StatusPill tone={tone}>
-                                                {label}
-                                            </StatusPill>
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </Card>
-                </div>
-            </div>
-
-            {/* Getting Started Walkthrough */}
-            <WelcomeOnboarding
-                serversCount={stats.serversCount}
-                projectsCount={stats.projectsCount}
-            />
+            {/* Recent Activity */}
+            <Card label="Recent Activity">
+                {runs.length === 0 ? (
+                    <p className="py-3 text-xs text-soft">
+                        No recent activity.
+                    </p>
+                ) : (
+                    <div className="divide-y divide-line">
+                        {runs.map((run) => {
+                            const [label, tone] = runStatus[run.status];
+                            return (
+                                <Link
+                                    key={run.id}
+                                    href={showRun(run.id).url}
+                                    className="flex items-center justify-between gap-3 py-2.5 hover:opacity-85"
+                                >
+                                    <span className="truncate text-[13px] text-ink">
+                                        {run.label}
+                                    </span>
+                                    <StatusPill tone={tone}>{label}</StatusPill>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
+            </Card>
         </AppLayout>
     );
 }

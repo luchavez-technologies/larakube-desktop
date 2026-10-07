@@ -8,6 +8,7 @@ type Props = {
     size?: 'sm' | 'md' | 'lg';
     tone?: 'ok' | 'warn' | 'bad' | 'auto';
     unit?: string;
+    direction?: 'higher-is-better' | 'lower-is-better';
 };
 
 export default function RadialGauge({
@@ -17,6 +18,7 @@ export default function RadialGauge({
     size = 'md',
     tone = 'auto',
     unit = '%',
+    direction = 'lower-is-better',
 }: Props) {
     const isWarmingUp = value === null || isNaN(value);
     const safeValue = isWarmingUp ? 0 : Math.min(100, Math.max(0, value));
@@ -32,11 +34,17 @@ export default function RadialGauge({
 
     const resolvedTone =
         tone === 'auto'
-            ? safeValue >= 85
-                ? 'bad'
-                : safeValue >= 70
-                  ? 'warn'
-                  : 'ok'
+            ? direction === 'higher-is-better'
+                ? safeValue >= 80
+                    ? 'ok'
+                    : safeValue >= 60
+                      ? 'warn'
+                      : 'bad'
+                : safeValue >= 85
+                  ? 'bad'
+                  : safeValue >= 70
+                    ? 'warn'
+                    : 'ok'
             : tone;
 
     const strokeColor = isWarmingUp
