@@ -89,3 +89,51 @@ test('the project page lists the installed editors', function () {
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('appropriate specialized editors are prioritized and non-matching specialized ones are filtered for a framework', function () {
+    $sandbox = editorSandbox(apps: ['Visual Studio Code', 'PhpStorm', 'PyCharm'], clis: ['zed']);
+    $launcher = app(EditorLauncher::class);
+
+    // For Laravel (PHP): PhpStorm is prioritized at the top, PyCharm is filtered out
+    expect($launcher->available('laravel'))->toBe([
+        ['slug' => 'phpstorm', 'label' => 'PhpStorm'],
+        ['slug' => 'vscode', 'label' => 'VS Code'],
+        ['slug' => 'zed', 'label' => 'Zed'],
+    ]);
+
+    // For FastAPI / Django (Python): PyCharm is prioritized at the top, PhpStorm is filtered out
+    expect($launcher->available('fastapi'))->toBe([
+        ['slug' => 'pycharm', 'label' => 'PyCharm'],
+        ['slug' => 'vscode', 'label' => 'VS Code'],
+        ['slug' => 'zed', 'label' => 'Zed'],
+    ]);
+
+    expect($launcher->available('django'))->toBe([
+        ['slug' => 'pycharm', 'label' => 'PyCharm'],
+        ['slug' => 'vscode', 'label' => 'VS Code'],
+        ['slug' => 'zed', 'label' => 'Zed'],
+    ]);
+
+    // For Next.js (JS): specialized PHP/Python IDEs are filtered out, universal editors remain
+    expect($launcher->available('nextjs'))->toBe([
+        ['slug' => 'vscode', 'label' => 'VS Code'],
+        ['slug' => 'zed', 'label' => 'Zed'],
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('community editions and alternative app names like PyCharm CE and IntelliJ IDEA CE are detected', function () {
+    $sandbox = editorSandbox(apps: ['PyCharm CE', 'IntelliJ IDEA CE']);
+    $launcher = app(EditorLauncher::class);
+
+    expect($launcher->available('fastapi'))->toBe([
+        ['slug' => 'pycharm', 'label' => 'PyCharm'],
+    ]);
+
+    expect($launcher->available('springboot'))->toBe([
+        ['slug' => 'idea', 'label' => 'IntelliJ IDEA'],
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});

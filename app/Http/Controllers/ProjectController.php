@@ -552,7 +552,7 @@ class ProjectController extends Controller
                 'finishedAt' => $latestRun->finished_at?->toISOString(),
                 'environment' => $latestRun->environment ?: $this->resolveRunEnvironment($latestRun),
             ] : null,
-            'editors' => $editors->available(),
+            'editors' => $editors->available($inspection['framework'] ?? $inspection['detectedFramework'] ?? null),
             'readyServers' => array_map(fn (array $stack): array => [
                 'name' => $stack['name'],
                 'ip' => $stack['ip'],

@@ -24,6 +24,8 @@ import {
     RotateCw,
     Share2,
     Unplug,
+    Code2,
+    ChevronDown,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
@@ -35,6 +37,7 @@ import Sparkline from '@/components/metrics/sparkline';
 import Card from '@/components/card';
 import FrameworkBadge from '@/components/framework-badge';
 import ProviderLogo from '@/components/provider-logo';
+import EditorLogo from '@/components/editor-logo';
 import FrameworkFields, {
     defaultAnswers,
     reconcile,
@@ -2111,46 +2114,47 @@ function EditorMenu({
         return null;
     }
 
-    const link = (editor: Editor, className: string, label: string) => (
-        <Link
-            key={editor.slug}
-            href={openEditor(project.id).url}
-            method="post"
-            data={{ editor: editor.slug }}
-            as="button"
-            preserveScroll
-            className={className}
-        >
-            {label}
-        </Link>
-    );
-
     return (
         <div className="relative">
             {editors.length === 1 ? (
-                link(
-                    editors[0],
-                    buttonClass('secondary'),
-                    `Open in ${editors[0].label}`,
-                )
+                <Link
+                    href={openEditor(project.id).url}
+                    method="post"
+                    data={{ editor: editors[0].slug }}
+                    as="button"
+                    preserveScroll
+                    className={cn(buttonClass('secondary'), 'gap-2')}
+                >
+                    <EditorLogo slug={editors[0].slug} size="xs" />
+                    <span>Open in {editors[0].label}</span>
+                </Link>
             ) : (
                 <details className="group">
                     <summary
                         className={cn(
                             buttonClass('secondary'),
-                            'cursor-pointer list-none',
+                            'cursor-pointer list-none gap-2',
                         )}
                     >
-                        Open in editor ▾
+                        <Code2 className="size-4 text-soft" />
+                        <span>Open in editor</span>
+                        <ChevronDown className="size-3 text-soft transition-transform group-open:rotate-180" />
                     </summary>
-                    <div className="absolute right-0 z-10 mt-1.5 w-44 rounded-xl bg-surface p-1 shadow-lg ring-1 ring-line">
-                        {editors.map((editor) =>
-                            link(
-                                editor,
-                                'block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-paper',
-                                editor.label,
-                            ),
-                        )}
+                    <div className="absolute right-0 z-10 mt-1.5 w-48 rounded-xl bg-surface p-1 shadow-lg ring-1 ring-line">
+                        {editors.map((editor) => (
+                            <Link
+                                key={editor.slug}
+                                href={openEditor(project.id).url}
+                                method="post"
+                                data={{ editor: editor.slug }}
+                                as="button"
+                                preserveScroll
+                                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-paper"
+                            >
+                                <EditorLogo slug={editor.slug} size="xs" />
+                                <span className="truncate">{editor.label}</span>
+                            </Link>
+                        ))}
                     </div>
                 </details>
             )}
