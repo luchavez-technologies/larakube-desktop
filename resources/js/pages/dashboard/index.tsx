@@ -5,6 +5,7 @@ import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
+import QuickActionsBar from '@/components/quick-actions-bar';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
 import { readiness } from '@/routes';
@@ -205,6 +206,8 @@ export default function DashboardIndex({
                     </div>
                 </div>
             )}
+
+            <QuickActionsBar servers={servers} />
 
             <WelcomeOnboarding
                 serversCount={stats.serversCount}

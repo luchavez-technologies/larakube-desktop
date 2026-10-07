@@ -17,6 +17,7 @@ use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDotenvController;
 use App\Http\Controllers\ProjectScalingController;
+use App\Http\Controllers\QuickActionController;
 use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
@@ -164,6 +165,7 @@ Route::post('/servers/{server}/tools/refresh', [ClusterToolController::class, 'r
 Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'show'])->name('servers.tools.show');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');
+Route::post('/quick-actions/launch', [QuickActionController::class, 'launch'])->name('quick-actions.launch');
 
 Route::post('/companions/add', [CompanionController::class, 'add'])->name('companions.add');
 Route::post('/companions/remove', [CompanionController::class, 'remove'])->name('companions.remove');

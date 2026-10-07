@@ -31,6 +31,7 @@ import {
     SiVaultwarden,
     SiPenpot,
     SiReactiveresume,
+    SiWordpress,
 } from '@icons-pack/react-simple-icons';
 import type { ClusterTool } from '@/types/larakube';
 
@@ -114,6 +115,15 @@ function getBrandVisual(
             containerClass:
                 'bg-[#64748B]/10 ring-1 ring-[#64748B]/25 text-[#6644FF] dark:text-[#8866FF]',
             icon: <SiDirectus size={px} color="#6644FF" />,
+        };
+    }
+
+    // 1c. WordPress
+    if (id === 'wordpress') {
+        return {
+            containerClass:
+                'bg-sky-500/10 ring-1 ring-sky-500/25 text-[#21759B] dark:text-[#38BDF8]',
+            icon: <SiWordpress size={px} color="#21759B" />,
         };
     }
 

@@ -1,6 +1,6 @@
 import { Head, Link, router, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { buttonClass } from '@/components/button';
+import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { sendJson } from '@/lib/http';
@@ -91,6 +91,7 @@ function backLink(run: Run): { href: string; label: string } {
                 : { href: serversIndex().url, label: 'Servers' };
         case 'install-cluster-tool':
         case 'remove-cluster-tool':
+        case 'quick-launch-app':
             return server
                 ? { href: toolsIndex(server).url, label: `Tools on ${server}` }
                 : { href: serversIndex().url, label: 'Servers' };
@@ -254,6 +255,11 @@ export default function ShowRun({ run }: { run: Run }) {
             {run.status === 'succeeded' && run.kind === 'cluster-grant' && (
                 <ClusterGrantCard run={run} />
             )}
+            {run.status === 'succeeded' &&
+                (run.kind === 'quick-launch-app' ||
+                    run.kind === 'install-cluster-tool') && (
+                    <AppReadyCard run={run} />
+                )}
             {run.status === 'failed' && (
                 <Card tone="error" className="mb-4">
                     <p className="text-base font-semibold text-accent">
@@ -675,6 +681,112 @@ function ClusterGrantCard({ run }: { run: Run }) {
                         </button>
                     </div>
                 </div>
+            </div>
+        </Card>
+    );
+}
+
+function AppReadyCard({ run }: { run: Run }) {
+    const appName = run.targetName || run.subject || 'Application';
+    const host =
+        (run.meta?.host as string) || (run.meta?.domain as string) || null;
+    const adminEmail = (run.meta?.admin_email as string) || null;
+    const database = (run.meta?.database as string) || null;
+    const serverName = run.serverName || (run.meta?.server as string) || null;
+    const url = host
+        ? host.startsWith('http')
+            ? host
+            : `https://${host}`
+        : null;
+
+    const openInBrowser = () => {
+        if (!url) return;
+        router.post('/open', { url });
+    };
+
+    return (
+        <Card className="mb-4 divide-y divide-line p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-ok/10 text-ok">
+                        <Check className="size-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-ink">
+                                {appName} is Live & Ready
+                            </h3>
+                            <StatusPill tone="ok">Deployed</StatusPill>
+                        </div>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Successfully deployed on {serverName ?? 'cluster'}{' '}
+                            with active SSL & ingress routing.
+                        </p>
+                    </div>
+                </div>
+                {url && (
+                    <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={openInBrowser}
+                    >
+                        <ExternalLink className="size-3.5" />
+                        <span>Open {appName}</span>
+                    </Button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2">
+                {url && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Live URL
+                        </span>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-ink select-all">
+                                {url}
+                            </span>
+                            <CopyButton value={url} />
+                        </div>
+                    </div>
+                )}
+
+                {adminEmail && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Administrator Email
+                        </span>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-mono text-xs text-ink select-all">
+                                {adminEmail}
+                            </span>
+                            <CopyButton value={adminEmail} />
+                        </div>
+                    </div>
+                )}
+
+                {database && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Database Engine
+                        </span>
+                        <p className="mt-1 text-xs font-medium text-ink capitalize">
+                            {database}
+                        </p>
+                    </div>
+                )}
+
+                {serverName && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Target Server
+                        </span>
+                        <p className="mt-1 text-xs font-medium text-ink">
+                            {serverName}
+                        </p>
+                    </div>
+                )}
             </div>
         </Card>
     );

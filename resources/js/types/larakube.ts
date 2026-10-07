@@ -55,6 +55,7 @@ export type RunKind =
     | 'install-tool'
     | 'install-cluster-tool'
     | 'remove-cluster-tool'
+    | 'quick-launch-app'
     | 'connect-domain'
     | 'enable-ssl'
     | 'new-project'
@@ -205,6 +206,14 @@ export type ClusterToolComponent = {
     backup?: boolean;
 };
 
+export type ToolCommonsCapabilities = {
+    databases: string[];
+    cache: string[];
+    storage: string[];
+    auth: string[];
+    mail: string[];
+};
+
 export type ClusterTool = {
     tool: string;
     instance: string;
@@ -237,6 +246,8 @@ export type ClusterTool = {
     multiInstance?: boolean;
     /** What the CLI asks when installing this tool, in the same shape as a framework's fields. */
     initFields?: FrameworkField[];
+    /** Standardized Plex Commons integration capabilities. */
+    commonsCapabilities?: ToolCommonsCapabilities;
 };
 
 export function toolCategories(tool: {

@@ -12,11 +12,13 @@ import {
     ArrowRight,
     Check,
     Settings2,
+    Sparkles,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
+import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
 import { open } from '@/routes';
@@ -53,6 +55,7 @@ type Props = {
     installing: Record<string, number>;
     companions?: CompanionApp[] | null;
     domains?: ServerDomain[] | null;
+    activeCommonsServices?: string[] | null;
 };
 
 const DEFAULT_COMPANIONS: CompanionApp[] = [
@@ -183,6 +186,7 @@ export default function ToolsIndex({
     installing,
     companions,
     domains,
+    activeCommonsServices,
 }: Props) {
     // The live check can take half a minute, so draw the last verified list
     // (or, the first time, the registry) and swap in the new one when it lands.
@@ -596,6 +600,9 @@ export default function ToolsIndex({
                                             key={`${tool.tool}-${tool.host || 'default'}`}
                                             server={server}
                                             tool={tool}
+                                            activeCommonsServices={
+                                                activeCommonsServices ?? []
+                                            }
                                             onAddInstance={handleAddInstance}
                                             onCategoryClick={
                                                 setSelectedCategory
@@ -613,6 +620,9 @@ export default function ToolsIndex({
                                         <AvailableCard
                                             key={tool.tool}
                                             tool={tool}
+                                            activeCommonsServices={
+                                                activeCommonsServices ?? []
+                                            }
                                             runId={installing[tool.tool]}
                                             disabled={verifying}
                                             onInstall={() => {
@@ -1105,6 +1115,7 @@ export default function ToolsIndex({
                     tool={installingTool}
                     tools={tools}
                     domains={domains}
+                    activeCommonsServices={activeCommonsServices ?? []}
                     isNewInstance={isNewInstance}
                     onClose={() => {
                         setInstallingTool(null);
@@ -1209,11 +1220,13 @@ function CheckedAgo({ checkedAt }: { checkedAt: string | null }) {
 function InstalledCard({
     server,
     tool,
+    activeCommonsServices,
     onAddInstance,
     onCategoryClick,
 }: {
     server: Server;
     tool: ClusterTool;
+    activeCommonsServices?: string[];
     onAddInstance?: (tool: ClusterTool) => void;
     onCategoryClick?: (category: string) => void;
 }) {
@@ -1285,6 +1298,14 @@ function InstalledCard({
                         </Link>
                     )}
                 </div>
+
+                {tool.commonsCapabilities && (
+                    <CommonsCapabilityPills
+                        capabilities={tool.commonsCapabilities}
+                        activeCommonsServices={activeCommonsServices}
+                        compact
+                    />
+                )}
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3.5 text-xs">
@@ -1333,12 +1354,14 @@ function InstalledCard({
 
 function AvailableCard({
     tool,
+    activeCommonsServices,
     runId,
     disabled,
     onInstall,
     onCategoryClick,
 }: {
     tool: ClusterTool;
+    activeCommonsServices?: string[];
     runId?: number;
     disabled: boolean;
     onInstall: () => void;
@@ -1393,6 +1416,14 @@ function AvailableCard({
                             </button>
                         ))}
                     </div>
+                )}
+
+                {tool.commonsCapabilities && (
+                    <CommonsCapabilityPills
+                        capabilities={tool.commonsCapabilities}
+                        activeCommonsServices={activeCommonsServices}
+                        compact
+                    />
                 )}
             </div>
 
@@ -1745,6 +1776,7 @@ function InstallDialog({
     tool,
     tools,
     domains,
+    activeCommonsServices,
     isNewInstance,
     onClose,
 }: {
@@ -1752,6 +1784,7 @@ function InstallDialog({
     tool: ClusterTool;
     tools: ClusterTool[];
     domains?: ServerDomain[] | null;
+    activeCommonsServices?: string[];
     isNewInstance?: boolean;
     onClose: () => void;
 }) {
@@ -1806,6 +1839,42 @@ function InstallDialog({
         subdomain,
         selectedBaseDomain,
     ]);
+
+    const activeMatches = useMemo(() => {
+        if (
+            !tool.commonsCapabilities ||
+            !activeCommonsServices ||
+            activeCommonsServices.length === 0
+        ) {
+            return [];
+        }
+        const activeSet = new Set(
+            activeCommonsServices.map((s) => s.toLowerCase()),
+        );
+        const matches: string[] = [];
+        const caps = tool.commonsCapabilities;
+        if (caps.databases?.some((d) => activeSet.has(d))) {
+            const dbName = caps.databases.find((d) => activeSet.has(d));
+            matches.push(
+                dbName === 'postgres' || dbName === 'postgresql'
+                    ? 'Plex PostgreSQL'
+                    : 'Plex MySQL',
+            );
+        }
+        if (caps.cache?.some((c) => activeSet.has(c))) {
+            matches.push('Redis');
+        }
+        if (caps.storage?.some((s) => activeSet.has(s))) {
+            matches.push('S3 Storage');
+        }
+        if (caps.auth?.some((a) => activeSet.has(a))) {
+            matches.push('Zitadel SSO');
+        }
+        if (caps.mail?.some((m) => activeSet.has(m))) {
+            matches.push('Stalwart Mail');
+        }
+        return matches;
+    }, [tool.commonsCapabilities, activeCommonsServices]);
 
     const tagline = toolTagline(tool);
     const name = toolName(tool);
@@ -1953,6 +2022,25 @@ function InstallDialog({
                 >
                     {({ errors, processing }) => (
                         <>
+                            {activeMatches.length > 0 && (
+                                <div className="flex items-start gap-3 rounded-xl bg-emerald-500/10 p-3 text-xs text-emerald-300 ring-1 ring-emerald-500/30">
+                                    <Sparkles className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+                                    <div className="space-y-0.5">
+                                        <p className="font-medium text-emerald-200">
+                                            Active Commons detected:{' '}
+                                            {activeMatches.join(', ')}
+                                        </p>
+                                        <p className="text-emerald-300/80">
+                                            This server runs shared Plex
+                                            infrastructure. LaraKube will
+                                            connect using shared tenant
+                                            resources with zero extra
+                                            containers.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                     <span className="block text-xs font-medium text-soft">
