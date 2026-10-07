@@ -14,6 +14,8 @@ use App\Http\Controllers\MailController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectDotenvController;
+use App\Http\Controllers\ProjectScalingController;
 use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
@@ -125,6 +127,12 @@ Route::post('/projects/{project}/tld', [ProjectController::class, 'tld'])->name(
 Route::post('/projects/{project}/plex/join', [PlexController::class, 'joinProject'])->name('projects.plex.join');
 Route::get('/projects/{project}/services', [ProjectController::class, 'services'])->name('projects.services');
 Route::post('/projects/{project}/plex/leave', [PlexController::class, 'leaveProject'])->name('projects.plex.leave');
+Route::post('/projects/{project}/scaling/replicas', [ProjectScalingController::class, 'updateReplicas'])->name('projects.scaling.replicas');
+Route::post('/projects/{project}/scaling/autoscale', [ProjectScalingController::class, 'updateAutoscale'])->name('projects.scaling.autoscale');
+Route::post('/projects/{project}/scaling/resources', [ProjectScalingController::class, 'updateResources'])->name('projects.scaling.resources');
+Route::get('/projects/{project}/dotenv/status', [ProjectDotenvController::class, 'status'])->name('projects.dotenv.status');
+Route::post('/projects/{project}/dotenv/push', [ProjectDotenvController::class, 'push'])->name('projects.dotenv.push');
+Route::post('/projects/{project}/dotenv/pull', [ProjectDotenvController::class, 'pull'])->name('projects.dotenv.pull');
 
 Route::get('/mail', [MailController::class, 'entry'])->name('mail');
 Route::get('/servers/{server}/mail', [MailController::class, 'index'])->name('servers.mail.index');

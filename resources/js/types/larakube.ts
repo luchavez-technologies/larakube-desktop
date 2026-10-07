@@ -327,6 +327,16 @@ export type ProjectEnvironment = {
     serverProvider?: string | null;
     plex?: string[];
     managed?: string[];
+    components?: string[];
+    replicas?: Record<string, number>;
+    autoscale?: Record<string, { min: number; max: number; cpu: number }>;
+    resources?: Record<
+        string,
+        {
+            requests?: { cpu?: string; memory?: string };
+            limits?: { cpu?: string; memory?: string };
+        }
+    >;
     ci?: {
         platform: string;
         repoSlug: string | null;

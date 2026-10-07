@@ -48,6 +48,11 @@ enum RunKind: string
     case LinkServer = 'link-server';
     case ConfigureHost = 'configure-host';
     case ConfigureCi = 'configure-ci';
+    case ConfigureReplicas = 'configure-replicas';
+    case ConfigureAutoscale = 'configure-autoscale';
+    case ConfigureResources = 'configure-resources';
+    case DotenvPush = 'dotenv-push';
+    case DotenvPull = 'dotenv-pull';
     case DeployApp = 'deploy-app';
     case UpProject = 'up-project';
     case DownProject = 'down-project';

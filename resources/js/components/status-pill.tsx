@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 const tones = {
@@ -15,7 +16,7 @@ export default function StatusPill({
     children,
 }: {
     tone: Tone;
-    children: string;
+    children: ReactNode;
 }) {
     const dot = tone === 'ok' || tone === 'bad' || tone === 'busy';
 

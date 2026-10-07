@@ -1027,7 +1027,7 @@ class ProjectController extends Controller
             return 'local';
         }
 
-        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost, RunKind::ConfigureCi], true)) {
+        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost, RunKind::ConfigureCi, RunKind::ConfigureReplicas, RunKind::ConfigureAutoscale, RunKind::ConfigureResources, RunKind::DotenvPush, RunKind::DotenvPull], true)) {
             return 'production';
         }
 

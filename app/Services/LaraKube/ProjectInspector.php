@@ -31,7 +31,7 @@ class ProjectInspector
     }
 
     /**
-     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
      */
     public function inspect(string $path, string $environment = 'production'): array
     {
@@ -67,6 +67,24 @@ class ProjectInspector
                 $securityAudit = is_array($envConfig['securityAudit'] ?? null) ? $envConfig['securityAudit'] : null;
                 $envBranch = is_string($envConfig['branch'] ?? null) ? $envConfig['branch'] : ($name === 'production' ? 'main' : $name);
 
+                $envFeatures = is_array($envConfig['features'] ?? null)
+                    ? $envConfig['features']
+                    : (is_array($blueprint['features'] ?? null) ? $blueprint['features'] : []);
+
+                $components = ['web'];
+                if (in_array('horizon', $envFeatures, true)) {
+                    $components[] = 'horizon';
+                }
+                if (in_array('queues', $envFeatures, true)) {
+                    $components[] = 'queues';
+                }
+                if (in_array('reverb', $envFeatures, true)) {
+                    $components[] = 'reverb';
+                }
+                if (in_array('ssr', $envFeatures, true)) {
+                    $components[] = 'ssr';
+                }
+
                 $environments[$name] = [
                     'name' => $name,
                     'isLocal' => $name === 'local',
@@ -75,6 +93,10 @@ class ProjectInspector
                     'serverContext' => is_string($envContext) && $envContext !== '' ? $envContext : null,
                     'plex' => is_array($envConfig['plex'] ?? null) ? array_values(array_filter($envConfig['plex'], 'is_string')) : [],
                     'managed' => is_array($envConfig['managed'] ?? null) ? array_values(array_filter($envConfig['managed'], 'is_string')) : [],
+                    'components' => $components,
+                    'replicas' => is_array($envConfig['replicas'] ?? null) ? $envConfig['replicas'] : [],
+                    'autoscale' => is_array($envConfig['autoscale'] ?? null) ? $envConfig['autoscale'] : [],
+                    'resources' => is_array($envConfig['resources'] ?? null) ? $envConfig['resources'] : [],
                     'ci' => [
                         'platform' => $git['platform'],
                         'repoSlug' => $git['repoSlug'],

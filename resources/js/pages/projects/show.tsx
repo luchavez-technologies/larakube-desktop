@@ -33,6 +33,8 @@ import {
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
+import WorkloadScalingCard from '@/components/workload-scaling-card';
+import EnvironmentSecretsCard from '@/components/environment-secrets-card';
 import ProjectTerminalCard, {
     type ProjectRun,
 } from '@/components/project-terminal-card';
@@ -426,12 +428,28 @@ export default function ShowProject({
                                         </Deferred>
                                     )}
 
+                                    {project.initialized && (
+                                        <WorkloadScalingCard
+                                            project={project}
+                                            activeEnv={activeEnv}
+                                            activeEnvConfig={activeEnvConfig}
+                                        />
+                                    )}
+
                                     <EnvironmentBackingServicesCard
                                         key={activeEnv}
                                         project={project}
                                         currentEnv={activeEnvConfig}
                                         services={backing?.[activeEnv]}
                                     />
+
+                                    {project.initialized && (
+                                        <EnvironmentSecretsCard
+                                            project={project}
+                                            activeEnv={activeEnv}
+                                            activeEnvConfig={activeEnvConfig}
+                                        />
+                                    )}
                                 </>
                             ) : (
                                 <>
@@ -478,11 +496,23 @@ export default function ShowProject({
                                         />
                                     </Deferred>
 
+                                    <WorkloadScalingCard
+                                        project={project}
+                                        activeEnv={activeEnv}
+                                        activeEnvConfig={activeEnvConfig}
+                                    />
+
                                     <EnvironmentBackingServicesCard
                                         key={activeEnv}
                                         project={project}
                                         currentEnv={activeEnvConfig}
                                         services={backing?.[activeEnv]}
+                                    />
+
+                                    <EnvironmentSecretsCard
+                                        project={project}
+                                        activeEnv={activeEnv}
+                                        activeEnvConfig={activeEnvConfig}
                                     />
                                 </>
                             )}

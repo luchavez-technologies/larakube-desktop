@@ -806,3 +806,110 @@ test('project inspector detects git forge, workflow, and blueprint registry conf
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('project scaling endpoints trigger replicas, autoscale, and resources runs', function () {
+    $sandbox = projectsSandbox();
+    ChildProcess::fake();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'environments' => [
+            'production' => [
+                'replicas' => ['web' => 3],
+                'autoscale' => ['web' => ['min' => 2, 'max' => 6, 'cpu' => 75]],
+                'resources' => ['web' => ['requests' => ['cpu' => '250m']]],
+            ],
+        ],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    // 1. Replicas
+    $response = $this->post(route('projects.scaling.replicas', $project), [
+        'environment' => 'production',
+        'component' => 'web',
+        'count' => 5,
+    ]);
+    $response->assertRedirect();
+    $run = Run::latest('id')->first();
+    expect($run->kind)->toBe(RunKind::ConfigureReplicas)
+        ->and($run->command)->toContain('replicas', 'production', '--component=web', '--count=5');
+
+    // 2. Autoscale
+    $response = $this->post(route('projects.scaling.autoscale', $project), [
+        'environment' => 'production',
+        'component' => 'web',
+        'min' => 2,
+        'max' => 8,
+        'cpu' => 80,
+    ]);
+    $response->assertRedirect();
+    $run = Run::latest('id')->first();
+    expect($run->kind)->toBe(RunKind::ConfigureAutoscale)
+        ->and($run->command)->toContain('autoscale', 'production', '--component=web', '--min=2', '--max=8', '--cpu=80');
+
+    // 3. Resources
+    $response = $this->post(route('projects.scaling.resources', $project), [
+        'environment' => 'production',
+        'component' => 'web',
+        'tier' => 'standard',
+    ]);
+    $response->assertRedirect();
+    $run = Run::latest('id')->first();
+    expect($run->kind)->toBe(RunKind::ConfigureResources)
+        ->and($run->command)->toContain('resources', 'production', '--component=web', '--tier=standard');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project dotenv endpoints trigger push, pull, and return drift status', function () {
+    $sandbox = projectsSandbox();
+    ChildProcess::fake();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'environments' => [
+            'production' => [],
+        ],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    // Push
+    $this->post(route('projects.dotenv.push', $project), ['environment' => 'production'])
+        ->assertRedirect();
+    $run = Run::latest('id')->first();
+    expect($run->kind)->toBe(RunKind::DotenvPush)
+        ->and($run->command)->toContain('dotenv:push', 'production');
+
+    // Pull
+    $this->post(route('projects.dotenv.pull', $project), ['environment' => 'production'])
+        ->assertRedirect();
+    $run = Run::latest('id')->first();
+    expect($run->kind)->toBe(RunKind::DotenvPull)
+        ->and($run->command)->toContain('dotenv:pull', 'production');
+
+    // Status json
+    Process::fake([
+        '*dotenv*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'production',
+            'items' => [
+                ['key' => 'APP_KEY', 'status' => 'drift', 'isSecret' => true, 'isExcluded' => false, 'local' => '••••••', 'cluster' => '••••••'],
+            ],
+            'summary' => [
+                'drift' => 1,
+                'inSync' => 5,
+            ],
+        ])),
+    ]);
+
+    $res = $this->getJson(route('projects.dotenv.status', ['project' => $project, 'environment' => 'production']));
+    $res->assertOk()
+        ->assertJsonPath('environment', 'production')
+        ->assertJsonPath('status.summary.drift', 1);
+
+    File::deleteDirectory($sandbox['home']);
+});
