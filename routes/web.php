@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\CloudAccountController;
 use App\Http\Controllers\CloudAuthController;
 use App\Http\Controllers\ClusterAccessController;
 use App\Http\Controllers\ClusterToolController;
@@ -44,6 +45,9 @@ Route::get('/setup/cloud/gcp/login/{run}', [CloudAuthController::class, 'gcpLogi
 Route::post('/setup/cloud/gcp/login/{run}/code', [CloudAuthController::class, 'gcpLoginCode'])->name('setup.cloud.gcp.login.code');
 Route::get('/setup/cloud/gcp/projects', [CloudAuthController::class, 'gcpProjects'])->name('setup.cloud.gcp.projects');
 Route::post('/setup/cloud/gcp/project', [CloudAuthController::class, 'setGcpProject'])->name('setup.cloud.gcp.project');
+Route::post('/setup/cloud/accounts/default', [CloudAccountController::class, 'setDefault'])->name('setup.cloud.accounts.default');
+Route::post('/setup/cloud/accounts', [CloudAccountController::class, 'add'])->name('setup.cloud.accounts.add');
+Route::delete('/setup/cloud/accounts', [CloudAccountController::class, 'remove'])->name('setup.cloud.accounts.remove');
 
 Route::get('/servers', [ServerController::class, 'index'])->name('servers.index');
 Route::get('/servers/create', [ServerController::class, 'create'])->name('servers.create');

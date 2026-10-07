@@ -11,9 +11,11 @@ import {
     Plus,
     RotateCw,
     XCircle,
+    Users,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
 import CopyButton from '@/components/copy-button';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
@@ -74,6 +76,8 @@ export default function Readiness({
 
     const [selectedChannel, setSelectedChannel] = useState(cliChannel);
     const [showAwsModal, setShowAwsModal] = useState(false);
+    const [accountModalProvider, setAccountModalProvider] =
+        useState<Provider | null>(null);
 
     return (
         <AppLayout title="Setup">
@@ -169,29 +173,32 @@ export default function Readiness({
                                                 key={provider.slug}
                                                 action={
                                                     <div className="flex items-center gap-2">
-                                                        {provider.slug ===
-                                                            'aws' && (
-                                                            <Button
-                                                                type="button"
-                                                                variant="secondary"
-                                                                size="sm"
-                                                                onClick={() =>
-                                                                    setShowAwsModal(
-                                                                        true,
-                                                                    )
-                                                                }
-                                                                className="gap-1.5"
-                                                            >
-                                                                <Key className="size-3.5" />
-                                                                <span>
-                                                                    {provider
-                                                                        .credentials
-                                                                        .ready
-                                                                        ? 'Change keys'
-                                                                        : 'Connect'}
-                                                                </span>
-                                                            </Button>
-                                                        )}
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                setAccountModalProvider(
+                                                                    provider,
+                                                                )
+                                                            }
+                                                            className="gap-1.5"
+                                                        >
+                                                            <Users className="size-3.5" />
+                                                            <span>
+                                                                {provider
+                                                                    .credentials
+                                                                    .ready
+                                                                    ? provider.accounts &&
+                                                                      provider
+                                                                          .accounts
+                                                                          .length >
+                                                                          1
+                                                                        ? `Accounts (${provider.accounts.length})`
+                                                                        : 'Accounts / Keys'
+                                                                    : 'Connect'}
+                                                            </span>
+                                                        </Button>
                                                         {provider.slug ===
                                                             'gcp' && (
                                                             <GcpSignIn
@@ -199,7 +206,7 @@ export default function Readiness({
                                                                     provider
                                                                         .credentials
                                                                         .ready
-                                                                        ? 'Switch account'
+                                                                        ? 'Switch'
                                                                         : 'Sign in'
                                                                 }
                                                             />
@@ -225,9 +232,12 @@ export default function Readiness({
                                                 <TwoLine
                                                     title={provider.label}
                                                     detail={
-                                                        provider.credentials
-                                                            .hint ??
-                                                        'Credentials verified'
+                                                        provider.activeAccount
+                                                            ? `Active account: ${provider.activeAccount}`
+                                                            : (provider
+                                                                  .credentials
+                                                                  .hint ??
+                                                              'Credentials verified')
                                                     }
                                                 />
                                             </ListRow>
@@ -249,6 +259,14 @@ export default function Readiness({
                         </Card>
                     </div>
                 </>
+            )}
+
+            {/* Cloud Multi-Account Modal */}
+            {accountModalProvider && (
+                <CloudAccountsModal
+                    provider={accountModalProvider}
+                    onClose={() => setAccountModalProvider(null)}
+                />
             )}
 
             {/* AWS Credential Modal */}

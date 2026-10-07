@@ -76,6 +76,15 @@ class DevBoxController extends Controller
             );
         }
 
+        $account = $request->string('account')->trim()->toString();
+        $accountArg = match ($provider) {
+            'aws' => $account !== '' ? ["--aws-profile={$account}"] : [],
+            'gcp' => $account !== '' ? ["--gcp-account={$account}"] : [],
+            'do' => $account !== '' ? ["--do-account={$account}"] : [],
+            'hetzner' => $account !== '' ? ["--hetzner-account={$account}"] : [],
+            default => [],
+        };
+
         $run = $runner->start(
             label: "Create dev box {$stackName}",
             arguments: [
@@ -86,6 +95,7 @@ class DevBoxController extends Controller
                 '--size='.$request->string('size'),
                 '--channel='.$this->settings->get()['cliChannel'],
                 '--json',
+                ...$accountArg,
             ],
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::CreateDevBox,

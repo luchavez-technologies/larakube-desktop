@@ -103,3 +103,20 @@ test('server fields are validated before anything runs', function () {
 
     File::deleteDirectory($bin);
 });
+
+test('passing an account attaches the appropriate provider flag to cloud:create', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'aws',
+        'stack_name' => 'client-server',
+        'region' => 'us-east-1',
+        'size' => 't3.small',
+        'account' => 'client-acme',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd = null, ?array $env = null, bool $persistent = false, mixed ...$rest): bool => in_array('--aws-profile=client-acme', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});

@@ -54,6 +54,15 @@ class ServerController extends Controller
             );
         }
 
+        $account = $request->string('account')->trim()->toString();
+        $accountArg = match ($provider) {
+            'aws' => $account !== '' ? ["--aws-profile={$account}"] : [],
+            'gcp' => $account !== '' ? ["--gcp-account={$account}"] : [],
+            'do' => $account !== '' ? ["--do-account={$account}"] : [],
+            'hetzner' => $account !== '' ? ["--hetzner-account={$account}"] : [],
+            default => [],
+        };
+
         $run = $runner->start(
             label: "Create server {$stackName}",
             arguments: [
@@ -64,6 +73,7 @@ class ServerController extends Controller
                 '--region='.$request->string('region'),
                 '--size='.$request->string('size'),
                 '--json',
+                ...$accountArg,
                 ...($request->connectsCloudflare() ? ['--cloudflare'] : []),
                 // Inside a project, the environment argument binds it to the new server.
                 ...($project !== null ? [ProjectController::ENVIRONMENT] : []),

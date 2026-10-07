@@ -12,6 +12,7 @@ import {
     UserPlus,
     ShieldCheck,
     XCircle,
+    Users,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -116,6 +117,15 @@ export default function ShowServer({
                             {providerLabels[server.provider] ?? server.provider}
                         </span>
                     </span>,
+                    server.account && (
+                        <span
+                            key="account"
+                            className="inline-flex items-center gap-1.5"
+                        >
+                            <Users className="size-3 text-soft" />
+                            <span>{server.account}</span>
+                        </span>
+                    ),
                     server.region && <span key="region">{server.region}</span>,
                     server.ip && <span key="ip">{server.ip}</span>,
                     <span key="kind">

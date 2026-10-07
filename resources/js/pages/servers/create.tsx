@@ -1,9 +1,10 @@
 import { Deferred, Link, useForm } from '@inertiajs/react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, Key } from 'lucide-react';
+import { ChevronDown, Key, Users, Plus } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
+import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
@@ -95,9 +96,11 @@ function ServerForm({
         aws_access_key_id: '',
         aws_secret_access_key: '',
         project_id: projectId,
+        account: initial.activeAccount ?? initial.accounts?.[0]?.id ?? '',
     });
 
     const [overrideAwsKeys, setOverrideAwsKeys] = useState(false);
+    const [showAccountModal, setShowAccountModal] = useState(false);
 
     const provider =
         providers.find((candidate) => candidate.slug === form.data.provider) ??
@@ -127,6 +130,7 @@ function ServerForm({
             api_token: '',
             aws_access_key_id: '',
             aws_secret_access_key: '',
+            account: next.activeAccount ?? next.accounts?.[0]?.id ?? '',
         });
     }
 
@@ -167,6 +171,51 @@ function ServerForm({
                     </button>
                 ))}
             </div>
+
+            {provider.accounts && provider.accounts.length > 0 && (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 ring-1 ring-line">
+                    <div className="flex items-center gap-2.5">
+                        <Users className="size-4 text-soft" />
+                        <div>
+                            <span className="text-foreground text-xs font-medium">
+                                Account / Profile:
+                            </span>
+                            <span className="ml-2 font-mono text-xs text-soft">
+                                {form.data.account ||
+                                    provider.activeAccount ||
+                                    'default'}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {provider.accounts.length > 1 && (
+                            <select
+                                value={form.data.account}
+                                onChange={(e) =>
+                                    form.setData('account', e.target.value)
+                                }
+                                className="bg-background rounded-lg px-2.5 py-1 text-xs ring-1 ring-line focus:ring-2 focus:ring-servers"
+                            >
+                                {provider.accounts.map((acc) => (
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.label}{' '}
+                                        {acc.isDefault ? '· (Default)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setShowAccountModal(true)}
+                        >
+                            <Plus className="size-3" />
+                            <span>Manage Accounts</span>
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             {(needsGcpLogin || needsAwsKeys) && (
                 <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
@@ -363,14 +412,24 @@ function ServerForm({
                                         ''))
                         }
                     >
-                        {form.processing
-                            ? 'Starting…'
-                            : devBox
-                              ? 'Create dev box'
-                              : 'Create server'}
+                        <Plus className="size-4" />
+                        <span>
+                            {form.processing
+                                ? 'Starting…'
+                                : devBox
+                                  ? 'Create dev box'
+                                  : 'Create server'}
+                        </span>
                     </Button>
                 </div>
             </div>
+
+            {showAccountModal && (
+                <CloudAccountsModal
+                    provider={provider}
+                    onClose={() => setShowAccountModal(false)}
+                />
+            )}
         </form>
     );
 }

@@ -19,10 +19,16 @@ class CloudAuthController extends Controller
             'access_key_id' => ['required', 'string', 'regex:/^[A-Z0-9]{16,32}$/'],
             'secret_access_key' => ['required', 'string', 'min:16'],
             'region' => ['required', 'string', 'regex:/^[a-z0-9-]+$/'],
+            'profile' => ['nullable', 'string', 'regex:/^[a-zA-Z0-9._-]+$/'],
         ]);
 
+        $arguments = ['cloud:credentials', '--provider=aws', "--region={$validated['region']}"];
+        if (! empty($validated['profile'])) {
+            $arguments[] = "--profile={$validated['profile']}";
+        }
+
         $result = $account->call(
-            ['cloud:credentials', '--provider=aws', "--region={$validated['region']}"],
+            $arguments,
             ['AWS_ACCESS_KEY_ID' => $validated['access_key_id'], 'AWS_SECRET_ACCESS_KEY' => $validated['secret_access_key']],
         );
 

@@ -12,6 +12,13 @@ export type Tool = {
 
 export type PickerOption = { value: string; label: string };
 
+export type ProviderAccount = {
+    id: string;
+    label: string;
+    isDefault: boolean;
+    meta?: string | null;
+};
+
 export type Provider = {
     slug: string;
     label: string;
@@ -20,6 +27,8 @@ export type Provider = {
     vpsSizes: PickerOption[];
     defaultVpsSize: string;
     defaultDevBoxSize?: string;
+    managedSizes?: PickerOption[];
+    defaultManagedSize?: string;
     /** Where the regions and prices come from: the provider's own list now, an earlier copy of it, or the CLI's built-in estimate. */
     pricing?: {
         source: 'live' | 'cached' | 'builtin';
@@ -27,6 +36,8 @@ export type Provider = {
         currency: string | null;
     };
     credentials: { ready: boolean; hint: string | null };
+    accounts?: ProviderAccount[];
+    activeAccount?: string | null;
 };
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';

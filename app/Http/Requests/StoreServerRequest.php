@@ -38,6 +38,7 @@ class StoreServerRequest extends FormRequest
             'aws_access_key_id' => ['nullable', 'string', 'max:100'],
             'aws_secret_access_key' => ['nullable', 'string', 'max:200'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'account' => ['nullable', 'string', 'max:100'],
         ];
     }
 
