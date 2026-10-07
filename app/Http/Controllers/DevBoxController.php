@@ -7,6 +7,7 @@ use App\Http\Requests\StoreServerRequest;
 use App\Models\Run;
 use App\Services\FilePicker;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\CloudAccount;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DevBoxShell;
 use App\Services\LaraKube\DevBoxTunnel;
@@ -67,6 +68,13 @@ class DevBoxController extends Controller
 
         $provider = $request->string('provider')->toString();
         $stackName = $request->string('stack_name')->toString();
+
+        if ($provider === 'aws' && $request->filled('aws_access_key_id') && $request->filled('aws_secret_access_key')) {
+            app(CloudAccount::class)->call(
+                ['cloud:credentials', '--provider=aws', '--region='.$request->string('region', 'us-east-1')],
+                ['AWS_ACCESS_KEY_ID' => trim((string) $request->input('aws_access_key_id')), 'AWS_SECRET_ACCESS_KEY' => trim((string) $request->input('aws_secret_access_key'))],
+            );
+        }
 
         $run = $runner->start(
             label: "Create dev box {$stackName}",
