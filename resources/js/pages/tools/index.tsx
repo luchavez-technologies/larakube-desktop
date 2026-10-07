@@ -2041,14 +2041,14 @@ function InstallDialog({
                     {({ errors, processing }) => (
                         <>
                             {activeMatches.length > 0 && (
-                                <div className="flex items-start gap-3 rounded-xl bg-emerald-500/10 p-3 text-xs text-emerald-300 ring-1 ring-emerald-500/30">
-                                    <Sparkles className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+                                <div className="flex items-start gap-3 rounded-xl bg-ok-tint p-3 text-xs text-ok ring-1 ring-ok/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
+                                    <Sparkles className="mt-0.5 size-4 shrink-0 text-ok dark:text-emerald-400" />
                                     <div className="space-y-0.5">
-                                        <p className="font-medium text-emerald-200">
+                                        <p className="font-semibold text-emerald-950 dark:text-emerald-200">
                                             Active Commons detected:{' '}
                                             {activeMatches.join(', ')}
                                         </p>
-                                        <p className="text-emerald-300/80">
+                                        <p className="leading-relaxed text-emerald-800/90 dark:text-emerald-300/80">
                                             This server runs shared Plex
                                             infrastructure. LaraKube will
                                             connect using shared tenant

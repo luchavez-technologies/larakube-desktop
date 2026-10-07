@@ -144,8 +144,8 @@ export default function CommonsCapabilityPills({
                                 ? 'px-1.5 py-0.5 text-[10px]'
                                 : 'px-2 py-0.5 text-xs',
                             pill.isActive
-                                ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30'
-                                : 'bg-badge/70 text-soft',
+                                ? 'bg-ok-tint font-semibold text-ok ring-1 ring-ok/30 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30'
+                                : 'bg-badge/70 text-soft ring-1 ring-line/50',
                         )}
                         title={
                             pill.isActive
@@ -154,9 +154,9 @@ export default function CommonsCapabilityPills({
                         }
                     >
                         {pill.isActive ? (
-                            <Check className="size-3 text-emerald-400" />
+                            <Check className="size-3 text-ok dark:text-emerald-400" />
                         ) : (
-                            <Icon className="text-muted-foreground size-3" />
+                            <Icon className="size-3 text-soft" />
                         )}
                         <span>
                             {pill.isActive ? pill.activeLabel : pill.label}

@@ -429,7 +429,7 @@ export default function QuickLaunchModal({
                                         onClick={() => setDatabase(dbOption.id)}
                                         className={`flex flex-col rounded-xl p-2.5 text-left ring-1 transition ${
                                             database === dbOption.id
-                                                ? 'bg-emerald-500/10 text-ink ring-emerald-500/50'
+                                                ? 'bg-ok-tint text-ink ring-ok/30 dark:bg-emerald-500/10 dark:ring-emerald-500/50'
                                                 : 'bg-badge/40 text-soft ring-line/70 hover:bg-badge hover:text-ink'
                                         }`}
                                     >
@@ -438,7 +438,7 @@ export default function QuickLaunchModal({
                                                 {dbOption.label}
                                             </span>
                                             {database === dbOption.id && (
-                                                <Check className="size-3.5 text-emerald-400" />
+                                                <Check className="size-3.5 text-ok dark:text-emerald-400" />
                                             )}
                                         </div>
                                         <span className="mt-0.5 text-[10px] text-faint">

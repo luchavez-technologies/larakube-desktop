@@ -101,7 +101,7 @@ export default function QuickActionsBar({
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
-                        <Sparkles className="size-4 text-emerald-400" />
+                        <Sparkles className="size-4 text-ok dark:text-emerald-400" />
                         <span>1-Click App Onboarding & Quick Actions</span>
                     </h2>
                     <p className="mt-0.5 text-xs text-soft">

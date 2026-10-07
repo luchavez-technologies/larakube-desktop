@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FrameworkField, NewAppAnswers } from '@/types/larakube';
 
@@ -273,15 +274,18 @@ export default function FrameworkFields({
                                                 set(field.key, option.value)
                                             }
                                             className={cn(
-                                                'flex flex-col items-start rounded-xl p-3 text-left ring-1 transition',
+                                                'flex cursor-pointer items-center justify-between rounded-xl p-3 text-left ring-1 transition',
                                                 selected
-                                                    ? 'bg-brand/10 text-ink ring-2 ring-brand'
+                                                    ? 'bg-brand/10 font-medium text-ink ring-2 ring-brand'
                                                     : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
                                             )}
                                         >
-                                            <span className="text-xs font-semibold">
+                                            <span className="text-xs font-semibold text-ink">
                                                 {option.label}
                                             </span>
+                                            {selected && (
+                                                <Check className="ml-1.5 size-3.5 shrink-0 text-brand" />
+                                            )}
                                         </button>
                                     );
                                 })}
