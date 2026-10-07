@@ -1,6 +1,6 @@
 import { Deferred, Link, useForm } from '@inertiajs/react';
-import type { FormEvent, ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { ChevronDown, Key } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
@@ -97,13 +97,17 @@ function ServerForm({
         project_id: projectId,
     });
 
+    const [overrideAwsKeys, setOverrideAwsKeys] = useState(false);
+
     const provider =
         providers.find((candidate) => candidate.slug === form.data.provider) ??
         initial;
 
     const needsToken =
         tokenProviders.includes(provider.slug) && !provider.credentials.ready;
-    const needsAwsKeys = provider.slug === 'aws' && !provider.credentials.ready;
+    const needsAwsKeys =
+        provider.slug === 'aws' &&
+        (!provider.credentials.ready || overrideAwsKeys);
     const needsGcpLogin =
         provider.slug === 'gcp' && !provider.credentials.ready;
     const cliMissing = /not installed/i.test(provider.credentials.hint ?? '');
@@ -114,6 +118,7 @@ function ServerForm({
     const price = size?.label.match(/\(([^)]*\/mo[^)]*)\)/)?.[1];
 
     function selectProvider(next: Provider) {
+        setOverrideAwsKeys(false);
         form.setData({
             ...form.data,
             provider: next.slug,
@@ -253,6 +258,32 @@ function ServerForm({
                             className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
                         />
                     </Field>
+                )}
+
+                {provider.slug === 'aws' && provider.credentials.ready && (
+                    <div className="flex items-center justify-between border-t border-line/60 pt-3 text-xs text-soft">
+                        <span>
+                            Using saved AWS credentials (~/.aws/credentials)
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (overrideAwsKeys) {
+                                    form.setData('aws_access_key_id', '');
+                                    form.setData('aws_secret_access_key', '');
+                                }
+                                setOverrideAwsKeys(!overrideAwsKeys);
+                            }}
+                            className="flex items-center gap-1 font-medium text-servers hover:underline"
+                        >
+                            <Key className="size-3" />
+                            <span>
+                                {overrideAwsKeys
+                                    ? 'Use saved credentials'
+                                    : 'Use different AWS keys'}
+                            </span>
+                        </button>
+                    </div>
                 )}
 
                 {needsAwsKeys && (

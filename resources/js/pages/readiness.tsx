@@ -10,6 +10,7 @@ import {
     ArrowUpCircle,
     Plus,
     RotateCw,
+    XCircle,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -168,33 +169,41 @@ export default function Readiness({
                                                 key={provider.slug}
                                                 action={
                                                     <div className="flex items-center gap-2">
-                                                        {!provider.credentials
-                                                            .ready &&
-                                                            provider.slug ===
-                                                                'aws' && (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="secondary"
-                                                                    size="sm"
-                                                                    onClick={() =>
-                                                                        setShowAwsModal(
-                                                                            true,
-                                                                        )
-                                                                    }
-                                                                    className="gap-1.5"
-                                                                >
-                                                                    <Key className="size-3.5" />
-                                                                    <span>
-                                                                        Connect
-                                                                    </span>
-                                                                </Button>
-                                                            )}
-                                                        {!provider.credentials
-                                                            .ready &&
-                                                            provider.slug ===
-                                                                'gcp' && (
-                                                                <GcpSignIn />
-                                                            )}
+                                                        {provider.slug ===
+                                                            'aws' && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="secondary"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    setShowAwsModal(
+                                                                        true,
+                                                                    )
+                                                                }
+                                                                className="gap-1.5"
+                                                            >
+                                                                <Key className="size-3.5" />
+                                                                <span>
+                                                                    {provider
+                                                                        .credentials
+                                                                        .ready
+                                                                        ? 'Change keys'
+                                                                        : 'Connect'}
+                                                                </span>
+                                                            </Button>
+                                                        )}
+                                                        {provider.slug ===
+                                                            'gcp' && (
+                                                            <GcpSignIn
+                                                                label={
+                                                                    provider
+                                                                        .credentials
+                                                                        .ready
+                                                                        ? 'Switch account'
+                                                                        : 'Sign in'
+                                                                }
+                                                            />
+                                                        )}
                                                         <StatusPill
                                                             tone={
                                                                 provider
@@ -244,7 +253,13 @@ export default function Readiness({
 
             {/* AWS Credential Modal */}
             {showAwsModal && (
-                <AwsCredentialsModal onClose={() => setShowAwsModal(false)} />
+                <AwsCredentialsModal
+                    onClose={() => setShowAwsModal(false)}
+                    isConfigured={Boolean(
+                        providers?.find((p) => p.slug === 'aws')?.credentials
+                            .ready,
+                    )}
+                />
             )}
         </AppLayout>
     );
@@ -760,7 +775,13 @@ function CliMissing({
     );
 }
 
-function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
+function AwsCredentialsModal({
+    onClose,
+    isConfigured = false,
+}: {
+    onClose: () => void;
+    isConfigured?: boolean;
+}) {
     const form = useForm({
         access_key_id: '',
         secret_access_key: '',
@@ -798,7 +819,9 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
             <div className="w-full max-w-lg rounded-2xl bg-surface p-6 shadow-xl ring-1 ring-line">
                 <div className="flex items-center justify-between border-b border-line pb-3">
                     <h3 className="text-base font-semibold">
-                        Connect AWS Account
+                        {isConfigured
+                            ? 'Update AWS Credentials'
+                            : 'Connect AWS Account'}
                     </h3>
                     <button
                         type="button"
@@ -901,15 +924,29 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                             type="button"
                             variant="secondary"
                             onClick={onClose}
+                            className="gap-1.5"
                         >
-                            Cancel
+                            <XCircle className="size-3.5" />
+                            <span>Cancel</span>
                         </Button>
                         <Button
                             type="submit"
                             variant="primary"
                             disabled={form.processing}
+                            className="gap-1.5"
                         >
-                            {form.processing ? 'Verifying…' : 'Save & Verify'}
+                            {form.processing ? (
+                                <RefreshCw className="size-3.5 animate-spin" />
+                            ) : (
+                                <Key className="size-3.5" />
+                            )}
+                            <span>
+                                {form.processing
+                                    ? 'Verifying…'
+                                    : isConfigured
+                                      ? 'Update & Verify'
+                                      : 'Save & Verify'}
+                            </span>
                         </Button>
                     </div>
                 </form>
