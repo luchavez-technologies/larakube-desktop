@@ -27,20 +27,31 @@ export default function WelcomeOnboarding({
     projectsCount,
     onImportKubeconfig,
 }: Props) {
-    const [dismissed, setDismissed] = useState(false);
+    const [dismissed, setDismissed] = useState(() => {
+        if (serversCount > 0 || projectsCount > 0) {
+            return (
+                localStorage.getItem('larakube_onboarding_force_show') !==
+                'true'
+            );
+        }
+        return localStorage.getItem('larakube_onboarding_dismissed') === 'true';
+    });
 
     useEffect(() => {
-        const isDismissed = localStorage.getItem(
-            'larakube_onboarding_dismissed',
-        );
-        if (isDismissed === 'true' && (serversCount > 0 || projectsCount > 0)) {
-            setDismissed(true);
+        if (serversCount > 0 || projectsCount > 0) {
+            if (
+                localStorage.getItem('larakube_onboarding_force_show') !==
+                'true'
+            ) {
+                setDismissed(true);
+            }
         }
     }, [serversCount, projectsCount]);
 
     const handleDismiss = () => {
         setDismissed(true);
         localStorage.setItem('larakube_onboarding_dismissed', 'true');
+        localStorage.removeItem('larakube_onboarding_force_show');
     };
 
     if (dismissed) {
@@ -57,6 +68,10 @@ export default function WelcomeOnboarding({
                     type="button"
                     onClick={() => {
                         setDismissed(false);
+                        localStorage.setItem(
+                            'larakube_onboarding_force_show',
+                            'true',
+                        );
                         localStorage.removeItem(
                             'larakube_onboarding_dismissed',
                         );

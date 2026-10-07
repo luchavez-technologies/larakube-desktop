@@ -83,25 +83,25 @@ export default function QuickActionsBar({
     };
 
     return (
-        <section className={`mb-6 space-y-3.5 ${className ?? ''}`}>
+        <section className={`space-y-3 ${className ?? ''}`}>
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
                         <Sparkles className="size-4 text-ok dark:text-emerald-400" />
                         <span>1-Click Companion Apps</span>
                     </h2>
                     <p className="mt-0.5 text-xs text-soft">
-                        Deploy production-grade companion applications with
-                        instant wildcard DNS and shared Commons.
+                        Instant production companion deployment with shared
+                        Commons.
                     </p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {FEATURED_APPS.map((app) => (
                     <Card
                         key={app.id}
-                        className="flex flex-col justify-between p-4.5 transition-all duration-150 hover:shadow-md hover:ring-line/80"
+                        className="flex flex-col justify-between p-3.5 transition-all duration-150 hover:shadow-md hover:ring-line/80"
                     >
                         <div className="space-y-2.5">
                             <div className="flex items-center gap-3">

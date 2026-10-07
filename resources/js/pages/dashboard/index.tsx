@@ -262,138 +262,139 @@ export default function DashboardIndex({
                 </div>
             )}
 
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-[1fr_340px] items-start gap-5">
-                <div className="flex flex-col gap-5">
-                    {/* Projects Fleet */}
-                    <Card label="Projects">
-                        {projects.length === 0 ? (
-                            <div className="py-6 text-center">
-                                <p className="text-sm text-soft">
-                                    No projects registered yet.
-                                </p>
-                                <Link
-                                    href={createProject().url}
-                                    className="mt-2 inline-block text-xs font-medium text-brand hover:underline"
+            {/* Core Fleet Workloads: Projects & Cloud Servers side-by-side */}
+            <div className="mb-6 grid grid-cols-1 items-stretch gap-5 lg:grid-cols-2">
+                {/* Projects Fleet */}
+                <Card label="Projects">
+                    {projects.length === 0 ? (
+                        <div className="py-6 text-center">
+                            <p className="text-sm text-soft">
+                                No projects registered yet.
+                            </p>
+                            <Link
+                                href={createProject().url}
+                                className="mt-2 inline-block text-xs font-medium text-brand hover:underline"
+                            >
+                                Create or add your first app →
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-line">
+                            {projects.map((project) => (
+                                <div
+                                    key={project.id}
+                                    className="flex items-center justify-between gap-4 py-3 first:pt-1 last:pb-1"
                                 >
-                                    Create or add your first app →
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-line">
-                                {projects.map((project) => (
-                                    <div
-                                        key={project.id}
-                                        className="flex items-center justify-between gap-4 py-3 first:pt-1 last:pb-1"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <Link
-                                                    href={
-                                                        showProject(project.id)
-                                                            .url
-                                                    }
-                                                    className="truncate text-sm font-medium text-ink hover:underline"
-                                                >
-                                                    {project.name}
-                                                </Link>
-                                                {project.framework && (
-                                                    <StatusPill tone="muted">
-                                                        {project.framework}
-                                                    </StatusPill>
-                                                )}
-                                            </div>
-                                            <p className="mt-0.5 truncate font-mono text-xs text-soft">
-                                                {project.webHost
-                                                    ? `https://${project.webHost}`
-                                                    : project.path}
-                                            </p>
-                                        </div>
-                                        <Link
-                                            href={showProject(project.id).url}
-                                            className={buttonClass(
-                                                'secondary',
-                                                'sm',
-                                            )}
-                                        >
-                                            <span>Manage</span>
-                                            <ArrowRight className="size-3" />
-                                        </Link>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
-
-                    {/* Servers Fleet */}
-                    <Card label="Cloud Servers">
-                        {servers.length === 0 ? (
-                            <div className="py-6 text-center">
-                                <p className="text-sm text-soft">
-                                    No cloud servers provisioned yet.
-                                </p>
-                                <Link
-                                    href={createServer().url}
-                                    className="mt-2 inline-block text-xs font-medium text-brand hover:underline"
-                                >
-                                    Create a server with OpenTofu →
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-line">
-                                {servers.map((server) => (
-                                    <div
-                                        key={server.name}
-                                        className="flex items-center justify-between gap-4 py-3 first:pt-1 last:pb-1"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <Link
-                                                    href={
-                                                        showServer(server.name)
-                                                            .url
-                                                    }
-                                                    className="truncate text-sm font-medium text-ink hover:underline"
-                                                >
-                                                    {server.name}
-                                                </Link>
-                                                <StatusPill
-                                                    tone={
-                                                        server.status ===
-                                                        'ready'
-                                                            ? 'ok'
-                                                            : 'muted'
-                                                    }
-                                                >
-                                                    {server.status}
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <Link
+                                                href={
+                                                    showProject(project.id).url
+                                                }
+                                                className="truncate text-sm font-medium text-ink hover:underline"
+                                            >
+                                                {project.name}
+                                            </Link>
+                                            {project.framework && (
+                                                <StatusPill tone="muted">
+                                                    {project.framework}
                                                 </StatusPill>
-                                            </div>
-                                            <p className="mt-0.5 truncate font-mono text-xs text-soft">
-                                                {server.ip ??
-                                                    'Provisioning IP…'}{' '}
-                                                ·{' '}
-                                                {server.provider.toUpperCase()}
-                                            </p>
-                                        </div>
-                                        <Link
-                                            href={showServer(server.name).url}
-                                            className={buttonClass(
-                                                'secondary',
-                                                'sm',
                                             )}
-                                        >
-                                            <span>View</span>
-                                            <ArrowRight className="size-3" />
-                                        </Link>
+                                        </div>
+                                        <p className="mt-0.5 truncate font-mono text-xs text-soft">
+                                            {project.webHost
+                                                ? `https://${project.webHost}`
+                                                : project.path}
+                                        </p>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
+                                    <Link
+                                        href={showProject(project.id).url}
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                        )}
+                                    >
+                                        <span>Manage</span>
+                                        <ArrowRight className="size-3" />
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </Card>
+
+                {/* Servers Fleet */}
+                <Card label="Cloud Servers">
+                    {servers.length === 0 ? (
+                        <div className="py-6 text-center">
+                            <p className="text-sm text-soft">
+                                No cloud servers provisioned yet.
+                            </p>
+                            <Link
+                                href={createServer().url}
+                                className="mt-2 inline-block text-xs font-medium text-brand hover:underline"
+                            >
+                                Create a server with OpenTofu →
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-line">
+                            {servers.map((server) => (
+                                <div
+                                    key={server.name}
+                                    className="flex items-center justify-between gap-4 py-3 first:pt-1 last:pb-1"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <Link
+                                                href={
+                                                    showServer(server.name).url
+                                                }
+                                                className="truncate text-sm font-medium text-ink hover:underline"
+                                            >
+                                                {server.name}
+                                            </Link>
+                                            <StatusPill
+                                                tone={
+                                                    server.status === 'ready'
+                                                        ? 'ok'
+                                                        : 'muted'
+                                                }
+                                            >
+                                                {server.status}
+                                            </StatusPill>
+                                        </div>
+                                        <p className="mt-0.5 truncate font-mono text-xs text-soft">
+                                            {server.ip ?? 'Provisioning IP…'} ·{' '}
+                                            {server.provider.toUpperCase()}
+                                        </p>
+                                    </div>
+                                    <Link
+                                        href={showServer(server.name).url}
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                        )}
+                                    >
+                                        <span>View</span>
+                                        <ArrowRight className="size-3" />
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </Card>
+            </div>
+
+            {/* Companion Apps & Activity Grid */}
+            <div className="mb-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+                {/* 1-Click Companion Apps (2 cols) */}
+                <div className="lg:col-span-2">
+                    <QuickActionsBar servers={servers} />
                 </div>
 
-                {/* Right Column: Activity Feed */}
-                <div className="flex flex-col gap-5">
+                {/* Right Column: Activity Feed (1 col) */}
+                <div className="lg:col-span-1">
                     <Card label="Recent Activity">
                         {runs.length === 0 ? (
                             <p className="py-3 text-xs text-soft">
@@ -423,9 +424,6 @@ export default function DashboardIndex({
                     </Card>
                 </div>
             </div>
-
-            {/* 1-Click Companion Apps */}
-            <QuickActionsBar servers={servers} />
 
             {/* Getting Started Walkthrough */}
             <WelcomeOnboarding
