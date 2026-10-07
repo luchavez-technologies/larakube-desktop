@@ -1,5 +1,5 @@
-import { Deferred, Link, router, usePoll } from '@inertiajs/react';
-import { useState } from 'react';
+import { Deferred, Form, Link, router, usePoll } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import {
     Laptop,
     Cloud,
@@ -12,13 +12,17 @@ import {
     Trash2,
     Globe,
     Server,
+    Plus,
+    X,
 } from 'lucide-react';
 import BackingServicesCard from '@/components/backing-services-card';
 import BoxProjectActions from '@/components/box-project-actions';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import EditorLogo from '@/components/editor-logo';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
+import FrameworkBadge from '@/components/framework-badge';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import ProjectTerminalCard, {
@@ -32,12 +36,19 @@ import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import { show as showBox, shareDomainPage } from '@/routes/devboxes';
 import { index } from '@/routes/projects';
+import { providerLabels } from '@/types/larakube';
 import type {
     BackingServices,
     DevBoxProject,
     Project,
     ProjectEnvironment,
 } from '@/types/larakube';
+
+type ReadyServer = {
+    name: string;
+    ip: string | null;
+    provider?: string | null;
+};
 
 type Props = {
     box: string;
@@ -53,6 +64,7 @@ type Props = {
     sharing?: Sharing | null;
     endpoints?: {
         operate: string;
+        environments?: string;
         scaling: {
             replicas: string;
             autoscale: string;
@@ -66,6 +78,7 @@ type Props = {
     };
     runs: RecentRun[];
     latestRun: ProjectRun | null;
+    readyServers?: ReadyServer[];
 };
 
 export default function ShowDevBoxProject({
@@ -79,8 +92,10 @@ export default function ShowDevBoxProject({
     endpoints,
     runs,
     latestRun,
+    readyServers = [],
 }: Props) {
     const [activeEnv, setActiveEnv] = useState('local');
+    const [addEnvModalOpen, setAddEnvModalOpen] = useState(false);
 
     // Follow an action that is still running until it finishes.
     usePoll(
@@ -230,6 +245,17 @@ export default function ShowDevBoxProject({
                                         </button>
                                     );
                                 })}
+
+                                {/* Add Environment Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => setAddEnvModalOpen(true)}
+                                    className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-medium text-soft transition-colors hover:bg-paper hover:text-ink"
+                                    title="Create a cloud environment, such as staging or production"
+                                >
+                                    <Plus className="size-3.5" />
+                                    <span>New environment</span>
+                                </button>
                             </div>
 
                             {/* Active Environment Deploy Button */}
@@ -262,6 +288,19 @@ export default function ShowDevBoxProject({
                                             project={details}
                                         />
 
+                                        <Deferred
+                                            data="sharing"
+                                            fallback={
+                                                <div className="h-24 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                            }
+                                        >
+                                            <SharingCard
+                                                box={box}
+                                                project={details}
+                                                sharing={sharing}
+                                            />
+                                        </Deferred>
+
                                         <WorkloadScalingCard
                                             project={{ name }}
                                             activeEnv="local"
@@ -288,19 +327,6 @@ export default function ShowDevBoxProject({
                                                 hasCommons={
                                                     backing?.commons ?? false
                                                 }
-                                            />
-                                        </Deferred>
-
-                                        <Deferred
-                                            data="sharing"
-                                            fallback={
-                                                <div className="h-24 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
-                                            }
-                                        >
-                                            <SharingCard
-                                                box={box}
-                                                project={details}
-                                                sharing={sharing}
                                             />
                                         </Deferred>
                                     </>
@@ -360,6 +386,20 @@ export default function ShowDevBoxProject({
                                 />
                             </div>
                         </div>
+
+                        {/* Add Environment Modal Popup */}
+                        <AddEnvironmentDialog
+                            open={addEnvModalOpen}
+                            onClose={() => setAddEnvModalOpen(false)}
+                            box={box}
+                            project={name}
+                            endpoint={
+                                endpoints?.environments ??
+                                `/dev-boxes/${box}/projects/${name}/environments`
+                            }
+                            readyServers={readyServers ?? []}
+                            onCreated={(newEnv) => setActiveEnv(newEnv)}
+                        />
                     </div>
                 ) : (
                     <Card tone="warn">
@@ -375,6 +415,36 @@ export default function ShowDevBoxProject({
             </Deferred>
         </AppLayout>
     );
+}
+
+function resolveIdeForFramework(framework?: string | null): {
+    slug: string;
+    name: string;
+} {
+    const fw = framework?.toLowerCase() ?? '';
+    if (['django', 'fastapi'].includes(fw)) {
+        return { slug: 'pycharm', name: 'PyCharm (JetBrains Gateway)' };
+    }
+    if (['go', 'gin'].includes(fw)) {
+        return { slug: 'goland', name: 'GoLand (JetBrains Gateway)' };
+    }
+    if (['rust', 'axum'].includes(fw)) {
+        return { slug: 'rustrover', name: 'RustRover (JetBrains Gateway)' };
+    }
+    if (
+        [
+            'nextjs',
+            'next',
+            'vite',
+            'astro',
+            'vue',
+            'react',
+            'docusaurus',
+        ].includes(fw)
+    ) {
+        return { slug: 'webstorm', name: 'WebStorm (JetBrains Gateway)' };
+    }
+    return { slug: 'phpstorm', name: 'PhpStorm (JetBrains Gateway)' };
 }
 
 function Header({
@@ -394,6 +464,7 @@ function Header({
 }) {
     const project = details && !('state' in details) ? details : null;
     const [editorMenuOpen, setEditorMenuOpen] = useState(false);
+    const ide = resolveIdeForFramework(project?.framework);
 
     return (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -401,9 +472,7 @@ function Header({
                 title={name}
                 badge={
                     project?.framework ? (
-                        <StatusPill tone="muted">
-                            {project.framework}
-                        </StatusPill>
+                        <FrameworkBadge slug={project.framework} />
                     ) : undefined
                 }
                 meta={
@@ -435,48 +504,97 @@ function Header({
                         </Button>
 
                         {editorMenuOpen && (
-                            <div className="absolute right-0 z-20 mt-1.5 w-60 rounded-xl border border-line bg-surface p-1.5 shadow-xl">
-                                <Link
-                                    href={open().url}
-                                    method="post"
-                                    data={{
-                                        url: `vscode://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`,
-                                    }}
-                                    as="button"
-                                    onClick={() => setEditorMenuOpen(false)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
-                                >
-                                    <Code2 className="size-3.5 text-blue-500" />
-                                    <span>VS Code (Remote SSH)</span>
-                                </Link>
+                            <div className="absolute right-0 z-20 mt-1.5 w-88 rounded-xl border border-line bg-surface p-2 shadow-2xl">
+                                <div className="space-y-1">
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{
+                                            url: `vscode://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`,
+                                        }}
+                                        as="button"
+                                        onClick={() => setEditorMenuOpen(false)}
+                                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
+                                    >
+                                        <EditorLogo slug="vscode" size="xs" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-ink">
+                                                VS Code (Remote SSH)
+                                            </p>
+                                            <p className="text-[11px] text-soft">
+                                                Open via Remote - SSH extension
+                                            </p>
+                                        </div>
+                                    </Link>
 
-                                <Link
-                                    href={open().url}
-                                    method="post"
-                                    data={{
-                                        url: `cursor://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`,
-                                    }}
-                                    as="button"
-                                    onClick={() => setEditorMenuOpen(false)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
-                                >
-                                    <Code2 className="size-3.5 text-purple-500" />
-                                    <span>Cursor (Remote SSH)</span>
-                                </Link>
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{
+                                            url: `cursor://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`,
+                                        }}
+                                        as="button"
+                                        onClick={() => setEditorMenuOpen(false)}
+                                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
+                                    >
+                                        <EditorLogo slug="cursor" size="xs" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-ink">
+                                                Cursor (Remote SSH)
+                                            </p>
+                                            <p className="text-[11px] text-soft">
+                                                Open via Remote SSH in Cursor
+                                            </p>
+                                        </div>
+                                    </Link>
 
-                                <div className="my-1 border-t border-line" />
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{
+                                            url: `jetbrains-gateway://connect?type=ssh&host=${devBox.ip}&user=larakube&port=22&deployDir=/home/larakube/projects/${name}`,
+                                        }}
+                                        as="button"
+                                        onClick={() => setEditorMenuOpen(false)}
+                                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
+                                    >
+                                        <EditorLogo slug={ide.slug} size="xs" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-ink">
+                                                {ide.name}
+                                            </p>
+                                            <p className="text-[11px] text-soft">
+                                                Remote Development via JetBrains
+                                                Gateway
+                                            </p>
+                                        </div>
+                                    </Link>
+                                </div>
 
-                                <div className="px-2.5 py-1.5">
-                                    <span className="block text-[11px] font-medium text-soft">
-                                        Terminal SSH Command:
-                                    </span>
-                                    <div className="mt-1 flex items-center justify-between gap-1 rounded bg-paper px-2 py-1 font-mono text-[11px] text-ink">
-                                        <span className="truncate">
-                                            ssh larakube@{devBox.ip}
+                                <div className="mt-2 border-t border-line pt-2">
+                                    <div className="flex items-center justify-between px-1">
+                                        <span className="text-[11px] font-semibold text-soft">
+                                            Terminal SSH Command
                                         </span>
+                                        <span className="text-[10px] text-faint">
+                                            Port 22 · user: larakube
+                                        </span>
+                                    </div>
+                                    <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-paper p-2 font-mono text-[11px] text-ink ring-1 ring-line">
+                                        <code className="text-wrap break-all select-all">
+                                            ssh -i{' '}
+                                            {devBox.sshKey ?? '~/.ssh/id_rsa'}{' '}
+                                            larakube@{devBox.ip}
+                                        </code>
                                         <CopyButton
                                             value={`ssh -i ${devBox.sshKey ?? '~/.ssh/id_rsa'} larakube@${devBox.ip}`}
                                         />
+                                    </div>
+                                    <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-soft">
+                                        <span>Project folder:</span>
+                                        <code className="font-mono text-ink">
+                                            ~/projects/{name}
+                                        </code>
                                     </div>
                                 </div>
                             </div>
@@ -802,5 +920,181 @@ function DevBoxConnectionCard({
                 </div>
             </div>
         </Card>
+    );
+}
+
+function AddEnvironmentDialog({
+    open,
+    onClose,
+    box,
+    project,
+    endpoint,
+    readyServers,
+    onCreated,
+}: {
+    open: boolean;
+    onClose: () => void;
+    box: string;
+    project: string;
+    endpoint: string;
+    readyServers: ReadyServer[];
+    onCreated?: (envName: string) => void;
+}) {
+    const [name, setName] = useState('');
+    const [server, setServer] = useState(readyServers[0]?.name ?? '');
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        if (open) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open, onClose]);
+
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="add-env-dialog-title"
+                className="w-full max-w-[480px] rounded-2xl bg-surface p-6 shadow-2xl ring-1 ring-line"
+            >
+                <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
+                    <div>
+                        <h3
+                            id="add-env-dialog-title"
+                            className="text-base font-semibold text-ink"
+                        >
+                            Add Cloud Environment
+                        </h3>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Create an environment overlay for {project} on {box}
+                            .
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg p-1.5 text-soft transition-colors hover:bg-paper hover:text-ink"
+                        title="Close dialog"
+                    >
+                        <X className="size-4" />
+                    </button>
+                </div>
+
+                <Form
+                    action={endpoint}
+                    onSuccess={() => {
+                        const envName = name.trim().toLowerCase();
+                        if (envName && onCreated) {
+                            onCreated(envName);
+                        }
+                        setName('');
+                        onClose();
+                    }}
+                    className="space-y-4"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <div>
+                                <label className="mb-1.5 block text-xs font-medium text-ink">
+                                    Environment Name
+                                </label>
+                                <input
+                                    name="environment"
+                                    value={name}
+                                    onChange={(e) =>
+                                        setName(
+                                            e.target.value
+                                                .toLowerCase()
+                                                .replace(/[^a-z0-9_-]/g, ''),
+                                        )
+                                    }
+                                    placeholder="staging, qa, uat, production"
+                                    spellCheck={false}
+                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                                {errors.environment && (
+                                    <p className="mt-1 text-xs text-accent">
+                                        {errors.environment}
+                                    </p>
+                                )}
+                                <p className="mt-1 text-[11px] text-soft">
+                                    Lowercase letters, numbers, hyphens, and
+                                    underscores only.
+                                </p>
+                            </div>
+
+                            {readyServers.length > 0 && (
+                                <div>
+                                    <label className="mb-1.5 block text-xs font-medium text-ink">
+                                        Target Cluster Server (Optional)
+                                    </label>
+                                    <select
+                                        name="server"
+                                        value={server}
+                                        onChange={(e) =>
+                                            setServer(e.target.value)
+                                        }
+                                        className="w-full rounded-lg border-0 bg-paper px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    >
+                                        <option value="">
+                                            None (define overlay without linking
+                                            server yet)
+                                        </option>
+                                        {readyServers.map((s) => (
+                                            <option key={s.name} value={s.name}>
+                                                {s.name}
+                                                {s.provider
+                                                    ? ` (${providerLabels[s.provider] ?? s.provider})`
+                                                    : ''}
+                                                {s.ip ? ` · ${s.ip}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.server && (
+                                        <p className="mt-1 text-xs text-accent">
+                                            {errors.server}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-end gap-2.5 border-t border-line pt-3">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onClose}
+                                    className="gap-1.5"
+                                >
+                                    <X className="size-3.5" />
+                                    <span>Cancel</span>
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={name.trim() === '' || processing}
+                                    className="gap-1.5"
+                                >
+                                    <Plus className="size-3.5" />
+                                    <span>
+                                        {processing
+                                            ? 'Creating…'
+                                            : 'Create Environment'}
+                                    </span>
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </Form>
+            </div>
+        </div>
     );
 }

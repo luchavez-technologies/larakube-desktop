@@ -605,6 +605,32 @@ test('deploying an app on a box starts a deploy-app run', function () {
     File::deleteDirectory($bin);
 });
 
+test('adding an environment to a dev box project starts a link-server run', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+            ['name' => 'staging-cluster', 'provider' => 'do', 'kind' => 'doks', 'region' => 'sgp1', 'ip' => '203.0.113.88', 'sshKey' => '/keys/doks', 'context' => 'doks-sgp1', 'role' => 'deploy', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.projects.environments.store', ['box' => 'my-dev-box', 'project' => 'shop']), [
+        'environment' => 'staging',
+        'server' => 'staging-cluster',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::LinkServer)
+        ->and($run->environment)->toBe('staging')
+        ->and($run->label)->toBe('Link shop (staging) to staging-cluster on my-dev-box');
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "'env' 'staging' '--ingress=traefik' '--managed=' '--web-hosts=' '--context=doks-sgp1' '--ssh-key=/keys/doks'"));
+
+    File::deleteDirectory($bin);
+});
+
 test('an app on a box has its own page, with what the box reports about it and the runs made on it', function () {
     $bin = devBoxProjectsCli();
     devBoxProjectsExperimental(true);

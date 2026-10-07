@@ -14,7 +14,17 @@ class OpenExternalController extends Controller
     {
         $validated = $request->validate([
             // Sign-in addresses (Google's carries scopes and a code challenge) run past 500 characters.
-            'url' => ['required', 'url:http,https', 'max:4096'],
+            'url' => [
+                'required',
+                'string',
+                'max:4096',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $scheme = parse_url((string) $value, PHP_URL_SCHEME);
+                    if (! in_array($scheme, ['http', 'https', 'vscode', 'cursor', 'jetbrains', 'jetbrains-gateway'], true)) {
+                        $fail('The url field must be a valid URL.');
+                    }
+                },
+            ],
         ]);
 
         // Plain http is only for a tunnel on this computer, such as a workspace editor.

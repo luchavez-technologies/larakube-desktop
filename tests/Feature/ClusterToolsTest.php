@@ -284,13 +284,17 @@ test('a finished install marks that server\'s tool list stale', function () {
     expect(app(ToolCatalog::class)->lastVerified('larakube-203.0.113.21')['checkedAt'])->toBeNull();
 });
 
-test('open hands https addresses to the default browser and rejects anything else', function () {
+test('open hands https and editor addresses to the default browser and rejects anything else', function () {
     $shell = Shell::fake();
 
     $this->post(route('open'), ['url' => 'javascript:alert(1)'])->assertSessionHasErrors('url');
     $this->post(route('open'), ['url' => 'https://sso.example.com'])->assertRedirect();
+    $this->post(route('open'), ['url' => 'vscode://vscode-remote/ssh-remote+larakube@1.2.3.4/home/larakube/projects/app'])->assertRedirect();
+    $this->post(route('open'), ['url' => 'jetbrains-gateway://connect?type=ssh&host=1.2.3.4&user=larakube'])->assertRedirect();
 
     $shell->assertOpenedExternal('https://sso.example.com');
+    $shell->assertOpenedExternal('vscode://vscode-remote/ssh-remote+larakube@1.2.3.4/home/larakube/projects/app');
+    $shell->assertOpenedExternal('jetbrains-gateway://connect?type=ssh&host=1.2.3.4&user=larakube');
 });
 
 test('Tools in the sidebar returns to the server last browsed', function () {

@@ -280,6 +280,38 @@ class DevBoxController extends Controller
         return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::ConfigureResources, $label, $args, $env);
     }
 
+    /** Add a cloud environment (e.g. staging, production) to a dev box project and optionally link a cluster server. */
+    public function addEnvironment(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash'],
+            'server' => ['nullable', 'string'],
+        ]);
+
+        $environment = $validated['environment'];
+        $serverName = $validated['server'] ?? null;
+
+        $args = ['env', $environment, '--ingress=traefik', '--managed=', '--web-hosts='];
+        $label = "Add environment {$environment} to {$project} on {$box}";
+
+        if (! empty($serverName)) {
+            $targetServer = $catalog->find($serverName);
+            if ($targetServer !== null && ! empty($targetServer['context'])) {
+                $args[] = "--context={$targetServer['context']}";
+            }
+            if ($targetServer !== null && ! empty($targetServer['sshKey'])) {
+                $args[] = "--ssh-key={$targetServer['sshKey']}";
+            }
+            $label = "Link {$project} ({$environment}) to {$serverName} on {$box}";
+        }
+
+        return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::LinkServer, $label, $args, $environment);
+    }
+
     /** Dotenv drift comparison against cluster secrets on the dev box. */
     public function dotenvStatus(Request $request, string $box, string $project, StackCatalog $catalog, DevBoxShell $shell): JsonResponse
     {
@@ -446,6 +478,7 @@ class DevBoxController extends Controller
             }, 'backing'),
             'endpoints' => [
                 'operate' => "/dev-boxes/{$box}/projects/{$project}",
+                'environments' => "/dev-boxes/{$box}/projects/{$project}/environments",
                 'scaling' => [
                     'replicas' => "/dev-boxes/{$box}/projects/{$project}/scaling/replicas",
                     'autoscale' => "/dev-boxes/{$box}/projects/{$project}/scaling/autoscale",
@@ -457,6 +490,12 @@ class DevBoxController extends Controller
                     'pull' => "/dev-boxes/{$box}/projects/{$project}/dotenv/pull",
                 ],
             ],
+            'readyServers' => Inertia::defer(function () use ($catalog): array {
+                return collect($catalog->all() ?? [])
+                    ->filter(fn (array $server): bool => $server['status'] === 'ready')
+                    ->values()
+                    ->all();
+            }, 'readyServers'),
             'runs' => $runs->map(fn (Run $run): array => ['id' => $run->id, 'label' => $run->label, 'kind' => $run->kind?->value, 'status' => $run->status->value, 'created_at' => $run->created_at?->toISOString(), 'environment' => $run->environment ?? 'local'])->all(),
             'latestRun' => $runs->first() ? [
                 'id' => $runs->first()->id,

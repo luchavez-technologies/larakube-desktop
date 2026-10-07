@@ -84,6 +84,7 @@ Route::post('/dev-boxes/{box}/access/revoke', [DevBoxController::class, 'revoke'
 Route::post('/dev-boxes/{box}/update-cli', [DevBoxController::class, 'updateCli'])->name('devboxes.update-cli');
 Route::get('/dev-boxes/{box}/projects/{project}', [DevBoxController::class, 'showProject'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.show');
 Route::post('/dev-boxes/{box}/projects/{project}/{action}', [DevBoxController::class, 'operate'])->where('project', '[a-z0-9][a-z0-9-]*')->where('action', 'up|down|start|stop|deploy')->name('devboxes.operate');
+Route::post('/dev-boxes/{box}/projects/{project}/environments', [DevBoxController::class, 'addEnvironment'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.environments.store');
 Route::post('/dev-boxes/{box}/projects/{project}/scaling/replicas', [DevBoxController::class, 'scaleReplicas'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.scaling.replicas');
 Route::post('/dev-boxes/{box}/projects/{project}/scaling/autoscale', [DevBoxController::class, 'scaleAutoscale'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.scaling.autoscale');
 Route::post('/dev-boxes/{box}/projects/{project}/scaling/resources', [DevBoxController::class, 'scaleResources'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.scaling.resources');
