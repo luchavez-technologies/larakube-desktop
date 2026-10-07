@@ -22,7 +22,7 @@ import {
     pull as pullRoute,
     status as statusRoute,
 } from '@/routes/projects/dotenv';
-import type { Project, ProjectEnvironment } from '@/types/larakube';
+import type { ProjectEnvironment } from '@/types/larakube';
 
 type DriftItem = {
     key: string;
@@ -57,14 +57,30 @@ export default function EnvironmentSecretsCard({
     project,
     activeEnv,
     activeEnvConfig: _activeEnvConfig,
+    customEndpoints,
 }: {
-    project: Project;
+    project: { id?: number; name?: string };
     activeEnv: string;
     activeEnvConfig: ProjectEnvironment;
+    customEndpoints?: {
+        status?: string;
+        push?: string;
+        pull?: string;
+    };
 }) {
     const [driftModalOpen, setDriftModalOpen] = useState(false);
     const [pushing, setPushing] = useState(false);
     const [pulling, setPulling] = useState(false);
+
+    const pushUrl =
+        customEndpoints?.push ??
+        (project.id ? pushRoute({ project: project.id }).url : '');
+    const pullUrl =
+        customEndpoints?.pull ??
+        (project.id ? pullRoute({ project: project.id }).url : '');
+    const statusUrl =
+        customEndpoints?.status ??
+        (project.id ? statusRoute({ project: project.id }).url : '');
 
     const envFilename = activeEnv === 'local' ? '.env' : `.env.${activeEnv}`;
 
@@ -78,7 +94,7 @@ export default function EnvironmentSecretsCard({
         }
         setPushing(true);
         router.post(
-            pushRoute({ project: project.id }).url,
+            pushUrl,
             { environment: activeEnv },
             {
                 preserveScroll: true,
@@ -97,7 +113,7 @@ export default function EnvironmentSecretsCard({
         }
         setPulling(true);
         router.post(
-            pullRoute({ project: project.id }).url,
+            pullUrl,
             { environment: activeEnv },
             {
                 preserveScroll: true,
@@ -186,7 +202,7 @@ export default function EnvironmentSecretsCard({
             {/* Drift Viewer Modal */}
             {driftModalOpen && (
                 <DotenvDriftModal
-                    project={project}
+                    statusUrl={statusUrl}
                     activeEnv={activeEnv}
                     envFilename={envFilename}
                     onClose={() => setDriftModalOpen(false)}
@@ -201,7 +217,7 @@ export default function EnvironmentSecretsCard({
 }
 
 function DotenvDriftModal({
-    project,
+    statusUrl,
     activeEnv,
     envFilename,
     onClose,
@@ -210,7 +226,7 @@ function DotenvDriftModal({
     pushing,
     pulling,
 }: {
-    project: Project;
+    statusUrl: string;
     activeEnv: string;
     envFilename: string;
     onClose: () => void;
@@ -227,7 +243,7 @@ function DotenvDriftModal({
 
     function fetchDrift(showPlaintext: boolean) {
         setLoading(true);
-        const url = `${statusRoute({ project: project.id }).url}?environment=${encodeURIComponent(activeEnv)}${showPlaintext ? '&reveal=1' : ''}`;
+        const url = `${statusUrl}?environment=${encodeURIComponent(activeEnv)}${showPlaintext ? '&reveal=1' : ''}`;
         fetch(url, { headers: { Accept: 'application/json' } })
             .then((res) => (res.ok ? res.json() : null))
             .then((res: DriftStatusResponse | null) => {

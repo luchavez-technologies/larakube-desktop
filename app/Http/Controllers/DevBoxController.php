@@ -11,6 +11,7 @@ use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DevBoxShell;
 use App\Services\LaraKube\DevBoxTunnel;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
@@ -19,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -121,35 +123,243 @@ class DevBoxController extends Controller
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
-    /** Up, down, start or stop an app on the box, as `larakube <action>` in its folder. */
+    /** Up, down, start, stop or deploy an app on the box, as `larakube <action>` in its folder. */
     public function operate(Request $request, string $box, string $project, string $action, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
         $this->ensureEnabled();
         $stack = $this->readyBox($box, $catalog);
         abort_if($stack === null, 404);
 
+        $env = $action === 'deploy' ? (string) $request->input('environment', 'production') : 'local';
+
         $arguments = match ($action) {
             'up' => ['up', 'local', '--no-console', '--no-test'],
             'down' => ['down', 'local', '--force'],
             'start' => ['start', 'local'],
             'stop' => ['stop', 'local'],
+            'deploy' => ['deploy', $env],
             default => abort(404),
         };
 
+        $kind = $action === 'deploy' ? RunKind::DeployApp : RunKind::OperateDevBoxProject;
+        $label = $action === 'deploy'
+            ? "Deploy {$project} ({$env}) on {$box}"
+            : ucfirst($action)." {$project} on {$box}";
+
         $run = $runner->start(
-            label: ucfirst($action)." {$project} on {$box}",
+            label: $label,
             arguments: $arguments,
-            kind: RunKind::OperateDevBoxProject,
+            kind: $kind,
             subject: $project,
-            meta: ['server' => $box, 'role' => 'dev', 'app' => $project],
+            meta: ['server' => $box, 'role' => 'dev', 'app' => $project, 'environment' => $env],
             targetType: 'server',
             targetName: $box,
             serverName: $box,
+            environment: $env,
             devBox: $stack,
             devBoxProject: $project,
         );
 
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /** Scale component replicas on a dev box. */
+    public function scaleReplicas(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash'],
+            'component' => ['required', 'string', 'alpha_dash'],
+            'count' => ['nullable', 'integer', 'min:0'],
+            'reset' => ['boolean'],
+        ]);
+
+        $env = $validated['environment'];
+        $component = $validated['component'];
+        $reset = $request->boolean('reset');
+        $count = $validated['count'] ?? 1;
+
+        $args = ['replicas', $env, "--component={$component}"];
+        if ($reset) {
+            $args[] = '--reset';
+            $label = "Reset replicas for {$component} ({$env}) on {$box}";
+        } else {
+            $args[] = "--count={$count}";
+            $label = "Set replicas for {$component} to {$count} ({$env}) on {$box}";
+        }
+
+        return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::ConfigureReplicas, $label, $args, $env);
+    }
+
+    /** Configure horizontal pod autoscaling on a dev box. */
+    public function scaleAutoscale(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash'],
+            'component' => ['required', 'string', 'alpha_dash'],
+            'min' => ['nullable', 'integer', 'min:1'],
+            'max' => ['nullable', 'integer', 'min:1'],
+            'cpu' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'disable' => ['boolean'],
+        ]);
+
+        $env = $validated['environment'];
+        $component = $validated['component'];
+        $disable = $request->boolean('disable');
+
+        $args = ['autoscale', $env, "--component={$component}"];
+        if ($disable) {
+            $args[] = '--disable';
+            $label = "Disable autoscaling for {$component} ({$env}) on {$box}";
+        } else {
+            $min = $validated['min'] ?? 1;
+            $max = $validated['max'] ?? max($min, 5);
+            $cpu = $validated['cpu'] ?? 70;
+            $args[] = "--min={$min}";
+            $args[] = "--max={$max}";
+            $args[] = "--cpu={$cpu}";
+            $label = "Configure autoscale for {$component} ({$min}..{$max} @ {$cpu}%) ({$env}) on {$box}";
+        }
+
+        return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::ConfigureAutoscale, $label, $args, $env);
+    }
+
+    /** Configure resource CPU/Memory requests & limits on a dev box. */
+    public function scaleResources(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash'],
+            'component' => ['required', 'string', 'alpha_dash'],
+            'tier' => ['nullable', 'string', Rule::in(['eco', 'standard', 'pro', 'custom'])],
+            'requests_cpu' => ['nullable', 'string', 'max:32'],
+            'requests_memory' => ['nullable', 'string', 'max:32'],
+            'limits_cpu' => ['nullable', 'string', 'max:32'],
+            'limits_memory' => ['nullable', 'string', 'max:32'],
+            'reset' => ['boolean'],
+        ]);
+
+        $env = $validated['environment'];
+        $component = $validated['component'];
+        $reset = $request->boolean('reset');
+        $tier = $validated['tier'] ?? null;
+
+        $args = ['resources', $env, "--component={$component}"];
+        if ($reset) {
+            $args[] = '--reset';
+            $label = "Reset resources for {$component} ({$env}) on {$box}";
+        } elseif ($tier !== null && $tier !== 'custom') {
+            $args[] = "--tier={$tier}";
+            $label = "Set {$component} resources to {$tier} tier ({$env}) on {$box}";
+        } else {
+            if (! empty($validated['requests_cpu'])) {
+                $args[] = "--requests-cpu={$validated['requests_cpu']}";
+            }
+            if (! empty($validated['requests_memory'])) {
+                $args[] = "--requests-memory={$validated['requests_memory']}";
+            }
+            if (! empty($validated['limits_cpu'])) {
+                $args[] = "--limits-cpu={$validated['limits_cpu']}";
+            }
+            if (! empty($validated['limits_memory'])) {
+                $args[] = "--limits-memory={$validated['limits_memory']}";
+            }
+            $label = "Update resources for {$component} ({$env}) on {$box}";
+        }
+
+        return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::ConfigureResources, $label, $args, $env);
+    }
+
+    /** Dotenv drift comparison against cluster secrets on the dev box. */
+    public function dotenvStatus(Request $request, string $box, string $project, StackCatalog $catalog, DevBoxShell $shell): JsonResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $environment = (string) $request->input('environment', 'local');
+        $reveal = $request->boolean('reveal');
+
+        $cmd = ['dotenv', $environment, '--json'];
+        if ($reveal) {
+            $cmd[] = '--reveal';
+        }
+
+        $result = $shell->json($stack, $cmd, 45, null, $project);
+
+        $status = null;
+        if ($result !== null && ($result['success'] ?? false) === true && is_array($result['items'] ?? null)) {
+            $status = [
+                'environment' => $result['environment'] ?? $environment,
+                'namespace' => $result['namespace'] ?? null,
+                'items' => array_values(array_filter($result['items'], is_array(...))),
+                'summary' => is_array($result['summary'] ?? null) ? $result['summary'] : [],
+            ];
+        }
+
+        return response()->json([
+            'environment' => $environment,
+            'status' => $status,
+        ]);
+    }
+
+    /** Push local secrets on the dev box into cluster secrets. */
+    public function dotenvPush(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $environment = (string) $request->input('environment', 'local');
+        $label = "Push secret keys to {$environment} on {$box}";
+
+        return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::DotenvPush, $label, ['dotenv:push', $environment], $environment);
+    }
+
+    /** Pull cluster secrets on the dev box into local .env. */
+    public function dotenvPull(Request $request, string $box, string $project, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $stack = $this->readyBox($box, $catalog);
+        abort_if($stack === null, 404);
+
+        $environment = (string) $request->input('environment', 'local');
+        $label = "Pull secret keys from {$environment} on {$box}";
+
+        return $this->devBoxProjectRun($stack, $box, $project, $runner, RunKind::DotenvPull, $label, ['dotenv:pull', $environment], $environment);
+    }
+
+    /**
+     * @param  array<string, mixed>  $stack
+     * @param  list<string>  $arguments
+     */
+    private function devBoxProjectRun(array $stack, string $box, string $project, CliRunner $runner, RunKind $kind, string $label, array $arguments, string $environment = 'local'): RedirectResponse
+    {
+        $runner->start(
+            label: $label,
+            arguments: $arguments,
+            kind: $kind,
+            subject: $project,
+            meta: ['server' => $box, 'role' => 'dev', 'app' => $project, 'environment' => $environment],
+            targetType: 'server',
+            targetName: $box,
+            serverName: $box,
+            environment: $environment,
+            devBox: $stack,
+            devBoxProject: $project,
+        );
+
+        return back();
     }
 
     /** One dev box: its apps, its Commons, how to connect. The cluster cards need the tunnel the CLI opens. */
@@ -183,7 +393,7 @@ class DevBoxController extends Controller
     }
 
     /** One app on a dev box, laid out like a local project's page. */
-    public function showProject(string $box, string $project, StackCatalog $catalog, DevBoxShell $shell): Response
+    public function showProject(string $box, string $project, StackCatalog $catalog, DevBoxShell $shell, ProjectInspector $inspector): Response
     {
         $this->ensureEnabled();
         $stack = $this->readyBox($box, $catalog);
@@ -194,6 +404,11 @@ class DevBoxController extends Controller
         return Inertia::render('devboxes/project', [
             'box' => $box,
             'name' => $project,
+            'devBox' => [
+                'name' => $box,
+                'ip' => $stack['ip'] ?? null,
+                'sshKey' => $stack['sshKey'] ?? null,
+            ],
             // What the box reports for this app, or a state saying why it cannot: the box did not answer, or the app is not in ~/projects.
             'details' => Inertia::defer(function () use ($shell, $stack, $project): array {
                 $result = $shell->json($stack, ['project:list', '--json']);
@@ -204,6 +419,13 @@ class DevBoxController extends Controller
 
                 return collect(is_array($result['projects'] ?? null) ? $result['projects'] : [])->firstWhere('name', $project) ?? ['state' => 'missing'];
             }, 'details'),
+            // Read .larakube.json from the dev box and construct multi-environment structure
+            'blueprint' => Inertia::defer(function () use ($shell, $stack, $project, $inspector): array {
+                $blueprint = $shell->readProjectJson($stack, $project, '.larakube.json');
+                $local = $shell->readProjectJson($stack, $project, '.larakube.local.json');
+
+                return $inspector->inspectBlueprint($blueprint, $local, 'local', $project);
+            }, 'blueprint'),
             // The stable public names the app has from share:domain, and whether their tunnel is up. Null when the box's CLI is too old to say.
             'sharing' => Inertia::defer(function () use ($shell, $stack, $project): ?array {
                 $result = $shell->json($stack, ['share:show', 'local', '--json'], 45, null, $project);
@@ -222,7 +444,20 @@ class DevBoxController extends Controller
                     ? ['commons' => ($result['commons'] ?? false) === true, 'services' => array_values(array_filter($result['services'], is_array(...)))]
                     : null;
             }, 'backing'),
-            'runs' => $runs->map(fn (Run $run): array => ['id' => $run->id, 'label' => $run->label, 'kind' => $run->kind?->value, 'status' => $run->status->value, 'created_at' => $run->created_at?->toISOString(), 'environment' => 'local'])->all(),
+            'endpoints' => [
+                'operate' => "/dev-boxes/{$box}/projects/{$project}",
+                'scaling' => [
+                    'replicas' => "/dev-boxes/{$box}/projects/{$project}/scaling/replicas",
+                    'autoscale' => "/dev-boxes/{$box}/projects/{$project}/scaling/autoscale",
+                    'resources' => "/dev-boxes/{$box}/projects/{$project}/scaling/resources",
+                ],
+                'dotenv' => [
+                    'status' => "/dev-boxes/{$box}/projects/{$project}/dotenv/status",
+                    'push' => "/dev-boxes/{$box}/projects/{$project}/dotenv/push",
+                    'pull' => "/dev-boxes/{$box}/projects/{$project}/dotenv/pull",
+                ],
+            ],
+            'runs' => $runs->map(fn (Run $run): array => ['id' => $run->id, 'label' => $run->label, 'kind' => $run->kind?->value, 'status' => $run->status->value, 'created_at' => $run->created_at?->toISOString(), 'environment' => $run->environment ?? 'local'])->all(),
             'latestRun' => $runs->first() ? [
                 'id' => $runs->first()->id,
                 'label' => $runs->first()->label,

@@ -37,6 +37,21 @@ class ProjectInspector
     {
         $blueprint = $this->readJson("{$path}/.larakube.json");
         $local = $this->readJson("{$path}/.larakube.local.json");
+        $git = $this->detectGit($path);
+
+        return $this->inspectBlueprint($blueprint, $local, $environment, $path, $git);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $blueprint
+     * @param  array<string, mixed>|null  $local
+     * @param  array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}|null  $git
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
+     */
+    public function inspectBlueprint(?array $blueprint, ?array $local = null, string $environment = 'production', string $path = '', ?array $git = null): array
+    {
+        $git ??= ['remote' => null, 'platform' => 'github', 'repoSlug' => null, 'hasWorkflow' => false];
+
         // A blueprint with no framework is Laravel: the LaraKube CLI reads null that way.
         $framework = is_string($blueprint['framework'] ?? null) ? $blueprint['framework'] : ($blueprint !== null ? 'laravel' : null);
         $host = $blueprint['environments'][$environment]['hosts']['web'] ?? null;
@@ -46,8 +61,6 @@ class ProjectInspector
         if ($ip === null && is_string($context) && preg_match('/^larakube-(.+)$/', $context, $m)) {
             $ip = $m[1];
         }
-
-        $git = $this->detectGit($path);
 
         $environments = [];
         if ($blueprint !== null && is_array($blueprint['environments'] ?? null)) {
@@ -109,17 +122,45 @@ class ProjectInspector
             }
         }
 
+        $projectName = is_string($blueprint['name'] ?? null)
+            ? $blueprint['name']
+            : ($path !== '' ? basename($path) : 'app');
+
+        if (! isset($environments['local'])) {
+            $environments['local'] = [
+                'name' => 'local',
+                'isLocal' => true,
+                'webHost' => "{$projectName}.test",
+                'serverIp' => null,
+                'serverContext' => null,
+                'plex' => [],
+                'managed' => [],
+                'components' => ['web'],
+                'replicas' => [],
+                'autoscale' => [],
+                'resources' => [],
+                'ci' => [
+                    'platform' => $git['platform'],
+                    'repoSlug' => $git['repoSlug'],
+                    'hasWorkflow' => $git['hasWorkflow'],
+                    'branch' => 'main',
+                    'registry' => null,
+                    'securityAudit' => null,
+                ],
+            ];
+        }
+
         $projectLocalTld = is_string($blueprint['localTld'] ?? null) ? $blueprint['localTld'] : null;
         $globalTld = $this->globalSettings?->getLocalTld() ?? 'test';
         $effectiveTld = ($projectLocalTld !== null && $projectLocalTld !== '') ? $projectLocalTld : $globalTld;
 
         return [
             'path' => $path,
-            'exists' => is_dir($path),
+            'exists' => $path !== '' ? is_dir($path) : true,
             'initialized' => $blueprint !== null,
-            'name' => is_string($blueprint['name'] ?? null) ? $blueprint['name'] : basename($path),
+            'name' => $projectName,
             'framework' => $framework,
-            'detectedFramework' => $blueprint === null ? $this->detect($path) : null,
+            'detectedFramework' => ($blueprint === null && $path !== '' && is_dir($path)) ? $this->detect($path) : null,
             'webHost' => is_string($host) && $host !== '' ? $host : null,
             'serverIp' => is_string($ip) && $ip !== '' ? $ip : null,
             'serverContext' => is_string($context) && $context !== '' ? $context : null,

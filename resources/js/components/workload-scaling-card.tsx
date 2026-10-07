@@ -15,7 +15,7 @@ import Button from '@/components/button';
 import Card from '@/components/card';
 import StatusPill from '@/components/status-pill';
 import { replicas, autoscale, resources } from '@/routes/projects/scaling';
-import type { Project, ProjectEnvironment } from '@/types/larakube';
+import type { ProjectEnvironment } from '@/types/larakube';
 
 const COMPONENT_LABELS: Record<string, { label: string; desc: string }> = {
     web: {
@@ -66,10 +66,16 @@ export default function WorkloadScalingCard({
     project,
     activeEnv,
     activeEnvConfig,
+    customEndpoints,
 }: {
-    project: Project;
+    project: { id?: number; name?: string };
     activeEnv: string;
     activeEnvConfig: ProjectEnvironment;
+    customEndpoints?: {
+        replicas?: string;
+        autoscale?: string;
+        resources?: string;
+    };
 }) {
     const components = activeEnvConfig.components ?? ['web'];
     const [submittingComponent, setSubmittingComponent] = useState<
@@ -84,6 +90,16 @@ export default function WorkloadScalingCard({
         null,
     );
 
+    const replicasUrl =
+        customEndpoints?.replicas ??
+        (project.id ? replicas({ project: project.id }).url : '');
+    const autoscaleUrl =
+        customEndpoints?.autoscale ??
+        (project.id ? autoscale({ project: project.id }).url : '');
+    const resourcesUrl =
+        customEndpoints?.resources ??
+        (project.id ? resources({ project: project.id }).url : '');
+
     function handleReplicaDelta(
         component: string,
         currentCount: number,
@@ -92,7 +108,7 @@ export default function WorkloadScalingCard({
         const newCount = Math.max(0, currentCount + delta);
         setSubmittingComponent(component);
         router.post(
-            replicas({ project: project.id }).url,
+            replicasUrl,
             {
                 environment: activeEnv,
                 component,
@@ -108,7 +124,7 @@ export default function WorkloadScalingCard({
     function handleResetReplicas(component: string) {
         setSubmittingComponent(component);
         router.post(
-            replicas({ project: project.id }).url,
+            replicasUrl,
             {
                 environment: activeEnv,
                 component,
@@ -303,7 +319,7 @@ export default function WorkloadScalingCard({
             {/* Autoscale Modal */}
             {autoscaleModalComp && (
                 <AutoscaleModal
-                    project={project}
+                    autoscaleUrl={autoscaleUrl}
                     activeEnv={activeEnv}
                     component={autoscaleModalComp}
                     existing={activeEnvConfig.autoscale?.[autoscaleModalComp]}
@@ -314,7 +330,7 @@ export default function WorkloadScalingCard({
             {/* Resource Sizing Modal */}
             {resourcesModalComp && (
                 <ResourcesModal
-                    project={project}
+                    resourcesUrl={resourcesUrl}
                     activeEnv={activeEnv}
                     component={resourcesModalComp}
                     existing={activeEnvConfig.resources?.[resourcesModalComp]}
@@ -326,13 +342,13 @@ export default function WorkloadScalingCard({
 }
 
 function AutoscaleModal({
-    project,
+    autoscaleUrl,
     activeEnv,
     component,
     existing,
     onClose,
 }: {
-    project: Project;
+    autoscaleUrl: string;
     activeEnv: string;
     component: string;
     existing?: { min: number; max: number; cpu: number };
@@ -346,7 +362,7 @@ function AutoscaleModal({
     function handleSubmit(disable = false) {
         setSubmitting(true);
         router.post(
-            autoscale({ project: project.id }).url,
+            autoscaleUrl,
             {
                 environment: activeEnv,
                 component,
@@ -481,13 +497,13 @@ function AutoscaleModal({
 }
 
 function ResourcesModal({
-    project,
+    resourcesUrl,
     activeEnv,
     component,
     existing,
     onClose,
 }: {
-    project: Project;
+    resourcesUrl: string;
     activeEnv: string;
     component: string;
     existing?: {
@@ -531,7 +547,7 @@ function ResourcesModal({
             }
         }
 
-        router.post(resources({ project: project.id }).url, payload, {
+        router.post(resourcesUrl, payload, {
             preserveScroll: true,
             onFinish: () => {
                 setSubmitting(false);

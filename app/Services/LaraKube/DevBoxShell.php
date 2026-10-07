@@ -123,6 +123,37 @@ class DevBoxShell
     }
 
     /**
+     * Reads a JSON file in a project directory on the dev box, e.g. .larakube.json or .larakube.local.json.
+     *
+     * @param  array{ip?: ?string, sshKey?: ?string}  $box
+     * @return array<string, mixed>|null
+     */
+    public function readProjectJson(array $box, string $project, string $filename): ?array
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]*$/', $project) !== 1) {
+            return null;
+        }
+
+        try {
+            $folder = self::PROJECTS_DIRECTORY."/{$project}";
+            $safeFile = basename($filename);
+            $remoteScript = 'cat "$HOME/'.escapeshellcmd($folder).'/'.$safeFile.'" 2>/dev/null || true';
+            $isolated = $this->locator->isolate($this->script($box, $remoteScript));
+            $result = Process::env($isolated['environment'])->timeout(15)->run($isolated['command']);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $result->successful() || trim($result->output()) === '') {
+            return null;
+        }
+
+        $decoded = json_decode(trim($result->output()), true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
      * Reads collaborator keys configured on the dev box.
      *
      * @param  array{ip?: ?string, sshKey?: ?string}  $box

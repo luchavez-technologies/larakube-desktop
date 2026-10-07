@@ -502,10 +502,107 @@ test('up, start, stop and down of an app on a box run that command there, in the
     'stop' => ['stop', "'stop' 'local' '--no-interaction'"],
 ]);
 
-test('only up, down, start and stop can be asked of an app on a box', function () {
+test('scaling replicas on a dev box project starts a configure-replicas run', function () {
+    $bin = devBoxProjectsCli();
     devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
 
-    $this->post('/dev-boxes/my-dev-box/projects/shop/rm-rf')->assertNotFound();
+    $this->post(route('devboxes.projects.scaling.replicas', ['box' => 'my-dev-box', 'project' => 'shop']), [
+        'environment' => 'local',
+        'component' => 'web',
+        'count' => 3,
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::ConfigureReplicas)
+        ->and($run->subject)->toBe('shop');
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "'replicas' 'local' '--component=web' '--count=3'"));
+
+    File::deleteDirectory($bin);
+});
+
+test('scaling autoscale on a dev box project starts a configure-autoscale run', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.projects.scaling.autoscale', ['box' => 'my-dev-box', 'project' => 'shop']), [
+        'environment' => 'production',
+        'component' => 'web',
+        'min' => 2,
+        'max' => 6,
+        'cpu' => 75,
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::ConfigureAutoscale);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "'autoscale' 'production' '--component=web' '--min=2' '--max=6' '--cpu=75'"));
+
+    File::deleteDirectory($bin);
+});
+
+test('scaling resources on a dev box project starts a configure-resources run', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.projects.scaling.resources', ['box' => 'my-dev-box', 'project' => 'shop']), [
+        'environment' => 'production',
+        'component' => 'web',
+        'tier' => 'pro',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::ConfigureResources);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "'resources' 'production' '--component=web' '--tier=pro'"));
+
+    File::deleteDirectory($bin);
+});
+
+test('dotenv push and pull on a dev box project start matching runs', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.projects.dotenv.push', ['box' => 'my-dev-box', 'project' => 'shop']), [
+        'environment' => 'production',
+    ])->assertRedirect();
+
+    expect(Run::sole()->kind)->toBe(RunKind::DotenvPush);
+
+    $this->post(route('devboxes.projects.dotenv.pull', ['box' => 'my-dev-box', 'project' => 'shop']), [
+        'environment' => 'production',
+    ])->assertRedirect();
+
+    expect(Run::latest('id')->first()->kind)->toBe(RunKind::DotenvPull);
+
+    File::deleteDirectory($bin);
+});
+
+test('deploying an app on a box starts a deploy-app run', function () {
+    $bin = devBoxProjectsCli();
+    devBoxProjectsExperimental(true);
+    devBoxDomainStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.operate', ['box' => 'my-dev-box', 'project' => 'shop', 'action' => 'deploy']), [
+        'environment' => 'production',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::DeployApp)
+        ->and($run->environment)->toBe('production');
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => str_contains(str_replace("'\\''", "'", end($cmd)), "'deploy' 'production'"));
+
+    File::deleteDirectory($bin);
 });
 
 test('an app on a box has its own page, with what the box reports about it and the runs made on it', function () {

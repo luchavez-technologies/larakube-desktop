@@ -83,7 +83,13 @@ Route::post('/dev-boxes/{box}/access/grant', [DevBoxController::class, 'grant'])
 Route::post('/dev-boxes/{box}/access/revoke', [DevBoxController::class, 'revoke'])->name('devboxes.access.revoke');
 Route::post('/dev-boxes/{box}/update-cli', [DevBoxController::class, 'updateCli'])->name('devboxes.update-cli');
 Route::get('/dev-boxes/{box}/projects/{project}', [DevBoxController::class, 'showProject'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.show');
-Route::post('/dev-boxes/{box}/projects/{project}/{action}', [DevBoxController::class, 'operate'])->where('project', '[a-z0-9][a-z0-9-]*')->where('action', 'up|down|start|stop')->name('devboxes.operate');
+Route::post('/dev-boxes/{box}/projects/{project}/{action}', [DevBoxController::class, 'operate'])->where('project', '[a-z0-9][a-z0-9-]*')->where('action', 'up|down|start|stop|deploy')->name('devboxes.operate');
+Route::post('/dev-boxes/{box}/projects/{project}/scaling/replicas', [DevBoxController::class, 'scaleReplicas'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.scaling.replicas');
+Route::post('/dev-boxes/{box}/projects/{project}/scaling/autoscale', [DevBoxController::class, 'scaleAutoscale'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.scaling.autoscale');
+Route::post('/dev-boxes/{box}/projects/{project}/scaling/resources', [DevBoxController::class, 'scaleResources'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.scaling.resources');
+Route::get('/dev-boxes/{box}/projects/{project}/dotenv/status', [DevBoxController::class, 'dotenvStatus'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.dotenv.status');
+Route::post('/dev-boxes/{box}/projects/{project}/dotenv/push', [DevBoxController::class, 'dotenvPush'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.dotenv.push');
+Route::post('/dev-boxes/{box}/projects/{project}/dotenv/pull', [DevBoxController::class, 'dotenvPull'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.projects.dotenv.pull');
 Route::get('/dev-boxes/{box}/projects/{project}/share-domain', [DevBoxController::class, 'shareDomainPage'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.share-domain-page');
 Route::post('/dev-boxes/{box}/domains', [DevBoxController::class, 'domains'])->name('devboxes.domains');
 Route::post('/dev-boxes/{box}/projects/{project}/share-domain', [DevBoxController::class, 'shareDomain'])->where('project', '[a-z0-9][a-z0-9-]*')->name('devboxes.share-domain');
