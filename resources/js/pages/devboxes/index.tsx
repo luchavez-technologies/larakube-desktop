@@ -4,6 +4,7 @@ import { ChevronRight, Download, Plus, Settings } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import DevBoxImportModal from '@/components/devbox-import-modal';
 import PageHeader from '@/components/page-header';
+import ProviderLogo from '@/components/provider-logo';
 import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
@@ -186,6 +187,10 @@ function DevBoxList({
                                     <StatusPill tone={tone}>{label}</StatusPill>
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-soft">
+                                    <ProviderLogo
+                                        provider={box.provider}
+                                        size="xs"
+                                    />
                                     <span>
                                         {providerLabels[box.provider] ??
                                             box.provider}
@@ -246,8 +251,16 @@ function DevBoxList({
                                     </Link>
                                 </td>
                                 <td className="text-soft">
-                                    {providerLabels[box.provider] ??
-                                        box.provider}
+                                    <div className="flex items-center gap-1.5">
+                                        <ProviderLogo
+                                            provider={box.provider}
+                                            size="xs"
+                                        />
+                                        <span>
+                                            {providerLabels[box.provider] ??
+                                                box.provider}
+                                        </span>
+                                    </div>
                                 </td>
                                 <td className="font-mono text-[13px] text-soft">
                                     {box.region ?? '—'}

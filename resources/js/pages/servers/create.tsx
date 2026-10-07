@@ -5,6 +5,7 @@ import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import GcpSignIn from '@/components/gcp-sign-in';
 import PageHeader from '@/components/page-header';
+import ProviderLogo from '@/components/provider-logo';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -144,9 +145,12 @@ function ServerForm({
                                 : 'ring-1 ring-line hover:ring-faint',
                         )}
                     >
-                        <span className="text-sm font-medium">
-                            {candidate.label}
-                        </span>
+                        <div className="flex items-center gap-3">
+                            <ProviderLogo provider={candidate.slug} size="sm" />
+                            <span className="text-sm font-medium">
+                                {candidate.label}
+                            </span>
+                        </div>
                         <StatusPill
                             tone={candidate.credentials.ready ? 'ok' : 'muted'}
                         >

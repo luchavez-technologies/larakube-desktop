@@ -10,6 +10,7 @@ import {
     X,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import ProviderLogo from '@/components/provider-logo';
 import { ServerActions } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
@@ -166,6 +167,12 @@ export default function ServersIndex({
                                                     </td>
                                                     <td className="text-soft">
                                                         <div className="flex items-center gap-1.5">
+                                                            <ProviderLogo
+                                                                provider={
+                                                                    server.provider
+                                                                }
+                                                                size="xs"
+                                                            />
                                                             <span>
                                                                 {providerLabels[
                                                                     server
@@ -256,6 +263,12 @@ export default function ServersIndex({
                                                     </StatusPill>
                                                 </div>
                                                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-soft">
+                                                    <ProviderLogo
+                                                        provider={
+                                                            server.provider
+                                                        }
+                                                        size="xs"
+                                                    />
                                                     <span>
                                                         {providerLabels[
                                                             server.provider

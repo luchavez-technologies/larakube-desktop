@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import CloneModal from '@/components/clone-modal';
+import FrameworkBadge from '@/components/framework-badge';
 import PageHeader from '@/components/page-header';
 import ProjectActions from '@/components/project-actions';
 import StatusPill from '@/components/status-pill';
@@ -155,13 +156,14 @@ export default function ProjectsIndex({
                                         {projectStatus(project)[0]}
                                     </StatusPill>
                                 </div>
-                                <p className="mt-1 text-xs text-soft">
-                                    {project.framework ??
-                                        project.detectedFramework ??
-                                        (project.exists
-                                            ? 'Unknown framework'
-                                            : '—')}
-                                </p>
+                                <div className="mt-2">
+                                    <FrameworkBadge
+                                        slug={
+                                            project.framework ??
+                                            project.detectedFramework
+                                        }
+                                    />
+                                </div>
                                 <p className="mt-2 truncate font-mono text-[11px] text-faint">
                                     {project.path}
                                 </p>
@@ -218,10 +220,8 @@ export default function ProjectsIndex({
                                                 {project.name}
                                             </Link>
                                         </td>
-                                        <td className="text-soft">
-                                            <StatusPill tone="muted">
-                                                {framework}
-                                            </StatusPill>
+                                        <td>
+                                            <FrameworkBadge slug={framework} />
                                         </td>
                                         <td className="max-w-[220px] truncate font-mono text-[12px] text-soft">
                                             {project.webHost
@@ -392,9 +392,9 @@ function BoxProjectList({
                                     {status(project)[0]}
                                 </StatusPill>
                             </div>
-                            <p className="mt-1 text-xs text-soft">
-                                {project.framework ?? 'Unknown framework'}
-                            </p>
+                            <div className="mt-2">
+                                <FrameworkBadge slug={project.framework} />
+                            </div>
                             <p className="mt-2 truncate font-mono text-[11px] text-faint">
                                 {project.path}
                             </p>
@@ -444,10 +444,8 @@ function BoxProjectList({
                                     {project.name}
                                 </Link>
                             </td>
-                            <td className="text-soft">
-                                <StatusPill tone="muted">
-                                    {project.framework ?? 'Unknown'}
-                                </StatusPill>
+                            <td>
+                                <FrameworkBadge slug={project.framework} />
                             </td>
                             <td className="max-w-[220px] truncate font-mono text-[12px] text-soft">
                                 {project.environments[0]?.host ?? project.path}

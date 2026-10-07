@@ -19,6 +19,7 @@ import CopyButton from '@/components/copy-button';
 import { DestroyServerDialog } from '@/components/server-dialogs';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
+import ProviderLogo from '@/components/provider-logo';
 import StatusPill from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
@@ -106,15 +107,23 @@ export default function ShowServer({
                 title={server.name}
                 badge={<StatusPill tone={tone}>{label}</StatusPill>}
                 meta={[
-                    providerLabels[server.provider] ?? server.provider,
-                    server.region,
-                    server.ip,
-                    server.kind === 'vps' ? 'single-node k3s' : server.kind,
-                ]
-                    .filter(Boolean)
-                    .map((part) => (
-                        <span key={part}>{part}</span>
-                    ))}
+                    <span
+                        key="provider"
+                        className="inline-flex items-center gap-1.5"
+                    >
+                        <ProviderLogo provider={server.provider} size="xs" />
+                        <span>
+                            {providerLabels[server.provider] ?? server.provider}
+                        </span>
+                    </span>,
+                    server.region && <span key="region">{server.region}</span>,
+                    server.ip && <span key="ip">{server.ip}</span>,
+                    <span key="kind">
+                        {server.kind === 'vps'
+                            ? 'single-node k3s'
+                            : server.kind}
+                    </span>,
+                ].filter(Boolean)}
             />
 
             {!ready && (

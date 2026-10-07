@@ -34,6 +34,7 @@ import ProjectTerminalCard, {
 import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
 import Sparkline from '@/components/metrics/sparkline';
 import Card from '@/components/card';
+import FrameworkBadge from '@/components/framework-badge';
 import FrameworkFields, {
     defaultAnswers,
     reconcile,
@@ -248,9 +249,7 @@ export default function ShowProject({
                 title={project.name}
                 badge={
                     project.framework ? (
-                        <StatusPill tone="muted">
-                            {frameworks[project.framework] ?? project.framework}
-                        </StatusPill>
+                        <FrameworkBadge slug={project.framework} />
                     ) : undefined
                 }
                 meta={<span>{project.path}</span>}

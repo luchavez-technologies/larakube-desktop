@@ -24,6 +24,7 @@ import DevBoxGrantModal from '@/components/devbox-grant-modal';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
+import ProviderLogo from '@/components/provider-logo';
 import {
     DestroyServerDialog,
     RestartServerDialog,
@@ -76,15 +77,19 @@ export default function ShowDevBox({
                 title={box.name}
                 badge={<StatusPill tone={tone}>{label}</StatusPill>}
                 meta={[
-                    providerLabels[box.provider] ?? box.provider,
-                    box.region,
-                    box.ip,
-                    'dev box',
-                ]
-                    .filter(Boolean)
-                    .map((part) => (
-                        <span key={part}>{part}</span>
-                    ))}
+                    <span
+                        key="provider"
+                        className="inline-flex items-center gap-1.5"
+                    >
+                        <ProviderLogo provider={box.provider} size="xs" />
+                        <span>
+                            {providerLabels[box.provider] ?? box.provider}
+                        </span>
+                    </span>,
+                    box.region && <span key="region">{box.region}</span>,
+                    box.ip && <span key="ip">{box.ip}</span>,
+                    <span key="kind">dev box</span>,
+                ].filter(Boolean)}
             />
 
             <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">

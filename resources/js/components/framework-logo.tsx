@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 
 type Props = {
     slug: string;
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'xs' | 'sm' | 'md' | 'lg';
     className?: string;
 };
 
@@ -40,6 +40,7 @@ export default function FrameworkLogo({
     const visual = resolveVisual(slug);
 
     const sizeClasses = {
+        xs: 'size-5 rounded-md p-0.5 [&_svg]:size-3.5',
         sm: 'size-7 rounded-lg p-1.5 [&_svg]:size-3.5',
         md: 'size-9.5 rounded-xl p-2 [&_svg]:size-5',
         lg: 'size-12 rounded-2xl p-2.5 [&_svg]:size-6',
@@ -177,3 +178,9 @@ function resolveVisual(slug: string): Visual {
             };
     }
 }
+
+export {
+    default as FrameworkBadge,
+    frameworkLabels,
+    resolveFrameworkLabel,
+} from '@/components/framework-badge';
