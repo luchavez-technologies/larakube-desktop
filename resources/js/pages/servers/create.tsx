@@ -1,6 +1,7 @@
 import { Deferred, Link, useForm } from '@inertiajs/react';
 import type { FormEvent, ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
+import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import GcpSignIn from '@/components/gcp-sign-in';
@@ -256,10 +257,7 @@ function ServerForm({
 
                 {needsAwsKeys && (
                     <div className="space-y-4 border-t border-line/60 pt-3">
-                        <p className="text-xs text-soft">
-                            Enter your AWS IAM credentials for this server
-                            deployment.
-                        </p>
+                        <AwsPolicyHelper />
                         <Field
                             label="AWS Access Key ID"
                             error={form.errors.aws_access_key_id}

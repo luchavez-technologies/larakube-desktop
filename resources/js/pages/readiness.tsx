@@ -15,6 +15,7 @@ import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import GcpSignIn from '@/components/gcp-sign-in';
 import CopyButton from '@/components/copy-button';
+import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
@@ -816,6 +817,8 @@ function AwsCredentialsModal({ onClose }: { onClose: () => void }) {
                         </code>{' '}
                         and tested via AWS STS.
                     </p>
+
+                    <AwsPolicyHelper />
 
                     <div>
                         <label className="text-foreground mb-1 block text-xs font-medium">
