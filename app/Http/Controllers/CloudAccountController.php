@@ -69,7 +69,7 @@ class CloudAccountController extends Controller
     public function remove(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
-            'provider' => ['required', 'string', 'in:do,hetzner,aws'],
+            'provider' => ['required', 'string', 'in:do,hetzner,aws,gcp'],
             'account_id' => ['required', 'string'],
         ]);
 

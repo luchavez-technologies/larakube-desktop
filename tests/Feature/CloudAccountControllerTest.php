@@ -71,3 +71,18 @@ test('remove account calls cloud:accounts --remove', function () {
         && in_array('--provider=hetzner', (array) $process->command, true)
         && in_array('--remove=hz-old', (array) $process->command, true));
 });
+
+test('remove account calls cloud:accounts --remove for gcp', function () {
+    fakeCloudAccountCli(json_encode(['success' => true]));
+
+    $response = $this->delete(route('setup.cloud.accounts.remove'), [
+        'provider' => 'gcp',
+        'account_id' => 'user@example.com',
+    ]);
+
+    $response->assertRedirect()->assertSessionHas('success');
+
+    Process::assertRan(fn ($process): bool => in_array('cloud:accounts', (array) $process->command, true)
+        && in_array('--provider=gcp', (array) $process->command, true)
+        && in_array('--remove=user@example.com', (array) $process->command, true));
+});
