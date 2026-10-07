@@ -566,7 +566,17 @@ class ProjectController extends Controller
             'backing' => Inertia::defer(fn (): array => collect(array_keys($inspection['environments']))
                 ->mapWithKeys(fn (string $environment): array => [$environment => $services->get($project->path, $environment)])
                 ->all()),
-            'healthMetrics' => Inertia::defer(fn (): ?array => $inspection['webHost'] ? $healthPing->check($inspection['webHost']) : null, 'healthMetrics'),
+            'healthMetrics' => Inertia::defer(function () use ($healthPing, $inspection): array {
+                $metrics = [];
+                foreach ($inspection['environments'] as $name => $env) {
+                    $host = $env['webHost'] ?? null;
+                    if ($host) {
+                        $metrics[$name] = $healthPing->check($host);
+                    }
+                }
+
+                return $metrics;
+            }, 'healthMetrics'),
             'podMetrics' => Inertia::defer(function () use ($clusterMetrics, $inspection): array {
                 $metrics = [];
                 foreach ($inspection['environments'] as $name => $env) {
@@ -579,7 +589,14 @@ class ProjectController extends Controller
 
                 return $metrics;
             }, 'podMetrics'),
-            'deployMetrics' => Inertia::defer(fn (): array => $fleetMetrics->projectDeployStats($project->id), 'deployMetrics'),
+            'deployMetrics' => Inertia::defer(function () use ($fleetMetrics, $project, $inspection): array {
+                $metrics = ['_all' => $fleetMetrics->projectDeployStats($project->id)];
+                foreach (array_keys($inspection['environments']) as $name) {
+                    $metrics[$name] = $fleetMetrics->projectDeployStats($project->id, $name);
+                }
+
+                return $metrics;
+            }, 'deployMetrics'),
         ]);
     }
 
@@ -679,6 +696,63 @@ class ProjectController extends Controller
         $host = $validated['host'];
 
         return $this->run($runner, $project, RunKind::ConfigureHost, "Set the address of {$this->name($project)} ({$environment})", ['cloud:configure', $environment, '--only=hosts', "--web-host={$host}"], $environment);
+    }
+
+    public function configureCi(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $validated = $request->validate([
+            'environment' => ['nullable', 'string', 'alpha_dash'],
+            'registry' => ['nullable', 'string', Rule::in(['ghcr', 'dockerhub', 'gitlab', 'forgejo', 'gar'])],
+            'image' => ['nullable', 'string', 'max:255'],
+            'branch' => ['nullable', 'string', 'max:255'],
+            'strict' => ['boolean'],
+            'skip_audit' => ['boolean'],
+            'with_tests' => ['boolean'],
+            'no_gitleaks' => ['boolean'],
+            'no_semgrep' => ['boolean'],
+            'no_trivy' => ['boolean'],
+            'rotate' => ['boolean'],
+        ]);
+
+        $environment = $validated['environment'] ?? self::ENVIRONMENT;
+        $args = ['cloud:configure', $environment, '--only=ci'];
+
+        if ($request->boolean('rotate')) {
+            $args[] = '--rotate';
+        }
+        if ($request->filled('registry')) {
+            $args[] = "--registry={$request->input('registry')}";
+        }
+        if ($request->filled('image')) {
+            $args[] = "--image={$request->input('image')}";
+        }
+        if ($request->filled('branch')) {
+            $args[] = "--branch={$request->input('branch')}";
+        }
+        if ($request->boolean('strict')) {
+            $args[] = '--strict';
+        }
+        if ($request->boolean('skip_audit')) {
+            $args[] = '--skip-audit';
+        }
+        if ($request->boolean('with_tests')) {
+            $args[] = '--with-tests';
+        }
+        if ($request->boolean('no_gitleaks')) {
+            $args[] = '--no-gitleaks';
+        }
+        if ($request->boolean('no_semgrep')) {
+            $args[] = '--no-semgrep';
+        }
+        if ($request->boolean('no_trivy')) {
+            $args[] = '--no-trivy';
+        }
+
+        $label = $request->boolean('rotate')
+            ? "Rotate CI/CD secrets for {$this->name($project)} ({$environment})"
+            : "Configure CI/CD for {$this->name($project)} ({$environment})";
+
+        return $this->run($runner, $project, RunKind::ConfigureCi, $label, $args, $environment);
     }
 
     public function deploy(Request $request, Project $project, CliRunner $runner): RedirectResponse
@@ -953,7 +1027,7 @@ class ProjectController extends Controller
             return 'local';
         }
 
-        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost], true)) {
+        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost, RunKind::ConfigureCi], true)) {
             return 'production';
         }
 

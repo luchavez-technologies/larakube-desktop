@@ -47,6 +47,7 @@ enum RunKind: string
     /** A cloud environment created with `env`, bound to an existing server. */
     case LinkServer = 'link-server';
     case ConfigureHost = 'configure-host';
+    case ConfigureCi = 'configure-ci';
     case DeployApp = 'deploy-app';
     case UpProject = 'up-project';
     case DownProject = 'down-project';

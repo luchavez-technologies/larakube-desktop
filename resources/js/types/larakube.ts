@@ -327,6 +327,27 @@ export type ProjectEnvironment = {
     serverProvider?: string | null;
     plex?: string[];
     managed?: string[];
+    ci?: {
+        platform: string;
+        repoSlug: string | null;
+        hasWorkflow: boolean;
+        branch: string;
+        registry: {
+            provider?: string;
+            image?: string;
+            host?: string;
+            [key: string]: unknown;
+        } | null;
+        securityAudit: {
+            strict?: boolean;
+            skipAudit?: boolean;
+            withTests?: boolean;
+            noGitleaks?: boolean;
+            noSemgrep?: boolean;
+            noTrivy?: boolean;
+            [key: string]: unknown;
+        } | null;
+    } | null;
 };
 
 export type PlexStatus = {
@@ -404,6 +425,12 @@ export type Project = {
     database?: string | null;
     cacheDriver?: string | null;
     objectStorage?: string | null;
+    git?: {
+        remote: string | null;
+        platform: string;
+        repoSlug: string | null;
+        hasWorkflow: boolean;
+    } | null;
     environments?: Record<string, ProjectEnvironment>;
     /** The latest create run's status, on the Projects list only. */
     scaffoldStatus?: RunStatus | null;

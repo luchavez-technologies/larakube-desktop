@@ -65,12 +65,21 @@ class FleetMetrics
      *
      * @return array{totalDeploys: int, successRate: int, avgDurationSeconds: ?int, lastDeployedAt: ?string, activity14d: list<int>}
      */
-    public function projectDeployStats(int $projectId): array
+    public function projectDeployStats(int $projectId, ?string $environment = null): array
     {
-        $runs = Run::query()
+        $query = Run::query()
             ->where('project_id', $projectId)
-            ->whereIn('kind', [RunKind::DeployApp, RunKind::UpProject])
-            ->latest('id')
+            ->whereIn('kind', [RunKind::DeployApp, RunKind::UpProject]);
+
+        if ($environment !== null && $environment !== '') {
+            $envLower = strtolower(trim($environment));
+            $query->where(function ($q) use ($envLower) {
+                $q->where('environment', $envLower)
+                    ->orWhere('label', 'like', "%({$envLower})%");
+            });
+        }
+
+        $runs = $query->latest('id')
             ->take(50)
             ->get(['id', 'status', 'created_at', 'finished_at']);
 

@@ -80,3 +80,49 @@ test('project deploy stats calculates totals and 14-day activity', function () {
         ->and(count($stats['activity14d']))->toBe(14)
         ->and(array_sum($stats['activity14d']))->toBe(1);
 });
+
+test('project deploy stats can filter by specific environment', function () {
+    $service = new FleetMetrics;
+
+    $project = Project::create(['path' => '/code/acme']);
+
+    $prodRun = new Run([
+        'label' => 'Deploy acme (production)',
+        'kind' => RunKind::DeployApp,
+        'status' => RunStatus::Succeeded,
+        'project_id' => $project->id,
+        'environment' => 'production',
+        'command' => ['deploy', 'app'],
+        'finished_at' => now()->subHours(5)->addSeconds(30),
+    ]);
+    $prodRun->timestamps = false;
+    $prodRun->created_at = now()->subHours(5);
+    $prodRun->save();
+
+    $stagingRun = new Run([
+        'label' => 'Deploy acme (staging)',
+        'kind' => RunKind::DeployApp,
+        'status' => RunStatus::Failed,
+        'project_id' => $project->id,
+        'environment' => 'staging',
+        'command' => ['deploy', 'app'],
+        'finished_at' => now()->subHours(2)->addSeconds(20),
+    ]);
+    $stagingRun->timestamps = false;
+    $stagingRun->created_at = now()->subHours(2);
+    $stagingRun->save();
+
+    $prodStats = $service->projectDeployStats($project->id, 'production');
+    expect($prodStats['totalDeploys'])->toBe(1)
+        ->and($prodStats['successRate'])->toBe(100)
+        ->and($prodStats['avgDurationSeconds'])->toBe(30);
+
+    $stagingStats = $service->projectDeployStats($project->id, 'staging');
+    expect($stagingStats['totalDeploys'])->toBe(1)
+        ->and($stagingStats['successRate'])->toBe(0)
+        ->and($stagingStats['avgDurationSeconds'])->toBeNull();
+
+    $allStats = $service->projectDeployStats($project->id);
+    expect($allStats['totalDeploys'])->toBe(2)
+        ->and($allStats['successRate'])->toBe(50);
+});

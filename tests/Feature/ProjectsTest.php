@@ -702,3 +702,107 @@ test('revealing asks the CLI again with --reveal and never caches the answer', f
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('configuring CI starts cloud:configure with --only=ci and appropriate flags', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.ci', $project), [
+        'environment' => 'staging',
+        'registry' => 'ghcr',
+        'image' => 'acme/shop',
+        'branch' => 'develop',
+        'strict' => '1',
+        'with_tests' => '1',
+        'no_gitleaks' => '1',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::ConfigureCi)
+        ->and($run->environment)->toBe('staging');
+
+    $fake->assertStarted(function (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest) use ($sandbox): bool {
+        $slice = array_slice((array) $cmd, 4);
+
+        return in_array('cloud:configure', $slice, true)
+            && in_array('staging', $slice, true)
+            && in_array('--only=ci', $slice, true)
+            && in_array('--registry=ghcr', $slice, true)
+            && in_array('--image=acme/shop', $slice, true)
+            && in_array('--branch=develop', $slice, true)
+            && in_array('--strict', $slice, true)
+            && in_array('--with-tests', $slice, true)
+            && in_array('--no-gitleaks', $slice, true)
+            && $cwd === $sandbox['app'];
+    });
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('configuring CI supports secret rotation flag', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.ci', $project), [
+        'environment' => 'production',
+        'rotate' => '1',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::ConfigureCi)
+        ->and($run->environment)->toBe('production');
+
+    $fake->assertStarted(function (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest) use ($sandbox): bool {
+        $slice = array_slice((array) $cmd, 4);
+
+        return in_array('cloud:configure', $slice, true)
+            && in_array('production', $slice, true)
+            && in_array('--only=ci', $slice, true)
+            && in_array('--rotate', $slice, true)
+            && $cwd === $sandbox['app'];
+    });
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project inspector detects git forge, workflow, and blueprint registry configuration', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    // Create fake git directory with remote origin
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = git@github.com:acme/cool-shop.git\n");
+    File::ensureDirectoryExists("{$sandbox['app']}/.github/workflows");
+    File::put("{$sandbox['app']}/.github/workflows/deploy.yml", "name: Deploy\n");
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'environments' => [
+            'production' => [
+                'hosts' => ['web' => 'shop.example.com'],
+                'registry' => ['provider' => 'ghcr', 'image' => 'acme/cool-shop'],
+                'securityAudit' => ['strict' => true, 'withTests' => true],
+            ],
+        ],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->get(route('projects.show', $project))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->where('project.git.platform', 'github')
+            ->where('project.git.repoSlug', 'acme/cool-shop')
+            ->where('project.git.hasWorkflow', true)
+            ->where('project.environments.production.ci.platform', 'github')
+            ->where('project.environments.production.ci.hasWorkflow', true)
+            ->where('project.environments.production.ci.registry.provider', 'ghcr')
+            ->where('project.environments.production.ci.registry.image', 'acme/cool-shop')
+            ->where('project.environments.production.ci.securityAudit.strict', true));
+
+    File::deleteDirectory($sandbox['home']);
+});

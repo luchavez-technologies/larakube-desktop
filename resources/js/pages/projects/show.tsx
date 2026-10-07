@@ -26,7 +26,11 @@ import {
     Unplug,
     Code2,
     ChevronDown,
+    GitBranch,
+    Key,
+    ShieldCheck,
 } from 'lucide-react';
+import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
 import ProjectTerminalCard, {
@@ -48,6 +52,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import {
+    ci as configureCiRoute,
     deploy,
     destroy,
     down,
@@ -136,9 +141,9 @@ export default function ShowProject({
     laravelOptions?: NewAppQuestion[] | null;
     readyServers: ReadyServer[];
     backing?: Record<string, BackingServices | null>;
-    healthMetrics?: HealthMetrics | null;
+    healthMetrics?: Record<string, HealthMetrics | null> | null;
     podMetrics?: Record<string, PodMetrics | null>;
-    deployMetrics?: DeployMetrics | null;
+    deployMetrics?: Record<string, DeployMetrics | null> | null;
 }) {
     const isRunning =
         runs.some((r) => r.status === 'running') ||
@@ -444,6 +449,9 @@ export default function ShowProject({
                                         onOpenDeploy={() =>
                                             setDeployModalOpen(true)
                                         }
+                                        onOpenCi={() =>
+                                            setDeployModalOpen(true)
+                                        }
                                     />
 
                                     <Deferred
@@ -453,7 +461,9 @@ export default function ShowProject({
                                             'deployMetrics',
                                         ]}
                                         fallback={
-                                            <Card label="App Health & Telemetry">
+                                            <Card
+                                                label={`App Health & Telemetry · ${activeEnv.toUpperCase()}`}
+                                            >
                                                 <div className="animate-pulse p-4 text-xs text-soft">
                                                     Loading workload telemetry…
                                                 </div>
@@ -496,6 +506,7 @@ export default function ShowProject({
                         project={project}
                         server={server}
                         activeEnv={activeCloudEnvName}
+                        activeEnvConfig={activeEnvConfig}
                         activeServer={activeServer}
                         activeServerProvider={activeServerProvider}
                         activeHost={activeHost}
@@ -695,6 +706,7 @@ function CloudEnvironmentOverviewCard({
     readyServers,
     runs,
     onOpenDeploy,
+    onOpenCi,
 }: {
     project: Project;
     activeEnv: string;
@@ -705,9 +717,14 @@ function CloudEnvironmentOverviewCard({
     readyServers: ReadyServer[];
     runs: RecentRun[];
     onOpenDeploy: () => void;
+    onOpenCi?: () => void;
 }) {
     const [showSwitchServer, setShowSwitchServer] = useState(false);
     const [showEditHost, setShowEditHost] = useState(false);
+    const [showRotateConfirm, setShowRotateConfirm] = useState(false);
+
+    const activeCi =
+        activeEnvConfig?.ci ?? project.environments?.[activeEnv]?.ci;
 
     const activeServerProvider =
         propProvider ??
@@ -755,7 +772,7 @@ function CloudEnvironmentOverviewCard({
             action={headerPill}
         >
             <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
                     {/* Server Details */}
                     <div className="rounded-xl border border-line bg-paper/60 p-3">
                         <div className="flex items-center justify-between">
@@ -905,6 +922,146 @@ function CloudEnvironmentOverviewCard({
                             </div>
                         )}
                     </div>
+
+                    {/* Delivery Pipeline Details */}
+                    <div className="rounded-xl border border-line bg-paper/60 p-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
+                                Delivery Pipeline
+                            </span>
+                            {activeCi?.hasWorkflow && (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setShowRotateConfirm(
+                                                !showRotateConfirm,
+                                            )
+                                        }
+                                        className="flex items-center gap-1 text-[11px] text-soft hover:text-ink"
+                                        title="Rotate scoped deployer secrets"
+                                    >
+                                        <Key className="size-2.5" />
+                                        <span>Rotate</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (onOpenCi) {
+                                                onOpenCi();
+                                            } else {
+                                                onOpenDeploy();
+                                            }
+                                        }}
+                                        className="text-[11px] text-brand hover:underline"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {activeCi?.hasWorkflow ? (
+                            <div className="mt-2.5 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-line/60 bg-surface shadow-2xs">
+                                        {activeCi.platform === 'gitlab' ? (
+                                            <SiGitlab className="size-4 text-[#FC6D26]" />
+                                        ) : activeCi.platform === 'forgejo' ? (
+                                            <SiForgejo className="size-4 text-[#FB532A]" />
+                                        ) : (
+                                            <SiGithub className="size-4 text-ink" />
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="truncate text-xs font-semibold text-ink">
+                                                {activeCi.platform === 'gitlab'
+                                                    ? 'GitLab CI'
+                                                    : activeCi.platform ===
+                                                        'forgejo'
+                                                      ? 'Forgejo'
+                                                      : 'GitHub Actions'}
+                                            </span>
+                                            <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                {activeCi.branch ?? 'main'}
+                                            </span>
+                                        </div>
+                                        <p className="mt-0.5 truncate font-mono text-[11px] text-soft">
+                                            {activeCi.registry?.image
+                                                ? `${activeCi.registry.provider ?? 'ghcr'}:${activeCi.registry.image}`
+                                                : `${activeCi.platform === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows'}`}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-2 text-xs text-soft">
+                                <span>Automated CI/CD not configured. </span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (onOpenCi) {
+                                            onOpenCi();
+                                        } else {
+                                            onOpenDeploy();
+                                        }
+                                    }}
+                                    className="font-medium text-brand hover:underline"
+                                >
+                                    Set up CI/CD
+                                </button>
+                            </div>
+                        )}
+
+                        {showRotateConfirm && (
+                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2.5">
+                                <p className="mb-2 text-[11px] text-ink">
+                                    Rotate scoped deployer secrets for{' '}
+                                    <strong>{activeEnv}</strong>?
+                                </p>
+                                <Form
+                                    action={configureCiRoute(project.id)}
+                                    onSuccess={() =>
+                                        setShowRotateConfirm(false)
+                                    }
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="environment"
+                                        value={activeEnv}
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="rotate"
+                                        value="1"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            variant="primary"
+                                            className="gap-1 text-xs"
+                                        >
+                                            <RotateCw className="size-2.5" />
+                                            <span>Confirm Rotate</span>
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="text-xs"
+                                            onClick={() =>
+                                                setShowRotateConfirm(false)
+                                            }
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </Form>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Deploy Action Banner */}
@@ -912,25 +1069,31 @@ function CloudEnvironmentOverviewCard({
                     <p className="text-xs text-soft">
                         {activeDeploy
                             ? 'Building and shipping app containers to cluster…'
-                            : hasSucceededDeploy
-                              ? `Last deployment to ${activeServer?.name ?? 'server'} succeeded.`
-                              : activeServer
-                                ? `Ready to deploy to ${activeServer.name}. Click Deploy to ship.`
-                                : 'Configure server and host to ship this environment.'}
+                            : activeCi?.hasWorkflow
+                              ? `Automated CI/CD is active on ${activeCi.branch ?? 'main'}. Push commits to Git to deploy, or trigger a manual deploy from this Mac.`
+                              : hasSucceededDeploy
+                                ? `Last deployment to ${activeServer?.name ?? 'server'} succeeded.`
+                                : activeServer
+                                  ? `Ready to deploy to ${activeServer.name}. Click Deploy to ship.`
+                                  : 'Configure server and host to ship this environment.'}
                     </p>
                     <Button
-                        variant="primary"
+                        variant={
+                            activeCi?.hasWorkflow ? 'secondary' : 'primary'
+                        }
                         size="sm"
                         onClick={onOpenDeploy}
                         className="gap-1.5"
                     >
                         <Play className="size-3.5 fill-current" />
                         <span>
-                            {hasSucceededDeploy
-                                ? `Deploy ${activeEnv.toUpperCase()} again`
-                                : activeServer
-                                  ? `Deploy to ${activeEnv.toUpperCase()}`
-                                  : 'Set up deployment'}
+                            {activeCi?.hasWorkflow
+                                ? 'Deploy from Mac (Manual)'
+                                : hasSucceededDeploy
+                                  ? `Deploy ${activeEnv.toUpperCase()} again`
+                                  : activeServer
+                                    ? `Deploy to ${activeEnv.toUpperCase()}`
+                                    : 'Set up deployment'}
                         </span>
                     </Button>
                 </div>
@@ -946,17 +1109,19 @@ function AppPerformanceMetricsCard({
     deployMetrics,
 }: {
     activeEnv: string;
-    healthMetrics?: HealthMetrics | null;
+    healthMetrics?: Record<string, HealthMetrics | null> | null;
     podMetrics?: Record<string, PodMetrics | null>;
-    deployMetrics?: DeployMetrics | null;
+    deployMetrics?: Record<string, DeployMetrics | null> | null;
 }) {
+    const envHealth = healthMetrics?.[activeEnv];
     const envPodMetrics = podMetrics?.[activeEnv];
+    const envDeploy = deployMetrics?.[activeEnv] ?? deployMetrics?.['_all'];
     const components = envPodMetrics?.components
         ? Object.entries(envPodMetrics.components)
         : [];
 
     return (
-        <Card label="App Health & Telemetry">
+        <Card label={`App Health & Telemetry · ${activeEnv.toUpperCase()}`}>
             <div className="grid grid-cols-1 divide-y divide-line lg:grid-cols-3 lg:divide-x lg:divide-y-0">
                 {/* 1. Endpoint Latency */}
                 <div className="flex flex-col justify-between p-3.5">
@@ -965,12 +1130,12 @@ function AppPerformanceMetricsCard({
                             <span className="text-[11px] font-semibold tracking-wider text-soft uppercase">
                                 Endpoint Latency
                             </span>
-                            {healthMetrics?.isUp ? (
+                            {envHealth?.isUp ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                                     <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                                    Healthy ({healthMetrics.status ?? 200})
+                                    Healthy ({envHealth.status ?? 200})
                                 </span>
-                            ) : healthMetrics?.checkedAt ? (
+                            ) : envHealth?.checkedAt ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-500">
                                     <span className="size-1.5 rounded-full bg-rose-500" />
                                     Unreachable
@@ -984,9 +1149,9 @@ function AppPerformanceMetricsCard({
 
                         <div className="mt-2 flex items-baseline gap-2">
                             <span className="font-mono text-2xl font-bold tracking-tight text-ink">
-                                {healthMetrics?.latencyMs !== null &&
-                                healthMetrics?.latencyMs !== undefined
-                                    ? `${healthMetrics.latencyMs}ms`
+                                {envHealth?.latencyMs !== null &&
+                                envHealth?.latencyMs !== undefined
+                                    ? `${envHealth.latencyMs}ms`
                                     : '—'}
                             </span>
                             <span className="text-xs text-soft">
@@ -999,9 +1164,9 @@ function AppPerformanceMetricsCard({
                         <span className="font-mono text-[10px] text-faint">
                             Recent pings (/up)
                         </span>
-                        {healthMetrics && healthMetrics.history.length > 0 ? (
+                        {envHealth && envHealth.history.length > 0 ? (
                             <Sparkline
-                                data={healthMetrics.history}
+                                data={envHealth.history}
                                 type="line"
                                 height={24}
                                 width={100}
@@ -1088,19 +1253,17 @@ function AppPerformanceMetricsCard({
                                 Deploy Health
                             </span>
                             <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-ink">
-                                {deployMetrics
-                                    ? `${deployMetrics.successRate}%`
-                                    : '—'}{' '}
+                                {envDeploy ? `${envDeploy.successRate}%` : '—'}{' '}
                                 success
                             </span>
                         </div>
 
                         <div className="mt-2 flex items-baseline gap-2">
                             <span className="font-mono text-2xl font-bold tracking-tight text-ink">
-                                {deployMetrics?.totalDeploys ?? 0}
+                                {envDeploy?.totalDeploys ?? 0}
                             </span>
                             <span className="text-xs text-soft">
-                                {deployMetrics?.totalDeploys === 1
+                                {envDeploy?.totalDeploys === 1
                                     ? 'total deploy'
                                     : 'total deploys'}
                             </span>
@@ -1114,15 +1277,14 @@ function AppPerformanceMetricsCard({
                             </span>
                             <p className="text-[10px] text-soft">
                                 Avg duration:{' '}
-                                {deployMetrics?.avgDurationSeconds
-                                    ? `${deployMetrics.avgDurationSeconds}s`
+                                {envDeploy?.avgDurationSeconds
+                                    ? `${envDeploy.avgDurationSeconds}s`
                                     : '—'}
                             </p>
                         </div>
-                        {deployMetrics &&
-                        deployMetrics.activity14d.length > 0 ? (
+                        {envDeploy && envDeploy.activity14d.length > 0 ? (
                             <Sparkline
-                                data={deployMetrics.activity14d}
+                                data={envDeploy.activity14d}
                                 type="bar"
                                 height={24}
                                 width={85}
@@ -1273,6 +1435,7 @@ function DeployDialog({
     project,
     server: _server,
     activeEnv,
+    activeEnvConfig,
     activeServer,
     activeServerProvider: propProvider,
     activeHost,
@@ -1289,6 +1452,7 @@ function DeployDialog({
     project: Project;
     server: Server | null;
     activeEnv: string;
+    activeEnvConfig?: ProjectEnvironment | null;
     activeServer: ReadyServer | Server | null;
     activeServerProvider?: string | null;
     activeHost: string | null;
@@ -1301,6 +1465,16 @@ function DeployDialog({
     readyServers: ReadyServer[];
 }) {
     const [showSwitchServer, setShowSwitchServer] = useState(false);
+    const [showEditCi, setShowEditCi] = useState(false);
+    const [skippedCi, setSkippedCi] = useState(false);
+
+    useEffect(() => {
+        setSkippedCi(false);
+        setShowEditCi(false);
+    }, [activeEnv]);
+
+    const activeCi =
+        activeEnvConfig?.ci ?? project.environments?.[activeEnv]?.ci;
 
     const activeServerProvider =
         propProvider ??
@@ -1577,6 +1751,94 @@ function DeployDialog({
 
                     <Step
                         number={4}
+                        title={`Registry & CI/CD (${activeEnv.toUpperCase()})`}
+                        done={Boolean(activeCi?.hasWorkflow) || skippedCi}
+                    >
+                        <div className="space-y-2">
+                            {activeCi?.hasWorkflow && !showEditCi ? (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-line bg-surface">
+                                                {activeCi.platform ===
+                                                'gitlab' ? (
+                                                    <SiGitlab className="size-3.5 text-[#FC6D26]" />
+                                                ) : activeCi.platform ===
+                                                  'forgejo' ? (
+                                                    <SiForgejo className="size-3.5 text-[#FB532A]" />
+                                                ) : (
+                                                    <SiGithub className="size-3.5 text-ink" />
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-soft">
+                                                <strong className="text-ink">
+                                                    {activeCi.platform ===
+                                                    'gitlab'
+                                                        ? 'GitLab CI'
+                                                        : activeCi.platform ===
+                                                            'forgejo'
+                                                          ? 'Forgejo Actions'
+                                                          : 'GitHub Actions'}
+                                                </strong>{' '}
+                                                · {activeCi.branch ?? 'main'} ·{' '}
+                                                <span className="font-mono text-[11px]">
+                                                    {activeCi.registry?.image ??
+                                                        project.name}
+                                                </span>
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowEditCi(true)}
+                                            className="text-[11px] text-brand hover:underline"
+                                        >
+                                            Reconfigure
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-soft">
+                                        Automated workflow is committed to
+                                        repository. Deployments trigger
+                                        automatically when pushing to{' '}
+                                        <strong>
+                                            {activeCi.branch ?? 'main'}
+                                        </strong>
+                                        .
+                                    </p>
+                                </div>
+                            ) : (
+                                <CiPipelineForm
+                                    project={project}
+                                    environment={activeEnv}
+                                    currentCi={activeCi}
+                                    onSuccess={() => setShowEditCi(false)}
+                                    onSkip={() => setSkippedCi(true)}
+                                />
+                            )}
+
+                            {latestRun?.kind === 'configure-ci' && (
+                                <p
+                                    className={cn(
+                                        'mt-2 text-xs',
+                                        latestRun.status === 'succeeded'
+                                            ? 'font-medium text-ok'
+                                            : latestRun.status === 'running'
+                                              ? 'animate-pulse font-medium text-brand'
+                                              : 'text-accent',
+                                    )}
+                                >
+                                    {latestRun.status === 'succeeded' &&
+                                        `✓ CI/CD pipeline configured for ${activeEnv}.`}
+                                    {latestRun.status === 'running' &&
+                                        'Setting up CI/CD workflow and scoped secrets…'}
+                                    {latestRun.status === 'failed' &&
+                                        'Failed to configure CI/CD pipeline.'}
+                                </p>
+                            )}
+                        </div>
+                    </Step>
+
+                    <Step
+                        number={5}
                         title={`Deploy (${activeEnv.toUpperCase()})`}
                         done={hasSucceededDeploy}
                         last
@@ -1589,6 +1851,22 @@ function DeployDialog({
                                         name="environment"
                                         value={activeEnv}
                                     />
+                                    {activeCi?.hasWorkflow && (
+                                        <div className="rounded-lg border border-line bg-paper/60 p-2.5 text-xs text-soft">
+                                            <p className="font-medium text-ink">
+                                                Push to deploy via CI/CD
+                                            </p>
+                                            <p className="mt-0.5">
+                                                Pushing to{' '}
+                                                <code className="font-mono text-[11px]">
+                                                    {activeCi.branch ?? 'main'}
+                                                </code>{' '}
+                                                will trigger your automated
+                                                workflow. You can also deploy
+                                                immediately from this Mac below.
+                                            </p>
+                                        </div>
+                                    )}
                                     <div className="flex items-center gap-3">
                                         <Button
                                             type="submit"
@@ -1604,9 +1882,11 @@ function DeployDialog({
                                                     ? 'Starting…'
                                                     : activeDeploy
                                                       ? 'Deploying…'
-                                                      : hasSucceededDeploy
-                                                        ? `Deploy ${activeEnv} again`
-                                                        : `Deploy to ${activeEnv}`}
+                                                      : activeCi?.hasWorkflow
+                                                        ? 'Deploy from Mac (Manual)'
+                                                        : hasSucceededDeploy
+                                                          ? `Deploy ${activeEnv} again`
+                                                          : `Deploy to ${activeEnv}`}
                                             </span>
                                         </Button>
                                         {activeDeploy && (
@@ -2094,6 +2374,303 @@ function HostForm({
                         {errors.host ??
                             `Point this name's DNS at ${serverIp ?? 'your server'} (or connect a domain on the server page).`}
                     </p>
+                </>
+            )}
+        </Form>
+    );
+}
+
+function CiPipelineForm({
+    project,
+    environment,
+    currentCi,
+    onSuccess,
+    onSkip,
+}: {
+    project: Project;
+    environment: string;
+    currentCi?: ProjectEnvironment['ci'];
+    onSuccess?: () => void;
+    onSkip?: () => void;
+}) {
+    const defaultRegistry =
+        currentCi?.registry?.provider ??
+        (project.git?.platform === 'gitlab'
+            ? 'gitlab'
+            : project.git?.platform === 'forgejo'
+              ? 'forgejo'
+              : 'ghcr');
+    const defaultImage =
+        currentCi?.registry?.image ??
+        project.git?.repoSlug ??
+        project.name.toLowerCase();
+    const defaultBranch = currentCi?.branch ?? 'main';
+
+    const [registry, setRegistry] = useState(defaultRegistry);
+    const [image, setImage] = useState(defaultImage);
+    const [branch, setBranch] = useState(defaultBranch);
+    const [showSecurity, setShowSecurity] = useState(false);
+
+    // Security Gate Toggles
+    const [withTests, setWithTests] = useState(
+        currentCi?.securityAudit?.withTests ?? true,
+    );
+    const [strict, setStrict] = useState(
+        currentCi?.securityAudit?.strict ?? false,
+    );
+    const [scanGitleaks, setScanGitleaks] = useState(
+        !(currentCi?.securityAudit?.noGitleaks ?? false),
+    );
+    const [scanSemgrep, setScanSemgrep] = useState(
+        !(currentCi?.securityAudit?.noSemgrep ?? false),
+    );
+    const [scanTrivy, setScanTrivy] = useState(
+        !(currentCi?.securityAudit?.noTrivy ?? false),
+    );
+
+    return (
+        <Form
+            action={configureCiRoute(project.id)}
+            onSuccess={onSuccess}
+            className="space-y-3"
+        >
+            {({ processing, errors }) => (
+                <>
+                    <input
+                        type="hidden"
+                        name="environment"
+                        value={environment}
+                    />
+                    <input type="hidden" name="registry" value={registry} />
+                    <input type="hidden" name="branch" value={branch} />
+                    <input type="hidden" name="image" value={image} />
+                    {withTests && (
+                        <input type="hidden" name="with_tests" value="1" />
+                    )}
+                    {strict && <input type="hidden" name="strict" value="1" />}
+                    {!scanGitleaks && (
+                        <input type="hidden" name="no_gitleaks" value="1" />
+                    )}
+                    {!scanSemgrep && (
+                        <input type="hidden" name="no_semgrep" value="1" />
+                    )}
+                    {!scanTrivy && (
+                        <input type="hidden" name="no_trivy" value="1" />
+                    )}
+
+                    {project.git?.platform && (
+                        <div className="flex items-center gap-2 rounded-lg border border-line/60 bg-paper/60 px-2.5 py-1.5 text-xs text-soft">
+                            {project.git.platform === 'gitlab' ? (
+                                <SiGitlab className="size-3.5 text-[#FC6D26]" />
+                            ) : project.git.platform === 'forgejo' ? (
+                                <SiForgejo className="size-3.5 text-[#FB532A]" />
+                            ) : (
+                                <SiGithub className="size-3.5 text-ink" />
+                            )}
+                            <span>
+                                Git remote detected:{' '}
+                                <strong className="text-ink">
+                                    {project.git.repoSlug ?? project.git.remote}
+                                </strong>
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-ink">
+                                Container Registry
+                            </label>
+                            <select
+                                value={registry}
+                                onChange={(e) => setRegistry(e.target.value)}
+                                disabled={processing}
+                                className="w-full rounded-lg border-0 bg-paper px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers disabled:opacity-45"
+                            >
+                                <option value="ghcr">
+                                    GitHub Container Registry (GHCR)
+                                </option>
+                                <option value="dockerhub">Docker Hub</option>
+                                <option value="gitlab">GitLab Registry</option>
+                                <option value="forgejo">
+                                    Forgejo Registry
+                                </option>
+                                <option value="gar">
+                                    Google Artifact Registry (GAR)
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-ink">
+                                Target Branch
+                            </label>
+                            <div className="flex items-center gap-1.5 rounded-lg bg-paper px-3 py-1.5 ring-1 ring-line">
+                                <GitBranch className="size-3.5 text-soft" />
+                                <input
+                                    value={branch}
+                                    onChange={(e) =>
+                                        setBranch(e.target.value.trim())
+                                    }
+                                    placeholder="main"
+                                    disabled={processing}
+                                    className="w-full border-0 bg-transparent p-0 font-mono text-[13px] outline-none placeholder:text-faint"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-xs font-medium text-ink">
+                            Image Repository Name
+                        </label>
+                        <input
+                            value={image}
+                            onChange={(e) =>
+                                setImage(e.target.value.trim().toLowerCase())
+                            }
+                            placeholder="owner/repo"
+                            disabled={processing}
+                            className="w-full rounded-lg border-0 bg-paper px-3 py-1.5 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers disabled:opacity-45"
+                        />
+                        <p className="mt-1 text-[11px] text-soft">
+                            Tag is derived from commit SHA during automated CI
+                            builds.
+                        </p>
+                    </div>
+
+                    {/* Expandable Security Gates */}
+                    <div className="rounded-lg border border-line bg-paper/40 p-2.5">
+                        <button
+                            type="button"
+                            onClick={() => setShowSecurity(!showSecurity)}
+                            className="flex w-full items-center justify-between text-left text-xs font-medium text-ink"
+                        >
+                            <div className="flex items-center gap-1.5">
+                                <ShieldCheck className="size-3.5 text-brand" />
+                                <span>Security Gates & Testing Policies</span>
+                            </div>
+                            <ChevronDown
+                                className={cn(
+                                    'size-3.5 text-soft transition-transform',
+                                    showSecurity && 'rotate-180',
+                                )}
+                            />
+                        </button>
+
+                        {showSecurity && (
+                            <div className="mt-2.5 space-y-2 border-t border-line/50 pt-2 text-xs">
+                                <label className="flex cursor-pointer items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={withTests}
+                                        onChange={(e) =>
+                                            setWithTests(e.target.checked)
+                                        }
+                                        className="rounded border-line text-brand focus:ring-brand"
+                                    />
+                                    <span className="text-ink">
+                                        Run test suite (Pest / PHPUnit) before
+                                        shipping
+                                    </span>
+                                </label>
+                                <label className="flex cursor-pointer items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={strict}
+                                        onChange={(e) =>
+                                            setStrict(e.target.checked)
+                                        }
+                                        className="rounded border-line text-brand focus:ring-brand"
+                                    />
+                                    <span className="text-ink">
+                                        Strict gate (abort release on
+                                        High/Critical CVEs)
+                                    </span>
+                                </label>
+                                <div className="pt-1 text-[11px] font-medium tracking-wider text-soft uppercase">
+                                    Security Scanners
+                                </div>
+                                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={scanGitleaks}
+                                            onChange={(e) =>
+                                                setScanGitleaks(
+                                                    e.target.checked,
+                                                )
+                                            }
+                                            className="rounded border-line text-brand focus:ring-brand"
+                                        />
+                                        <span className="text-soft">
+                                            Gitleaks
+                                        </span>
+                                    </label>
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={scanSemgrep}
+                                            onChange={(e) =>
+                                                setScanSemgrep(e.target.checked)
+                                            }
+                                            className="rounded border-line text-brand focus:ring-brand"
+                                        />
+                                        <span className="text-soft">
+                                            Semgrep SAST
+                                        </span>
+                                    </label>
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={scanTrivy}
+                                            onChange={(e) =>
+                                                setScanTrivy(e.target.checked)
+                                            }
+                                            className="rounded border-line text-brand focus:ring-brand"
+                                        />
+                                        <span className="text-soft">
+                                            Trivy Image
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {errors.ci && (
+                        <p className="text-xs text-accent">{errors.ci}</p>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={processing}
+                            className="gap-1.5"
+                        >
+                            <GitBranch className="size-3.5" />
+                            <span>
+                                {processing
+                                    ? 'Configuring CI/CD…'
+                                    : currentCi?.hasWorkflow
+                                      ? 'Update Pipeline & Secrets'
+                                      : 'Configure & Push Secrets'}
+                            </span>
+                        </Button>
+                        {onSkip && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={onSkip}
+                                className="gap-1 text-soft hover:text-ink"
+                            >
+                                <span>Skip to Direct Deploy</span>
+                                <ArrowRight className="size-3" />
+                            </Button>
+                        )}
+                    </div>
                 </>
             )}
         </Form>

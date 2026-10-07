@@ -31,7 +31,7 @@ class ProjectInspector
     }
 
     /**
-     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, plex: list<string>, managed: list<string>}>}
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
      */
     public function inspect(string $path, string $environment = 'production'): array
     {
@@ -47,6 +47,8 @@ class ProjectInspector
             $ip = $m[1];
         }
 
+        $git = $this->detectGit($path);
+
         $environments = [];
         if ($blueprint !== null && is_array($blueprint['environments'] ?? null)) {
             foreach ($blueprint['environments'] as $name => $envConfig) {
@@ -60,6 +62,11 @@ class ProjectInspector
                 if ($envIp === null && is_string($envContext) && preg_match('/^larakube-(.+)$/', $envContext, $m)) {
                     $envIp = $m[1];
                 }
+
+                $registry = is_array($envConfig['registry'] ?? null) ? $envConfig['registry'] : null;
+                $securityAudit = is_array($envConfig['securityAudit'] ?? null) ? $envConfig['securityAudit'] : null;
+                $envBranch = is_string($envConfig['branch'] ?? null) ? $envConfig['branch'] : ($name === 'production' ? 'main' : $name);
+
                 $environments[$name] = [
                     'name' => $name,
                     'isLocal' => $name === 'local',
@@ -68,6 +75,14 @@ class ProjectInspector
                     'serverContext' => is_string($envContext) && $envContext !== '' ? $envContext : null,
                     'plex' => is_array($envConfig['plex'] ?? null) ? array_values(array_filter($envConfig['plex'], 'is_string')) : [],
                     'managed' => is_array($envConfig['managed'] ?? null) ? array_values(array_filter($envConfig['managed'], 'is_string')) : [],
+                    'ci' => [
+                        'platform' => $git['platform'],
+                        'repoSlug' => $git['repoSlug'],
+                        'hasWorkflow' => $git['hasWorkflow'],
+                        'branch' => $envBranch,
+                        'registry' => $registry,
+                        'securityAudit' => $securityAudit,
+                    ],
                 ];
             }
         }
@@ -93,7 +108,48 @@ class ProjectInspector
             'database' => is_string($blueprint['database'] ?? null) ? $blueprint['database'] : null,
             'cacheDriver' => is_string($blueprint['cacheDriver'] ?? null) ? $blueprint['cacheDriver'] : null,
             'objectStorage' => is_string($blueprint['objectStorage'] ?? null) ? $blueprint['objectStorage'] : null,
+            'git' => $git,
             'environments' => $environments,
+        ];
+    }
+
+    /**
+     * @return array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}
+     */
+    public function detectGit(string $path): array
+    {
+        $remote = null;
+        $configFile = "{$path}/.git/config";
+        if (is_file($configFile)) {
+            $content = (string) file_get_contents($configFile);
+            if (preg_match('/\[remote\s+"origin"\][^\[]*?url\s*=\s*(.+)/i', $content, $m)) {
+                $remote = trim($m[1]);
+            }
+        }
+
+        $platform = 'github';
+        $repoSlug = null;
+
+        if ($remote !== null && preg_match('#^(?:https?://|git@)([^/:]+)[:/](.+?)(?:\.git)?$#', $remote, $m)) {
+            $host = strtolower($m[1]);
+            $repoSlug = trim($m[2]);
+            $platform = match (true) {
+                str_contains($host, 'gitlab') => 'gitlab',
+                str_contains($host, 'forgejo') || str_contains($host, 'gitea') || str_contains($host, 'codeberg') => 'forgejo',
+                default => 'github',
+            };
+        }
+
+        $hasWorkflow = file_exists("{$path}/.github/workflows/deploy.yml")
+            || file_exists("{$path}/.gitlab-ci.yml")
+            || file_exists("{$path}/.forgejo/workflows/deploy.yml")
+            || file_exists("{$path}/.gitea/workflows/deploy.yml");
+
+        return [
+            'remote' => $remote,
+            'platform' => $platform,
+            'repoSlug' => $repoSlug,
+            'hasWorkflow' => $hasWorkflow,
         ];
     }
 
