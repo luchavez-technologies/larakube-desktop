@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from '@inertiajs/react';
-import { Sparkles, X, Zap, Plus, ArrowRight } from 'lucide-react';
+import { Sparkles, X, Zap, ArrowRight } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import ToolLogo from '@/components/tool-logo';
@@ -8,8 +8,6 @@ import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import QuickLaunchModal, {
     type QuickLaunchAppId,
 } from '@/components/quick-launch-modal';
-import { create as createProject } from '@/routes/projects';
-import { create as createServer } from '@/routes/servers';
 import { tools as toolsRoute } from '@/routes';
 import type { Server, ToolCommonsCapabilities } from '@/types/larakube';
 
@@ -223,13 +221,6 @@ export default function WelcomeOnboarding({
 
                     {/* Quick Action Navigation Links */}
                     <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
-                        <Link
-                            href={createServer().url}
-                            className={buttonClass('secondary', 'sm', 'gap-1')}
-                        >
-                            <Plus className="size-3.5" />
-                            <span>Server</span>
-                        </Link>
                         {onImportKubeconfig && (
                             <button
                                 type="button"
@@ -240,15 +231,8 @@ export default function WelcomeOnboarding({
                             </button>
                         )}
                         <Link
-                            href={createProject().url}
-                            className={buttonClass('secondary', 'sm', 'gap-1')}
-                        >
-                            <Plus className="size-3.5" />
-                            <span>Project</span>
-                        </Link>
-                        <Link
                             href={toolsRoute().url}
-                            className={buttonClass('ghost', 'sm', 'gap-1')}
+                            className={buttonClass('secondary', 'sm', 'gap-1')}
                         >
                             <span>Tools Catalog</span>
                             <ArrowRight className="size-3" />

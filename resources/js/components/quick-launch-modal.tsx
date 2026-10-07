@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import {
     Zap,
     Rocket,
@@ -8,9 +8,13 @@ import {
     Globe,
     Mail,
     Check,
+    Copy,
+    Plus,
+    AlertCircle,
 } from 'lucide-react';
-import Button from '@/components/button';
+import Button, { buttonClass } from '@/components/button';
 import ToolLogo from '@/components/tool-logo';
+import { create as createServer } from '@/routes/servers';
 import type { Server } from '@/types/larakube';
 
 export type QuickLaunchAppId = 'pocketbase' | 'n8n' | 'wordpress';
@@ -112,6 +116,7 @@ export default function QuickLaunchModal({
     const [wireSso, setWireSso] = useState<boolean>(false);
     const [wireMail, setWireMail] = useState<boolean>(false);
     const [submitting, setSubmitting] = useState<boolean>(false);
+    const [dnsCopied, setDnsCopied] = useState<boolean>(false);
 
     const currentApp = useMemo(
         () => APPS.find((a) => a.id === selectedAppId) ?? APPS[0],
@@ -124,6 +129,17 @@ export default function QuickLaunchModal({
             readyServers[0],
         [readyServers, selectedServerName],
     );
+
+    const handleCopyDns = () => {
+        if (!currentServer?.ip) return;
+        const hostName = useCustomDomain
+            ? customDomain.split('.')[0] || '*'
+            : subdomain || '*';
+        const textToCopy = `Type: A\nName: ${hostName}\nValue: ${currentServer.ip}\nTTL: 600`;
+        void navigator.clipboard.writeText(textToCopy);
+        setDnsCopied(true);
+        setTimeout(() => setDnsCopied(false), 2000);
+    };
 
     // Sync defaults when app or server changes
     useEffect(() => {
@@ -321,35 +337,91 @@ export default function QuickLaunchModal({
                                 <ServerIcon className="pointer-events-none absolute top-3 left-3 size-4 text-soft" />
                             </div>
                         ) : (
-                            <div className="rounded-xl bg-warn-tint p-3 text-xs text-warn ring-1 ring-warn-line">
-                                <p className="font-semibold">
-                                    No ready servers available
-                                </p>
-                                <p className="mt-0.5">
-                                    Please create or start a server before
-                                    launching applications.
-                                </p>
+                            <div className="rounded-xl border border-warn/30 bg-warn/10 p-3.5 text-xs text-ink ring-1 ring-warn/20">
+                                <div className="flex items-start gap-2.5">
+                                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-warn" />
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-warn">
+                                            No ready servers available
+                                        </p>
+                                        <p className="mt-1 leading-relaxed text-soft">
+                                            A running Kubernetes cluster is
+                                            required to schedule workloads,
+                                            databases, and ingress routes.
+                                        </p>
+                                        <div className="mt-3">
+                                            <Link
+                                                href={createServer().url}
+                                                className={buttonClass(
+                                                    'primary',
+                                                    'sm',
+                                                    'gap-1.5',
+                                                )}
+                                            >
+                                                <Plus className="size-3.5" />
+                                                <span>
+                                                    Create or Connect Server
+                                                </span>
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
 
                     {/* Domain & Address */}
                     <div>
-                        <div className="mb-1.5 flex items-center justify-between">
+                        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
                             <label className="text-xs font-medium text-soft">
                                 Domain / Host Address
                             </label>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setUseCustomDomain(!useCustomDomain)
-                                }
-                                className="text-primary text-[11px] hover:underline"
-                            >
-                                {useCustomDomain
-                                    ? 'Use Subdomain format'
-                                    : '+ Custom full domain'}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {currentServer?.ip &&
+                                !['127.0.0.1', 'localhost', 'local'].includes(
+                                    currentServer.ip,
+                                ) ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBaseDomain(
+                                                `${currentServer.ip}.nip.io`,
+                                            );
+                                            setUseCustomDomain(false);
+                                        }}
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:underline"
+                                    >
+                                        <Zap className="size-3" />
+                                        <span>
+                                            No domain? Use {currentServer.ip}
+                                            .nip.io
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBaseDomain('dev.test');
+                                            setUseCustomDomain(false);
+                                        }}
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:underline"
+                                    >
+                                        <Zap className="size-3" />
+                                        <span>Use local .dev.test</span>
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setUseCustomDomain(!useCustomDomain)
+                                    }
+                                    className="text-primary text-[11px] hover:underline"
+                                >
+                                    {useCustomDomain
+                                        ? 'Use Subdomain format'
+                                        : '+ Custom full domain'}
+                                </button>
+                            </div>
                         </div>
                         {useCustomDomain ? (
                             <div className="relative">
@@ -401,6 +473,92 @@ export default function QuickLaunchModal({
                                 https://{resolvedDomain}
                             </span>
                         </p>
+
+                        {/* DNS Guidance Box for GoDaddy & External Registrars */}
+                        {currentServer?.ip &&
+                            !['127.0.0.1', 'localhost', 'local'].includes(
+                                currentServer.ip,
+                            ) && (
+                                <div className="mt-2.5 rounded-xl border border-line bg-paper/60 p-3 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5 font-medium text-ink">
+                                            <Globe className="size-3.5 text-soft" />
+                                            <span>
+                                                DNS Configuration (GoDaddy,
+                                                Namecheap, External)
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyDns}
+                                            className="text-primary inline-flex items-center gap-1 text-[11px] font-medium hover:underline"
+                                        >
+                                            {dnsCopied ? (
+                                                <>
+                                                    <Check className="size-3 text-ok" />
+                                                    <span>Copied!</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Copy className="size-3" />
+                                                    <span>Copy DNS Record</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                    <p className="mt-1 text-[11px] leading-relaxed text-soft">
+                                        For domains registered on GoDaddy or
+                                        external DNS, add an{' '}
+                                        <strong className="text-ink">
+                                            A record
+                                        </strong>{' '}
+                                        pointing traffic to your server:
+                                    </p>
+                                    <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-surface p-2 font-mono text-[11px] ring-1 ring-line">
+                                        <div>
+                                            <span className="block text-[10px] text-faint uppercase">
+                                                Type
+                                            </span>
+                                            <span className="font-semibold text-ink">
+                                                A
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[10px] text-faint uppercase">
+                                                Host / Name
+                                            </span>
+                                            <span className="font-semibold text-ink">
+                                                {useCustomDomain
+                                                    ? customDomain.split(
+                                                          '.',
+                                                      )[0] || '@'
+                                                    : subdomain || '@'}{' '}
+                                                <span className="font-sans text-[10px] text-faint">
+                                                    (or *)
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[10px] text-faint uppercase">
+                                                Points to
+                                            </span>
+                                            <span className="font-semibold text-ink">
+                                                {currentServer.ip}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="mt-1.5 text-[10px] leading-relaxed text-faint">
+                                        💡 <strong>Pro-Tip:</strong> Using{' '}
+                                        <code className="rounded bg-badge px-1 py-0.5 font-mono text-ink">
+                                            *
+                                        </code>{' '}
+                                        as host in GoDaddy routes all companion
+                                        apps to this server. Traefik
+                                        automatically issues Let's Encrypt SSL
+                                        certificates once traffic arrives.
+                                    </p>
+                                </div>
+                            )}
                     </div>
 
                     {/* Database Engine Selector (for tools that offer DB choices like WordPress and n8n) */}
@@ -505,9 +663,11 @@ export default function QuickLaunchModal({
                         >
                             <Rocket className="size-3.5" />
                             <span>
-                                {submitting
-                                    ? 'Deploying…'
-                                    : `Launch ${currentApp.name}`}
+                                {readyServers.length === 0
+                                    ? 'Server Required'
+                                    : submitting
+                                      ? 'Deploying…'
+                                      : `Launch ${currentApp.name}`}
                             </span>
                         </Button>
                     </div>
