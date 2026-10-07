@@ -155,24 +155,43 @@ export default function FrameworkFields({
         const hint = error
             ? undefined
             : (field.optionHints?.[String(answer)] ?? field.description);
+        const isSmallSelect =
+            field.type === 'select' &&
+            options.length > 0 &&
+            options.length <= 3 &&
+            !field.nullable;
 
         return (
             <div
                 key={field.key}
                 className={
-                    field.type === 'multiselect' ? 'col-span-2' : undefined
+                    field.type === 'multiselect' ||
+                    field.type === 'confirm' ||
+                    isSmallSelect
+                        ? 'col-span-full'
+                        : undefined
                 }
             >
                 {field.type === 'confirm' ? (
-                    <label className="flex items-center gap-2 text-sm">
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface/50 p-3 text-xs text-soft ring-1 ring-line transition hover:text-ink hover:ring-faint">
                         <input
                             type="checkbox"
                             checked={answer === true}
                             onChange={(event) =>
                                 set(field.key, event.target.checked)
                             }
+                            className="mt-0.5 size-4 rounded accent-brand"
                         />
-                        {field.label}
+                        <div className="space-y-0.5">
+                            <span className="block font-medium text-ink">
+                                {field.label}
+                            </span>
+                            {field.description && (
+                                <span className="block text-[11px] text-soft">
+                                    {field.description}
+                                </span>
+                            )}
+                        </div>
                     </label>
                 ) : (
                     <>
@@ -234,9 +253,48 @@ export default function FrameworkFields({
                                     );
                                 })}
                             </div>
+                        ) : isSmallSelect ? (
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {options.map((option) => {
+                                    const currentVal =
+                                        typeof answer === 'string'
+                                            ? answer
+                                            : typeof field.default === 'string'
+                                              ? field.default
+                                              : '';
+                                    const selected =
+                                        currentVal === option.value;
+
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() =>
+                                                set(field.key, option.value)
+                                            }
+                                            className={cn(
+                                                'flex flex-col items-start rounded-xl p-3 text-left ring-1 transition',
+                                                selected
+                                                    ? 'bg-brand/10 text-ink ring-2 ring-brand'
+                                                    : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                            )}
+                                        >
+                                            <span className="text-xs font-semibold">
+                                                {option.label}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         ) : (
                             <select
-                                value={typeof answer === 'string' ? answer : ''}
+                                value={
+                                    typeof answer === 'string'
+                                        ? answer
+                                        : typeof field.default === 'string'
+                                          ? field.default
+                                          : ''
+                                }
                                 onChange={(event) =>
                                     set(field.key, event.target.value || null)
                                 }
@@ -257,7 +315,7 @@ export default function FrameworkFields({
                         )}
                     </>
                 )}
-                {(error ?? hint) && (
+                {(error || (field.type !== 'confirm' && hint)) && (
                     <span
                         className={cn(
                             'mt-1 block text-xs',

@@ -13,6 +13,8 @@ import {
     Check,
     Settings2,
     Sparkles,
+    XCircle,
+    Download,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
@@ -1840,42 +1842,6 @@ function InstallDialog({
         selectedBaseDomain,
     ]);
 
-    const activeMatches = useMemo(() => {
-        if (
-            !tool.commonsCapabilities ||
-            !activeCommonsServices ||
-            activeCommonsServices.length === 0
-        ) {
-            return [];
-        }
-        const activeSet = new Set(
-            activeCommonsServices.map((s) => s.toLowerCase()),
-        );
-        const matches: string[] = [];
-        const caps = tool.commonsCapabilities;
-        if (caps.databases?.some((d) => activeSet.has(d))) {
-            const dbName = caps.databases.find((d) => activeSet.has(d));
-            matches.push(
-                dbName === 'postgres' || dbName === 'postgresql'
-                    ? 'Plex PostgreSQL'
-                    : 'Plex MySQL',
-            );
-        }
-        if (caps.cache?.some((c) => activeSet.has(c))) {
-            matches.push('Redis');
-        }
-        if (caps.storage?.some((s) => activeSet.has(s))) {
-            matches.push('S3 Storage');
-        }
-        if (caps.auth?.some((a) => activeSet.has(a))) {
-            matches.push('Zitadel SSO');
-        }
-        if (caps.mail?.some((m) => activeSet.has(m))) {
-            matches.push('Stalwart Mail');
-        }
-        return matches;
-    }, [tool.commonsCapabilities, activeCommonsServices]);
-
     const tagline = toolTagline(tool);
     const name = toolName(tool);
 
@@ -1903,6 +1869,58 @@ function InstallDialog({
     const [options, setOptions] = useState<NewAppAnswers>(() =>
         defaultAnswers(optionFields),
     );
+
+    const activeMatches = useMemo(() => {
+        if (
+            !tool.commonsCapabilities ||
+            !activeCommonsServices ||
+            activeCommonsServices.length === 0
+        ) {
+            return [];
+        }
+        const activeSet = new Set(
+            activeCommonsServices.map((s) => s.toLowerCase()),
+        );
+        const matches: string[] = [];
+        const caps = tool.commonsCapabilities;
+
+        const chosenDb =
+            typeof options.db === 'string'
+                ? options.db.toLowerCase()
+                : ((
+                      tool.initFields?.find((f) => f.key === 'db')?.default as
+                          | string
+                          | undefined
+                  )?.toLowerCase() ?? null);
+        const usesSqlite = chosenDb === 'sqlite';
+
+        if (!usesSqlite && caps.databases?.some((d) => activeSet.has(d))) {
+            const dbName = caps.databases.find((d) => activeSet.has(d));
+            matches.push(
+                dbName === 'postgres' || dbName === 'postgresql'
+                    ? 'Plex PostgreSQL'
+                    : 'Plex MySQL',
+            );
+        }
+        if (!usesSqlite && caps.cache?.some((c) => activeSet.has(c))) {
+            matches.push('Redis');
+        }
+        if (caps.storage?.some((s) => activeSet.has(s))) {
+            matches.push('S3 Storage');
+        }
+        if (caps.auth?.some((a) => activeSet.has(a))) {
+            matches.push('Zitadel SSO');
+        }
+        if (caps.mail?.some((m) => activeSet.has(m))) {
+            matches.push('Stalwart Mail');
+        }
+        return matches;
+    }, [
+        tool.commonsCapabilities,
+        tool.initFields,
+        activeCommonsServices,
+        options.db,
+    ]);
 
     const [adminEmail, setAdminEmail] = useState(defaultAdminEmail);
     const [touchedAdminEmail, setTouchedAdminEmail] = useState(false);
@@ -2328,12 +2346,14 @@ function InstallDialog({
                             )}
                             <div className="flex items-center justify-end gap-2.5 pt-1">
                                 <Button variant="secondary" onClick={onClose}>
+                                    <XCircle className="size-4" />
                                     Cancel
                                 </Button>
                                 <Button
                                     type="submit"
                                     disabled={processing || domain === ''}
                                 >
+                                    <Download className="size-4" />
                                     {processing
                                         ? 'Starting…'
                                         : isMulti
