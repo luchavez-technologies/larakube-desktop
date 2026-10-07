@@ -15,6 +15,7 @@ type Props = {
     server: Server;
     servers: Server[];
     isInstalled: boolean;
+    hasSso?: boolean;
     serverInfo?: ServerInfo | null;
     domains?: DomainRow[];
     accounts?: {
@@ -29,6 +30,7 @@ export default function MailIndex({
     server,
     servers,
     isInstalled,
+    hasSso = false,
     serverInfo,
     domains = [],
     accounts = { accounts: [], queue: 0 },
@@ -197,6 +199,7 @@ export default function MailIndex({
                                 server={server}
                                 accounts={accounts.accounts}
                                 queue={accounts.queue}
+                                hasSso={hasSso}
                             />
                         )}
 

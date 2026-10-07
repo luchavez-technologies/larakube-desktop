@@ -137,6 +137,25 @@ test('creating a mailbox starts a mail-create-account run', function () {
         ->and($run->subject)->toBe('alice@example.com');
 });
 
+test('creating a mailbox with sso forwards --sso flag', function () {
+    $bin = mailTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.mail.accounts.store', 'prod-vps'), [
+        'email' => 'alice@example.com',
+        'password' => 'secret1234',
+        'sso' => true,
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'mail:create', 'production', '--context=larakube-do-ams3',
+            '--email=alice@example.com', '--password=secret1234',
+            '--sso', '--no-interaction',
+        ];
+    });
+});
+
 test('resetting a mailbox password starts a mail-reset-password run', function () {
     $bin = mailTestServer();
     $fake = ChildProcess::fake();
@@ -156,6 +175,44 @@ test('resetting a mailbox password starts a mail-reset-password run', function (
 
     $run = Run::sole();
     expect($run->kind)->toBe(RunKind::MailResetPassword);
+});
+
+test('resetting a mailbox password with sso forwards --sso flag', function () {
+    $bin = mailTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.mail.accounts.password', 'prod-vps'), [
+        'email' => 'alice@example.com',
+        'password' => 'new-secret-999',
+        'sso' => true,
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'mail:password', 'production', '--context=larakube-do-ams3',
+            '--email=alice@example.com', '--force', '--password=new-secret-999',
+            '--sso', '--no-interaction',
+        ];
+    });
+});
+
+test('syncing mail accounts to sso starts a mail-sync-sso run', function () {
+    $bin = mailTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.mail.sync-sso', 'prod-vps'))
+        ->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'mail:sync-sso', 'production', '--context=larakube-do-ams3',
+            '--no-interaction',
+        ];
+    });
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::MailSyncSso)
+        ->and($run->subject)->toBe('mail:sso:prod-vps');
 });
 
 test('deleting a mailbox starts a mail-delete-account run', function () {

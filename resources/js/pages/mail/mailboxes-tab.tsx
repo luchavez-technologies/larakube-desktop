@@ -6,6 +6,8 @@ import {
     Trash2,
     Search,
     Shield,
+    ShieldCheck,
+    RotateCw,
     User,
     Inbox,
     Copy,
@@ -31,6 +33,7 @@ type Props = {
     server: Server;
     accounts?: AccountRow[];
     queue?: number;
+    hasSso?: boolean;
 };
 
 function generatePassword(): string {
@@ -47,6 +50,7 @@ export default function MailboxesTab({
     server,
     accounts = [],
     queue = 0,
+    hasSso = false,
 }: Props) {
     const [search, setSearch] = useState('');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -58,10 +62,12 @@ export default function MailboxesTab({
     const [newName, setNewName] = useState('');
     const [newPassword, setNewPassword] = useState(generatePassword());
     const [newQuota, setNewQuota] = useState('10');
+    const [createSso, setCreateSso] = useState(hasSso);
 
     // Reset password state
     const [newResetPassword, setNewResetPassword] =
         useState(generatePassword());
+    const [resetSso, setResetSso] = useState(hasSso);
     const [copiedReset, setCopiedReset] = useState(false);
 
     const filteredAccounts = useMemo(() => {
@@ -96,17 +102,36 @@ export default function MailboxesTab({
                     )}
                 </div>
 
-                <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                        setNewPassword(generatePassword());
-                        setIsCreateOpen(true);
-                    }}
-                >
-                    <Plus className="h-4 w-4" />
-                    New Mailbox
-                </Button>
+                <div className="flex items-center gap-2">
+                    {hasSso && (
+                        <Form
+                            action={`/servers/${server.name}/mail/sync-sso`}
+                            method="post"
+                        >
+                            <Button
+                                type="submit"
+                                variant="secondary"
+                                size="sm"
+                                title="Sync existing Stalwart mail accounts to Zitadel SSO"
+                            >
+                                <RotateCw className="h-4 w-4" />
+                                Sync to SSO
+                            </Button>
+                        </Form>
+                    )}
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                            setNewPassword(generatePassword());
+                            setCreateSso(hasSso);
+                            setIsCreateOpen(true);
+                        }}
+                    >
+                        <Plus className="h-4 w-4" />
+                        New Mailbox
+                    </Button>
+                </div>
             </div>
 
             <Card className="overflow-hidden p-0">
@@ -161,16 +186,27 @@ export default function MailboxesTab({
                                             {account.name || '—'}
                                         </td>
                                         <td className="px-5 py-3.5">
-                                            <span
-                                                className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                                                    account.role.toLowerCase() ===
-                                                    'admin'
-                                                        ? 'bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/20'
-                                                        : 'bg-zinc-500/10 text-zinc-400 ring-1 ring-zinc-500/20'
-                                                }`}
-                                            >
-                                                {account.role}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span
+                                                    className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                                                        account.role.toLowerCase() ===
+                                                        'admin'
+                                                            ? 'bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/20'
+                                                            : 'bg-zinc-500/10 text-zinc-400 ring-1 ring-zinc-500/20'
+                                                    }`}
+                                                >
+                                                    {account.role}
+                                                </span>
+                                                {hasSso && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand ring-1 ring-brand/20"
+                                                        title="SSO Enabled via Zitadel"
+                                                    >
+                                                        <ShieldCheck className="h-3 w-3" />
+                                                        SSO
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-5 py-3.5 text-soft">
                                             <div className="flex items-center gap-1.5">
@@ -191,6 +227,7 @@ export default function MailboxesTab({
                                                             generatePassword(),
                                                         );
                                                         setCopiedReset(false);
+                                                        setResetSso(hasSso);
                                                         setResetTarget(account);
                                                     }}
                                                     title="Reset Password"
@@ -319,6 +356,34 @@ export default function MailboxesTab({
                                 />
                             </div>
 
+                            {hasSso && (
+                                <div className="rounded-lg border border-line bg-paper/50 p-3">
+                                    <input type="hidden" name="sso" value="0" />
+                                    <label className="flex cursor-pointer items-start gap-2.5">
+                                        <input
+                                            type="checkbox"
+                                            name="sso"
+                                            value="1"
+                                            checked={createSso}
+                                            onChange={(e) =>
+                                                setCreateSso(e.target.checked)
+                                            }
+                                            className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                        />
+                                        <div>
+                                            <span className="block text-xs font-medium text-ink">
+                                                Create matching SSO identity
+                                            </span>
+                                            <span className="block text-[11px] text-soft">
+                                                Provisions a Zitadel user
+                                                account with matching email and
+                                                password.
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-end gap-2 pt-4">
                                 <Button
                                     variant="secondary"
@@ -421,6 +486,33 @@ export default function MailboxesTab({
                                     className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 font-mono text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                                 />
                             </div>
+
+                            {hasSso && (
+                                <div className="rounded-lg border border-line bg-paper/50 p-3">
+                                    <input type="hidden" name="sso" value="0" />
+                                    <label className="flex cursor-pointer items-start gap-2.5">
+                                        <input
+                                            type="checkbox"
+                                            name="sso"
+                                            value="1"
+                                            checked={resetSso}
+                                            onChange={(e) =>
+                                                setResetSso(e.target.checked)
+                                            }
+                                            className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                        />
+                                        <div>
+                                            <span className="block text-xs font-medium text-ink">
+                                                Update matching SSO password
+                                            </span>
+                                            <span className="block text-[11px] text-soft">
+                                                Updates this user's password in
+                                                Zitadel if the identity exists.
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
 
                             <div className="flex items-center justify-end gap-2 pt-4">
                                 <Button

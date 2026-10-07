@@ -51,6 +51,9 @@ class MailController extends Controller
             'serverInfo' => $isInstalled
                 ? Inertia::defer(fn (): ?array => $status->serverInfo($context), 'serverInfo')
                 : null,
+            'hasSso' => $isInstalled
+                ? Inertia::defer(fn (): bool => (bool) ($status->serverInfo($context)['sso']['installed'] ?? false), 'hasSso')
+                : false,
             'domains' => $isInstalled
                 ? Inertia::defer(fn (): array => $status->domains($context), 'domains')
                 : [],
@@ -104,6 +107,7 @@ class MailController extends Controller
             'password' => ['nullable', 'string', 'min:8'],
             'name' => ['nullable', 'string', 'max:255'],
             'quota' => ['nullable', 'integer', 'min:1'],
+            'sso' => ['nullable', 'boolean'],
         ]);
 
         $stack = $this->readyServer($server);
@@ -119,6 +123,9 @@ class MailController extends Controller
         }
         if ($request->filled('quota')) {
             $args[] = '--quota='.$request->integer('quota');
+        }
+        if ($request->has('sso')) {
+            $args[] = $request->boolean('sso') ? '--sso' : '--no-sso';
         }
 
         $run = $runner->start(
@@ -144,6 +151,7 @@ class MailController extends Controller
         $request->validate([
             'email' => ['required', 'email'],
             'password' => ['nullable', 'string', 'min:8'],
+            'sso' => ['nullable', 'boolean'],
         ]);
 
         $stack = $this->readyServer($server);
@@ -154,12 +162,38 @@ class MailController extends Controller
         if ($request->filled('password')) {
             $args[] = '--password='.$request->string('password')->toString();
         }
+        if ($request->has('sso')) {
+            $args[] = $request->boolean('sso') ? '--sso' : '--no-sso';
+        }
 
         $run = $runner->start(
             label: "Reset password for {$email} on {$server}",
             arguments: $args,
             kind: RunKind::MailResetPassword,
             subject: $email,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /**
+     * Sync existing Stalwart mail accounts to Zitadel SSO.
+     */
+    public function syncSso(Request $request, string $server, CliRunner $runner): RedirectResponse
+    {
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+
+        $run = $runner->start(
+            label: "Sync mail accounts to Zitadel SSO on {$server}",
+            arguments: ['mail:sync-sso', 'production', "--context={$context}"],
+            kind: RunKind::MailSyncSso,
+            subject: "mail:sso:{$server}",
             meta: ['server' => $server, 'context' => $context],
             targetType: 'server',
             targetName: $server,

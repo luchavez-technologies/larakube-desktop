@@ -139,6 +139,7 @@ Route::get('/servers/{server}/mail', [MailController::class, 'index'])->name('se
 Route::post('/servers/{server}/mail/deploy', [MailController::class, 'deploy'])->name('servers.mail.deploy');
 Route::post('/servers/{server}/mail/accounts', [MailController::class, 'createAccount'])->name('servers.mail.accounts.store');
 Route::post('/servers/{server}/mail/accounts/password', [MailController::class, 'resetPassword'])->name('servers.mail.accounts.password');
+Route::post('/servers/{server}/mail/sync-sso', [MailController::class, 'syncSso'])->name('servers.mail.sync-sso');
 Route::delete('/servers/{server}/mail/accounts', [MailController::class, 'deleteAccount'])->name('servers.mail.accounts.destroy');
 Route::post('/servers/{server}/mail/domains', [MailController::class, 'addDomain'])->name('servers.mail.domains.store');
 Route::post('/servers/{server}/mail/relay', [MailController::class, 'configureRelay'])->name('servers.mail.relay.store');

@@ -88,6 +88,7 @@ enum RunKind: string
     case MailCreateAccount = 'mail-create-account';
     case MailDeleteAccount = 'mail-delete-account';
     case MailResetPassword = 'mail-reset-password';
+    case MailSyncSso = 'mail-sync-sso';
     case MailAddDomain = 'mail-add-domain';
     case MailConfigureRelay = 'mail-configure-relay';
     case MailSendTest = 'mail-send-test';
