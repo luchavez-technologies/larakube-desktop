@@ -17,12 +17,14 @@ import {
     Download,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import { show as showRun } from '@/routes/runs';
 import {
@@ -353,25 +355,21 @@ export default function ToolsIndex({
                         mode={viewMode}
                         onChange={handleViewModeChange}
                     />
-                    <label className="flex h-9 items-center gap-2.5 rounded-lg bg-surface px-3 ring-1 ring-line">
+                    <div className="flex h-9 items-center gap-2.5 rounded-lg bg-surface pl-3 ring-1 ring-line">
                         <span className="text-xs text-soft">Server</span>
-                        <select
+                        <SelectMenu
                             value={server.name}
-                            onChange={(event) =>
-                                router.visit(toolsIndex(event.target.value).url)
+                            accent="tools"
+                            triggerClassName="h-9 rounded-lg bg-transparent px-2 ring-0 hover:ring-0"
+                            onChange={(value) =>
+                                router.visit(toolsIndex(value).url)
                             }
-                            className="bg-transparent text-[13px] font-medium outline-none"
-                        >
-                            {servers.map((candidate) => (
-                                <option
-                                    key={candidate.name}
-                                    value={candidate.name}
-                                >
-                                    {candidate.name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                            options={servers.map((candidate) => ({
+                                value: candidate.name,
+                                label: candidate.name,
+                            }))}
+                        />
+                    </div>
                     <Link
                         href={refresh(server.name).url}
                         method="post"
@@ -2010,341 +2008,385 @@ function InstallDialog({
         };
     }, [domain, server.name, server.ip, selectedDomainMeta?.externalDns]);
 
+    const [slidIn, setSlidIn] = useState(false);
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => setSlidIn(true));
+        return () => cancelAnimationFrame(frame);
+    }, []);
+
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
+            className="fixed inset-0 z-50 flex justify-end bg-ink/45 backdrop-blur-xs"
             onClick={onClose}
         >
             <div
                 role="dialog"
                 aria-modal="true"
-                className="w-full max-w-[480px] rounded-2xl bg-surface p-7 shadow-2xl"
+                className={cn(
+                    'flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-surface shadow-2xl transition-transform duration-300 ease-out',
+                    slidIn ? 'translate-x-0' : 'translate-x-full',
+                )}
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="flex items-baseline gap-2">
-                    <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                        {isMulti ? `Deploy ${name}` : `Install ${name}`}
-                    </h2>
-                    {tagline && (
-                        <span className="text-sm text-soft">· {tagline}</span>
-                    )}
+                <div className="px-7 pt-7">
+                    <div className="flex items-baseline gap-2">
+                        <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                            {isMulti ? `Deploy ${name}` : `Install ${name}`}
+                        </h2>
+                        {tagline && (
+                            <span className="text-sm text-soft">
+                                · {tagline}
+                            </span>
+                        )}
+                    </div>
+                    <p className="mt-1.5 text-sm text-soft">
+                        {isMulti
+                            ? `Deploy an additional, isolated ${name} deployment on ${server.name}.`
+                            : `On ${server.name}. It gets its own address under your domain.`}
+                    </p>
                 </div>
-                <p className="mt-1.5 text-sm text-soft">
-                    {isMulti
-                        ? `Deploy an additional, isolated ${name} deployment on ${server.name}.`
-                        : `On ${server.name}. It gets its own address under your domain.`}
-                </p>
                 <Form
                     action={store({ server: server.name, tool: tool.tool })}
-                    className="mt-5 space-y-4"
+                    className="flex h-full flex-col overflow-hidden"
                 >
                     {({ errors, processing }) => (
                         <>
-                            {activeMatches.length > 0 && (
-                                <div className="flex items-start gap-3 rounded-xl bg-ok-tint p-3 text-xs text-ok ring-1 ring-ok/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
-                                    <Sparkles className="mt-0.5 size-4 shrink-0 text-ok dark:text-emerald-400" />
-                                    <div className="space-y-0.5">
-                                        <p className="font-semibold text-emerald-950 dark:text-emerald-200">
-                                            Active Commons detected:{' '}
-                                            {activeMatches.join(', ')}
-                                        </p>
-                                        <p className="leading-relaxed text-emerald-800/90 dark:text-emerald-300/80">
-                                            This server runs shared Plex
-                                            infrastructure. LaraKube will
-                                            connect using shared tenant
-                                            resources with zero extra
-                                            containers.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                    <span className="block text-xs font-medium text-soft">
-                                        {isCustomDomain
-                                            ? 'Domain / Host'
-                                            : 'Host Address'}
-                                    </span>
-                                    {knownDomains.length > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (isCustomDomain) {
-                                                    setIsCustomDomain(false);
-                                                } else {
-                                                    setIsCustomDomain(true);
-                                                    setCustomDomain(domain);
-                                                }
-                                            }}
-                                            className="text-xs text-tools hover:underline"
-                                        >
-                                            {isCustomDomain
-                                                ? 'Pick connected base domain'
-                                                : '+ Custom domain'}
-                                        </button>
-                                    )}
-                                </div>
-
-                                {!isCustomDomain && knownDomains.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {knownDomains.length > 1 && (
-                                            <div>
-                                                <select
-                                                    value={selectedBaseDomain}
-                                                    onChange={(event) => {
-                                                        if (
-                                                            event.target
-                                                                .value ===
-                                                            '__custom__'
-                                                        ) {
-                                                            setIsCustomDomain(
-                                                                true,
-                                                            );
-                                                            setCustomDomain(
-                                                                domain,
-                                                            );
-                                                        } else {
-                                                            setSelectedBaseDomain(
-                                                                event.target
-                                                                    .value,
-                                                            );
-                                                        }
-                                                    }}
-                                                    className="w-full rounded-lg border-0 bg-surface px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-tools"
-                                                >
-                                                    {knownDomains.map((d) => (
-                                                        <option
-                                                            key={d.domain}
-                                                            value={d.domain}
-                                                        >
-                                                            {d.domain}{' '}
-                                                            {d.externalDns
-                                                                ? '(ExternalDNS · Cloudflare)'
-                                                                : d.tls
-                                                                  ? '(Cloudflare TLS)'
-                                                                  : '(Active Ingress)'}
-                                                        </option>
-                                                    ))}
-                                                    <option value="__custom__">
-                                                        + Enter custom domain…
-                                                    </option>
-                                                </select>
-                                            </div>
-                                        )}
-                                        <div className="flex rounded-lg ring-1 ring-line focus-within:ring-2 focus-within:ring-tools">
-                                            <input
-                                                type="text"
-                                                value={subdomain}
-                                                onChange={(event) =>
-                                                    setSubdomain(
-                                                        event.target.value
-                                                            .trim()
-                                                            .toLowerCase()
-                                                            .replace(
-                                                                /[^a-z0-9-]/g,
-                                                                '',
-                                                            ),
-                                                    )
-                                                }
-                                                placeholder={defaultSubdomainForTool(
-                                                    tool,
-                                                    Boolean(isMulti),
-                                                    tools,
-                                                )}
-                                                autoFocus
-                                                spellCheck={false}
-                                                className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-mono text-[13px] outline-none"
-                                            />
-                                            <div className="flex items-center border-l border-line bg-badge/40 px-3 font-mono text-[13px] text-soft">
-                                                .{selectedBaseDomain}
-                                            </div>
+                            <div className="flex-1 space-y-4 overflow-y-auto px-7 pt-5 pb-7">
+                                {activeMatches.length > 0 && (
+                                    <div className="flex items-start gap-3 rounded-xl bg-ok-tint p-3 text-xs text-ok ring-1 ring-ok/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
+                                        <Sparkles className="mt-0.5 size-4 shrink-0 text-ok dark:text-emerald-400" />
+                                        <div className="space-y-0.5">
+                                            <p className="font-semibold text-emerald-950 dark:text-emerald-200">
+                                                Active Commons detected:{' '}
+                                                {activeMatches.join(', ')}
+                                            </p>
+                                            <p className="leading-relaxed text-emerald-800/90 dark:text-emerald-300/80">
+                                                This server runs shared Plex
+                                                infrastructure. LaraKube will
+                                                connect using shared tenant
+                                                resources with zero extra
+                                                containers.
+                                            </p>
                                         </div>
-                                        <input
-                                            type="hidden"
-                                            name="domain"
-                                            value={domain}
-                                        />
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <input
-                                            name="domain"
-                                            value={customDomain}
-                                            onChange={(event) =>
-                                                setCustomDomain(
-                                                    event.target.value
-                                                        .trim()
-                                                        .toLowerCase(),
-                                                )
-                                            }
-                                            placeholder="e.g. pocket.example.com"
-                                            autoFocus
-                                            spellCheck={false}
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
-                                        />
                                     </div>
                                 )}
 
-                                {errors.domain && (
-                                    <span className="mt-1 block text-xs text-accent">
-                                        {errors.domain}
-                                    </span>
-                                )}
-
-                                <div className="mt-2 space-y-1.5 rounded-lg bg-paper p-3 text-xs text-soft">
+                                <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <span className="font-mono text-[12px] text-ink">
-                                            https://{domain || 'example.com'}
+                                        <span className="block text-xs font-medium text-soft">
+                                            {isCustomDomain
+                                                ? 'Domain / Host'
+                                                : 'Host Address'}
                                         </span>
-                                        {selectedDomainMeta?.externalDns ? (
-                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
-                                                <Check className="size-3" />{' '}
-                                                ExternalDNS auto-sync
-                                            </span>
-                                        ) : dnsStatus.checking ? (
-                                            <span className="text-[11px] text-soft">
-                                                Checking DNS…
-                                            </span>
-                                        ) : dnsStatus.checked &&
-                                          dnsStatus.matches ? (
-                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
-                                                <Check className="size-3" /> A
-                                                record points to {server.ip}
-                                            </span>
-                                        ) : null}
+                                        {knownDomains.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (isCustomDomain) {
+                                                        setIsCustomDomain(
+                                                            false,
+                                                        );
+                                                    } else {
+                                                        setIsCustomDomain(true);
+                                                        setCustomDomain(domain);
+                                                    }
+                                                }}
+                                                className="text-xs text-tools hover:underline"
+                                            >
+                                                {isCustomDomain
+                                                    ? 'Pick connected base domain'
+                                                    : '+ Custom domain'}
+                                            </button>
+                                        )}
                                     </div>
 
-                                    {selectedDomainMeta?.externalDns ? (
-                                        <p className="text-[11px] leading-relaxed text-soft">
-                                            DNS records are managed
-                                            automatically through ExternalDNS on
-                                            Cloudflare.
-                                        </p>
-                                    ) : (
-                                        <p className="text-[11px] leading-relaxed text-soft">
-                                            {dnsStatus.checked &&
-                                            dnsStatus.matches ? (
-                                                <>
-                                                    Traffic resolves to{' '}
-                                                    <span className="font-mono text-ink">
-                                                        {server.ip}
-                                                    </span>
-                                                    . Traefik will route
-                                                    requests and issue Let's
-                                                    Encrypt certificates
-                                                    automatically.
-                                                </>
-                                            ) : (
-                                                <>
-                                                    ExternalDNS is not syncing
-                                                    this domain. If you already
-                                                    set up an A record (or
-                                                    wildcard{' '}
-                                                    <span className="font-mono text-ink">
-                                                        *.{domain || 'domain'}
-                                                    </span>
-                                                    ) pointing to{' '}
-                                                    <span className="font-mono text-ink">
-                                                        {server.ip ??
-                                                            'the server'}
-                                                    </span>
-                                                    , Traefik will route traffic
-                                                    and issue Let's Encrypt
-                                                    certificates automatically.
-                                                </>
-                                            )}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                            {needsAdminEmail && (
-                                <label className="block">
-                                    <span className="mb-1.5 block text-xs font-medium text-soft">
-                                        Admin Email
-                                    </span>
-                                    <input
-                                        type="email"
-                                        name="admin_email"
-                                        value={adminEmail}
-                                        onChange={(event) => {
-                                            setTouchedAdminEmail(true);
-                                            setAdminEmail(
-                                                event.target.value.trim(),
-                                            );
-                                        }}
-                                        placeholder={`e.g. admin@${domain || 'example.com'}`}
-                                        spellCheck={false}
-                                        required
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
-                                    />
-                                    {errors.admin_email ? (
-                                        <span className="mt-1 block text-xs text-accent">
-                                            {errors.admin_email}
-                                        </span>
-                                    ) : (
-                                        <span className="mt-1 block text-xs text-soft">
-                                            Primary administrator account for{' '}
-                                            {name}.
-                                        </span>
-                                    )}
-                                </label>
-                            )}
-                            {optionFields.length > 0 && (
-                                <div className="space-y-4">
-                                    <FrameworkFields
-                                        fields={optionFields}
-                                        answers={options}
-                                        errors={
-                                            errors as Record<string, string>
-                                        }
-                                        errorPrefix="options"
-                                        onChange={setOptions}
-                                    />
-                                    {Object.entries(options).flatMap(
-                                        ([key, value]) =>
-                                            (Array.isArray(value)
-                                                ? value
-                                                : [value]
-                                            )
-                                                .filter(
-                                                    (item) =>
-                                                        item !== null &&
-                                                        item !== '' &&
-                                                        item !== false,
-                                                )
-                                                .map((item, index) => (
-                                                    <input
-                                                        key={`${key}-${index}`}
-                                                        type="hidden"
-                                                        name={
-                                                            Array.isArray(value)
-                                                                ? `options[${key}][]`
-                                                                : `options[${key}]`
-                                                        }
+                                    {!isCustomDomain &&
+                                    knownDomains.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {knownDomains.length > 1 && (
+                                                <div>
+                                                    <SelectMenu
                                                         value={
-                                                            item === true
-                                                                ? '1'
-                                                                : String(item)
+                                                            selectedBaseDomain
+                                                        }
+                                                        accent="tools"
+                                                        triggerClassName="font-mono text-[13px]"
+                                                        onChange={(value) =>
+                                                            setSelectedBaseDomain(
+                                                                value,
+                                                            )
+                                                        }
+                                                        options={knownDomains.map(
+                                                            (d) => ({
+                                                                value: d.domain,
+                                                                label: d.domain,
+                                                                badge: d.externalDns ? (
+                                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                                                                        <Sparkles className="size-2.5" />
+                                                                        ExternalDNS
+                                                                    </span>
+                                                                ) : d.tls ? (
+                                                                    <span className="shrink-0 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                                                                        TLS
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="shrink-0 rounded-full bg-badge px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                                        Active
+                                                                        Ingress
+                                                                    </span>
+                                                                ),
+                                                            }),
+                                                        )}
+                                                        footer={
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setIsCustomDomain(
+                                                                        true,
+                                                                    );
+                                                                    setCustomDomain(
+                                                                        domain,
+                                                                    );
+                                                                }}
+                                                                className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs text-soft transition hover:bg-badge hover:text-ink"
+                                                            >
+                                                                <Plus className="size-3.5 text-soft" />
+                                                                <span>
+                                                                    Enter custom
+                                                                    domain…
+                                                                </span>
+                                                            </button>
                                                         }
                                                     />
-                                                )),
+                                                </div>
+                                            )}
+                                            <div className="flex rounded-lg ring-1 ring-line focus-within:ring-2 focus-within:ring-tools">
+                                                <input
+                                                    type="text"
+                                                    value={subdomain}
+                                                    onChange={(event) =>
+                                                        setSubdomain(
+                                                            event.target.value
+                                                                .trim()
+                                                                .toLowerCase()
+                                                                .replace(
+                                                                    /[^a-z0-9-]/g,
+                                                                    '',
+                                                                ),
+                                                        )
+                                                    }
+                                                    placeholder={defaultSubdomainForTool(
+                                                        tool,
+                                                        Boolean(isMulti),
+                                                        tools,
+                                                    )}
+                                                    autoFocus
+                                                    spellCheck={false}
+                                                    className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-mono text-[13px] outline-none"
+                                                />
+                                                <div className="flex items-center border-l border-line bg-badge/40 px-3 font-mono text-[13px] text-soft">
+                                                    .{selectedBaseDomain}
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="hidden"
+                                                name="domain"
+                                                value={domain}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <input
+                                                name="domain"
+                                                value={customDomain}
+                                                onChange={(event) =>
+                                                    setCustomDomain(
+                                                        event.target.value
+                                                            .trim()
+                                                            .toLowerCase(),
+                                                    )
+                                                }
+                                                placeholder="e.g. pocket.example.com"
+                                                autoFocus
+                                                spellCheck={false}
+                                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
+                                            />
+                                        </div>
                                     )}
+
+                                    {errors.domain && (
+                                        <span className="mt-1 block text-xs text-accent">
+                                            {errors.domain}
+                                        </span>
+                                    )}
+
+                                    <div className="mt-2 space-y-1.5 rounded-lg bg-paper p-3 text-xs text-soft">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-mono text-[12px] text-ink">
+                                                https://
+                                                {domain || 'example.com'}
+                                            </span>
+                                            {selectedDomainMeta?.externalDns ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
+                                                    <Check className="size-3" />{' '}
+                                                    ExternalDNS auto-sync
+                                                </span>
+                                            ) : dnsStatus.checking ? (
+                                                <span className="text-[11px] text-soft">
+                                                    Checking DNS…
+                                                </span>
+                                            ) : dnsStatus.checked &&
+                                              dnsStatus.matches ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
+                                                    <Check className="size-3" />{' '}
+                                                    A record points to{' '}
+                                                    {server.ip}
+                                                </span>
+                                            ) : null}
+                                        </div>
+
+                                        {selectedDomainMeta?.externalDns ? (
+                                            <p className="text-[11px] leading-relaxed text-soft">
+                                                DNS records are managed
+                                                automatically through
+                                                ExternalDNS on Cloudflare.
+                                            </p>
+                                        ) : (
+                                            <p className="text-[11px] leading-relaxed text-soft">
+                                                {dnsStatus.checked &&
+                                                dnsStatus.matches ? (
+                                                    <>
+                                                        Traffic resolves to{' '}
+                                                        <span className="font-mono text-ink">
+                                                            {server.ip}
+                                                        </span>
+                                                        . Traefik will route
+                                                        requests and issue Let's
+                                                        Encrypt certificates
+                                                        automatically.
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        ExternalDNS is not
+                                                        syncing this domain. If
+                                                        you already set up an A
+                                                        record (or wildcard{' '}
+                                                        <span className="font-mono text-ink">
+                                                            *.
+                                                            {domain || 'domain'}
+                                                        </span>
+                                                        ) pointing to{' '}
+                                                        <span className="font-mono text-ink">
+                                                            {server.ip ??
+                                                                'the server'}
+                                                        </span>
+                                                        , Traefik will route
+                                                        traffic and issue Let's
+                                                        Encrypt certificates
+                                                        automatically.
+                                                    </>
+                                                )}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            )}
-                            {ssoInstalled && (
+                                {needsAdminEmail && (
+                                    <label className="block">
+                                        <span className="mb-1.5 block text-xs font-medium text-soft">
+                                            Admin Email
+                                        </span>
+                                        <input
+                                            type="email"
+                                            name="admin_email"
+                                            value={adminEmail}
+                                            onChange={(event) => {
+                                                setTouchedAdminEmail(true);
+                                                setAdminEmail(
+                                                    event.target.value.trim(),
+                                                );
+                                            }}
+                                            placeholder={`e.g. admin@${domain || 'example.com'}`}
+                                            spellCheck={false}
+                                            required
+                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
+                                        />
+                                        {errors.admin_email ? (
+                                            <span className="mt-1 block text-xs text-accent">
+                                                {errors.admin_email}
+                                            </span>
+                                        ) : (
+                                            <span className="mt-1 block text-xs text-soft">
+                                                Primary administrator account
+                                                for {name}.
+                                            </span>
+                                        )}
+                                    </label>
+                                )}
+                                {optionFields.length > 0 && (
+                                    <div className="space-y-4">
+                                        <FrameworkFields
+                                            fields={optionFields}
+                                            answers={options}
+                                            errors={
+                                                errors as Record<string, string>
+                                            }
+                                            errorPrefix="options"
+                                            onChange={setOptions}
+                                        />
+                                        {Object.entries(options).flatMap(
+                                            ([key, value]) =>
+                                                (Array.isArray(value)
+                                                    ? value
+                                                    : [value]
+                                                )
+                                                    .filter(
+                                                        (item) =>
+                                                            item !== null &&
+                                                            item !== '' &&
+                                                            item !== false,
+                                                    )
+                                                    .map((item, index) => (
+                                                        <input
+                                                            key={`${key}-${index}`}
+                                                            type="hidden"
+                                                            name={
+                                                                Array.isArray(
+                                                                    value,
+                                                                )
+                                                                    ? `options[${key}][]`
+                                                                    : `options[${key}]`
+                                                            }
+                                                            value={
+                                                                item === true
+                                                                    ? '1'
+                                                                    : String(
+                                                                          item,
+                                                                      )
+                                                            }
+                                                        />
+                                                    )),
+                                        )}
+                                    </div>
+                                )}
+                                {ssoInstalled && (
+                                    <Checkbox
+                                        name="wire_sso"
+                                        label="Sign in with SSO (it's installed on this server)"
+                                    />
+                                )}
+                                {mailInstalled && (
+                                    <Checkbox
+                                        name="wire_mail"
+                                        label="Send email through Mail (it's installed on this server)"
+                                    />
+                                )}
                                 <Checkbox
-                                    name="wire_sso"
-                                    label="Sign in with SSO (it's installed on this server)"
+                                    name="confirm_commons_restart"
+                                    label="Allow shared Commons services (e.g. Redis) to restart if required"
                                 />
-                            )}
-                            {mailInstalled && (
-                                <Checkbox
-                                    name="wire_mail"
-                                    label="Send email through Mail (it's installed on this server)"
-                                />
-                            )}
-                            <div className="flex items-center justify-end gap-2.5 pt-1">
+                            </div>
+                            <div className="flex items-center justify-end gap-2.5 border-t border-line px-7 py-4">
                                 <Button variant="secondary" onClick={onClose}>
                                     <XCircle className="size-4" />
                                     Cancel

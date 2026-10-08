@@ -24,6 +24,7 @@ class RemoveClusterToolRequest extends FormRequest
             'domain' => ['nullable', 'string', 'max:253'],
             'host' => ['nullable', 'string', 'max:253'],
             'instance' => ['nullable', 'string', 'max:120'],
+            'purge' => ['nullable', 'boolean'],
         ];
     }
 

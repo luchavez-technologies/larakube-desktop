@@ -147,7 +147,11 @@ export default function RunDrawer() {
     return (
         <aside
             aria-label="Activity HUD"
-            className="fixed right-6 bottom-4 z-50 flex flex-col items-end"
+            // Below every drawer/modal overlay (all z-50, mounted later in the
+            // DOM so they'd otherwise win the tie and sit on top) so an open
+            // drawer's own footer buttons are never covered by this HUD —
+            // still comfortably above ordinary page content.
+            className="fixed right-6 bottom-4 z-40 flex flex-col items-end"
         >
             {/* Expanded Drawer / Terminal Panel */}
             {expanded && (

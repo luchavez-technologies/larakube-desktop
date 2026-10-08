@@ -82,9 +82,9 @@ test('quick launch launches wordpress with commons mysql', function () {
         'database' => 'mysql',
     ]);
 
-    $response->assertSessionHasNoErrors();
-    $response->assertRedirect(route('runs.show', Run::sole()));
+    $response->assertOk();
     $run = Run::sole();
+    $response->assertJsonPath('run.id', $run->id);
 
     expect($run->kind)->toBe(RunKind::QuickLaunchApp)
         ->and($run->tool)->toBe('wordpress')
@@ -122,9 +122,9 @@ test('quick launch launches n8n without db flag even when database is specified'
         'database' => 'sqlite',
     ]);
 
-    $response->assertSessionHasNoErrors();
-    $response->assertRedirect(route('runs.show', Run::sole()));
+    $response->assertOk();
     $run = Run::sole();
+    $response->assertJsonPath('run.id', $run->id);
 
     expect($run->kind)->toBe(RunKind::QuickLaunchApp)
         ->and($run->tool)->toBe('n8n')
@@ -140,9 +140,38 @@ test('quick launch launches n8n without db flag even when database is specified'
             '--tool=n8n',
             '--context=larakube-198.51.100.10',
             '--domain=flow.example.com',
-            '--admin-email=admin@example.com',
             '--no-wire-sso',
             '--no-wire-mail',
+            '--force',
+            '--no-interaction',
+        ];
+    });
+});
+
+test('quick launch forwards --confirm-commons-restart when confirmed', function () {
+    $fake = ChildProcess::fake();
+
+    $response = $this->post(route('quick-actions.launch'), [
+        'tool' => 'n8n',
+        'server' => 'prod-server',
+        'domain' => 'flow.example.com',
+        'confirm_commons_restart' => '1',
+    ]);
+
+    $response->assertOk();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) {
+        $bin = $this->bin;
+
+        return array_slice($cmd, 4) === [
+            "{$bin}/larakube",
+            'tool:add',
+            '--tool=n8n',
+            '--context=larakube-198.51.100.10',
+            '--domain=flow.example.com',
+            '--no-wire-sso',
+            '--no-wire-mail',
+            '--confirm-commons-restart',
             '--force',
             '--no-interaction',
         ];

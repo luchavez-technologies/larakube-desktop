@@ -164,6 +164,7 @@ Route::get('/servers/{server}/check-dns', [ClusterToolController::class, 'checkD
 Route::get('/servers/{server}/domains', [ClusterToolController::class, 'domains'])->name('servers.domains');
 Route::post('/servers/{server}/tools/refresh', [ClusterToolController::class, 'refresh'])->name('servers.tools.refresh');
 Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'show'])->name('servers.tools.show');
+Route::get('/servers/{server}/tools/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.tools.credentials');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');
 Route::post('/quick-actions/launch', [QuickActionController::class, 'launch'])->name('quick-actions.launch');

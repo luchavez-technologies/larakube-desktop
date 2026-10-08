@@ -295,6 +295,7 @@ function RemoveForm({
     onCancel: () => void;
 }) {
     const [typed, setTyped] = useState('');
+    const [purge, setPurge] = useState(false);
 
     return (
         <Form
@@ -325,6 +326,24 @@ function RemoveForm({
                             </span>
                         )}
                     </label>
+                    <label className="mt-4 flex items-start gap-2.5 rounded-lg bg-accent-tint p-3">
+                        <input
+                            type="checkbox"
+                            name="purge"
+                            value="1"
+                            checked={purge}
+                            onChange={(event) => setPurge(event.target.checked)}
+                            className="mt-0.5 accent-accent"
+                        />
+                        <span className="text-xs leading-relaxed text-ink">
+                            <span className="font-medium">
+                                Also destroy its data
+                            </span>{' '}
+                            — database and uploaded files are permanently
+                            deleted, not just the tool itself. This cannot be
+                            undone.
+                        </span>
+                    </label>
                     <div className="mt-5 flex justify-end gap-2.5">
                         <Button variant="secondary" onClick={onCancel}>
                             Cancel
@@ -336,7 +355,9 @@ function RemoveForm({
                         >
                             {processing
                                 ? 'Starting…'
-                                : `Remove ${toolName(tool)}`}
+                                : purge
+                                  ? `Remove ${toolName(tool)} & Purge Data`
+                                  : `Remove ${toolName(tool)}`}
                         </Button>
                     </div>
                 </>

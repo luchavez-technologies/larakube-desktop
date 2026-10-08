@@ -8,7 +8,7 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 
 class QuickActionController extends Controller
 {
@@ -17,7 +17,7 @@ class QuickActionController extends Controller
         private ToolCatalog $tools,
     ) {}
 
-    public function launch(QuickLaunchAppRequest $request, CliRunner $runner): RedirectResponse
+    public function launch(QuickLaunchAppRequest $request, CliRunner $runner): JsonResponse
     {
         $server = $request->string('server')->toString();
         $tool = $request->string('tool')->trim()->lower()->toString();
@@ -54,7 +54,10 @@ class QuickActionController extends Controller
         );
 
         if ($resolved['errors'] !== []) {
-            return back()->withErrors(collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["options.{$key}" => $error])->all());
+            return response()->json([
+                'message' => 'One or more options are invalid.',
+                'errors' => collect($resolved['errors'])->mapWithKeys(fn (string $error, string $key): array => ["options.{$key}" => [$error]])->all(),
+            ], 422);
         }
 
         $extraFlags = [];
@@ -71,11 +74,12 @@ class QuickActionController extends Controller
             "--tool={$tool}",
             "--context={$context}",
             "--domain={$domain}",
-            ...($adminEmail !== '' ? ["--admin-email={$adminEmail}"] : []),
+            ...($adminEmail !== '' && $needsAdminEmail ? ["--admin-email={$adminEmail}"] : []),
             $request->boolean('wire_sso') ? '--wire-sso' : '--no-wire-sso',
             $request->boolean('wire_mail') ? '--wire-mail' : '--no-wire-mail',
             ...$extraFlags,
             ...$resolved['flags'],
+            ...($request->boolean('confirm_commons_restart') ? ['--confirm-commons-restart'] : []),
             '--force',
         ];
 
@@ -99,7 +103,18 @@ class QuickActionController extends Controller
             tool: $tool,
         );
 
-        return to_route('runs.show', $run);
+        return response()->json([
+            'run' => [
+                'id' => $run->id,
+                'label' => $run->label,
+                'status' => $run->status->value,
+            ],
+            'tool' => [
+                'slug' => $tool,
+                'displayName' => $displayName,
+                'domain' => $domain,
+            ],
+        ]);
     }
 
     /**
