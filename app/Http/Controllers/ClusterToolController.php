@@ -120,6 +120,15 @@ class ClusterToolController extends Controller
         return response()->json($status->checkDns($domain, $serverIp));
     }
 
+    public function domains(string $server, ClusterStatus $status): JsonResponse
+    {
+        $stack = $this->readyServer($server);
+
+        return response()->json([
+            'domains' => $status->domains((string) $stack['context']),
+        ]);
+    }
+
     public function show(Request $request, string $server, string $tool): Response
     {
         $stack = $this->readyServer($server);

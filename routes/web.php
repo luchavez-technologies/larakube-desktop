@@ -161,6 +161,7 @@ Route::get('/servers/{server}/mail/check-dns', [MailController::class, 'checkDns
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
 Route::get('/servers/{server}/tools', [ClusterToolController::class, 'index'])->name('servers.tools.index');
 Route::get('/servers/{server}/check-dns', [ClusterToolController::class, 'checkDns'])->name('servers.tools.check-dns');
+Route::get('/servers/{server}/domains', [ClusterToolController::class, 'domains'])->name('servers.domains');
 Route::post('/servers/{server}/tools/refresh', [ClusterToolController::class, 'refresh'])->name('servers.tools.refresh');
 Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'show'])->name('servers.tools.show');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');

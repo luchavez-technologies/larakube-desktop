@@ -20,7 +20,11 @@ import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import { create as createServer } from '@/routes/servers';
 import { cn } from '@/lib/utils';
-import type { Server, ToolCommonsCapabilities } from '@/types/larakube';
+import type {
+    Server,
+    ServerDomain,
+    ToolCommonsCapabilities,
+} from '@/types/larakube';
 
 export type QuickLaunchAppId = 'pocketbase' | 'n8n' | 'wordpress';
 
@@ -155,6 +159,9 @@ export default function QuickLaunchModal({
     const [submitting, setSubmitting] = useState<boolean>(false);
     const [dnsCopied, setDnsCopied] = useState<boolean>(false);
 
+    const [domains, setDomains] = useState<ServerDomain[]>([]);
+    const [loadingDomains, setLoadingDomains] = useState<boolean>(false);
+
     const currentApp = useMemo(
         () => APPS.find((a) => a.id === selectedAppId) ?? APPS[0],
         [selectedAppId],
@@ -188,6 +195,57 @@ export default function QuickLaunchModal({
             setHighestReachedStep(1);
         }
     }, [isOpen, initialApp]);
+
+    // Fetch domains and auto-detect ExternalDNS for selected server
+    useEffect(() => {
+        if (!isOpen || !selectedServerName) {
+            setDomains([]);
+            return;
+        }
+
+        let cancelled = false;
+        setLoadingDomains(true);
+
+        fetch(`/servers/${encodeURIComponent(selectedServerName)}/domains`)
+            .then((res) => (res.ok ? res.json() : { domains: [] }))
+            .then((data: { domains?: ServerDomain[] }) => {
+                if (cancelled) return;
+                const fetched: ServerDomain[] = data.domains ?? [];
+                setDomains(fetched);
+
+                // Auto-pick the first ExternalDNS zone if available, otherwise first connected domain
+                const extDomain = fetched.find((d) => d.externalDns);
+                const bestDomain = extDomain ?? fetched[0];
+
+                if (bestDomain) {
+                    setBaseDomain(bestDomain.domain);
+                    setUseCustomDomain(false);
+                } else if (
+                    currentServer?.ip &&
+                    !['127.0.0.1', 'localhost', 'local'].includes(
+                        currentServer.ip,
+                    )
+                ) {
+                    setBaseDomain(`${currentServer.ip}.nip.io`);
+                } else {
+                    setBaseDomain('dev.test');
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setDomains([]);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setLoadingDomains(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, selectedServerName, currentServer?.ip]);
 
     // Sync defaults when app or server changes
     useEffect(() => {
@@ -230,20 +288,57 @@ export default function QuickLaunchModal({
         }
     }, [currentServer]);
 
+    const selectedDomainMeta = useMemo(
+        () => domains.find((d) => d.domain === baseDomain),
+        [domains, baseDomain],
+    );
+
+    const hasExternalDns = useMemo(() => {
+        if (useCustomDomain) {
+            const trimmed = customDomain.trim().toLowerCase();
+            return (
+                trimmed !== '' &&
+                domains.some(
+                    (d) =>
+                        d.externalDns &&
+                        (trimmed === d.domain ||
+                            trimmed.endsWith(`.${d.domain}`)),
+                )
+            );
+        }
+        return Boolean(selectedDomainMeta?.externalDns);
+    }, [useCustomDomain, customDomain, domains, selectedDomainMeta]);
+
+    const resolvedDomain = useMemo(() => {
+        if (useCustomDomain) {
+            return customDomain.trim().toLowerCase() || 'app.example.com';
+        }
+        const sub =
+            subdomain.trim().toLowerCase() || currentApp.defaultSubdomain;
+        const fallbackBase =
+            currentServer?.ip &&
+            !['127.0.0.1', 'localhost', 'local'].includes(currentServer.ip)
+                ? `${currentServer.ip}.nip.io`
+                : 'example.com';
+        const base = baseDomain.trim().toLowerCase() || fallbackBase;
+        return `${sub}.${base}`;
+    }, [
+        useCustomDomain,
+        customDomain,
+        subdomain,
+        currentApp.defaultSubdomain,
+        baseDomain,
+        currentServer?.ip,
+    ]);
+
     if (!isOpen) {
         return null;
     }
 
-    const resolvedDomain = useCustomDomain
-        ? customDomain.trim().toLowerCase()
-        : subdomain.trim().toLowerCase()
-          ? baseDomain
-              ? `${subdomain.trim().toLowerCase()}.${baseDomain.trim().toLowerCase()}`
-              : `${subdomain.trim().toLowerCase()}.example.com`
-          : baseDomain || 'example.com';
-
     const handleNext = () => {
         if (currentStep === 2 && readyServers.length === 0) return;
+        if (currentStep === 3 && useCustomDomain && !customDomain.trim())
+            return;
         if (currentStep === 3 && !resolvedDomain) return;
 
         const next = currentStep + 1;
@@ -265,6 +360,7 @@ export default function QuickLaunchModal({
         }
 
         if (!selectedServerName || !resolvedDomain) return;
+        if (useCustomDomain && !customDomain.trim()) return;
 
         setSubmitting(true);
         router.post(
@@ -546,6 +642,17 @@ export default function QuickLaunchModal({
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
+                                                        {isSelected &&
+                                                            domains.some(
+                                                                (d) =>
+                                                                    d.externalDns,
+                                                            ) && (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[10px] font-medium text-ok dark:bg-emerald-500/20 dark:text-emerald-300">
+                                                                    <Sparkles className="size-2.5" />
+                                                                    ExternalDNS
+                                                                    Active
+                                                                </span>
+                                                            )}
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[10px] font-medium text-ok">
                                                             <Check className="size-3" />{' '}
                                                             Ready
@@ -641,12 +748,23 @@ export default function QuickLaunchModal({
                                         Domain / Host Address
                                     </label>
                                     <div className="flex items-center gap-2">
-                                        {currentServer?.ip &&
-                                        ![
-                                            '127.0.0.1',
-                                            'localhost',
-                                            'local',
-                                        ].includes(currentServer.ip) ? (
+                                        {loadingDomains ? (
+                                            <span className="text-[11px] text-faint">
+                                                Detecting DNS zones…
+                                            </span>
+                                        ) : hasExternalDns ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok dark:text-emerald-400">
+                                                <Sparkles className="size-3" />
+                                                <span>
+                                                    ExternalDNS Auto-Sync
+                                                </span>
+                                            </span>
+                                        ) : currentServer?.ip &&
+                                          ![
+                                              '127.0.0.1',
+                                              'localhost',
+                                              'local',
+                                          ].includes(currentServer.ip) ? (
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -678,15 +796,20 @@ export default function QuickLaunchModal({
                                         )}
                                         <button
                                             type="button"
-                                            onClick={() =>
-                                                setUseCustomDomain(
-                                                    !useCustomDomain,
-                                                )
-                                            }
+                                            onClick={() => {
+                                                if (useCustomDomain) {
+                                                    setUseCustomDomain(false);
+                                                } else {
+                                                    setUseCustomDomain(true);
+                                                    setCustomDomain(
+                                                        resolvedDomain,
+                                                    );
+                                                }
+                                            }}
                                             className="text-primary text-[11px] hover:underline"
                                         >
                                             {useCustomDomain
-                                                ? 'Use Subdomain format'
+                                                ? 'Pick connected base domain'
                                                 : '+ Custom full domain'}
                                         </button>
                                     </div>
@@ -712,9 +835,19 @@ export default function QuickLaunchModal({
                                                 type="text"
                                                 value={subdomain}
                                                 onChange={(e) =>
-                                                    setSubdomain(e.target.value)
+                                                    setSubdomain(
+                                                        e.target.value
+                                                            .trim()
+                                                            .toLowerCase()
+                                                            .replace(
+                                                                /[^a-z0-9-]/g,
+                                                                '',
+                                                            ),
+                                                    )
                                                 }
-                                                placeholder="subdomain"
+                                                placeholder={
+                                                    currentApp.defaultSubdomain
+                                                }
                                                 className="focus:ring-primary w-full rounded-xl border-0 bg-surface py-2.5 pr-2 pl-9 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2"
                                                 required
                                             />
@@ -723,118 +856,202 @@ export default function QuickLaunchModal({
                                         <span className="text-sm font-semibold text-soft">
                                             .
                                         </span>
-                                        <input
-                                            type="text"
-                                            value={baseDomain}
-                                            onChange={(e) =>
-                                                setBaseDomain(e.target.value)
-                                            }
-                                            placeholder="example.com"
-                                            className="focus:ring-primary w-44 rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2"
-                                            required
-                                        />
+                                        {domains.length > 1 ? (
+                                            <select
+                                                value={baseDomain}
+                                                onChange={(e) => {
+                                                    if (
+                                                        e.target.value ===
+                                                        '__custom__'
+                                                    ) {
+                                                        setUseCustomDomain(
+                                                            true,
+                                                        );
+                                                        setCustomDomain(
+                                                            resolvedDomain,
+                                                        );
+                                                    } else {
+                                                        setBaseDomain(
+                                                            e.target.value,
+                                                        );
+                                                    }
+                                                }}
+                                                className="focus:ring-primary max-w-[220px] truncate rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-xs text-ink ring-1 ring-line outline-none focus:ring-2"
+                                            >
+                                                {domains.map((d) => (
+                                                    <option
+                                                        key={d.domain}
+                                                        value={d.domain}
+                                                    >
+                                                        {d.domain}{' '}
+                                                        {d.externalDns
+                                                            ? '(ExternalDNS · Cloudflare)'
+                                                            : d.tls
+                                                              ? '(Cloudflare TLS)'
+                                                              : ''}
+                                                    </option>
+                                                ))}
+                                                <option value="__custom__">
+                                                    + Custom domain…
+                                                </option>
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                value={baseDomain}
+                                                onChange={(e) =>
+                                                    setBaseDomain(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder={
+                                                    currentServer?.ip &&
+                                                    ![
+                                                        '127.0.0.1',
+                                                        'localhost',
+                                                        'local',
+                                                    ].includes(currentServer.ip)
+                                                        ? `${currentServer.ip}.nip.io`
+                                                        : 'example.com'
+                                                }
+                                                className="focus:ring-primary w-48 rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2"
+                                                required
+                                            />
+                                        )}
                                     </div>
                                 )}
-                                <p className="mt-1 text-[11px] text-faint">
-                                    Live address:{' '}
-                                    <span className="font-mono font-semibold text-ink">
-                                        https://{resolvedDomain}
+                                <div className="mt-1 flex items-center justify-between text-[11px] text-faint">
+                                    <span>
+                                        Live address:{' '}
+                                        <span className="font-mono font-semibold text-ink">
+                                            https://{resolvedDomain}
+                                        </span>
                                     </span>
-                                </p>
-
-                                {/* DNS Guidance Box for GoDaddy & External Registrars */}
-                                {currentServer?.ip &&
-                                    ![
-                                        '127.0.0.1',
-                                        'localhost',
-                                        'local',
-                                    ].includes(currentServer.ip) && (
-                                        <div className="mt-2.5 rounded-xl border border-line bg-paper/60 p-3 text-xs">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-1.5 font-medium text-ink">
-                                                    <Globe className="size-3.5 text-soft" />
-                                                    <span>
-                                                        DNS for GoDaddy,
-                                                        Namecheap & External
-                                                        Registrars
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleCopyDns}
-                                                    className="text-primary inline-flex items-center gap-1 text-[11px] font-medium hover:underline"
-                                                >
-                                                    {dnsCopied ? (
-                                                        <>
-                                                            <Check className="size-3 text-ok" />
-                                                            <span>Copied!</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Copy className="size-3" />
-                                                            <span>
-                                                                Copy DNS Record
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </button>
-                                            </div>
-                                            <p className="mt-1 text-[11px] leading-relaxed text-soft">
-                                                For domains registered on
-                                                GoDaddy or external DNS, add an{' '}
-                                                <strong className="text-ink">
-                                                    A record
-                                                </strong>{' '}
-                                                pointing traffic to your server:
-                                            </p>
-                                            <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-surface p-2 font-mono text-[11px] ring-1 ring-line">
-                                                <div>
-                                                    <span className="block text-[10px] text-faint uppercase">
-                                                        Type
-                                                    </span>
-                                                    <span className="font-semibold text-ink">
-                                                        A
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="block text-[10px] text-faint uppercase">
-                                                        Host / Name
-                                                    </span>
-                                                    <span className="font-semibold text-ink">
-                                                        {useCustomDomain
-                                                            ? customDomain.split(
-                                                                  '.',
-                                                              )[0] || '@'
-                                                            : subdomain ||
-                                                              '@'}{' '}
-                                                        <span className="font-sans text-[10px] text-faint">
-                                                            (or *)
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="block text-[10px] text-faint uppercase">
-                                                        Points to
-                                                    </span>
-                                                    <span className="font-semibold text-ink">
-                                                        {currentServer.ip}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <p className="mt-1.5 text-[10px] leading-relaxed text-faint">
-                                                💡 <strong>Pro-Tip:</strong>{' '}
-                                                Using{' '}
-                                                <code className="rounded bg-badge px-1 py-0.5 font-mono text-ink">
-                                                    *
-                                                </code>{' '}
-                                                as host in GoDaddy routes all
-                                                companion apps to this server.
-                                                Traefik automatically issues
-                                                Let's Encrypt SSL certificates
-                                                once traffic arrives.
-                                            </p>
-                                        </div>
+                                    {hasExternalDns && (
+                                        <span className="inline-flex items-center gap-1 font-medium text-ok dark:text-emerald-400">
+                                            <Check className="size-3" />{' '}
+                                            ExternalDNS Auto-Sync
+                                        </span>
                                     )}
+                                </div>
+
+                                {/* ExternalDNS Auto-Sync Banner OR GoDaddy Manual DNS Guidance */}
+                                {hasExternalDns ? (
+                                    <div className="mt-2.5 rounded-xl border border-ok/30 bg-ok-tint/70 p-3.5 text-xs ring-1 ring-ok/20 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/30">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5 font-semibold text-emerald-950 dark:text-emerald-200">
+                                                <Sparkles className="size-3.5 text-ok dark:text-emerald-400" />
+                                                <span>
+                                                    ExternalDNS Auto-Sync
+                                                    (Cloudflare) Active
+                                                </span>
+                                            </div>
+                                            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">
+                                                Zero Config
+                                            </span>
+                                        </div>
+                                        <p className="mt-1.5 text-[11px] leading-relaxed text-emerald-800/90 dark:text-emerald-300/80">
+                                            This cluster manages{' '}
+                                            <strong className="font-mono text-emerald-950 dark:text-emerald-100">
+                                                {baseDomain}
+                                            </strong>{' '}
+                                            via ExternalDNS. An A-record for{' '}
+                                            <strong className="font-mono text-emerald-950 dark:text-emerald-100">
+                                                {resolvedDomain}
+                                            </strong>{' '}
+                                            will be synchronized to Cloudflare
+                                            automatically once launched. Traefik
+                                            automatically handles Let's Encrypt
+                                            SSL certificates.
+                                        </p>
+                                    </div>
+                                ) : currentServer?.ip &&
+                                  !['127.0.0.1', 'localhost', 'local'].includes(
+                                      currentServer.ip,
+                                  ) ? (
+                                    <div className="mt-2.5 rounded-xl border border-line bg-paper/60 p-3 text-xs">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5 font-medium text-ink">
+                                                <Globe className="size-3.5 text-soft" />
+                                                <span>
+                                                    DNS for GoDaddy, Namecheap &
+                                                    External Registrars
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleCopyDns}
+                                                className="text-primary inline-flex items-center gap-1 text-[11px] font-medium hover:underline"
+                                            >
+                                                {dnsCopied ? (
+                                                    <>
+                                                        <Check className="size-3 text-ok" />
+                                                        <span>Copied!</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Copy className="size-3" />
+                                                        <span>
+                                                            Copy DNS Record
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                        <p className="mt-1 text-[11px] leading-relaxed text-soft">
+                                            For domains registered on GoDaddy or
+                                            external DNS, add an{' '}
+                                            <strong className="text-ink">
+                                                A record
+                                            </strong>{' '}
+                                            pointing traffic to your server:
+                                        </p>
+                                        <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-surface p-2 font-mono text-[11px] ring-1 ring-line">
+                                            <div>
+                                                <span className="block text-[10px] text-faint uppercase">
+                                                    Type
+                                                </span>
+                                                <span className="font-semibold text-ink">
+                                                    A
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-[10px] text-faint uppercase">
+                                                    Host / Name
+                                                </span>
+                                                <span className="font-semibold text-ink">
+                                                    {useCustomDomain
+                                                        ? customDomain.split(
+                                                              '.',
+                                                          )[0] || '@'
+                                                        : subdomain || '@'}{' '}
+                                                    <span className="font-sans text-[10px] text-faint">
+                                                        (or *)
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-[10px] text-faint uppercase">
+                                                    Points to
+                                                </span>
+                                                <span className="font-semibold text-ink">
+                                                    {currentServer.ip}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <p className="mt-1.5 text-[10px] leading-relaxed text-faint">
+                                            💡 <strong>Pro-Tip:</strong> Using{' '}
+                                            <code className="rounded bg-badge px-1 py-0.5 font-mono text-ink">
+                                                *
+                                            </code>{' '}
+                                            as host in GoDaddy routes all
+                                            companion apps to this server.
+                                            Traefik automatically issues Let's
+                                            Encrypt SSL certificates once
+                                            traffic arrives.
+                                        </p>
+                                    </div>
+                                ) : null}
                             </div>
 
                             {/* Database Engine Selector */}
@@ -1004,6 +1221,26 @@ export default function QuickLaunchModal({
                                     </div>
                                     <div>
                                         <span className="block text-[10px] text-faint uppercase">
+                                            Routing & DNS
+                                        </span>
+                                        <span className="font-semibold text-ink">
+                                            {hasExternalDns ? (
+                                                <span className="inline-flex items-center gap-1 text-ok dark:text-emerald-400">
+                                                    <Check className="size-3" />{' '}
+                                                    ExternalDNS Auto-Sync
+                                                </span>
+                                            ) : (
+                                                'Manual A-Record'
+                                            )}
+                                        </span>
+                                        <span className="block text-[11px] text-soft">
+                                            {hasExternalDns
+                                                ? 'Cloudflare managed'
+                                                : `Points to ${currentServer?.ip ?? 'server'}`}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[10px] text-faint uppercase">
                                             Database Engine
                                         </span>
                                         <span className="font-semibold text-ink">
@@ -1012,7 +1249,7 @@ export default function QuickLaunchModal({
                                                 : 'Embedded SQLite'}
                                         </span>
                                     </div>
-                                    <div>
+                                    <div className="col-span-2">
                                         <span className="block text-[10px] text-faint uppercase">
                                             Admin Email
                                         </span>

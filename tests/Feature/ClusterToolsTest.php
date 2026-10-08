@@ -349,6 +349,17 @@ test('check-dns endpoint returns resolution status for a domain', function () {
     File::deleteDirectory($bin);
 });
 
+test('domains endpoint returns list of cluster domains and externaldns status', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->getJson(route('servers.domains', ['server' => 'workshop-demo']))
+        ->assertOk()
+        ->assertJsonStructure(['domains']);
+
+    File::deleteDirectory($bin);
+});
+
 test('a tool that was just installed shows at once, without waiting for the live check', function () {
     $bin = clusterToolsFakeCli();
     Cache::flush();
