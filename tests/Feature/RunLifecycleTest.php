@@ -10,6 +10,7 @@ use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
+use Native\Desktop\Facades\Window;
 
 function runLifecycleRun(bool $json = true): Run
 {
@@ -166,7 +167,25 @@ test('runs.stream returns live output and run details as JSON', function () {
 });
 
 test('runs.detach returns success JSON', function () {
+    // Window:: isn't fakeable via Http::fake() the way most NativePHP facades
+    // are here — it talks to the Electron IPC bridge directly, which isn't
+    // running at all under `php artisan test` (locally or in CI), so a real
+    // call fails with a cURL connection error rather than a clean HTTP fake.
+    // Mockery expectations are this codebase's own established way around it
+    // (see FocusOnMenuClickTest).
     $run = runLifecycleRun();
+
+    Window::shouldReceive('open')
+        ->with("run-{$run->id}")
+        ->once()
+        ->andReturnSelf();
+    Window::shouldReceive('title')->once()->andReturnSelf();
+    Window::shouldReceive('url')->once()->andReturnSelf();
+    Window::shouldReceive('width')->once()->andReturnSelf();
+    Window::shouldReceive('height')->once()->andReturnSelf();
+    Window::shouldReceive('minWidth')->once()->andReturnSelf();
+    Window::shouldReceive('minHeight')->once()->andReturnSelf();
+    Window::shouldReceive('rememberState')->once()->andReturnSelf();
 
     $this->postJson(route('runs.detach', $run))
         ->assertOk()
