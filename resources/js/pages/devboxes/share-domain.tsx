@@ -4,6 +4,7 @@ import Button from '@/components/button';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import {
@@ -127,19 +128,15 @@ export default function ShareDomain({
                             label="Domain"
                             hint="Names look like shop-box.example.com, one level under it, so Cloudflare's free certificate covers them."
                         >
-                            <select
+                            <SelectMenu
                                 value={domain}
-                                onChange={(event) =>
-                                    setDomain(event.target.value)
-                                }
-                                className="w-full rounded-lg border-0 bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                            >
-                                {domains.map((name) => (
-                                    <option key={name} value={name}>
-                                        {name}
-                                    </option>
-                                ))}
-                            </select>
+                                accent="servers"
+                                onChange={setDomain}
+                                options={domains.map((name) => ({
+                                    value: name,
+                                    label: name,
+                                }))}
+                            />
                         </Field>
                         <div className="flex flex-wrap items-center gap-3">
                             <Button

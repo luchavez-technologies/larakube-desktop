@@ -6,6 +6,7 @@ import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -104,23 +105,17 @@ export default function Workspaces({
                 subtitle="A browser editor with your repository, running on your own server. Nothing here is hosted by LaraKube. Experimental: it can change or break between releases."
                 actions={
                     servers.length > 0 && (
-                        <select
+                        <SelectMenu
                             value={server ?? ''}
-                            onChange={(event) =>
-                                router.get(index().url, {
-                                    server: event.target.value,
-                                })
-                            }
-                            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm"
                             aria-label="Server"
-                        >
-                            {servers.map((s) => (
-                                <option key={s.name} value={s.name}>
-                                    {s.name}
-                                    {s.ip ? ` (${s.ip})` : ''}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(value) =>
+                                router.get(index().url, { server: value })
+                            }
+                            options={servers.map((s) => ({
+                                value: s.name,
+                                label: s.ip ? `${s.name} (${s.ip})` : s.name,
+                            }))}
+                        />
                     )
                 }
             />
@@ -277,52 +272,44 @@ function NewWorkspace({
                     <span className="mb-1 block text-xs font-medium text-soft">
                         Framework
                     </span>
-                    <select
+                    <SelectMenu
                         value={form.data.framework}
-                        onChange={(e) => {
+                        triggerClassName={inputClass}
+                        onChange={(value) => {
                             form.setData((data) => ({
                                 ...data,
-                                framework: e.target.value,
+                                framework: value,
                                 runtimeVersion: '',
                             }));
                         }}
-                        className={inputClass}
-                    >
-                        {(options?.frameworks ?? []).map((f) => (
-                            <option
-                                key={f.value}
-                                value={f.value}
-                                disabled={!f.available}
-                            >
-                                {f.label}
-                                {f.available
-                                    ? ''
-                                    : ' (image not published yet)'}
-                            </option>
-                        ))}
-                    </select>
+                        options={(options?.frameworks ?? []).map((f) => ({
+                            value: f.value,
+                            label: f.available
+                                ? f.label
+                                : `${f.label} (image not published yet)`,
+                            disabled: !f.available,
+                        }))}
+                    />
                 </label>
                 <label className="block">
                     <span className="mb-1 block text-xs font-medium text-soft">
                         {runtime?.label ?? 'Runtime'} version
                     </span>
-                    <select
+                    <SelectMenu
                         value={
                             form.data.runtimeVersion ||
                             runtime?.defaultVersion ||
                             ''
                         }
-                        onChange={(e) =>
-                            form.setData('runtimeVersion', e.target.value)
+                        triggerClassName={inputClass}
+                        onChange={(value) =>
+                            form.setData('runtimeVersion', value)
                         }
-                        className={inputClass}
-                    >
-                        {(runtime?.versions ?? []).map((version) => (
-                            <option key={version} value={version}>
-                                {version}
-                            </option>
-                        ))}
-                    </select>
+                        options={(runtime?.versions ?? []).map((version) => ({
+                            value: version,
+                            label: version,
+                        }))}
+                    />
                 </label>
                 <label className="block">
                     <span className="mb-1 block text-xs font-medium text-soft">
@@ -338,17 +325,15 @@ function NewWorkspace({
                     <span className="mb-1 block text-xs font-medium text-soft">
                         Size
                     </span>
-                    <select
+                    <SelectMenu
                         value={form.data.size}
-                        onChange={(e) => form.setData('size', e.target.value)}
-                        className={inputClass}
-                    >
-                        {(options?.sizes ?? []).map((size) => (
-                            <option key={size.value} value={size.value}>
-                                {size.label}
-                            </option>
-                        ))}
-                    </select>
+                        triggerClassName={inputClass}
+                        onChange={(value) => form.setData('size', value)}
+                        options={(options?.sizes ?? []).map((size) => ({
+                            value: size.value,
+                            label: size.label,
+                        }))}
+                    />
                 </label>
                 <div className="flex items-center justify-between gap-4 sm:col-span-2">
                     <p className="text-xs leading-relaxed text-soft">

@@ -49,6 +49,7 @@ import FrameworkFields, {
     reconcile,
 } from '@/components/framework-fields';
 import PageHeader from '@/components/page-header';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -2046,22 +2047,16 @@ function AddEnvironmentDialog({
                                 <label className="mb-1.5 block text-xs font-medium text-ink">
                                     Target Server
                                 </label>
-                                <select
+                                <SelectMenu
                                     name="server"
                                     value={server}
-                                    onChange={(e) => setServer(e.target.value)}
-                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                >
-                                    {readyServers.map((s) => (
-                                        <option key={s.name} value={s.name}>
-                                            {s.name}
-                                            {s.provider
-                                                ? ` (${providerLabels[s.provider] ?? s.provider})`
-                                                : ''}
-                                            {s.ip ? ` · ${s.ip}` : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                    accent="servers"
+                                    onChange={setServer}
+                                    options={readyServers.map((s) => ({
+                                        value: s.name,
+                                        label: `${s.name}${s.provider ? ` (${providerLabels[s.provider] ?? s.provider})` : ''}${s.ip ? ` · ${s.ip}` : ''}`,
+                                    }))}
+                                />
                                 {errors.server && (
                                     <p className="mt-1 text-xs text-accent">
                                         {errors.server}
@@ -2189,22 +2184,21 @@ function InitForm({
     return (
         <form onSubmit={submit} className="space-y-3">
             <div className="flex items-center gap-2.5">
-                <select
+                <SelectMenu
                     value={form.data.framework}
-                    onChange={(event) =>
-                        setData('framework', event.target.value)
-                    }
-                    className="rounded-lg border-0 bg-surface px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                >
-                    {Object.entries(frameworks).map(([value, label]) => (
-                        <option key={value} value={value}>
-                            {label}
-                            {value === project.detectedFramework
-                                ? ' (detected)'
-                                : ''}
-                        </option>
-                    ))}
-                </select>
+                    accent="servers"
+                    triggerClassName="py-1.5 text-[13px]"
+                    onChange={(value) => setData('framework', value)}
+                    options={Object.entries(frameworks).map(
+                        ([value, label]) => ({
+                            value,
+                            label:
+                                value === project.detectedFramework
+                                    ? `${label} (detected)`
+                                    : label,
+                        }),
+                    )}
+                />
                 <Button
                     type="submit"
                     size="sm"
@@ -2293,26 +2287,18 @@ function LinkServerForm({
                         value={environment}
                     />
                     <div className="flex items-center gap-2.5">
-                        <select
+                        <SelectMenu
                             name="server"
                             value={server}
-                            onChange={(event) => setServer(event.target.value)}
+                            accent="servers"
                             disabled={!project.initialized}
-                            className="rounded-lg border-0 bg-surface px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers disabled:opacity-45"
-                        >
-                            {servers.map((candidate) => (
-                                <option
-                                    key={candidate.name}
-                                    value={candidate.name}
-                                >
-                                    {candidate.name}
-                                    {candidate.provider
-                                        ? ` (${providerLabels[candidate.provider] ?? candidate.provider})`
-                                        : ''}
-                                    {candidate.ip ? ` · ${candidate.ip}` : ''}
-                                </option>
-                            ))}
-                        </select>
+                            triggerClassName="py-1.5 text-[13px]"
+                            onChange={setServer}
+                            options={servers.map((candidate) => ({
+                                value: candidate.name,
+                                label: `${candidate.name}${candidate.provider ? ` (${providerLabels[candidate.provider] ?? candidate.provider})` : ''}${candidate.ip ? ` · ${candidate.ip}` : ''}`,
+                            }))}
+                        />
                         <Button
                             type="submit"
                             size="sm"
@@ -2511,24 +2497,35 @@ function CiPipelineForm({
                             <label className="mb-1 block text-xs font-medium text-ink">
                                 Container Registry
                             </label>
-                            <select
+                            <SelectMenu
                                 value={registry}
-                                onChange={(e) => setRegistry(e.target.value)}
+                                accent="servers"
                                 disabled={processing}
-                                className="w-full rounded-lg border-0 bg-paper px-3 py-1.5 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers disabled:opacity-45"
-                            >
-                                <option value="ghcr">
-                                    GitHub Container Registry (GHCR)
-                                </option>
-                                <option value="dockerhub">Docker Hub</option>
-                                <option value="gitlab">GitLab Registry</option>
-                                <option value="forgejo">
-                                    Forgejo Registry
-                                </option>
-                                <option value="gar">
-                                    Google Artifact Registry (GAR)
-                                </option>
-                            </select>
+                                triggerClassName="py-1.5 text-[13px]"
+                                onChange={setRegistry}
+                                options={[
+                                    {
+                                        value: 'ghcr',
+                                        label: 'GitHub Container Registry (GHCR)',
+                                    },
+                                    {
+                                        value: 'dockerhub',
+                                        label: 'Docker Hub',
+                                    },
+                                    {
+                                        value: 'gitlab',
+                                        label: 'GitLab Registry',
+                                    },
+                                    {
+                                        value: 'forgejo',
+                                        label: 'Forgejo Registry',
+                                    },
+                                    {
+                                        value: 'gar',
+                                        label: 'Google Artifact Registry (GAR)',
+                                    },
+                                ]}
+                            />
                         </div>
 
                         <div>
@@ -2905,22 +2902,23 @@ function ProjectTldForm({ project }: { project: Project }) {
             {({ processing }) => (
                 <>
                     <span className="text-soft">TLD override:</span>
-                    <select
+                    <SelectMenu
                         name="tld"
                         value={tldValue}
-                        onChange={(e) => setTldValue(e.target.value)}
-                        className="rounded border border-line bg-surface px-2 py-0.5 text-xs text-ink outline-none"
-                    >
-                        <option value="">
-                            Default (.
-                            {project.globalTld || 'test'})
-                        </option>
-                        <option value="test">.test</option>
-                        <option value="kube">.kube</option>
-                        <option value="localhost">.localhost</option>
-                        <option value="local">.local</option>
-                        <option value="internal">.internal</option>
-                    </select>
+                        triggerClassName="h-7 px-2 py-0.5 text-xs"
+                        onChange={setTldValue}
+                        options={[
+                            {
+                                value: '',
+                                label: `Default (.${project.globalTld || 'test'})`,
+                            },
+                            { value: 'test', label: '.test' },
+                            { value: 'kube', label: '.kube' },
+                            { value: 'localhost', label: '.localhost' },
+                            { value: 'local', label: '.local' },
+                            { value: 'internal', label: '.internal' },
+                        ]}
+                    />
                     <Button
                         type="submit"
                         variant="secondary"

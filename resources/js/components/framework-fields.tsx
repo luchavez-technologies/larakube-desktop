@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check } from 'lucide-react';
+import SelectMenu from '@/components/select-menu';
 import { cn } from '@/lib/utils';
 import type { FrameworkField, NewAppAnswers } from '@/types/larakube';
 
@@ -291,7 +292,7 @@ export default function FrameworkFields({
                                 })}
                             </div>
                         ) : (
-                            <select
+                            <SelectMenu
                                 value={
                                     typeof answer === 'string'
                                         ? answer
@@ -299,23 +300,20 @@ export default function FrameworkFields({
                                           ? field.default
                                           : ''
                                 }
-                                onChange={(event) =>
-                                    set(field.key, event.target.value || null)
+                                triggerClassName={inputClass}
+                                onChange={(value) =>
+                                    set(field.key, value || null)
                                 }
-                                className={inputClass}
-                            >
-                                {field.nullable && (
-                                    <option value="">None</option>
-                                )}
-                                {options.map((option) => (
-                                    <option
-                                        key={option.value}
-                                        value={option.value}
-                                    >
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
+                                options={[
+                                    ...(field.nullable
+                                        ? [{ value: '', label: 'None' }]
+                                        : []),
+                                    ...options.map((option) => ({
+                                        value: option.value,
+                                        label: option.label,
+                                    })),
+                                ]}
+                            />
                         )}
                     </>
                 )}

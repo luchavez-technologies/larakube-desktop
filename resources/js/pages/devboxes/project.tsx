@@ -29,6 +29,7 @@ import ProjectTerminalCard, {
     type ProjectRun,
 } from '@/components/project-terminal-card';
 import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import AppLayout from '@/layouts/app-layout';
@@ -1036,28 +1037,22 @@ function AddEnvironmentDialog({
                                     <label className="mb-1.5 block text-xs font-medium text-ink">
                                         Target Cluster Server (Optional)
                                     </label>
-                                    <select
+                                    <SelectMenu
                                         name="server"
                                         value={server}
-                                        onChange={(e) =>
-                                            setServer(e.target.value)
-                                        }
-                                        className="w-full rounded-lg border-0 bg-paper px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    >
-                                        <option value="">
-                                            None (define overlay without linking
-                                            server yet)
-                                        </option>
-                                        {readyServers.map((s) => (
-                                            <option key={s.name} value={s.name}>
-                                                {s.name}
-                                                {s.provider
-                                                    ? ` (${providerLabels[s.provider] ?? s.provider})`
-                                                    : ''}
-                                                {s.ip ? ` · ${s.ip}` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        accent="servers"
+                                        onChange={setServer}
+                                        options={[
+                                            {
+                                                value: '',
+                                                label: 'None (define overlay without linking server yet)',
+                                            },
+                                            ...readyServers.map((s) => ({
+                                                value: s.name,
+                                                label: `${s.name}${s.provider ? ` (${providerLabels[s.provider] ?? s.provider})` : ''}${s.ip ? ` · ${s.ip}` : ''}`,
+                                            })),
+                                        ]}
+                                    />
                                     {errors.server && (
                                         <p className="mt-1 text-xs text-accent">
                                             {errors.server}

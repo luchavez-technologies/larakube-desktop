@@ -20,6 +20,7 @@ import GcpSignIn from '@/components/gcp-sign-in';
 import CopyButton from '@/components/copy-button';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { ListRow, TwoLine } from '@/components/list-row';
+import SelectMenu from '@/components/select-menu';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -910,19 +911,11 @@ function AwsCredentialsModal({
                         <label className="text-foreground mb-1 block text-xs font-medium">
                             Default Region
                         </label>
-                        <select
+                        <SelectMenu
                             value={form.data.region}
-                            onChange={(e) =>
-                                form.setData('region', e.target.value)
-                            }
-                            className="w-full rounded-lg border-0 bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
-                        >
-                            {regions.map((r) => (
-                                <option key={r.value} value={r.value}>
-                                    {r.label}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(value) => form.setData('region', value)}
+                            options={regions}
+                        />
                         {form.errors.region && (
                             <p className="mt-1 text-xs text-accent">
                                 {form.errors.region}

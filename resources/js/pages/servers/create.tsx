@@ -8,6 +8,7 @@ import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -189,20 +190,20 @@ function ServerForm({
                     </div>
                     <div className="flex items-center gap-2">
                         {provider.accounts.length > 1 && (
-                            <select
+                            <SelectMenu
                                 value={form.data.account}
-                                onChange={(e) =>
-                                    form.setData('account', e.target.value)
+                                accent="servers"
+                                triggerClassName="h-7 bg-background px-2.5 py-1 text-xs"
+                                onChange={(value) =>
+                                    form.setData('account', value)
                                 }
-                                className="bg-background rounded-lg px-2.5 py-1 text-xs ring-1 ring-line focus:ring-2 focus:ring-servers"
-                            >
-                                {provider.accounts.map((acc) => (
-                                    <option key={acc.id} value={acc.id}>
-                                        {acc.label}{' '}
-                                        {acc.isDefault ? '· (Default)' : ''}
-                                    </option>
-                                ))}
-                            </select>
+                                options={provider.accounts.map((acc) => ({
+                                    value: acc.id,
+                                    label: acc.isDefault
+                                        ? `${acc.label} · (Default)`
+                                        : acc.label,
+                                }))}
+                            />
                         )}
                         <Button
                             type="button"
@@ -577,16 +578,11 @@ function Select({
     options: { value: string; label: string }[];
 }) {
     return (
-        <select
+        <SelectMenu
             value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="w-full rounded-lg border-0 bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-        >
-            {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                    {option.label}
-                </option>
-            ))}
-        </select>
+            onChange={onChange}
+            accent="servers"
+            options={options}
+        />
     );
 }

@@ -15,6 +15,7 @@ import {
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import SelectMenu from '@/components/select-menu';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
 import { cn } from '@/lib/utils';
@@ -254,19 +255,17 @@ export default function SettingsIndex({
                                 <label className="text-xs font-medium text-ink">
                                     Global Local TLD:
                                 </label>
-                                <select
+                                <SelectMenu
                                     value={form.data.localTld}
-                                    onChange={(e) =>
-                                        form.setData('localTld', e.target.value)
+                                    triggerClassName="h-8 py-1.5 text-xs"
+                                    onChange={(value) =>
+                                        form.setData('localTld', value)
                                     }
-                                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink outline-none focus:ring-2 focus:ring-brand"
-                                >
-                                    {allowedTlds.map((tld) => (
-                                        <option key={tld} value={tld}>
-                                            .{tld}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={allowedTlds.map((tld) => ({
+                                        value: tld,
+                                        label: `.${tld}`,
+                                    }))}
+                                />
                             </div>
                             <p className="text-[11px] text-soft">
                                 Note: Projects can override this individually in
@@ -348,24 +347,22 @@ export default function SettingsIndex({
                                 <label className="mb-1.5 block text-xs font-medium text-ink">
                                     Default Cloud Provider
                                 </label>
-                                <select
+                                <SelectMenu
                                     value={form.data.defaultCloudProvider}
-                                    onChange={(e) =>
+                                    triggerClassName="h-8 py-1.5 text-xs"
+                                    onChange={(value) =>
                                         form.setData(
                                             'defaultCloudProvider',
-                                            e.target.value,
+                                            value,
                                         )
                                     }
-                                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink outline-none focus:ring-2 focus:ring-brand"
-                                >
-                                    {Object.entries(cloudProviders).map(
-                                        ([slug, label]) => (
-                                            <option key={slug} value={slug}>
-                                                {label} ({slug})
-                                            </option>
-                                        ),
+                                    options={Object.entries(cloudProviders).map(
+                                        ([slug, label]) => ({
+                                            value: slug,
+                                            label: `${label} (${slug})`,
+                                        }),
                                     )}
-                                </select>
+                                />
                             </div>
 
                             <div>
@@ -432,24 +429,19 @@ export default function SettingsIndex({
                                 <label className="mb-1.5 block text-xs font-medium text-ink">
                                     Preferred AI Provider
                                 </label>
-                                <select
+                                <SelectMenu
                                     value={form.data.aiProvider}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'aiProvider',
-                                            e.target.value,
-                                        )
+                                    triggerClassName="h-8 py-1.5 text-xs"
+                                    onChange={(value) =>
+                                        form.setData('aiProvider', value)
                                     }
-                                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink outline-none focus:ring-2 focus:ring-brand"
-                                >
-                                    {Object.entries(aiProviders).map(
-                                        ([slug, label]) => (
-                                            <option key={slug} value={slug}>
-                                                {label}
-                                            </option>
-                                        ),
+                                    options={Object.entries(aiProviders).map(
+                                        ([slug, label]) => ({
+                                            value: slug,
+                                            label,
+                                        }),
                                     )}
-                                </select>
+                                />
                             </div>
 
                             <div>
@@ -480,24 +472,23 @@ export default function SettingsIndex({
                                 <label className="text-xs font-medium text-ink">
                                     Release Channel:
                                 </label>
-                                <select
+                                <SelectMenu
                                     value={form.data.cliChannel}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'cliChannel',
-                                            e.target.value,
-                                        )
+                                    triggerClassName="h-8 py-1.5 text-xs"
+                                    onChange={(value) =>
+                                        form.setData('cliChannel', value)
                                     }
-                                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink outline-none focus:ring-2 focus:ring-brand"
-                                >
-                                    <option value="canary">
-                                        Canary (Pre-release develop builds ·
-                                        Recommended for testing)
-                                    </option>
-                                    <option value="stable">
-                                        Stable (Official tagged releases)
-                                    </option>
-                                </select>
+                                    options={[
+                                        {
+                                            value: 'canary',
+                                            label: 'Canary (Pre-release develop builds · Recommended for testing)',
+                                        },
+                                        {
+                                            value: 'stable',
+                                            label: 'Stable (Official tagged releases)',
+                                        },
+                                    ]}
+                                />
                             </div>
                         </div>
                     </Card>

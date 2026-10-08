@@ -5,6 +5,7 @@ import Button from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import GcpSignIn from '@/components/gcp-sign-in';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import { cn } from '@/lib/utils';
 import type { Provider, ProviderAccount } from '@/types/larakube';
@@ -522,22 +523,17 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                 <label className="text-foreground mb-1 block text-xs font-medium">
                                     Default Region
                                 </label>
-                                <select
+                                <SelectMenu
                                     value={awsForm.data.region}
-                                    onChange={(e) =>
-                                        awsForm.setData(
-                                            'region',
-                                            e.target.value,
-                                        )
+                                    accent="servers"
+                                    onChange={(value) =>
+                                        awsForm.setData('region', value)
                                     }
-                                    className="bg-background w-full rounded-lg px-3 py-2 text-sm ring-1 ring-line focus:ring-2 focus:ring-servers"
-                                >
-                                    {provider.regions.map((r) => (
-                                        <option key={r.value} value={r.value}>
-                                            {r.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={provider.regions.map((r) => ({
+                                        value: r.value,
+                                        label: r.label,
+                                    }))}
+                                />
                             </div>
 
                             <div className="flex justify-end gap-2 pt-2">

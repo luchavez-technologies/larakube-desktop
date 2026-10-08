@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import Button from '@/components/button';
 import CopyButton from '@/components/copy-button';
+import SelectMenu from '@/components/select-menu';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
 
@@ -229,22 +230,14 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
                                 the Google Cloud console, then sign in again.
                             </p>
                         ) : (
-                            <select
+                            <SelectMenu
                                 value={project}
-                                onChange={(event) =>
-                                    setProject(event.target.value)
-                                }
-                                className="w-full rounded-lg border-0 px-3 py-2 ring-1 ring-line"
-                            >
-                                {projects.map((candidate) => (
-                                    <option
-                                        key={candidate.id}
-                                        value={candidate.id}
-                                    >
-                                        {candidate.name} ({candidate.id})
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={setProject}
+                                options={projects.map((candidate) => ({
+                                    value: candidate.id,
+                                    label: `${candidate.name} (${candidate.id})`,
+                                }))}
+                            />
                         )}
                         <Button
                             type="button"

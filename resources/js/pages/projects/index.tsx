@@ -13,6 +13,7 @@ import CloneModal from '@/components/clone-modal';
 import FrameworkBadge from '@/components/framework-badge';
 import PageHeader from '@/components/page-header';
 import ProjectActions from '@/components/project-actions';
+import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
@@ -286,21 +287,20 @@ function LocationSwitch({
                 ) : (
                     <Laptop className="size-4 text-soft" />
                 )}
-                <select
+                <SelectMenu
                     value={box ?? ''}
-                    onChange={(event) => go(event.target.value || null)}
                     aria-label="Where the projects are"
-                    className="bg-transparent text-sm font-medium outline-none"
-                >
-                    <option value="">This computer</option>
-                    <optgroup label="Dev boxes">
-                        {devBoxes.map((name) => (
-                            <option key={name} value={name}>
-                                {name}
-                            </option>
-                        ))}
-                    </optgroup>
-                </select>
+                    triggerClassName="h-7 bg-transparent px-1 ring-0 hover:ring-0"
+                    onChange={(value) => go(value || null)}
+                    options={[
+                        { value: '', label: 'This computer' },
+                        ...devBoxes.map((name) => ({
+                            value: name,
+                            label: name,
+                            group: 'Dev boxes',
+                        })),
+                    ]}
+                />
             </div>
         );
     }
