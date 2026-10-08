@@ -355,7 +355,7 @@ test('domains endpoint returns list of cluster domains and externaldns status', 
 
     $this->getJson(route('servers.domains', ['server' => 'workshop-demo']))
         ->assertOk()
-        ->assertJsonStructure(['domains']);
+        ->assertJsonStructure(['domains', 'activeCommonsServices']);
 
     File::deleteDirectory($bin);
 });

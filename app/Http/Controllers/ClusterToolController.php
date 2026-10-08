@@ -61,44 +61,7 @@ class ClusterToolController extends Controller
             'installing' => $this->installingTools($server),
             'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
             'domains' => Inertia::defer(fn (): array => $status->domains($context), 'domains'),
-            'activeCommonsServices' => Inertia::defer(function () use ($status, $context): array {
-                $active = [];
-                $plex = $status->plex($context);
-                if ($plex !== null && $plex['initialized']) {
-                    foreach ($plex['services'] as $name => $svc) {
-                        if (! empty($svc['enabled'])) {
-                            $active[] = $name;
-                            if ($name === 'postgres') {
-                                $active[] = 'postgresql';
-                            }
-                            if ($name === 'mysql') {
-                                $active[] = 'mariadb';
-                            }
-                            if (in_array($name, ['minio', 'garage'], true)) {
-                                $active[] = 's3';
-                            }
-                        }
-                    }
-                }
-                $verified = $this->tools->lastVerified($context);
-                $toolList = $verified['tools'] ?? $this->tools->registered($context) ?? [];
-                foreach ($toolList as $t) {
-                    if (! empty($t['installed'])) {
-                        $toolSlug = $t['tool'] ?? '';
-                        if (in_array($toolSlug, ['sso', 'zitadel'], true)) {
-                            $active[] = 'oidc';
-                            $active[] = 'sso';
-                            $active[] = 'zitadel';
-                        }
-                        if (in_array($toolSlug, ['mail', 'stalwart'], true)) {
-                            $active[] = 'smtp';
-                            $active[] = 'mail';
-                        }
-                    }
-                }
-
-                return array_values(array_unique($active));
-            }, 'activeCommonsServices'),
+            'activeCommonsServices' => Inertia::defer(fn (): array => $this->activeServices($status, $context), 'activeCommonsServices'),
         ]);
     }
 
@@ -123,10 +86,55 @@ class ClusterToolController extends Controller
     public function domains(string $server, ClusterStatus $status): JsonResponse
     {
         $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
 
         return response()->json([
-            'domains' => $status->domains((string) $stack['context']),
+            'domains' => $status->domains($context),
+            'activeCommonsServices' => $this->activeServices($status, $context),
         ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function activeServices(ClusterStatus $status, string $context): array
+    {
+        $active = [];
+        $plex = $status->plex($context);
+        if ($plex !== null && $plex['initialized']) {
+            foreach ($plex['services'] as $name => $svc) {
+                if (! empty($svc['enabled'])) {
+                    $active[] = $name;
+                    if ($name === 'postgres') {
+                        $active[] = 'postgresql';
+                    }
+                    if ($name === 'mysql') {
+                        $active[] = 'mariadb';
+                    }
+                    if (in_array($name, ['minio', 'garage'], true)) {
+                        $active[] = 's3';
+                    }
+                }
+            }
+        }
+        $verified = $this->tools->lastVerified($context);
+        $toolList = $verified['tools'] ?? $this->tools->registered($context) ?? [];
+        foreach ($toolList as $t) {
+            if (! empty($t['installed'])) {
+                $toolSlug = $t['tool'] ?? '';
+                if (in_array($toolSlug, ['sso', 'zitadel'], true)) {
+                    $active[] = 'oidc';
+                    $active[] = 'sso';
+                    $active[] = 'zitadel';
+                }
+                if (in_array($toolSlug, ['mail', 'stalwart'], true)) {
+                    $active[] = 'smtp';
+                    $active[] = 'mail';
+                }
+            }
+        }
+
+        return array_values(array_unique($active));
     }
 
     public function show(Request $request, string $server, string $tool): Response

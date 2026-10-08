@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { router, Link } from '@inertiajs/react';
 import {
     Zap,
@@ -13,6 +13,8 @@ import {
     ArrowLeft,
     ArrowRight,
     Sparkles,
+    ChevronDown,
+    Shield,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ToolLogo from '@/components/tool-logo';
@@ -161,6 +163,12 @@ export default function QuickLaunchModal({
 
     const [domains, setDomains] = useState<ServerDomain[]>([]);
     const [loadingDomains, setLoadingDomains] = useState<boolean>(false);
+    const [clusterServices, setClusterServices] = useState<string[]>(() =>
+        (activeCommonsServices ?? []).map((s) => s.toLowerCase()),
+    );
+    const [domainDropdownOpen, setDomainDropdownOpen] =
+        useState<boolean>(false);
+    const domainDropdownRef = useRef<HTMLDivElement>(null);
 
     const currentApp = useMemo(
         () => APPS.find((a) => a.id === selectedAppId) ?? APPS[0],
@@ -185,6 +193,32 @@ export default function QuickLaunchModal({
         setTimeout(() => setDnsCopied(false), 2000);
     };
 
+    // Close domain dropdown when clicking outside or pressing Escape
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                domainDropdownRef.current &&
+                !domainDropdownRef.current.contains(event.target as Node)
+            ) {
+                setDomainDropdownOpen(false);
+            }
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setDomainDropdownOpen(false);
+            }
+        };
+
+        if (domainDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleKeyDown);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [domainDropdownOpen]);
+
     // Reset or initialize state when opening modal
     useEffect(() => {
         if (isOpen) {
@@ -193,6 +227,7 @@ export default function QuickLaunchModal({
             }
             setCurrentStep(1);
             setHighestReachedStep(1);
+            setDomainDropdownOpen(false);
         }
     }, [isOpen, initialApp]);
 
@@ -207,30 +242,47 @@ export default function QuickLaunchModal({
         setLoadingDomains(true);
 
         fetch(`/servers/${encodeURIComponent(selectedServerName)}/domains`)
-            .then((res) => (res.ok ? res.json() : { domains: [] }))
-            .then((data: { domains?: ServerDomain[] }) => {
-                if (cancelled) return;
-                const fetched: ServerDomain[] = data.domains ?? [];
-                setDomains(fetched);
+            .then((res) =>
+                res.ok
+                    ? res.json()
+                    : { domains: [], activeCommonsServices: [] },
+            )
+            .then(
+                (data: {
+                    domains?: ServerDomain[];
+                    activeCommonsServices?: string[];
+                }) => {
+                    if (cancelled) return;
+                    const fetched: ServerDomain[] = data.domains ?? [];
+                    setDomains(fetched);
 
-                // Auto-pick the first ExternalDNS zone if available, otherwise first connected domain
-                const extDomain = fetched.find((d) => d.externalDns);
-                const bestDomain = extDomain ?? fetched[0];
+                    if (Array.isArray(data.activeCommonsServices)) {
+                        setClusterServices(
+                            data.activeCommonsServices.map((s) =>
+                                s.toLowerCase(),
+                            ),
+                        );
+                    }
 
-                if (bestDomain) {
-                    setBaseDomain(bestDomain.domain);
-                    setUseCustomDomain(false);
-                } else if (
-                    currentServer?.ip &&
-                    !['127.0.0.1', 'localhost', 'local'].includes(
-                        currentServer.ip,
-                    )
-                ) {
-                    setBaseDomain(`${currentServer.ip}.nip.io`);
-                } else {
-                    setBaseDomain('dev.test');
-                }
-            })
+                    // Auto-pick the first ExternalDNS zone if available, otherwise first connected domain
+                    const extDomain = fetched.find((d) => d.externalDns);
+                    const bestDomain = extDomain ?? fetched[0];
+
+                    if (bestDomain) {
+                        setBaseDomain(bestDomain.domain);
+                        setUseCustomDomain(false);
+                    } else if (
+                        currentServer?.ip &&
+                        !['127.0.0.1', 'localhost', 'local'].includes(
+                            currentServer.ip,
+                        )
+                    ) {
+                        setBaseDomain(`${currentServer.ip}.nip.io`);
+                    } else {
+                        setBaseDomain('dev.test');
+                    }
+                },
+            )
             .catch(() => {
                 if (!cancelled) {
                     setDomains([]);
@@ -252,9 +304,7 @@ export default function QuickLaunchModal({
         if (!isOpen) return;
         setSubdomain(currentApp.defaultSubdomain);
         if (currentApp.availableDbs && currentApp.availableDbs.length > 0) {
-            const activeSet = new Set(
-                (activeCommonsServices ?? []).map((s) => s.toLowerCase()),
-            );
+            const activeSet = new Set(clusterServices);
             if (
                 currentApp.id === 'wordpress' &&
                 (activeSet.has('mysql') || activeSet.has('mariadb'))
@@ -271,7 +321,7 @@ export default function QuickLaunchModal({
         } else {
             setDatabase('');
         }
-    }, [currentApp, isOpen, activeCommonsServices]);
+    }, [currentApp, isOpen, clusterServices]);
 
     // Initial server selection and email
     useEffect(() => {
@@ -308,6 +358,21 @@ export default function QuickLaunchModal({
         }
         return Boolean(selectedDomainMeta?.externalDns);
     }, [useCustomDomain, customDomain, domains, selectedDomainMeta]);
+
+    const appSupportsMail = Boolean(
+        currentApp.capabilities.mail?.includes('smtp'),
+    );
+    const clusterHasMail =
+        clusterServices.includes('mail') || clusterServices.includes('smtp');
+
+    const appSupportsSso = Boolean(
+        currentApp.capabilities.auth?.includes('oidc') ||
+        currentApp.capabilities.auth?.includes('sso'),
+    );
+    const clusterHasSso =
+        clusterServices.includes('sso') ||
+        clusterServices.includes('zitadel') ||
+        clusterServices.includes('oidc');
 
     const resolvedDomain = useMemo(() => {
         if (useCustomDomain) {
@@ -856,45 +921,138 @@ export default function QuickLaunchModal({
                                         <span className="text-sm font-semibold text-soft">
                                             .
                                         </span>
-                                        {domains.length > 1 ? (
-                                            <select
-                                                value={baseDomain}
-                                                onChange={(e) => {
-                                                    if (
-                                                        e.target.value ===
-                                                        '__custom__'
-                                                    ) {
-                                                        setUseCustomDomain(
-                                                            true,
-                                                        );
-                                                        setCustomDomain(
-                                                            resolvedDomain,
-                                                        );
-                                                    } else {
-                                                        setBaseDomain(
-                                                            e.target.value,
-                                                        );
-                                                    }
-                                                }}
-                                                className="focus:ring-primary max-w-[220px] truncate rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-xs text-ink ring-1 ring-line outline-none focus:ring-2"
+                                        {domains.length > 0 ? (
+                                            <div
+                                                ref={domainDropdownRef}
+                                                className="relative"
                                             >
-                                                {domains.map((d) => (
-                                                    <option
-                                                        key={d.domain}
-                                                        value={d.domain}
-                                                    >
-                                                        {d.domain}{' '}
-                                                        {d.externalDns
-                                                            ? '(ExternalDNS · Cloudflare)'
-                                                            : d.tls
-                                                              ? '(Cloudflare TLS)'
-                                                              : ''}
-                                                    </option>
-                                                ))}
-                                                <option value="__custom__">
-                                                    + Custom domain…
-                                                </option>
-                                            </select>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setDomainDropdownOpen(
+                                                            (prev) => !prev,
+                                                        )
+                                                    }
+                                                    className={cn(
+                                                        'flex h-[42px] cursor-pointer items-center justify-between gap-2 rounded-xl bg-surface px-3.5 font-mono text-xs text-ink ring-1 transition outline-none',
+                                                        domainDropdownOpen
+                                                            ? 'bg-primary/5 ring-primary shadow-xs ring-2'
+                                                            : 'hover:ring-primary/50 ring-line hover:bg-badge/30',
+                                                    )}
+                                                >
+                                                    <div className="flex min-w-0 items-center gap-1.5">
+                                                        <span className="max-w-[140px] truncate font-semibold sm:max-w-[180px]">
+                                                            {baseDomain ||
+                                                                'Select domain'}
+                                                        </span>
+                                                        {selectedDomainMeta?.externalDns ? (
+                                                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">
+                                                                <Sparkles className="size-2.5" />
+                                                                Cloudflare
+                                                            </span>
+                                                        ) : selectedDomainMeta?.tls ? (
+                                                            <span className="shrink-0 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-medium text-blue-700 dark:text-blue-300">
+                                                                TLS
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                    <ChevronDown
+                                                        className={cn(
+                                                            'size-3.5 shrink-0 text-soft transition-transform duration-200',
+                                                            domainDropdownOpen &&
+                                                                'text-primary rotate-180',
+                                                        )}
+                                                    />
+                                                </button>
+
+                                                {domainDropdownOpen && (
+                                                    <div className="animate-in fade-in zoom-in-95 absolute top-full right-0 z-50 mt-1.5 w-72 overflow-hidden rounded-2xl bg-surface p-1.5 shadow-2xl ring-1 ring-line duration-100 sm:w-80">
+                                                        <div className="px-2.5 py-1.5 text-[10px] font-semibold tracking-wider text-faint uppercase">
+                                                            Cluster Domains &
+                                                            Zones
+                                                        </div>
+                                                        <div className="flex flex-col gap-0.5">
+                                                            {domains.map(
+                                                                (d) => {
+                                                                    const isSelected =
+                                                                        d.domain ===
+                                                                        baseDomain;
+                                                                    return (
+                                                                        <button
+                                                                            key={
+                                                                                d.domain
+                                                                            }
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setBaseDomain(
+                                                                                    d.domain,
+                                                                                );
+                                                                                setUseCustomDomain(
+                                                                                    false,
+                                                                                );
+                                                                                setDomainDropdownOpen(
+                                                                                    false,
+                                                                                );
+                                                                            }}
+                                                                            className={cn(
+                                                                                'flex cursor-pointer items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left text-xs transition',
+                                                                                isSelected
+                                                                                    ? 'bg-primary/10 text-primary font-semibold'
+                                                                                    : 'text-ink hover:bg-badge/60',
+                                                                            )}
+                                                                        >
+                                                                            <div className="flex min-w-0 items-center gap-2">
+                                                                                <span className="truncate font-mono text-xs">
+                                                                                    {
+                                                                                        d.domain
+                                                                                    }
+                                                                                </span>
+                                                                                {d.externalDns ? (
+                                                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                                                                                        <Sparkles className="size-2.5" />
+                                                                                        ExternalDNS
+                                                                                    </span>
+                                                                                ) : d.tls ? (
+                                                                                    <span className="shrink-0 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                                                                                        TLS
+                                                                                    </span>
+                                                                                ) : null}
+                                                                            </div>
+                                                                            {isSelected && (
+                                                                                <Check className="text-primary size-3.5 shrink-0" />
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                },
+                                                            )}
+                                                        </div>
+
+                                                        <div className="my-1 border-t border-line/60" />
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setUseCustomDomain(
+                                                                    true,
+                                                                );
+                                                                setCustomDomain(
+                                                                    resolvedDomain,
+                                                                );
+                                                                setDomainDropdownOpen(
+                                                                    false,
+                                                                );
+                                                            }}
+                                                            className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs text-soft transition hover:bg-badge hover:text-ink"
+                                                        >
+                                                            <Plus className="size-3.5 text-soft" />
+                                                            <span>
+                                                                Enter custom
+                                                                full domain…
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         ) : (
                                             <input
                                                 type="text"
@@ -1114,41 +1272,123 @@ export default function QuickLaunchModal({
                                 </div>
                             </div>
 
-                            {/* Optional Integrations */}
-                            <div className="space-y-2 rounded-xl bg-badge/40 p-3 ring-1 ring-line/50">
-                                <span className="block text-xs font-medium text-soft">
-                                    Integrations & Wiring
-                                </span>
-                                <div className="flex flex-col gap-2">
-                                    <label className="flex cursor-pointer items-center gap-2 text-xs text-ink">
-                                        <input
-                                            type="checkbox"
-                                            checked={wireMail}
-                                            onChange={(e) =>
-                                                setWireMail(e.target.checked)
-                                            }
-                                            className="text-primary focus:ring-primary rounded border-line"
-                                        />
-                                        <span>
-                                            Connect Stalwart Mail Relay (SMTP)
-                                        </span>
-                                    </label>
-                                    <label className="flex cursor-pointer items-center gap-2 text-xs text-ink">
-                                        <input
-                                            type="checkbox"
-                                            checked={wireSso}
-                                            onChange={(e) =>
-                                                setWireSso(e.target.checked)
-                                            }
-                                            className="text-primary focus:ring-primary rounded border-line"
-                                        />
-                                        <span>
-                                            Connect Zitadel Single Sign-On
-                                            (OIDC)
-                                        </span>
-                                    </label>
+                            {/* Integrations & Wiring */}
+                            {!appSupportsMail && !appSupportsSso ? (
+                                <div className="rounded-xl border border-line/70 bg-badge/30 p-3.5 text-xs">
+                                    <div className="flex items-center gap-2 font-medium text-ink">
+                                        <Sparkles className="size-3.5 text-brand" />
+                                        <span>Standalone Deployment</span>
+                                    </div>
+                                    <p className="mt-1 text-[11px] leading-relaxed text-soft">
+                                        {currentApp.name} operates 100%
+                                        self-contained with built-in
+                                        authentication, embedded SQLite storage,
+                                        and automatic Traefik SSL routing. No
+                                        external mail relay or SSO provider
+                                        needed.
+                                    </p>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="space-y-2.5 rounded-xl bg-badge/40 p-3.5 ring-1 ring-line/50">
+                                    <span className="block text-xs font-semibold text-ink">
+                                        Companion Integrations
+                                    </span>
+                                    <div className="flex flex-col gap-2.5">
+                                        {appSupportsMail &&
+                                            (clusterHasMail ? (
+                                                <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={wireMail}
+                                                        onChange={(e) =>
+                                                            setWireMail(
+                                                                e.target
+                                                                    .checked,
+                                                            )
+                                                        }
+                                                        className="text-primary focus:ring-primary mt-0.5 rounded border-line"
+                                                    />
+                                                    <div>
+                                                        <span className="font-medium">
+                                                            Connect Stalwart
+                                                            Mail Relay (SMTP)
+                                                        </span>
+                                                        <p className="text-[11px] text-soft">
+                                                            Stalwart detected on
+                                                            cluster. Automates
+                                                            transactional and
+                                                            notification emails.
+                                                        </p>
+                                                    </div>
+                                                </label>
+                                            ) : (
+                                                <div className="flex items-start gap-2 rounded-lg bg-surface/70 p-2.5 text-xs text-soft ring-1 ring-line/60">
+                                                    <Mail className="mt-0.5 size-3.5 shrink-0 text-faint" />
+                                                    <div>
+                                                        <span className="font-medium text-ink">
+                                                            Stalwart Mail Relay:
+                                                            Not installed
+                                                        </span>
+                                                        <p className="text-[11px] text-faint">
+                                                            {currentApp.name}{' '}
+                                                            will use local
+                                                            mail/fallback. You
+                                                            can install Stalwart
+                                                            anytime from Tools.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                        {appSupportsSso &&
+                                            (clusterHasSso ? (
+                                                <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={wireSso}
+                                                        onChange={(e) =>
+                                                            setWireSso(
+                                                                e.target
+                                                                    .checked,
+                                                            )
+                                                        }
+                                                        className="text-primary focus:ring-primary mt-0.5 rounded border-line"
+                                                    />
+                                                    <div>
+                                                        <span className="font-medium">
+                                                            Connect Zitadel
+                                                            Single Sign-On
+                                                            (OIDC)
+                                                        </span>
+                                                        <p className="text-[11px] text-soft">
+                                                            Zitadel detected on
+                                                            cluster. Registers
+                                                            OAuth2/OIDC client
+                                                            for one-click team
+                                                            login.
+                                                        </p>
+                                                    </div>
+                                                </label>
+                                            ) : (
+                                                <div className="flex items-start gap-2 rounded-lg bg-surface/70 p-2.5 text-xs text-soft ring-1 ring-line/60">
+                                                    <Shield className="mt-0.5 size-3.5 shrink-0 text-faint" />
+                                                    <div>
+                                                        <span className="font-medium text-ink">
+                                                            Zitadel SSO: Not
+                                                            installed
+                                                        </span>
+                                                        <p className="text-[11px] text-faint">
+                                                            App will use
+                                                            standard
+                                                            administrator login
+                                                            credentials.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
