@@ -3,6 +3,7 @@
 use App\Enums\ActivityType;
 use App\Enums\RunKind;
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Models\Activity;
 use App\Models\ClusterTool;
 use App\Models\Run;
@@ -460,6 +461,50 @@ test('domains endpoint returns list of cluster domains and externaldns status', 
     $this->getJson(route('servers.domains', ['server' => 'workshop-demo']))
         ->assertOk()
         ->assertJsonStructure(['domains', 'activeCommonsServices']);
+
+    File::deleteDirectory($bin);
+});
+
+test('a fresh domains list renders at once, with no live DNS/TLS/ingress check', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $server = Server::updateOrCreate(['name' => 'workshop-demo'], [
+        'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-203.0.113.21', 'status' => 'ready',
+        'domains_sync_status' => 'fresh', 'domains_last_synced_at' => now()->subMinutes(5),
+    ]);
+    $server->domains()->create(['domain' => 'example.com', 'external_dns' => true]);
+
+    $this->getJson(route('servers.domains', ['server' => 'workshop-demo']))
+        ->assertOk()
+        ->assertJson(['domains' => [
+            ['domain' => 'example.com', 'externalDns' => true, 'tls' => false, 'inUse' => false],
+        ]]);
+
+    Process::assertNotRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'external-dns:list'));
+    Process::assertNotRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'tls:show'));
+
+    File::deleteDirectory($bin);
+});
+
+test('a stale domains list still renders instantly while the background re-sync catches up', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $server = Server::updateOrCreate(['name' => 'workshop-demo'], [
+        'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-203.0.113.21', 'status' => 'ready',
+        'domains_sync_status' => 'fresh', 'domains_last_synced_at' => now()->subSeconds(SyncServerDomainsJob::FRESH_SECONDS + 60),
+    ]);
+    $server->domains()->create(['domain' => 'stale.example.com', 'external_dns' => true]);
+
+    // The sync queue dispatches inline in tests, so the stale row is replaced
+    // by whatever the (faked, empty) live check reports — proving the
+    // request never blocked waiting for it.
+    $this->getJson(route('servers.domains', ['server' => 'workshop-demo']))
+        ->assertOk()
+        ->assertJson(['domains' => []]);
+
+    expect($server->fresh()->domains_sync_status)->toBe('fresh');
 
     File::deleteDirectory($bin);
 });

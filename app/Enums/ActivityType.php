@@ -13,6 +13,8 @@ enum ActivityType: string
     case ToolRemoved = 'tool-removed';
     case ToolSyncFailed = 'tool-sync-failed';
 
+    case DomainsSyncFailed = 'domains-sync-failed';
+
     case MailDeployed = 'mail-deployed';
     case MailAccountCreated = 'mail-account-created';
     case MailAccountDeleted = 'mail-account-deleted';

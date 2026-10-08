@@ -27,6 +27,9 @@ use Illuminate\Support\Carbon;
  * @property string $sync_status
  * @property Carbon|null $last_synced_at
  * @property string|null $last_sync_error
+ * @property string $domains_sync_status
+ * @property Carbon|null $domains_last_synced_at
+ * @property string|null $domains_last_sync_error
  */
 class Server extends Model
 {
@@ -46,6 +49,9 @@ class Server extends Model
         'sync_status',
         'last_synced_at',
         'last_sync_error',
+        'domains_sync_status',
+        'domains_last_synced_at',
+        'domains_last_sync_error',
     ];
 
     /**
@@ -56,6 +62,7 @@ class Server extends Model
         return [
             'bindings' => 'array',
             'last_synced_at' => 'datetime',
+            'domains_last_synced_at' => 'datetime',
         ];
     }
 
@@ -65,6 +72,14 @@ class Server extends Model
     public function clusterTools(): HasMany
     {
         return $this->hasMany(ClusterTool::class);
+    }
+
+    /**
+     * @return HasMany<ServerDomain, $this>
+     */
+    public function domains(): HasMany
+    {
+        return $this->hasMany(ServerDomain::class);
     }
 
     /**

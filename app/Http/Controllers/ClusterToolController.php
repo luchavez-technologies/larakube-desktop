@@ -11,6 +11,7 @@ use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
@@ -38,7 +39,7 @@ class ClusterToolController extends Controller
         return $resolved === null ? to_route('servers.index') : to_route('servers.tools.index', $resolved);
     }
 
-    public function index(string $server, ClusterStatus $status, CurrentServer $current): Response
+    public function index(string $server, ClusterStatus $status, DomainCatalog $domains, CurrentServer $current): Response
     {
         $stack = $this->readyServer($server);
         $current->remember($server);
@@ -59,7 +60,11 @@ class ClusterToolController extends Controller
                 : Inertia::defer(fn (): ?array => $this->tools->forContext($context), 'tools'),
             'installing' => $this->installingTools($server),
             'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
-            'domains' => Inertia::defer(fn (): array => $status->domains($context), 'domains'),
+            // An instant DB read — domains used to block on a live CLI
+            // round-trip (ExternalDNS + TLS + kubectl) the first time a
+            // server's cache went cold, same class of problem the rest of
+            // this page already solved for tools.
+            'domains' => $domains->forContext($context) ?? [],
             'activeCommonsServices' => Inertia::defer(fn (): array => $this->activeServices($status, $context), 'activeCommonsServices'),
         ]);
     }
@@ -98,13 +103,13 @@ class ClusterToolController extends Controller
         ]);
     }
 
-    public function domains(string $server, ClusterStatus $status): JsonResponse
+    public function domains(string $server, ClusterStatus $status, DomainCatalog $domains): JsonResponse
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
 
         return response()->json([
-            'domains' => $status->domains($context),
+            'domains' => $domains->forContext($context) ?? [],
             'activeCommonsServices' => $this->activeServices($status, $context),
         ]);
     }

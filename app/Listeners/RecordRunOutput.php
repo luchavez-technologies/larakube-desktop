@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncMailJob;
+use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Models\Activity;
 use App\Models\Run;
 use App\Models\Server;
@@ -104,10 +105,18 @@ class RecordRunOutput
 
         if ($context !== null && $run->kind === RunKind::ConnectDomain) {
             app(ClusterStatus::class)->forgetDns($context);
+
+            if ($server !== null) {
+                SyncServerDomainsJob::dispatch($server->id);
+            }
         }
 
         if ($context !== null && $run->kind === RunKind::EnableSsl) {
             app(ClusterStatus::class)->forgetTls($context);
+
+            if ($server !== null) {
+                SyncServerDomainsJob::dispatch($server->id);
+            }
         }
 
         if ($server !== null && $run->kind?->changesMail()) {

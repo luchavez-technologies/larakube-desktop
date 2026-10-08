@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncMailJob;
+use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServersJob;
 use App\Models\Run;
 use App\Models\Server;
@@ -75,6 +76,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
             foreach (Server::where('status', 'ready')->whereNotNull('context')->get() as $server) {
                 SyncClusterToolsJob::dispatch($server->id);
+                SyncServerDomainsJob::dispatch($server->id);
 
                 if ($server->mailTool()?->installed) {
                     SyncMailJob::dispatch($server->id);
