@@ -170,6 +170,8 @@ export type Server = {
     role?: string;
     status: ServerStatus;
     isCurrent?: boolean;
+    /** Whether this server has at least one domain ExternalDNS manages — an instant DB read, present for every server, not just a selected one. */
+    hasExternalDns?: boolean;
 };
 
 export type ServerDomain = {

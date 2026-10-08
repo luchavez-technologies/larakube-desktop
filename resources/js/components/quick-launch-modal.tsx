@@ -14,6 +14,7 @@ import {
     ArrowLeft,
     ArrowRight,
     CheckCircle2,
+    Circle,
     ExternalLink,
     RefreshCw,
     RotateCw,
@@ -951,53 +952,96 @@ export default function QuickLaunchModal({
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                {isSelected &&
-                                                                    domains.some(
-                                                                        (d) =>
-                                                                            d.externalDns,
-                                                                    ) && (
-                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[10px] font-medium text-ok dark:bg-emerald-500/20 dark:text-emerald-300">
-                                                                            <Sparkles className="size-2.5" />
+                                                                {s.hasExternalDns ? (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[10px] font-medium text-ok dark:bg-emerald-500/20 dark:text-emerald-300">
+                                                                        <Sparkles className="size-2.5" />
+                                                                        ExternalDNS
+                                                                        Active
+                                                                        <InfoTooltip
+                                                                            align="right"
+                                                                            side="bottom"
+                                                                        >
+                                                                            This
+                                                                            cluster
+                                                                            manages
+                                                                            a
+                                                                            connected
+                                                                            domain
+                                                                            itself:
+                                                                            DNS
+                                                                            records
+                                                                            and
+                                                                            SSL
+                                                                            certificates
+                                                                            are
+                                                                            created
+                                                                            automatically
+                                                                            when
+                                                                            you
+                                                                            deploy,
+                                                                            no
+                                                                            manual
+                                                                            setup
+                                                                            needed.
+                                                                        </InfoTooltip>
+                                                                    </span>
+                                                                ) : (
+                                                                    // Same slot, always present — an empty one here (not
+                                                                    // just omitting the pill) is what keeps every row's
+                                                                    // "Ready" badge landing at the same x position. Spelled
+                                                                    // out with a label + its own info icon, not a bare
+                                                                    // circle: that read as an unexplained decoration.
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-badge px-2 py-0.5 text-[10px] font-medium text-faint">
+                                                                        <Circle className="size-2.5" />
+                                                                        Manual
+                                                                        DNS
+                                                                        <InfoTooltip
+                                                                            align="right"
+                                                                            side="bottom"
+                                                                        >
+                                                                            This
+                                                                            cluster
+                                                                            has
+                                                                            no
+                                                                            domain
+                                                                            connected
+                                                                            to
                                                                             ExternalDNS
-                                                                            Active
-                                                                            <InfoTooltip
-                                                                                align="right"
-                                                                                side="bottom"
-                                                                            >
-                                                                                This
-                                                                                cluster
-                                                                                manages
-                                                                                a
-                                                                                connected
-                                                                                domain
-                                                                                itself:
-                                                                                DNS
-                                                                                records
-                                                                                and
-                                                                                SSL
-                                                                                certificates
-                                                                                are
-                                                                                created
-                                                                                automatically
-                                                                                when
-                                                                                you
-                                                                                deploy,
-                                                                                no
-                                                                                manual
-                                                                                setup
-                                                                                needed.
-                                                                            </InfoTooltip>
-                                                                        </span>
-                                                                    )}
+                                                                            yet.
+                                                                            After
+                                                                            launching,
+                                                                            you'll
+                                                                            add
+                                                                            a
+                                                                            DNS
+                                                                            A
+                                                                            record
+                                                                            yourself
+                                                                            at
+                                                                            your
+                                                                            registrar.
+                                                                        </InfoTooltip>
+                                                                    </span>
+                                                                )}
                                                                 <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[10px] font-medium text-ok">
                                                                     <Check className="size-3" />{' '}
                                                                     Ready
                                                                 </span>
-                                                                {isSelected && (
-                                                                    <span className="flex size-4.5 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
-                                                                        ✓
-                                                                    </span>
-                                                                )}
+                                                                {/* Always present, selected or not — otherwise every
+                                                                    badge to its left shifts left/right as rows are
+                                                                    clicked, which is what looked "wrong" about it. */}
+                                                                <span
+                                                                    className={cn(
+                                                                        'flex size-4.5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-colors',
+                                                                        isSelected
+                                                                            ? 'bg-brand text-white'
+                                                                            : 'text-line ring-1 ring-line',
+                                                                    )}
+                                                                >
+                                                                    {isSelected
+                                                                        ? '✓'
+                                                                        : ''}
+                                                                </span>
                                                             </div>
                                                         </button>
                                                     );

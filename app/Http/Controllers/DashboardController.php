@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\Run;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FleetMetrics;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
@@ -25,6 +26,7 @@ class DashboardController extends Controller
         LocalCluster $localCluster,
         ClusterStatus $clusterStatus,
         FleetMetrics $fleetMetrics,
+        DomainCatalog $domains,
     ): Response|RedirectResponse {
         // A first launch has no CLI yet, and every other page needs it: Setup installs it.
         if ($locator->find('larakube') === null) {
@@ -41,6 +43,17 @@ class DashboardController extends Controller
 
         $allServers = $stacks->all() ?? [];
         $readyServersCount = count(array_filter($allServers, fn (array $s): bool => $s['status'] === 'ready'));
+
+        // An instant DB read (DomainCatalog), not a live DNS/TLS/kubectl
+        // check — safe to compute for every server up front so Quick
+        // Launch's cluster picker can show this consistently for all of
+        // them, not just whichever one happens to be selected.
+        $allServers = array_map(function (array $s) use ($domains): array {
+            $s['hasExternalDns'] = is_string($s['context'] ?? null)
+                && collect($domains->forContext($s['context']) ?? [])->contains('externalDns', true);
+
+            return $s;
+        }, $allServers);
 
         $recentRuns = Run::query()->latest('id')->take(5)->get(['id', 'label', 'kind', 'status', 'created_at', 'target_type', 'target_name', 'environment']);
 

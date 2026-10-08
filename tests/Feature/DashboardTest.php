@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Project;
+use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
@@ -64,6 +65,40 @@ test('dashboard page renders with stats and workspace overview', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('dashboard/index')
+        );
+});
+
+test('every dashboard server carries hasExternalDns, computed up front for all of them', function () {
+    // Quick Launch's cluster picker needs this for every server at once, not
+    // just a selected one — an instant DB read (DomainCatalog), never a live
+    // DNS check, so it's safe to compute for all of them here.
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([
+        ['name' => 'with-dns', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '34.27.253.31', 'context' => 'larakube-with-dns', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ['name' => 'without-dns', 'provider' => 'aws', 'kind' => 'vps', 'region' => 'ap-southeast-1', 'ip' => '3.1.217.1', 'context' => 'larakube-without-dns', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $withDns = Server::create(['name' => 'with-dns', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-with-dns', 'status' => 'ready', 'domains_sync_status' => 'fresh', 'domains_last_synced_at' => now()]);
+    $withDns->domains()->create(['domain' => 'example.com', 'external_dns' => true]);
+
+    Server::create(['name' => 'without-dns', 'provider' => 'aws', 'kind' => 'vps', 'context' => 'larakube-without-dns', 'status' => 'ready', 'domains_sync_status' => 'fresh', 'domains_last_synced_at' => now()]);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('servers.0.hasExternalDns', true)
+            ->where('servers.1.hasExternalDns', false)
         );
 });
 
