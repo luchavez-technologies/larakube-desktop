@@ -1,9 +1,13 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import { Globe, Send, Settings, ExternalLink, Inbox } from 'lucide-react';
 import { buttonClass } from '@/components/button';
+import SelectMenu from '@/components/select-menu';
 import { open } from '@/routes';
 import AppLayout from '@/layouts/app-layout';
+import SyncStatusBadge, {
+    type SyncStatus,
+} from '@/components/sync-status-badge';
 import MailEmptyState from './mail-empty-state';
 import MailboxesTab, { type AccountRow } from './mailboxes-tab';
 import DomainsTab, { type DomainRow } from './domains-tab';
@@ -22,9 +26,27 @@ type Props = {
         accounts: AccountRow[];
         queue: number;
     };
+    mailSync: {
+        status: SyncStatus;
+        lastSyncedAt: string | null;
+        error: string | null;
+    };
 };
 
 type TabType = 'mailboxes' | 'domains' | 'relay' | 'settings';
+
+function MailboxesSkeleton() {
+    return (
+        <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                    key={i}
+                    className="h-14 animate-pulse rounded-xl bg-paper"
+                />
+            ))}
+        </div>
+    );
+}
 
 export default function MailIndex({
     server,
@@ -32,10 +54,28 @@ export default function MailIndex({
     isInstalled,
     hasSso = false,
     serverInfo,
-    domains = [],
-    accounts = { accounts: [], queue: 0 },
+    domains,
+    accounts,
+    mailSync,
 }: Props) {
     const [activeTab, setActiveTab] = useState<TabType>('mailboxes');
+
+    usePoll(
+        2000,
+        { only: ['serverInfo', 'domains', 'accounts', 'mailSync'] },
+        { autoStart: isInstalled && mailSync.status === 'syncing' },
+    );
+
+    // Deferred props arrive as undefined until the follow-up request lands — show a
+    // skeleton instead of silently defaulting to empty and popping in once real data lands.
+    const loading =
+        isInstalled &&
+        (serverInfo === undefined ||
+            domains === undefined ||
+            accounts === undefined);
+
+    const resolvedDomains = domains ?? [];
+    const resolvedAccounts = accounts ?? { accounts: [], queue: 0 };
 
     const tabs: Array<{
         id: TabType;
@@ -47,13 +87,13 @@ export default function MailIndex({
             id: 'mailboxes',
             label: 'Mailboxes',
             icon: Inbox,
-            count: accounts.accounts.length,
+            count: resolvedAccounts.accounts.length,
         },
         {
             id: 'domains',
             label: 'Domains & DNS',
             icon: Globe,
-            count: domains.length,
+            count: resolvedDomains.length,
         },
         {
             id: 'relay',
@@ -84,6 +124,14 @@ export default function MailIndex({
                                     Stalwart Active
                                 </span>
                             )}
+                            {isInstalled && (
+                                <SyncStatusBadge
+                                    status={mailSync.status}
+                                    lastSyncedAt={mailSync.lastSyncedAt}
+                                    error={mailSync.error}
+                                    subject="mail"
+                                />
+                            )}
                         </div>
                         <p className="mt-1 text-xs text-soft">
                             High-performance JMAP/IMAP mailboxes and delivery
@@ -92,27 +140,20 @@ export default function MailIndex({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
-                        <label className="flex h-9 items-center gap-2.5 rounded-lg bg-surface px-3 ring-1 ring-line">
+                        <div className="flex h-9 items-center gap-2.5 rounded-lg bg-surface pl-3 ring-1 ring-line">
                             <span className="text-xs text-soft">Server</span>
-                            <select
+                            <SelectMenu
                                 value={server.name}
-                                onChange={(e) =>
-                                    router.visit(
-                                        `/servers/${e.target.value}/mail`,
-                                    )
+                                triggerClassName="h-9 rounded-lg bg-transparent px-2 ring-0 hover:ring-0"
+                                onChange={(value) =>
+                                    router.visit(`/servers/${value}/mail`)
                                 }
-                                className="text-foreground bg-transparent text-[13px] font-medium outline-none"
-                            >
-                                {servers.map((candidate) => (
-                                    <option
-                                        key={candidate.name}
-                                        value={candidate.name}
-                                    >
-                                        {candidate.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                                options={servers.map((candidate) => ({
+                                    value: candidate.name,
+                                    label: candidate.name,
+                                }))}
+                            />
+                        </div>
 
                         {isInstalled && serverInfo?.webmailUrl && (
                             <Link
@@ -194,32 +235,41 @@ export default function MailIndex({
                         </div>
 
                         {/* Active Tab Content */}
-                        {activeTab === 'mailboxes' && (
-                            <MailboxesTab
-                                server={server}
-                                accounts={accounts.accounts}
-                                queue={accounts.queue}
-                                hasSso={hasSso}
-                            />
-                        )}
+                        {loading ? (
+                            <MailboxesSkeleton />
+                        ) : (
+                            <>
+                                {activeTab === 'mailboxes' && (
+                                    <MailboxesTab
+                                        server={server}
+                                        accounts={resolvedAccounts.accounts}
+                                        queue={resolvedAccounts.queue}
+                                        hasSso={hasSso}
+                                    />
+                                )}
 
-                        {activeTab === 'domains' && (
-                            <DomainsTab
-                                server={server}
-                                domains={domains}
-                                serverHost={serverInfo?.host}
-                            />
-                        )}
+                                {activeTab === 'domains' && (
+                                    <DomainsTab
+                                        server={server}
+                                        domains={resolvedDomains}
+                                        serverHost={serverInfo?.host}
+                                    />
+                                )}
 
-                        {activeTab === 'relay' && (
-                            <RelayTab
-                                server={server}
-                                relay={serverInfo?.relay}
-                            />
-                        )}
+                                {activeTab === 'relay' && (
+                                    <RelayTab
+                                        server={server}
+                                        relay={serverInfo?.relay}
+                                    />
+                                )}
 
-                        {activeTab === 'settings' && (
-                            <SettingsTab server={server} info={serverInfo} />
+                                {activeTab === 'settings' && (
+                                    <SettingsTab
+                                        server={server}
+                                        info={serverInfo}
+                                    />
+                                )}
+                            </>
                         )}
                     </div>
                 )}

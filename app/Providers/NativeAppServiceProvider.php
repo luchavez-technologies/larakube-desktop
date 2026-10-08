@@ -4,7 +4,11 @@ namespace App\Providers;
 
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncMailJob;
+use App\Jobs\Sync\SyncServersJob;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\Elevation;
 use App\Services\LaraKube\GlobalSettings;
 use Native\Desktop\Contracts\ProvidesPhpIni;
@@ -24,6 +28,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         $this->closeInterruptedLocalSetup();
         $this->syncTheme();
+        $this->warmSync();
 
         Window::open()
             ->title(config('app.name'))
@@ -56,6 +61,24 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             if ($interrupted->exists()) {
                 app(Elevation::class)->revoke();
                 $interrupted->update(['status' => RunStatus::Failed, 'finished_at' => now()]);
+            }
+        } catch (\Throwable) {
+            // The database may not be migrated yet on a first launch.
+        }
+    }
+
+    /** Dispatches a background refresh for everything this app already knows about, so Tools/Mail are warm before the user clicks in. */
+    private function warmSync(): void
+    {
+        try {
+            SyncServersJob::dispatch();
+
+            foreach (Server::where('status', 'ready')->whereNotNull('context')->get() as $server) {
+                SyncClusterToolsJob::dispatch($server->id);
+
+                if ($server->mailTool()?->installed) {
+                    SyncMailJob::dispatch($server->id);
+                }
             }
         } catch (\Throwable) {
             // The database may not be migrated yet on a first launch.

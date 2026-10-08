@@ -1,23 +1,47 @@
 <?php
 
+use App\Enums\ActivityType;
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Models\Activity;
+use App\Models\ClusterTool;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\ToolCatalog;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 use Native\Desktop\Facades\Shell;
 
-/** Keeps a tool list the way the app does, tagged with the installed CLI build. */
-function clusterToolsSeed(string $key, array $tools, ?int $checkedAt): void
+/** Seeds a server with an already-synced tool list, the way SyncClusterToolsJob leaves it. */
+function clusterToolsSeed(string $context, array $tools, ?int $checkedAt, string $serverName = 'workshop-demo'): Server
 {
-    $cli = app(ToolLocator::class)->find('larakube');
+    $server = Server::updateOrCreate(['name' => $serverName], [
+        'provider' => 'gcp', 'kind' => 'vps', 'context' => $context, 'status' => 'ready',
+    ]);
 
-    Cache::forever($key, ['tools' => $tools, 'checkedAt' => $checkedAt, 'build' => $cli !== null ? (string) @filemtime($cli) : '']);
+    foreach ($tools as $position => $row) {
+        ClusterTool::updateOrCreate(
+            ['server_id' => $server->id, 'tool' => $row['tool'], 'host' => $row['host'] ?? null],
+            [
+                'instance' => $row['instance'] ?? null,
+                'installed' => (bool) ($row['installed'] ?? false),
+                'multi_instance' => $row['multiInstance'] ?? true,
+                'position' => $position,
+                'data' => $row,
+                'sync_status' => $checkedAt !== null ? 'fresh' : 'stale',
+                'last_synced_at' => $checkedAt !== null ? Carbon::createFromTimestamp($checkedAt) : null,
+            ],
+        );
+    }
+
+    return $server;
 }
 
 function clusterToolsFakeCli(): string
@@ -111,19 +135,25 @@ test('the fast registry list and the verified list are separate deferred props',
 });
 
 test('forgetting a server marks its verified list stale but keeps it to show meanwhile', function () {
-    clusterToolsSeed('cluster-tools:ctx', [['tool' => 'sso']], now()->getTimestamp());
+    Queue::fake();
     Cache::put('cluster-tools:ctx:registered', [['tool' => 'sso']]);
+    $server = clusterToolsSeed('ctx', [['tool' => 'sso', 'host' => null]], now()->getTimestamp());
 
     app(ToolCatalog::class)->forget('ctx');
+    $last = app(ToolCatalog::class)->lastVerified('ctx');
 
-    expect(app(ToolCatalog::class)->lastVerified('ctx'))->toBe(['tools' => [['tool' => 'sso']], 'checkedAt' => null])
+    expect($server->clusterTools()->sole()->sync_status)->toBe('stale')
+        ->and($last['checkedAt'])->toBeNull()
+        ->and($last['tools'][0])->toMatchArray(['tool' => 'sso', 'installed' => false])
         ->and(Cache::has('cluster-tools:ctx:registered'))->toBeFalse();
+
+    Queue::assertPushed(SyncClusterToolsJob::class, fn ($job): bool => $job->serverId === $server->id);
 });
 
 test('a fresh verified list renders at once, with no live check', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
-    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', clusterToolsRows(), now()->subMinutes(5)->getTimestamp());
+    clusterToolsSeed('larakube-203.0.113.21', clusterToolsRows(), now()->subMinutes(5)->getTimestamp());
 
     $this->get(route('servers.tools.index', 'workshop-demo'))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -140,7 +170,7 @@ test('a fresh verified list renders at once, with no live check', function () {
 test('an old verified list shows while the live check re-runs in the background', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
-    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', [clusterToolsRows()[0]], now()->subSeconds(ToolCatalog::FRESH_SECONDS + 60)->getTimestamp());
+    clusterToolsSeed('larakube-203.0.113.21', [clusterToolsRows()[0]], now()->subSeconds(ToolCatalog::FRESH_SECONDS + 60)->getTimestamp());
 
     $this->get(route('servers.tools.index', 'workshop-demo'))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -157,12 +187,14 @@ test('an old verified list shows while the live check re-runs in the background'
 test('Refresh re-checks a fresh list', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
-    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
+    clusterToolsSeed('larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
 
     $this->post(route('servers.tools.refresh', 'workshop-demo'))->assertRedirect(route('servers.tools.index', 'workshop-demo'));
 
+    // The re-check dispatched by Refresh runs immediately under the sync queue driver,
+    // so by the next visit the list is already fresh again rather than still deferred.
     $this->get(route('servers.tools.index', 'workshop-demo'))
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('lastVerified', 2)->missing('tools'));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('lastVerified', 2)->has('tools', 2));
 
     File::deleteDirectory($bin);
 });
@@ -275,13 +307,40 @@ test('removing needs the tool name typed and only applies to installed tools', f
     File::deleteDirectory($bin);
 });
 
-test('a finished install marks that server\'s tool list stale', function () {
-    clusterToolsSeed('cluster-tools:larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
+test('removing with purge checked passes --purge through to the CLI', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso', 'purge' => '1'])
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'zitadel:remove', 'production', '--context=larakube-203.0.113.21', '--domain=sso.example.com', '--purge', '--force', '--no-interaction']);
+
+    File::deleteDirectory($bin);
+});
+
+test('removing without purge never sends --purge', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->delete(route('servers.tools.destroy', ['server' => 'workshop-demo', 'tool' => 'sso']), ['confirm' => 'sso'])
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => ! in_array('--purge', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});
+
+test('a finished install dispatches a re-sync of that server\'s tool list', function () {
+    Queue::fake();
+    $server = clusterToolsSeed('larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
     $run = Run::create(['label' => 'Install CRM', 'kind' => RunKind::InstallClusterTool, 'subject' => 'crm', 'meta' => ['server' => 'workshop-demo', 'context' => 'larakube-203.0.113.21', 'tool' => 'crm'], 'command' => ['larakube']]);
 
     event(new ProcessExited($run->alias(), 0));
 
-    expect(app(ToolCatalog::class)->lastVerified('larakube-203.0.113.21')['checkedAt'])->toBeNull();
+    Queue::assertPushed(SyncClusterToolsJob::class, fn ($job): bool => $job->serverId === $server->id);
 });
 
 test('open hands https and editor addresses to the default browser and rejects anything else', function () {
@@ -349,6 +408,51 @@ test('check-dns endpoint returns resolution status for a domain', function () {
     File::deleteDirectory($bin);
 });
 
+test('credentials endpoint fetches bootstrap credentials live via tool:show --json', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:show*' => Process::result(output: json_encode([
+            'tool' => 'pocketbase', 'instance' => '', 'environment' => 'local', 'installed' => true,
+            'namespace' => 'larakube-shared', 'host' => 'data.example.com', 'url' => 'https://data.example.com',
+            'wirings' => [], 'components' => [],
+            'credentials' => ['admin_email' => 'admin@example.com', 'admin_password' => 's3cret'],
+        ])),
+    ]);
+
+    $this->getJson(route('servers.tools.credentials', ['server' => 'workshop-demo', 'tool' => 'pocketbase', 'domain' => 'data.example.com']))
+        ->assertOk()
+        ->assertJson(['credentials' => [
+            'tool' => 'pocketbase', 'instance' => '', 'environment' => 'local', 'installed' => true,
+            'namespace' => 'larakube-shared', 'host' => 'data.example.com', 'url' => 'https://data.example.com',
+            'wirings' => [], 'components' => [],
+            'credentials' => ['admin_email' => 'admin@example.com', 'admin_password' => 's3cret'],
+        ]]);
+
+    File::deleteDirectory($bin);
+});
+
+test('credentials endpoint reports null when the CLI call fails', function () {
+    $bin = clusterToolsFakeCli();
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:show*' => Process::result(output: 'not json', exitCode: 1),
+    ]);
+
+    $this->getJson(route('servers.tools.credentials', ['server' => 'workshop-demo', 'tool' => 'pocketbase', 'domain' => 'data.example.com']))
+        ->assertOk()
+        ->assertJson(['credentials' => null]);
+
+    File::deleteDirectory($bin);
+});
+
 test('domains endpoint returns list of cluster domains and externaldns status', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
@@ -360,16 +464,14 @@ test('domains endpoint returns list of cluster domains and externaldns status', 
     File::deleteDirectory($bin);
 });
 
-test('a tool that was just installed shows at once, without waiting for the live check', function () {
+test('a finished install re-syncs via the full tool:list check, merging in what changed', function () {
     $bin = clusterToolsFakeCli();
-    Cache::flush();
     $before = clusterToolsRows();
-    clusterToolsSeed('cluster-tools:ctx', $before, now()->subMinutes(5)->getTimestamp());
+    clusterToolsSeed('ctx', $before, now()->subMinutes(5)->getTimestamp(), 'demo');
 
-    // The registry already knows the new CRM instance.
-    $registry = $before;
-    $registry[1] = [...$before[1], 'installed' => true, 'host' => 'crm.example.com', 'url' => 'https://crm.example.com'];
-    Process::fake(['*tool:list*--registry-only*' => Process::result(output: json_encode($registry))]);
+    $after = $before;
+    $after[1] = [...$before[1], 'installed' => true, 'host' => 'crm.example.com', 'url' => 'https://crm.example.com'];
+    Process::fake(['*tool:list*' => Process::result(output: json_encode($after))]);
 
     $run = Run::create([
         'label' => 'Install CRM on demo', 'command' => ['larakube', 'tool:add'], 'kind' => RunKind::InstallClusterTool,
@@ -379,19 +481,18 @@ test('a tool that was just installed shows at once, without waiting for the live
 
     $last = app(ToolCatalog::class)->lastVerified('ctx');
 
-    expect($last['checkedAt'])->toBeNull()
-        ->and(array_column($last['tools'], 'tool'))->toBe(['sso', 'crm'])
+    expect(array_column($last['tools'], 'tool'))->toBe(['sso', 'crm'])
         ->and($last['tools'][1])->toMatchArray(['installed' => true, 'host' => 'crm.example.com'])
-        ->and($last['tools'][0]['host'])->toBe('sso.example.com');
+        ->and($last['tools'][0]['host'])->toBe('sso.example.com')
+        ->and(Activity::where('type', ActivityType::ToolInstalled)->exists())->toBeTrue();
 
     File::deleteDirectory($bin);
 });
 
-test('a failed install leaves the list as it was', function () {
+test('a failed install still re-verifies the tool list, but records no install activity', function () {
     $bin = clusterToolsFakeCli();
-    Cache::flush();
-    clusterToolsSeed('cluster-tools:ctx', clusterToolsRows(), now()->getTimestamp());
-    Process::fake();
+    clusterToolsSeed('ctx', clusterToolsRows(), now()->getTimestamp(), 'demo');
+    Process::fake(['*tool:list*' => Process::result(output: json_encode(clusterToolsRows()))]);
 
     $run = Run::create([
         'label' => 'Install CRM on demo', 'command' => ['larakube', 'tool:add'], 'kind' => RunKind::InstallClusterTool,
@@ -399,8 +500,8 @@ test('a failed install leaves the list as it was', function () {
     ]);
     event(new ProcessExited($run->alias(), 1));
 
-    Process::assertNotRan(fn ($process) => in_array('--registry-only', (array) $process->command, true));
-    expect(app(ToolCatalog::class)->lastVerified('ctx')['tools'][1]['installed'])->toBeFalse();
+    expect(app(ToolCatalog::class)->lastVerified('ctx')['tools'][1]['installed'])->toBeFalse()
+        ->and(Activity::where('type', ActivityType::ToolInstalled)->exists())->toBeFalse();
 
     File::deleteDirectory($bin);
 });
@@ -513,24 +614,4 @@ test('a tool\'s page carries what it holds on the Commons, for the shared backin
                 ->where('backing.services.0.details.0.value', 'outline_wiki')));
 
     File::deleteDirectory($bin);
-});
-
-test('a tool list kept from an older CLI build is not used once the CLI is replaced', function () {
-    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
-    File::ensureDirectoryExists($directory);
-    File::put("{$directory}/larakube", "#!/bin/sh\n");
-    chmod("{$directory}/larakube", 0755);
-    touch("{$directory}/larakube", 1_700_000_000);
-    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
-
-    Cache::forever('cluster-tools:ctx', ['tools' => [['tool' => 'twenty']], 'checkedAt' => now()->getTimestamp(), 'build' => (string) filemtime("{$directory}/larakube")]);
-
-    expect(app(ToolCatalog::class)->cached('ctx'))->toHaveCount(1);
-
-    touch("{$directory}/larakube", 1_800_000_000);
-    clearstatcache();
-
-    expect(app(ToolCatalog::class)->cached('ctx'))->toBeNull();
-
-    File::deleteDirectory($directory);
 });

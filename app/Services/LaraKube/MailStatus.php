@@ -2,18 +2,24 @@
 
 namespace App\Services\LaraKube;
 
-use Illuminate\Process\Exceptions\ProcessTimedOutException;
-use Illuminate\Support\Facades\Cache;
+use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncMailJob;
+use App\Models\ClusterTool;
+use App\Models\MailAccount;
+use App\Models\MailDomain;
+use App\Models\Server;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Live Stalwart mail status, accounts, domains, and DNS verification
- * queried from the LaraKube CLI (`mail:show`, `mail:domains`, `mail:accounts`, `mail:check`).
+ * Stalwart mail status, accounts and domains, mirrored into the
+ * mail_accounts/mail_domains tables (and the mail ClusterTool row) by
+ * SyncClusterToolsJob/SyncMailJob. Reads here are instant database reads; a
+ * stale or missing picture triggers a background re-sync rather than
+ * blocking on the CLI. checkDns() stays a live, uncached probe — a DNS/TLS
+ * check is only meaningful run fresh, right when asked for.
  */
 class MailStatus
 {
-    public const TTL_SECONDS = 180;
-
     public function __construct(private ToolLocator $locator) {}
 
     /**
@@ -23,22 +29,61 @@ class MailStatus
      */
     public function serverInfo(string $context): ?array
     {
-        /** @var array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int, relay?: ?array{configured: bool, provider: string, username?: ?string, region?: ?string, port?: int, host?: string}, sso?: ?array{installed?: bool}}|null $info */
-        $info = $this->remember("mail:server:{$context}", function () use ($context): ?array {
-            return $this->json(['mail:show', 'production', "--context={$context}", '--json'], timeout: 60);
-        });
+        $server = Server::firstWhere('context', $context);
+
+        if ($server === null) {
+            return null;
+        }
+
+        $mailTool = $this->syncIfNeeded($server);
+
+        if ($mailTool === null) {
+            return ['installed' => false];
+        }
+
+        /** @var array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int, relay?: ?array{configured: bool, provider: string, username?: ?string, region?: ?string, port?: int, host?: string}, sso?: ?array{installed?: bool}} $info */
+        $info = $mailTool->data['serverInfo'] ?? ['installed' => $mailTool->installed];
 
         return $info;
     }
 
     /**
-     * Check whether Stalwart is installed on the given cluster context.
+     * Whether Stalwart is installed, from the already-synced tool list — no
+     * live CLI call needed to answer this, but this is also what triggers
+     * the first sync for a server never checked before.
      */
     public function isInstalled(string $context): bool
     {
-        $info = $this->serverInfo($context);
+        $server = Server::firstWhere('context', $context);
 
-        return (bool) ($info['installed'] ?? false);
+        if ($server === null) {
+            return false;
+        }
+
+        $mailTool = $this->syncIfNeeded($server);
+
+        return $mailTool !== null && $mailTool->installed;
+    }
+
+    /**
+     * Whether the mail picture shown is fresh, syncing, stale or erroring, and
+     * when it was last confirmed — for the "syncing in the background" badge.
+     *
+     * @return array{status: string, lastSyncedAt: ?string, error: ?string}
+     */
+    public function syncState(string $context): array
+    {
+        $mailTool = Server::firstWhere('context', $context)?->mailTool();
+
+        if ($mailTool === null) {
+            return ['status' => 'stale', 'lastSyncedAt' => null, 'error' => null];
+        }
+
+        return [
+            'status' => $mailTool->sync_status,
+            'lastSyncedAt' => $mailTool->last_synced_at?->toAtomString(),
+            'error' => $mailTool->last_sync_error,
+        ];
     }
 
     /**
@@ -48,21 +93,17 @@ class MailStatus
      */
     public function domains(string $context): array
     {
-        /** @var list<array{id: string, name: string, accounts: int}>|null $domains */
-        $domains = $this->remember("mail:domains:{$context}", function () use ($context): array {
-            $data = $this->json(['mail:domains', 'production', "--context={$context}", '--json'], timeout: 60);
+        $server = Server::firstWhere('context', $context);
 
-            if ($data === null || ! isset($data['domains']) || ! is_array($data['domains'])) {
-                return [];
-            }
+        if ($server === null) {
+            return [];
+        }
 
-            /** @var list<array{id: string, name: string, accounts: int}> $list */
-            $list = array_values($data['domains']);
+        $this->syncIfNeeded($server);
 
-            return $list;
-        });
-
-        return $domains ?? [];
+        return array_values($server->mailDomains()->get()
+            ->map(fn (MailDomain $domain): array => ['id' => (string) $domain->id, 'name' => $domain->name, 'accounts' => $domain->accounts_count])
+            ->all());
     }
 
     /**
@@ -72,24 +113,18 @@ class MailStatus
      */
     public function accounts(string $context): array
     {
-        /** @var array{accounts: list<array{email: string, name: string, role: string, quota: string, quotaBytes: ?int, used: string, usedBytes: ?int}>, queue: int}|null $res */
-        $res = $this->remember("mail:accounts:{$context}", function () use ($context): array {
-            $data = $this->json(['mail:accounts', 'production', "--context={$context}", '--json'], timeout: 60);
+        $server = Server::firstWhere('context', $context);
 
-            if ($data === null || ! isset($data['accounts']) || ! is_array($data['accounts'])) {
-                return ['accounts' => [], 'queue' => 0];
-            }
+        if ($server === null) {
+            return ['accounts' => [], 'queue' => 0];
+        }
 
-            /** @var list<array{email: string, name: string, role: string, quota: string, quotaBytes: ?int, used: string, usedBytes: ?int}> $accs */
-            $accs = array_values($data['accounts']);
+        $mailTool = $this->syncIfNeeded($server);
 
-            return [
-                'accounts' => $accs,
-                'queue' => (int) ($data['queue'] ?? 0),
-            ];
-        });
-
-        return $res ?? ['accounts' => [], 'queue' => 0];
+        return [
+            'accounts' => array_values($server->mailAccounts()->get()->map(fn (MailAccount $account): array => $account->toAccountArray())->all()),
+            'queue' => (int) ($mailTool?->data['queue'] ?? 0),
+        ];
     }
 
     /**
@@ -110,42 +145,68 @@ class MailStatus
         return $result;
     }
 
-    /**
-     * Invalidate cached data for the context after mutation runs.
-     */
+    /** Marks mail data stale and dispatches an immediate re-sync — for use after a mutation completes. */
     public function forget(string $context): void
     {
-        Cache::forget("mail:server:{$context}");
-        Cache::forget("mail:domains:{$context}");
-        Cache::forget("mail:accounts:{$context}");
+        $server = Server::firstWhere('context', $context);
+
+        if ($server === null) {
+            return;
+        }
+
+        $mailTool = $server->mailTool();
+
+        if ($mailTool === null) {
+            SyncClusterToolsJob::dispatch($server->id);
+
+            return;
+        }
+
+        $mailTool->update(['sync_status' => 'stale']);
+        SyncMailJob::dispatch($server->id);
     }
 
     /**
-     * @template T of array<mixed>
-     *
-     * @param  callable(): (T|null)  $resolve
-     * @return T|null
+     * Dispatches whichever sync this server's mail picture needs, and
+     * returns the mail tool row as currently known (possibly stale).
      */
-    private function remember(string $key, callable $resolve): ?array
+    private function syncIfNeeded(Server $server): ?ClusterTool
     {
-        $cached = Cache::get($key);
+        $mailTool = $server->mailTool();
 
-        if (is_array($cached)) {
-            /** @var T $cached */
-            return $cached;
+        // A row already mid-sync (by this call or a concurrent one) is left alone —
+        // treating "syncing" the same as "needs a sync" would cascade duplicate jobs.
+        if ($mailTool !== null && $mailTool->sync_status === 'syncing') {
+            return $mailTool;
         }
 
-        try {
-            $value = $resolve();
-        } catch (ProcessTimedOutException) {
-            return null;
+        if ($mailTool === null || $mailTool->sync_status !== 'fresh') {
+            SyncClusterToolsJob::dispatch($server->id);
+
+            // Under the sync queue driver the dispatch above already ran and wrote
+            // the row, so re-querying picks it up instead of returning the
+            // pre-dispatch snapshot; under a real async worker it's a no-op re-read.
+            return $server->mailTool();
         }
 
-        if ($value !== null) {
-            Cache::put($key, $value, self::TTL_SECONDS);
+        if (! $mailTool->installed) {
+            return $mailTool;
         }
 
-        return $value;
+        // Whether mail data has EVER been synced, not whether any mailboxes
+        // exist — a server with genuinely zero mailboxes must not look
+        // perpetually unsynced and get re-dispatched on every single check.
+        $everSynced = isset($mailTool->data['serverInfo']);
+        $mailFresh = $mailTool->last_synced_at !== null
+            && $mailTool->last_synced_at->gt(now()->subSeconds(SyncMailJob::FRESH_SECONDS));
+
+        if (! $everSynced || ! $mailFresh) {
+            SyncMailJob::dispatch($server->id);
+
+            return $mailTool->fresh();
+        }
+
+        return $mailTool;
     }
 
     /**

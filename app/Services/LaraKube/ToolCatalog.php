@@ -2,21 +2,24 @@
 
 namespace App\Services\LaraKube;
 
+use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Models\ClusterTool;
+use App\Models\Server;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Cluster Tools and their install state on one server, from
- * `larakube tool:list --json --context=…`. That call makes a couple of kubectl
- * round trips per tool (tens of seconds against a remote server), so the last
- * verified list is kept per context and only re-checked once it is older than
- * FRESH_SECONDS, or when an install, a removal or Refresh marks it stale. A
- * stale list is still shown while the new check runs.
+ * Cluster Tools and their install state on one server, mirrored into the
+ * cluster_tools table by SyncClusterToolsJob from
+ * `larakube tool:list --json --context=…`. Reads here are always instant
+ * database reads; a stale or missing list triggers a background re-sync
+ * rather than blocking on the CLI, and the last verified list (or, on a
+ * first-ever visit, the registry) is returned meanwhile.
  */
 class ToolCatalog
 {
-    public const FRESH_SECONDS = 1800;
+    public const FRESH_SECONDS = SyncClusterToolsJob::FRESH_SECONDS;
 
     /** How long the registry-only list, used before any verified list exists, is kept. */
     private const REGISTERED_TTL_SECONDS = 600;
@@ -28,19 +31,25 @@ class ToolCatalog
      */
     public function forContext(string $context): ?array
     {
-        $last = $this->lastVerified($context);
+        $server = Server::firstWhere('context', $context);
 
-        if ($last !== null && $this->isFresh($last)) {
-            return $last['tools'];
+        if ($server === null) {
+            return null;
         }
 
-        $tools = $this->load($context, registryOnly: false);
+        $last = $this->lastVerifiedForServer($server);
 
-        if ($tools !== null) {
-            Cache::forever($this->key($context), ['tools' => $tools, 'checkedAt' => now()->getTimestamp(), 'build' => $this->build()]);
+        // A sync already in flight (by this call or a concurrent one) is left alone —
+        // treating "syncing" the same as "stale" would cascade duplicate re-verifications.
+        if (($last === null || ! $this->isFresh($last)) && ! $this->isSyncing($server)) {
+            SyncClusterToolsJob::dispatch($server->id);
+            // Re-read: under the sync queue driver (tests, and briefly during a cold app boot) the
+            // dispatch above already ran and wrote fresh rows, so this picks them up immediately
+            // instead of returning the pre-dispatch snapshot; under a real async worker it's a no-op re-read.
+            $last = $this->lastVerifiedForServer($server);
         }
 
-        return $tools;
+        return $last['tools'] ?? null;
     }
 
     /**
@@ -51,22 +60,9 @@ class ToolCatalog
      */
     public function lastVerified(string $context): ?array
     {
-        $cached = Cache::get($this->key($context));
+        $server = Server::firstWhere('context', $context);
 
-        if (! is_array($cached) || ! is_array($cached['tools'] ?? null) || ! array_is_list($cached['tools'])) {
-            return null;
-        }
-
-        // A list an older CLI build produced may lack fields the pages now read.
-        $build = $this->build();
-        if ($build !== '' && ($cached['build'] ?? null) !== $build) {
-            return null;
-        }
-
-        /** @var list<array<string, mixed>> $tools */
-        $tools = $cached['tools'];
-
-        return ['tools' => $tools, 'checkedAt' => is_int($cached['checkedAt'] ?? null) ? $cached['checkedAt'] : null];
+        return $server === null ? null : $this->lastVerifiedForServer($server);
     }
 
     /**
@@ -79,14 +75,14 @@ class ToolCatalog
 
     /**
      * The same rows from the tool registry alone (about a second): enough to
-     * draw the page while forContext() verifies against the live cluster.
+     * draw the page while the background sync verifies against the live cluster.
      * Unverified: a tool installed outside the registry shows as available.
      *
      * @return list<array<string, mixed>>|null
      */
     public function registered(string $context): ?array
     {
-        $key = $this->key($context).':registered';
+        $key = $this->registeredKey($context);
         $cached = Cache::get($key);
 
         if (is_array($cached) && array_is_list($cached)) {
@@ -94,7 +90,7 @@ class ToolCatalog
             return $cached;
         }
 
-        $tools = $this->load($context, registryOnly: true);
+        $tools = $this->load($context);
 
         if ($tools !== null) {
             Cache::put($key, $tools, self::REGISTERED_TTL_SECONDS);
@@ -130,7 +126,7 @@ class ToolCatalog
     }
 
     /**
-     * Only what is already cached, never a slow lookup.
+     * Only what is already synced, never triggers a new sync.
      *
      * @return list<array<string, mixed>>|null
      */
@@ -139,66 +135,52 @@ class ToolCatalog
         return $this->lastVerified($context)['tools'] ?? null;
     }
 
-    /** Marks the verified list stale so the next view re-checks, keeping it to show meanwhile. */
+    /** Marks the verified list stale and dispatches an immediate re-sync — for the explicit "Refresh" action. */
     public function forget(string $context): void
     {
-        $last = $this->lastVerified($context);
+        $server = Server::firstWhere('context', $context);
 
-        if ($last !== null) {
-            Cache::forever($this->key($context), ['tools' => $last['tools'], 'checkedAt' => null, 'build' => $this->build()]);
+        if ($server !== null) {
+            ClusterTool::where('server_id', $server->id)->update(['sync_status' => 'stale']);
+            SyncClusterToolsJob::dispatch($server->id);
         }
 
-        Cache::forget($this->key($context).':registered');
+        Cache::forget($this->registeredKey($context));
     }
 
     /**
-     * Swaps one tool's rows for what the registry says about it right now (about
-     * a second), so a tool that was just installed or removed shows at once instead
-     * of after the slow live check. The list stays stale, so that check still runs.
+     * @return array{tools: list<array<string, mixed>>, checkedAt: int|null}|null
      */
-    public function refreshTool(string $context, string $tool): void
+    private function lastVerifiedForServer(Server $server): ?array
     {
-        $last = $this->lastVerified($context);
+        $rows = $server->clusterTools()->orderBy('position')->get();
 
-        if ($last === null) {
-            return;
+        if ($rows->isEmpty()) {
+            return null;
         }
 
-        $registered = $this->load($context, registryOnly: true);
+        // "syncing" still has valid last-known data (it's mid re-verification, not invalidated),
+        // so it counts here the same as "fresh" — only "stale"/"error" rows withhold checkedAt.
+        $allFresh = $rows->every(fn (ClusterTool $row): bool => in_array($row->sync_status, ['fresh', 'syncing'], true) && $row->last_synced_at !== null);
+        $checkedAt = $allFresh ? $rows->min('last_synced_at')?->getTimestamp() : null;
 
-        if ($registered === null) {
-            return;
-        }
+        return [
+            'tools' => array_values($rows->map(fn (ClusterTool $row): array => $row->toToolArray())->all()),
+            'checkedAt' => $checkedAt,
+        ];
+    }
 
-        $fresh = array_values(array_filter($registered, fn (array $row): bool => ($row['tool'] ?? null) === $tool));
-        $rows = [];
-        $placed = false;
-
-        foreach ($last['tools'] as $row) {
-            if (($row['tool'] ?? null) !== $tool) {
-                $rows[] = $row;
-
-                continue;
-            }
-
-            if (! $placed) {
-                array_push($rows, ...$fresh);
-                $placed = true;
-            }
-        }
-
-        if (! $placed) {
-            array_push($rows, ...$fresh);
-        }
-
-        Cache::forever($this->key($context), ['tools' => $rows, 'checkedAt' => null, 'build' => $this->build()]);
-        Cache::forget($this->key($context).':registered');
+    private function isSyncing(Server $server): bool
+    {
+        return $server->clusterTools()->where('sync_status', 'syncing')->exists();
     }
 
     /**
+     * The registry-only list (about a second): no kubectl round trips, just what the CLI ships.
+     *
      * @return list<array<string, mixed>>|null
      */
-    private function load(string $context, bool $registryOnly): ?array
+    private function load(string $context): ?array
     {
         $cli = $this->locator->find('larakube');
 
@@ -206,12 +188,9 @@ class ToolCatalog
             return null;
         }
 
-        // Longer than PHP's default 30s request limit: a remote cluster alone takes about that long.
-        set_time_limit(240);
-
-        $isolated = $this->locator->isolate([$cli, 'tool:list', "--context={$context}", ...($registryOnly ? ['--registry-only'] : []), '--json', '--no-interaction']);
+        $isolated = $this->locator->isolate([$cli, 'tool:list', "--context={$context}", '--registry-only', '--json', '--no-interaction']);
         try {
-            $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
+            $result = Process::env($isolated['environment'])->timeout(15)->run($isolated['command']);
         } catch (ProcessTimedOutException) {
             return null;
         }
@@ -226,16 +205,8 @@ class ToolCatalog
         return $decoded;
     }
 
-    /** The installed CLI build, as its file's modification time; empty when there is no CLI. */
-    private function build(): string
+    private function registeredKey(string $context): string
     {
-        $cli = $this->locator->find('larakube');
-
-        return $cli !== null ? (string) @filemtime($cli) : '';
-    }
-
-    private function key(string $context): string
-    {
-        return 'cluster-tools:'.$context;
+        return 'cluster-tools:'.$context.':registered';
     }
 }

@@ -7,6 +7,8 @@ use App\Enums\RunStatus;
 use App\Http\Requests\InstallClusterToolRequest;
 use App\Http\Requests\RemoveClusterToolRequest;
 use App\Models\Run;
+use App\Models\Server;
+use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\FrameworkForm;
@@ -14,6 +16,7 @@ use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
 use App\Services\LaraKube\ToolCommons;
+use App\Services\LaraKube\ToolCredentials;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,24 +28,20 @@ class ClusterToolController extends Controller
 {
     public function __construct(private StackCatalog $stacks, private ToolCatalog $tools) {}
 
-    /** The sidebar's Tools entry: the server last browsed, else the first ready one, else Servers. */
-    public function entry(): RedirectResponse
+    /** The sidebar's Tools entry: the server last browsed (shared with Mail), else the first ready one, else Servers. */
+    public function entry(CurrentServer $current): RedirectResponse
     {
         $ready = array_values(array_filter($this->stacks->all() ?? [], fn (array $stack): bool => $stack['status'] === 'ready' && $stack['context'] !== null));
         $names = array_column($ready, 'name');
-        $last = session('tools.server');
+        $resolved = $current->resolve($names);
 
-        if (is_string($last) && in_array($last, $names, true)) {
-            return to_route('servers.tools.index', $last);
-        }
-
-        return $names === [] ? to_route('servers.index') : to_route('servers.tools.index', $names[0]);
+        return $resolved === null ? to_route('servers.index') : to_route('servers.tools.index', $resolved);
     }
 
-    public function index(string $server, ClusterStatus $status): Response
+    public function index(string $server, ClusterStatus $status, CurrentServer $current): Response
     {
         $stack = $this->readyServer($server);
-        session(['tools.server' => $server]);
+        $current->remember($server);
 
         $context = (string) $stack['context'];
         $last = $this->tools->lastVerified($context);
@@ -81,6 +80,22 @@ class ClusterToolController extends Controller
         }
 
         return response()->json($status->checkDns($domain, $serverIp));
+    }
+
+    /**
+     * A freshly-installed tool's bootstrap credentials, fetched live — so a
+     * caller (Quick Launch, the install drawer) can show the admin login
+     * right after a Run succeeds, instead of sending someone to the Activity
+     * Log to read it out of plain-text CLI output.
+     */
+    public function credentials(Request $request, string $server, string $tool, ToolCredentials $credentials): JsonResponse
+    {
+        $stack = $this->readyServer($server);
+        $domain = $request->string('domain')->trim()->lower()->toString();
+
+        return response()->json([
+            'credentials' => $credentials->fetch((string) $stack['context'], $tool, $domain),
+        ]);
     }
 
     public function domains(string $server, ClusterStatus $status): JsonResponse
@@ -203,6 +218,7 @@ class ClusterToolController extends Controller
                 $request->boolean('wire_sso') ? '--wire-sso' : '--no-wire-sso',
                 $request->boolean('wire_mail') ? '--wire-mail' : '--no-wire-mail',
                 ...$resolved['flags'],
+                ...($request->boolean('confirm_commons_restart') ? ['--confirm-commons-restart'] : []),
                 '--force',
             ],
             kind: RunKind::InstallClusterTool,
@@ -243,7 +259,7 @@ class ClusterToolController extends Controller
 
         $run = app(CliRunner::class)->start(
             label: 'Remove '.$displayName." from {$server}",
-            arguments: [$command, 'production', "--context={$context}", ...($host !== null ? ["--domain={$host}"] : []), '--force'],
+            arguments: [$command, 'production', "--context={$context}", ...($host !== null ? ["--domain={$host}"] : []), ...($request->boolean('purge') ? ['--purge'] : []), '--force'],
             kind: RunKind::RemoveClusterTool,
             subject: $tool,
             meta: ['server' => $server, 'context' => $context, 'tool' => $tool, 'host' => $host ?? ''],
@@ -286,6 +302,8 @@ class ClusterToolController extends Controller
         $stack = $this->stacks->find($server);
 
         abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
+
+        Server::syncFromStack($stack);
 
         return $stack;
     }

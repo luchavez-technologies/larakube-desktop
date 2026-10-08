@@ -4,12 +4,14 @@ namespace App\Listeners;
 
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncMailJob;
+use App\Models\Activity;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\Elevation;
 use App\Services\LaraKube\ClusterStatus;
-use App\Services\LaraKube\MailStatus;
 use App\Services\LaraKube\ReadinessCheck;
-use App\Services\LaraKube\ToolCatalog;
 use App\Services\RunNotifier;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
@@ -86,15 +88,13 @@ class RecordRunOutput
         app(RunNotifier::class)->runFinished($run);
 
         $context = $run->meta['context'] ?? null;
+        $server = $context !== null ? Server::firstWhere('context', $context) : null;
 
-        if ($context !== null && $run->kind?->changesClusterTools()) {
-            app(ToolCatalog::class)->forget($context);
+        if ($server !== null && $run->kind?->changesClusterTools()) {
+            SyncClusterToolsJob::dispatch($server->id);
 
-            // Show what just changed at once; the full live check follows on the next visit.
-            $tool = $run->meta['tool'] ?? null;
-
-            if ($status === RunStatus::Succeeded && is_string($tool) && in_array($run->kind, [RunKind::InstallClusterTool, RunKind::RemoveClusterTool], true)) {
-                app(ToolCatalog::class)->refreshTool($context, $tool);
+            if ($status === RunStatus::Succeeded) {
+                $this->recordActivity($run, $server);
             }
         }
 
@@ -110,9 +110,39 @@ class RecordRunOutput
             app(ClusterStatus::class)->forgetTls($context);
         }
 
-        if ($context !== null && $run->kind?->changesMail()) {
-            app(MailStatus::class)->forget($context);
+        if ($server !== null && $run->kind?->changesMail()) {
+            // Deploying mail for the first time means the tool list itself doesn't
+            // know about it yet; everything else already has an installed mail tool.
+            if ($run->kind === RunKind::MailDeploy) {
+                SyncClusterToolsJob::dispatch($server->id);
+            } else {
+                SyncMailJob::dispatch($server->id);
+            }
+
+            if ($status === RunStatus::Succeeded) {
+                $this->recordActivity($run, $server);
+            }
         }
+    }
+
+    private function recordActivity(Run $run, Server $server): void
+    {
+        $type = $run->kind?->activityType();
+
+        if ($type === null) {
+            return;
+        }
+
+        $tool = $run->meta['tool'] ?? $run->tool;
+
+        Activity::create([
+            'server_id' => $server->id,
+            'cluster_tool_id' => $tool !== null ? $server->clusterTools()->where('tool', $tool)->value('id') : null,
+            'run_id' => $run->id,
+            'type' => $type,
+            'title' => $run->label,
+            'occurred_at' => now(),
+        ]);
     }
 
     /**

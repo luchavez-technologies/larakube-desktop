@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Models\Server;
+use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\MailStatus;
 use App\Services\LaraKube\StackCatalog;
@@ -19,26 +21,22 @@ class MailController extends Controller
     /**
      * Entry route from sidebar: redirects to last browsed server or first ready server.
      */
-    public function entry(): RedirectResponse
+    public function entry(CurrentServer $current): RedirectResponse
     {
         $ready = array_values(array_filter($this->stacks->all() ?? [], fn (array $stack): bool => $stack['status'] === 'ready' && $stack['context'] !== null));
         $names = array_column($ready, 'name');
-        $last = session('mail.server');
+        $resolved = $current->resolve($names);
 
-        if (is_string($last) && in_array($last, $names, true)) {
-            return to_route('servers.mail.index', $last);
-        }
-
-        return $names === [] ? to_route('servers.index') : to_route('servers.mail.index', $names[0]);
+        return $resolved === null ? to_route('servers.index') : to_route('servers.mail.index', $resolved);
     }
 
     /**
      * Mail management overview for the selected server.
      */
-    public function index(string $server, MailStatus $status): Response
+    public function index(string $server, MailStatus $status, CurrentServer $current): Response
     {
         $stack = $this->readyServer($server);
-        session(['mail.server' => $server]);
+        $current->remember($server);
 
         $context = (string) $stack['context'];
         $isInstalled = $status->isInstalled($context);
@@ -60,6 +58,7 @@ class MailController extends Controller
             'accounts' => $isInstalled
                 ? Inertia::defer(fn (): array => $status->accounts($context), 'accounts')
                 : ['accounts' => [], 'queue' => 0],
+            'mailSync' => $status->syncState($context),
         ]);
     }
 
@@ -384,6 +383,8 @@ class MailController extends Controller
         $stack = $this->stacks->find($server);
 
         abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
+
+        Server::syncFromStack($stack);
 
         /** @var array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, status: string, account?: ?string} $stack */
         return $stack;

@@ -108,4 +108,19 @@ enum RunKind: string
     {
         return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailConfigureRelay], true);
     }
+
+    /** The Activity this run's completion is worth recording as, if any — deliberately narrow, see Activity. */
+    public function activityType(): ?ActivityType
+    {
+        return match ($this) {
+            self::InstallClusterTool => ActivityType::ToolInstalled,
+            self::RemoveClusterTool => ActivityType::ToolRemoved,
+            self::MailDeploy => ActivityType::MailDeployed,
+            self::MailCreateAccount => ActivityType::MailAccountCreated,
+            self::MailDeleteAccount => ActivityType::MailAccountDeleted,
+            self::MailAddDomain => ActivityType::MailDomainAdded,
+            self::MailConfigureRelay => ActivityType::MailRelayConfigured,
+            default => null,
+        };
+    }
 }

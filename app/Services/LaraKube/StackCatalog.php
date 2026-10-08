@@ -44,9 +44,11 @@ class StackCatalog
     }
 
     /**
+     * Every stack and discovered cluster, unfiltered by role — what SyncServersJob mirrors into the servers table.
+     *
      * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
-    private function everything(): ?array
+    public function everything(): ?array
     {
         $cli = $this->locator->find('larakube');
 

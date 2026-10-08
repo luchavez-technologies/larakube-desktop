@@ -1,12 +1,34 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncMailJob;
+use App\Models\ClusterTool;
+use App\Models\MailAccount;
+use App\Models\MailDomain;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\MailStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Queue;
+use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
+
+/** Fakes the real CLI calls behind MailStatus/SyncClusterToolsJob/SyncMailJob, for tests that don't mock MailStatus. */
+function mailRealFakes(array $accounts = [['email' => 'admin@example.com', 'name' => 'Admin', 'role' => 'admin', 'quota' => '1 GB', 'quotaBytes' => 1_000_000, 'used' => '0 MB', 'usedBytes' => 0]], array $domains = [['id' => 'd1', 'name' => 'example.com', 'accounts' => 1]]): void
+{
+    Process::fake([
+        '*tool:list*' => Process::result(output: json_encode([
+            ['tool' => 'stalwart', 'instance' => '', 'brand' => 'Stalwart', 'installed' => true, 'host' => 'mail.example.com', 'multiInstance' => false],
+        ])),
+        '*mail:show*' => Process::result(output: json_encode(['installed' => true, 'host' => 'mail.example.com'])),
+        '*mail:domains*' => Process::result(output: json_encode(['domains' => $domains])),
+        '*mail:accounts*' => Process::result(output: json_encode(['accounts' => $accounts, 'queue' => 0])),
+    ]);
+}
 
 function mailTestServer(): string
 {
@@ -81,6 +103,9 @@ test('viewing mail page renders mail/index with installation status', function (
             ['email' => 'admin@example.com', 'name' => 'Admin', 'role' => 'Admin', 'quota' => 'Unlimited', 'used' => '0 MB'],
         ],
         'queue' => 0,
+    ]);
+    $mailStatus->shouldReceive('syncState')->with('larakube-do-ams3')->andReturn([
+        'status' => 'fresh', 'lastSyncedAt' => now()->toAtomString(), 'error' => null,
     ]);
     app()->instance(MailStatus::class, $mailStatus);
 
@@ -319,4 +344,75 @@ test('checking DNS returns JSON results from MailStatus', function () {
             'installed' => true,
             'domain' => 'example.com',
         ]);
+});
+
+test('viewing the mail page syncs real mail accounts and domains into the database', function () {
+    mailTestServer();
+    mailRealFakes();
+
+    $this->get(route('servers.mail.index', 'prod-vps'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('mail/index')
+            ->where('isInstalled', true)
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->where('accounts.accounts.0.email', 'admin@example.com')
+                ->where('domains.0.name', 'example.com')));
+
+    expect(MailAccount::where('email', 'admin@example.com')->exists())->toBeTrue()
+        ->and(MailDomain::where('name', 'example.com')->exists())->toBeTrue();
+});
+
+test('a finished mailbox-create run re-syncs mail accounts for that server', function () {
+    mailTestServer();
+    mailRealFakes();
+
+    // Prime the mail tool row and initial accounts the way a real page visit would.
+    $this->get(route('servers.mail.index', 'prod-vps'));
+
+    $run = Run::create([
+        'label' => 'Create mailbox jane@example.com on prod-vps', 'command' => ['larakube', 'mail:create'],
+        'kind' => RunKind::MailCreateAccount, 'meta' => ['server' => 'prod-vps', 'context' => 'larakube-do-ams3'],
+    ]);
+
+    mailRealFakes(accounts: [
+        ['email' => 'admin@example.com', 'name' => 'Admin', 'role' => 'admin', 'quota' => '1 GB', 'quotaBytes' => 1_000_000, 'used' => '0 MB', 'usedBytes' => 0],
+        ['email' => 'jane@example.com', 'name' => 'Jane', 'role' => 'user', 'quota' => '1 GB', 'quotaBytes' => 1_000_000, 'used' => '0 MB', 'usedBytes' => 0],
+    ], domains: [['id' => 'd1', 'name' => 'example.com', 'accounts' => 2]]);
+
+    event(new ProcessExited($run->alias(), 0));
+
+    expect(MailAccount::where('email', 'jane@example.com')->exists())->toBeTrue();
+});
+
+test('a server with genuinely zero mailboxes does not get re-synced on every check', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'prod-vps', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-do-ams3', 'status' => 'ready']);
+    ClusterTool::create([
+        'server_id' => $server->id, 'tool' => 'stalwart', 'host' => null, 'installed' => true,
+        'data' => ['tool' => 'stalwart', 'serverInfo' => ['installed' => true], 'queue' => 0],
+        'sync_status' => 'fresh', 'last_synced_at' => now(),
+    ]);
+
+    $status = app(MailStatus::class);
+    $status->isInstalled('larakube-do-ams3');
+    $status->accounts('larakube-do-ams3');
+    $status->domains('larakube-do-ams3');
+
+    Queue::assertNotPushed(SyncMailJob::class);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('a mail tool mid-sync is left alone instead of triggering another sync', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'prod-vps', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-do-ams3', 'status' => 'ready']);
+    ClusterTool::create([
+        'server_id' => $server->id, 'tool' => 'stalwart', 'host' => null, 'installed' => true,
+        'data' => ['tool' => 'stalwart'], 'sync_status' => 'syncing', 'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    app(MailStatus::class)->isInstalled('larakube-do-ams3');
+
+    Queue::assertNotPushed(SyncMailJob::class);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
 });
