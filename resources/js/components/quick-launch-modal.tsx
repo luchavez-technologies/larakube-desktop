@@ -64,7 +64,6 @@ const APPS: AppOption[] = [
         description:
             'Fair-code node-based engine connecting 400+ apps, webhooks, and AI models.',
         defaultSubdomain: 'n8n',
-        defaultDb: 'sqlite',
         capabilities: {
             databases: ['sqlite', 'postgresql'],
             cache: ['redis'],
@@ -72,18 +71,6 @@ const APPS: AppOption[] = [
             auth: [],
             mail: [],
         },
-        availableDbs: [
-            {
-                id: 'sqlite',
-                label: 'SQLite (0 RAM, instant)',
-                desc: 'Embedded file storage, ideal for single instance',
-            },
-            {
-                id: 'postgres',
-                label: 'Plex PostgreSQL',
-                desc: 'High concurrency, uses shared Commons Postgres',
-            },
-        ],
     },
     {
         id: 'wordpress',
@@ -182,6 +169,34 @@ export default function QuickLaunchModal({
         [readyServers, selectedServerName],
     );
 
+    const isLocalServer = useMemo(() => {
+        if (!currentServer) return true;
+        const provider = (currentServer.provider ?? '').toLowerCase();
+        const localProviders = [
+            'local',
+            'k3d',
+            'kind',
+            'orbstack',
+            'minikube',
+            'docker',
+        ];
+        if (localProviders.includes(provider)) return true;
+        if (currentServer.region === 'local') return true;
+        if (
+            currentServer.ip &&
+            ['127.0.0.1', 'localhost', 'local'].includes(currentServer.ip)
+        ) {
+            return true;
+        }
+        if (
+            !currentServer.ip &&
+            !['gcp', 'aws', 'do', 'hetzner', 'vps', 'cloud'].includes(provider)
+        ) {
+            return true;
+        }
+        return false;
+    }, [currentServer]);
+
     const handleCopyDns = () => {
         if (!currentServer?.ip) return;
         const hostName = useCustomDomain
@@ -271,15 +286,14 @@ export default function QuickLaunchModal({
                     if (bestDomain) {
                         setBaseDomain(bestDomain.domain);
                         setUseCustomDomain(false);
-                    } else if (
-                        currentServer?.ip &&
-                        !['127.0.0.1', 'localhost', 'local'].includes(
-                            currentServer.ip,
-                        )
-                    ) {
-                        setBaseDomain(`${currentServer.ip}.nip.io`);
-                    } else {
+                    } else if (isLocalServer) {
                         setBaseDomain('dev.test');
+                        setUseCustomDomain(false);
+                    } else {
+                        // Cloud server without connected cluster domains:
+                        // Do not suggest local .dev.test or third-party nip.io. Let operator enter their own domain.
+                        setBaseDomain('');
+                        setUseCustomDomain(false);
                     }
                 },
             )
@@ -297,7 +311,7 @@ export default function QuickLaunchModal({
         return () => {
             cancelled = true;
         };
-    }, [isOpen, selectedServerName, currentServer?.ip]);
+    }, [isOpen, selectedServerName, currentServer?.ip, isLocalServer]);
 
     // Sync defaults when app or server changes
     useEffect(() => {
@@ -310,11 +324,6 @@ export default function QuickLaunchModal({
                 (activeSet.has('mysql') || activeSet.has('mariadb'))
             ) {
                 setDatabase('mysql');
-            } else if (
-                currentApp.id === 'n8n' &&
-                (activeSet.has('postgres') || activeSet.has('postgresql'))
-            ) {
-                setDatabase('postgres');
             } else {
                 setDatabase(currentApp.defaultDb ?? 'sqlite');
             }
@@ -380,11 +389,7 @@ export default function QuickLaunchModal({
         }
         const sub =
             subdomain.trim().toLowerCase() || currentApp.defaultSubdomain;
-        const fallbackBase =
-            currentServer?.ip &&
-            !['127.0.0.1', 'localhost', 'local'].includes(currentServer.ip)
-                ? `${currentServer.ip}.nip.io`
-                : 'example.com';
+        const fallbackBase = isLocalServer ? 'dev.test' : 'example.com';
         const base = baseDomain.trim().toLowerCase() || fallbackBase;
         return `${sub}.${base}`;
     }, [
@@ -393,7 +398,7 @@ export default function QuickLaunchModal({
         subdomain,
         currentApp.defaultSubdomain,
         baseDomain,
-        currentServer?.ip,
+        isLocalServer,
     ]);
 
     if (!isOpen) {
@@ -630,11 +635,25 @@ export default function QuickLaunchModal({
                                     <span>{currentApp.name} Overview</span>
                                 </div>
                                 <p className="mt-1 leading-relaxed text-soft">
-                                    {currentApp.description} Default database is{' '}
-                                    <strong className="text-ink">
-                                        {currentApp.defaultDb ?? 'SQLite'}
-                                    </strong>
-                                    . Configurable in step 3.
+                                    {currentApp.description}
+                                    {currentApp.availableDbs &&
+                                    currentApp.availableDbs.length > 0 ? (
+                                        <>
+                                            {' '}
+                                            Default database is{' '}
+                                            <strong className="text-ink">
+                                                {currentApp.defaultDb ??
+                                                    'SQLite'}
+                                            </strong>
+                                            . Configurable in step 3.
+                                        </>
+                                    ) : (
+                                        <>
+                                            {' '}
+                                            Uses lightweight embedded SQLite
+                                            storage.
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -824,29 +843,7 @@ export default function QuickLaunchModal({
                                                     ExternalDNS Auto-Sync
                                                 </span>
                                             </span>
-                                        ) : currentServer?.ip &&
-                                          ![
-                                              '127.0.0.1',
-                                              'localhost',
-                                              'local',
-                                          ].includes(currentServer.ip) ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setBaseDomain(
-                                                        `${currentServer.ip}.nip.io`,
-                                                    );
-                                                    setUseCustomDomain(false);
-                                                }}
-                                                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:underline"
-                                            >
-                                                <Zap className="size-3" />
-                                                <span>
-                                                    No domain? Use{' '}
-                                                    {currentServer.ip}.nip.io
-                                                </span>
-                                            </button>
-                                        ) : (
+                                        ) : isLocalServer ? (
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -858,7 +855,7 @@ export default function QuickLaunchModal({
                                                 <Zap className="size-3" />
                                                 <span>Use local .dev.test</span>
                                             </button>
-                                        )}
+                                        ) : null}
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -874,7 +871,9 @@ export default function QuickLaunchModal({
                                             className="text-primary text-[11px] hover:underline"
                                         >
                                             {useCustomDomain
-                                                ? 'Pick connected base domain'
+                                                ? domains.length > 0
+                                                    ? 'Pick connected base domain'
+                                                    : 'Use subdomain + domain'
                                                 : '+ Custom full domain'}
                                         </button>
                                     </div>
@@ -1063,13 +1062,8 @@ export default function QuickLaunchModal({
                                                     )
                                                 }
                                                 placeholder={
-                                                    currentServer?.ip &&
-                                                    ![
-                                                        '127.0.0.1',
-                                                        'localhost',
-                                                        'local',
-                                                    ].includes(currentServer.ip)
-                                                        ? `${currentServer.ip}.nip.io`
+                                                    isLocalServer
+                                                        ? 'dev.test'
                                                         : 'example.com'
                                                 }
                                                 className="focus:ring-primary w-48 rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2"

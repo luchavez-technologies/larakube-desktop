@@ -44,7 +44,7 @@ class QuickActionController extends Controller
         }
 
         $extraOptions = (array) $request->input('options', []);
-        if ($database !== '' && in_array($tool, ['wordpress', 'n8n'], true)) {
+        if ($database !== '' && $tool === 'wordpress') {
             $extraOptions['db'] = $database;
         }
 
@@ -58,7 +58,7 @@ class QuickActionController extends Controller
         }
 
         $extraFlags = [];
-        if ($database !== '' && in_array($tool, ['wordpress', 'n8n'], true)) {
+        if ($database !== '' && $tool === 'wordpress') {
             $dbFlag = "--db={$database}";
             if (! in_array($dbFlag, $resolved['flags'], true)) {
                 $extraFlags[] = $dbFlag;

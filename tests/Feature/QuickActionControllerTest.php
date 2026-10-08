@@ -49,6 +49,13 @@ beforeEach(function () {
                     ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text'],
                 ],
             ],
+            [
+                'tool' => 'n8n', 'instance' => '', 'icon' => '*', 'brand' => 'n8n', 'label' => 'Workflow Automation (n8n)', 'installed' => false,
+                'removeCommand' => 'n8n:remove', 'namespace' => 'larakube-shared', 'host' => null, 'aliases' => [], 'url' => null,
+                'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+                'commonsCapabilities' => ['databases' => ['sqlite'], 'cache' => ['redis'], 'storage' => ['s3'], 'auth' => [], 'mail' => []],
+                'initFields' => [],
+            ],
         ], JSON_PRETTY_PRINT)),
     ]);
 });
@@ -98,6 +105,44 @@ test('quick launch launches wordpress with commons mysql', function () {
             '--no-wire-sso',
             '--no-wire-mail',
             '--db=mysql',
+            '--force',
+            '--no-interaction',
+        ];
+    });
+});
+
+test('quick launch launches n8n without db flag even when database is specified', function () {
+    $fake = ChildProcess::fake();
+
+    $response = $this->post(route('quick-actions.launch'), [
+        'tool' => 'n8n',
+        'server' => 'prod-server',
+        'domain' => 'flow.example.com',
+        'admin_email' => 'admin@example.com',
+        'database' => 'sqlite',
+    ]);
+
+    $response->assertSessionHasNoErrors();
+    $response->assertRedirect(route('runs.show', Run::sole()));
+    $run = Run::sole();
+
+    expect($run->kind)->toBe(RunKind::QuickLaunchApp)
+        ->and($run->tool)->toBe('n8n')
+        ->and($run->server_name)->toBe('prod-server')
+        ->and($run->meta['host'])->toBe('flow.example.com');
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) {
+        $bin = $this->bin;
+
+        return array_slice($cmd, 4) === [
+            "{$bin}/larakube",
+            'tool:add',
+            '--tool=n8n',
+            '--context=larakube-198.51.100.10',
+            '--domain=flow.example.com',
+            '--admin-email=admin@example.com',
+            '--no-wire-sso',
+            '--no-wire-mail',
             '--force',
             '--no-interaction',
         ];
