@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreServerRequest extends FormRequest
 {
@@ -23,6 +24,13 @@ class StoreServerRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('target_kind')) {
+            $this->merge(['target_kind' => 'vps']);
+        }
+    }
+
     /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -33,6 +41,11 @@ class StoreServerRequest extends FormRequest
             'stack_name' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/'],
             'region' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9-]+$/'],
             'size' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9.-]+$/'],
+            // Not "kind" — that already means 'server'|'dev-box' on this same form.
+            'target_kind' => ['required', Rule::in(['vps', 'managed'])],
+            'node_count' => ['required_if:target_kind,managed', 'nullable', 'integer', 'min:1', 'max:20'],
+            'ha' => ['nullable', 'boolean'],
+            'k8s_version_prefix' => ['nullable', 'string', 'max:20', 'regex:/^[0-9.]+$/'],
             'api_token' => ['nullable', 'string', 'max:200'],
             'cloudflare_token' => ['nullable', 'string', 'max:200'],
             'aws_access_key_id' => ['nullable', 'string', 'max:100'],
@@ -40,6 +53,17 @@ class StoreServerRequest extends FormRequest
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
             'account' => ['nullable', 'string', 'max:100'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            // Mirrors cloud:create's own guard (resolveTargetKind()) — Hetzner
+            // has no managed-Kubernetes offering at all.
+            if ($this->input('provider') === 'hetzner' && $this->input('target_kind') === 'managed') {
+                $validator->errors()->add('target_kind', 'Hetzner Cloud does not offer a managed Kubernetes service.');
+            }
+        });
     }
 
     /**

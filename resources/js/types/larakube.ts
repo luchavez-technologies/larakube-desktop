@@ -29,6 +29,10 @@ export type Provider = {
     defaultDevBoxSize?: string;
     managedSizes?: PickerOption[];
     defaultManagedSize?: string;
+    /** The managed-Kubernetes offering this provider maps to (doks/eks/gke/custom), and how it models HA control planes. */
+    managedProvider?: string;
+    haOption?: 'boolean' | 'tier' | 'always' | 'unknown';
+    haCost?: string | null;
     /** Where the regions and prices come from: the provider's own list now, an earlier copy of it, or the CLI's built-in estimate. */
     pricing?: {
         source: 'live' | 'cached' | 'builtin';

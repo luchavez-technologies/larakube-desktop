@@ -104,6 +104,70 @@ test('server fields are validated before anything runs', function () {
     File::deleteDirectory($bin);
 });
 
+test('creating a managed cluster passes --managed, --node-count, --ha, and skips --cloudflare', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'gcp',
+        'stack_name' => 'my-cluster',
+        'region' => 'us-central1',
+        'size' => 'e2-medium',
+        'target_kind' => 'managed',
+        'node_count' => '3',
+        'ha' => '1',
+        'cloudflare_token' => 'cf_secret',
+    ])->assertRedirect();
+
+    $run = Run::sole();
+    expect($run->label)->toBe('Create managed cluster my-cluster');
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'cloud:create', '--provider=gcp', '--managed', '--node-count=3', '--ha',
+        '--stack-name=my-cluster', '--region=us-central1', '--size=e2-medium', '--json', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
+test('a managed cluster without node_count or ha omits those flags, defaulting target_kind to vps otherwise', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'aws',
+        'stack_name' => 'my-cluster',
+        'region' => 'us-east-1',
+        'size' => 't3.medium',
+        'target_kind' => 'managed',
+        'node_count' => '2',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => in_array('--managed', (array) $cmd, true)
+        && in_array('--node-count=2', (array) $cmd, true)
+        && ! in_array('--ha', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});
+
+test('Hetzner cannot be targeted for a managed cluster', function () {
+    $bin = createServerFakeCli();
+    ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'hetzner',
+        'stack_name' => 'my-cluster',
+        'region' => 'fsn1',
+        'size' => 'cx22',
+        'target_kind' => 'managed',
+        'node_count' => '2',
+    ])->assertSessionHasErrors('target_kind');
+
+    expect(Run::count())->toBe(0);
+
+    File::deleteDirectory($bin);
+});
+
 test('passing an account attaches the appropriate provider flag to cloud:create', function () {
     $bin = createServerFakeCli();
     $fake = ChildProcess::fake();

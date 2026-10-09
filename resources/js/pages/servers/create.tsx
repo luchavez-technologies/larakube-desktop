@@ -85,10 +85,12 @@ function ServerForm({
     devBox: boolean;
     defaultProvider?: string;
 }) {
-    const startSize = (candidate: Provider) =>
-        devBox
-            ? (candidate.defaultDevBoxSize ?? candidate.defaultVpsSize)
-            : candidate.defaultVpsSize;
+    const startSize = (candidate: Provider, targetKind: 'vps' | 'managed') =>
+        targetKind === 'managed'
+            ? (candidate.defaultManagedSize ?? candidate.defaultVpsSize)
+            : devBox
+              ? (candidate.defaultDevBoxSize ?? candidate.defaultVpsSize)
+              : candidate.defaultVpsSize;
     const initial =
         providers.find(
             (provider) =>
@@ -100,7 +102,11 @@ function ServerForm({
         provider: initial.slug,
         stack_name: '',
         region: initial.defaultRegion,
-        size: startSize(initial),
+        size: startSize(initial, 'vps'),
+        target_kind: 'vps' as 'vps' | 'managed',
+        node_count: '2',
+        ha: false,
+        k8s_version_prefix: '',
         api_token: '',
         cloudflare_token: '',
         aws_access_key_id: '',
@@ -125,22 +131,41 @@ function ServerForm({
         provider.slug === 'gcp' && !provider.credentials.ready;
     const cliMissing = /not installed/i.test(provider.credentials.hint ?? '');
 
-    const size = provider.vpsSizes.find(
-        (option) => option.value === form.data.size,
-    );
+    const canBeManaged = !devBox && (provider.managedSizes?.length ?? 0) > 0;
+    const isManaged = form.data.target_kind === 'managed' && canBeManaged;
+    const sizeOptions = isManaged ? provider.managedSizes! : provider.vpsSizes;
+    const size = sizeOptions.find((option) => option.value === form.data.size);
     const price = size?.label.match(/\(([^)]*\/mo[^)]*)\)/)?.[1];
+    const nodeCount = Math.max(1, parseInt(form.data.node_count, 10) || 1);
+    const monthlyEstimate = isManaged
+        ? estimateManagedCost(price, nodeCount, form.data.ha, provider.haCost)
+        : undefined;
 
     function selectProvider(next: Provider) {
         setOverrideAwsKeys(false);
+        const nextCanBeManaged =
+            !devBox && (next.managedSizes?.length ?? 0) > 0;
+        const nextTargetKind = nextCanBeManaged ? form.data.target_kind : 'vps';
         form.setData({
             ...form.data,
             provider: next.slug,
             region: next.defaultRegion,
-            size: startSize(next),
+            target_kind: nextTargetKind,
+            size: startSize(next, nextTargetKind),
+            ha: false,
             api_token: '',
             aws_access_key_id: '',
             aws_secret_access_key: '',
             account: next.activeAccount ?? next.accounts?.[0]?.id ?? '',
+        });
+    }
+
+    function selectTargetKind(next: 'vps' | 'managed') {
+        form.setData({
+            ...form.data,
+            target_kind: next,
+            size: startSize(provider, next),
+            ha: false,
         });
     }
 
@@ -287,6 +312,51 @@ function ServerForm({
                         />
                     </Field>
 
+                    {canBeManaged && (
+                        <Field
+                            label="Server type"
+                            error={form.errors.target_kind}
+                        >
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => selectTargetKind('vps')}
+                                    className={cn(
+                                        'rounded-lg px-3 py-2 text-left text-sm transition',
+                                        !isManaged
+                                            ? 'bg-servers/10 ring-2 ring-servers'
+                                            : 'ring-1 ring-line hover:ring-faint',
+                                    )}
+                                >
+                                    <span className="block font-medium">
+                                        Single server (VPS)
+                                    </span>
+                                    <span className="block text-xs text-soft">
+                                        k3s, single-node — cheapest, simplest
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => selectTargetKind('managed')}
+                                    className={cn(
+                                        'rounded-lg px-3 py-2 text-left text-sm transition',
+                                        isManaged
+                                            ? 'bg-servers/10 ring-2 ring-servers'
+                                            : 'ring-1 ring-line hover:ring-faint',
+                                    )}
+                                >
+                                    <span className="block font-medium">
+                                        Managed Kubernetes
+                                    </span>
+                                    <span className="block text-xs text-soft">
+                                        {provider.managedProvider?.toUpperCase()}{' '}
+                                        — multi-node, scales with your traffic
+                                    </span>
+                                </button>
+                            </div>
+                        </Field>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <Field label="Region" error={form.errors.region}>
                             <Select
@@ -307,10 +377,64 @@ function ServerForm({
                                 onChange={(value) =>
                                     form.setData('size', value)
                                 }
-                                options={provider.vpsSizes}
+                                options={sizeOptions}
                             />
                         </Field>
                     </div>
+
+                    {isManaged && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field
+                                label="Node count"
+                                error={form.errors.node_count}
+                            >
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={20}
+                                    value={form.data.node_count}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'node_count',
+                                            event.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+                            {provider.haOption === 'boolean' ? (
+                                <Field label="Control plane">
+                                    <label className="flex h-9 items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.data.ha}
+                                            onChange={(event) =>
+                                                form.setData(
+                                                    'ha',
+                                                    event.target.checked,
+                                                )
+                                            }
+                                            className="size-4 rounded ring-1 ring-line"
+                                        />
+                                        <span>
+                                            High availability
+                                            {provider.haCost
+                                                ? ` (${provider.haCost})`
+                                                : ''}
+                                        </span>
+                                    </label>
+                                </Field>
+                            ) : (
+                                provider.haOption === 'always' && (
+                                    <Field label="Control plane">
+                                        <p className="flex h-9 items-center text-sm text-soft">
+                                            High availability included
+                                        </p>
+                                    </Field>
+                                )
+                            )}
+                        </div>
+                    )}
 
                     {needsToken && (
                         <Field
@@ -401,7 +525,7 @@ function ServerForm({
                         </div>
                     )}
 
-                    {!devBox && (
+                    {!devBox && !isManaged && (
                         <CloudflareOption
                             value={form.data.cloudflare_token}
                             error={form.errors.cloudflare_token}
@@ -414,9 +538,11 @@ function ServerForm({
 
                 <div className="mt-5 flex items-center justify-between gap-4">
                     <p className="text-[13px] text-soft">
-                        {price
-                            ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                            : `Billed by ${provider.label}. You can destroy it any time.`}
+                        {isManaged && monthlyEstimate
+                            ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                            : price
+                              ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                              : `Billed by ${provider.label}. You can destroy it any time.`}
                     </p>
                     <div className="flex items-center gap-2.5">
                         <Link
@@ -460,6 +586,22 @@ function ServerForm({
             )}
         </>
     );
+}
+
+/** A rough total monthly estimate: per-node price × node count, plus HA's own cost if enabled. */
+function estimateManagedCost(
+    priceLabel: string | undefined,
+    nodeCount: number,
+    ha: boolean,
+    haCost?: string | null,
+): string | undefined {
+    const perNode = priceLabel?.match(/\$([\d.]+)/)?.[1];
+    if (!perNode) return undefined;
+
+    const total = parseFloat(perNode) * nodeCount;
+    const base = `~$${Math.round(total)}/mo for ${nodeCount} node${nodeCount === 1 ? '' : 's'}`;
+
+    return ha && haCost ? `${base}, plus ${haCost} for HA` : base;
 }
 
 /** The optional Cloudflare step: what it gives, how to get a token, and that it can wait. */

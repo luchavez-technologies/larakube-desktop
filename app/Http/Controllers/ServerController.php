@@ -65,18 +65,31 @@ class ServerController extends Controller
             default => [],
         };
 
+        $targetKind = $request->string('target_kind', 'vps')->toString();
+        $kindArg = $targetKind === 'managed'
+            ? [
+                '--managed',
+                '--node-count='.$request->integer('node_count'),
+                ...($request->boolean('ha') ? ['--ha'] : []),
+                ...($request->filled('k8s_version_prefix') ? ['--k8s-version-prefix='.$request->string('k8s_version_prefix')] : []),
+            ]
+            : ['--vps'];
+
         $run = $runner->start(
-            label: "Create server {$stackName}",
+            label: $targetKind === 'managed' ? "Create managed cluster {$stackName}" : "Create server {$stackName}",
             arguments: [
                 'cloud:create',
                 "--provider={$provider}",
-                '--vps',
+                ...$kindArg,
                 "--stack-name={$stackName}",
                 '--region='.$request->string('region'),
                 '--size='.$request->string('size'),
                 '--json',
                 ...$accountArg,
-                ...($request->connectsCloudflare() ? ['--cloudflare'] : []),
+                // Cloudflare auto-setup only applies to the VPS's own
+                // cloud:init flow — meaningless (and never requested) on a
+                // managed cluster's create path.
+                ...($targetKind === 'vps' && $request->connectsCloudflare() ? ['--cloudflare'] : []),
                 // Inside a project, the environment argument binds it to the new server.
                 ...($project !== null ? [ProjectController::ENVIRONMENT] : []),
             ],
