@@ -82,9 +82,10 @@ jobs:
       GITHUB_OWNER: ${{ github.repository_owner }}
       GITHUB_REPO: ${{ github.event.repository.name }}
       LARAKUBE_UPDATE_URL: ${{ needs.checks.outputs.is_canary == 'true' && format('https://github.com/{0}/releases/download/canary', github.repository) || format('https://github.com/{0}/releases/latest/download', github.repository) }}
-      # Apple Code Signing & Notarization (macOS only)
-      CSC_LINK: ${{ matrix.target == 'mac' && secrets.CSC_LINK || '' }}
-      CSC_KEY_PASSWORD: ${{ matrix.target == 'mac' && secrets.CSC_KEY_PASSWORD || '' }}
+      # Apple Notarization (macOS only). Signing itself is NOT handed to
+      # electron-builder via CSC_LINK/CSC_KEY_PASSWORD — see "Import Apple
+      # signing certificate" below for why — so those two are deliberately
+      # absent here and scoped to that one step instead.
       NATIVEPHP_APPLE_ID: ${{ matrix.target == 'mac' && secrets.NATIVEPHP_APPLE_ID || '' }}
       NATIVEPHP_APPLE_ID_PASS: ${{ matrix.target == 'mac' && secrets.NATIVEPHP_APPLE_ID_PASS || '' }}
       NATIVEPHP_APPLE_TEAM_ID: ${{ matrix.target == 'mac' && secrets.NATIVEPHP_APPLE_TEAM_ID || '' }}
@@ -139,8 +140,54 @@ jobs:
         shell: bash
         run: echo "MAIN_VITE_NATIVEPHP_BUILD_PATH='../../../build'" > nativephp/electron/.env.production
 
+      # electron-builder's own CSC_LINK/CSC_KEY_PASSWORD handling
+      # (app-builder-lib/out/codeSign/macCodeSign.js) has a confirmed bug: it
+      # creates a keychain with a random password (for create-keychain/
+      # unlock-keychain), but then passes CSC_KEY_PASSWORD — the
+      # certificate's own import password, a completely different value — to
+      # `security set-key-partition-list -k`, which Apple's own security(1)
+      # documents as taking the KEYCHAIN's password, not the certificate's.
+      # That mismatch doesn't matter on macOS versions that don't enforce
+      # it, but fails outright ("SecKeychainUnlock: ... not correct") on
+      # ones that do — which is what GitHub's macos-latest runners are on
+      # now. Doing the keychain setup ourselves, with the right password in
+      # the right place, works around it; CSC_LINK/CSC_KEY_PASSWORD are then
+      # deliberately NOT passed to native:build below, so electron-builder's
+      # own (buggy) import path never runs — CSC_IDENTITY_AUTO_DISCOVERY
+      # finds the identity we already imported and trusted here instead.
+      - name: Import Apple signing certificate
+        if: matrix.target == 'mac'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          set -eu
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+
+          # openssl's base64, not the base64 CLI: macOS's built-in base64 takes
+          # different flags than GNU's, openssl's -d/-A is the same either way.
+          echo -n "$CSC_LINK" | openssl base64 -d -A -out "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          EXISTING_KEYCHAINS="$(security list-keychains -d user | sed 's/"//g')"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+
       - name: Build ${{ matrix.target }}-${{ matrix.arch }}
         shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.target == 'mac' && 'true' || 'false' }}
         run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
 
       - name: Collect installers
