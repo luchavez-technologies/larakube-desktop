@@ -21,6 +21,7 @@ import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/page-header';
+import HelpCommunityCard from '@/components/help-community-card';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 
@@ -512,6 +513,8 @@ export default function SettingsIndex({
                             </div>
                         </div>
                     </Card>
+
+                    <HelpCommunityCard />
                 </div>
             </div>
         </AppLayout>

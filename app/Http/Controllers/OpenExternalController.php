@@ -20,7 +20,7 @@ class OpenExternalController extends Controller
                 'max:4096',
                 function (string $attribute, mixed $value, \Closure $fail): void {
                     $scheme = parse_url((string) $value, PHP_URL_SCHEME);
-                    if (! in_array($scheme, ['http', 'https', 'vscode', 'cursor', 'jetbrains', 'jetbrains-gateway'], true)) {
+                    if (! in_array($scheme, ['http', 'https', 'mailto', 'vscode', 'cursor', 'jetbrains', 'jetbrains-gateway'], true)) {
                         $fail('The url field must be a valid URL.');
                     }
                 },
