@@ -10,6 +10,7 @@ use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\DiagnosticsController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\OnboardingController;
@@ -194,6 +195,8 @@ Route::post('/diagnostics/folder', [DiagnosticsController::class, 'folder'])->na
 Route::get('/updates', [UpdatesController::class, 'status'])->name('updates.status');
 Route::post('/updates/check', [UpdatesController::class, 'check'])->name('updates.check');
 Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');
+Route::get('/help', [HelpController::class, 'show'])->name('help.show');
+
 Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('settings.theme');

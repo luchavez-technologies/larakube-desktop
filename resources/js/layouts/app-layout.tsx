@@ -10,10 +10,12 @@ import {
     Settings,
     Code2,
     Mail,
+    HelpCircle,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 import { dashboard, mail, readiness, tools } from '@/routes';
+import { show as helpShow } from '@/routes/help';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
@@ -111,6 +113,14 @@ const navigation: NavItem[] = [
         active: (url) => url.startsWith('/settings'),
         accent: 'bg-slate-600',
         icon: Settings,
+    },
+    {
+        label: 'Help',
+        description: 'Community & support',
+        href: helpShow().url,
+        active: (url) => url.startsWith('/help'),
+        accent: 'bg-rose-600',
+        icon: HelpCircle,
     },
 ];
 
