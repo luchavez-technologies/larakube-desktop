@@ -3,6 +3,7 @@
 use App\Models\Project;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
@@ -10,7 +11,33 @@ use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
+/**
+ * Every test below exercises the dashboard's own content, not the onboarding
+ * gate — assume onboarding is already done unless a test says otherwise.
+ * `hideProjects`/`experimental` are stubbed too: HandleInertiaRequests::share()
+ * calls both on every request, mocked or not.
+ */
+function onboarded(): void
+{
+    $settings = mock(GlobalSettings::class);
+    $settings->shouldReceive('hasCompletedOnboarding')->andReturnTrue();
+    $settings->shouldReceive('hideProjects')->andReturnFalse();
+    $settings->shouldReceive('experimental')->andReturnFalse();
+    app()->instance(GlobalSettings::class, $settings);
+}
+
+test('a first launch that has not finished onboarding is sent to the wizard', function () {
+    $settings = mock(GlobalSettings::class);
+    $settings->shouldReceive('hasCompletedOnboarding')->andReturnFalse();
+    $settings->shouldReceive('hideProjects')->andReturnFalse();
+    $settings->shouldReceive('experimental')->andReturnFalse();
+    app()->instance(GlobalSettings::class, $settings);
+
+    $this->get(route('dashboard'))->assertRedirect(route('onboarding'));
+});
+
 test('dashboard page renders with stats and workspace overview', function () {
+    onboarded();
     $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($bin);
     File::put("{$bin}/larakube", "#!/bin/sh\n");
@@ -72,6 +99,7 @@ test('every dashboard server carries hasExternalDns, computed up front for all o
     // Quick Launch's cluster picker needs this for every server at once, not
     // just a selected one — an instant DB read (DomainCatalog), never a live
     // DNS check, so it's safe to compute for all of them here.
+    onboarded();
     $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($bin);
     File::put("{$bin}/larakube", "#!/bin/sh\n");
@@ -103,6 +131,7 @@ test('every dashboard server carries hasExternalDns, computed up front for all o
 });
 
 test('a first launch with no CLI sends the user to Setup', function () {
+    onboarded();
     $empty = storage_path('framework/testing/empty-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($empty);
     app()->instance(ToolLocator::class, new ToolLocator([$empty]));
@@ -111,6 +140,7 @@ test('a first launch with no CLI sends the user to Setup', function () {
 });
 
 test('the dashboard warns about ready servers that have no backups', function () {
+    onboarded();
     $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($bin);
     File::put("{$bin}/larakube", "#!/bin/sh\n");

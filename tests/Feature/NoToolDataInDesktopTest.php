@@ -34,7 +34,7 @@ test('Desktop does not branch on a specific tool, apart from the known leftovers
     // installed first, which tool replaces another) and be sent as data.
     $known = ['pages/tools/index.tsx' => 6];
     // Setup's own tools (the CLI, kubectl) and cloud providers are not Cluster Tools.
-    $skip = ['components/tool-logo.tsx', 'components/framework-logo.tsx', 'pages/servers/create.tsx', 'pages/readiness.tsx', 'components/cloud-accounts-modal.tsx'];
+    $skip = ['components/tool-logo.tsx', 'components/framework-logo.tsx', 'pages/servers/create.tsx', 'pages/readiness.tsx', 'components/cloud-accounts-modal.tsx', 'components/setup/tool-catalog.tsx'];
     $found = [];
 
     foreach (desktopSources() as $file => $source) {

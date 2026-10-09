@@ -7,6 +7,7 @@ use App\Models\Run;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FleetMetrics;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
@@ -27,8 +28,16 @@ class DashboardController extends Controller
         ClusterStatus $clusterStatus,
         FleetMetrics $fleetMetrics,
         DomainCatalog $domains,
+        GlobalSettings $settings,
     ): Response|RedirectResponse {
-        // A first launch has no CLI yet, and every other page needs it: Setup installs it.
+        // A first launch gets the onboarding wizard before anything else — its
+        // own install step is how the CLI gets installed, so this check comes
+        // before the "CLI missing" one below.
+        if (! $settings->hasCompletedOnboarding()) {
+            return redirect()->route('onboarding');
+        }
+
+        // Covers an already-onboarded install that somehow lost its CLI: Setup installs it.
         if ($locator->find('larakube') === null) {
             return redirect()->route('readiness');
         }

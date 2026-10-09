@@ -29,19 +29,27 @@ class ReadinessCheck
 
     public const CLI_INSTALL_COMMAND = 'curl -fsSL https://cli.larakube.app/install.sh | bash -s -- --canary';
 
+    /** Which cloud provider (GlobalSettings::CLOUD_PROVIDERS key) each provider-specific CLI tool is for. DO/Hetzner need no CLI binary — just the API token fields already on Setup/Settings. */
+    private const PROVIDER_TOOLS = ['aws' => 'aws', 'gcloud' => 'gcp'];
+
     public function __construct(private ToolLocator $locator) {}
 
     /**
      * Every tool the page lists, without checking this computer, so the page can
      * draw its rows at once and fill each in as its check finishes.
      *
+     * @param  ?list<string>  $intendedProviders  When given and non-empty, provider-specific tools (aws/gcloud) whose provider isn't in this list are left out entirely. Null or empty means "show everything" — used by the regular Setup page and by onboarding before a provider choice is made.
      * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool}>
      */
-    public function catalog(): array
+    public function catalog(?array $intendedProviders = null): array
     {
         $catalog = [];
 
         foreach (self::TOOLS as $slug => $tool) {
+            if (! empty($intendedProviders) && array_key_exists($slug, self::PROVIDER_TOOLS) && ! in_array(self::PROVIDER_TOOLS[$slug], $intendedProviders, true)) {
+                continue;
+            }
+
             $catalog[] = [
                 'slug' => $slug,
                 'label' => $tool['label'],

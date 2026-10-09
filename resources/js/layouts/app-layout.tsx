@@ -158,7 +158,10 @@ export default function AppLayout({
     const hideProjects = Boolean(props.hideProjects);
     const visibleNavigation = navigation.filter(
         (item) =>
-            !(hideProjects && item.label === 'Projects') &&
+            !(
+                hideProjects &&
+                (item.label === 'Projects' || item.label === 'Dev Boxes')
+            ) &&
             (!item.experimental || Boolean(props.experimental)),
     );
 

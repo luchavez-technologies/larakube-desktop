@@ -12,6 +12,7 @@ use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
@@ -30,6 +31,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+Route::get('/onboarding', [OnboardingController::class, 'show'])->name('onboarding');
+Route::post('/onboarding/providers', [OnboardingController::class, 'setProviders'])->name('onboarding.providers');
+Route::post('/onboarding/complete', [OnboardingController::class, 'complete'])->name('onboarding.complete');
+Route::post('/onboarding/reset', [OnboardingController::class, 'reset'])->name('onboarding.reset');
 
 Route::get('/readiness', [ReadinessController::class, 'show'])->name('readiness');
 Route::post('/setup/cli/update', [ToolInstallController::class, 'updateCli'])->name('setup.cli.update');

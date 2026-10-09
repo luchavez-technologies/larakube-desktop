@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
-    Download,
     Key,
     RefreshCw,
     X,
     AlertCircle,
-    Check,
-    ArrowUpCircle,
     Plus,
     RotateCw,
     XCircle,
@@ -16,8 +13,6 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
-import GcpSignIn from '@/components/gcp-sign-in';
-import CopyButton from '@/components/copy-button';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { ListRow, TwoLine } from '@/components/list-row';
 import SelectMenu from '@/components/select-menu';
@@ -25,19 +20,14 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { create as createServer } from '@/routes/servers';
-import { install } from '@/routes/setup/tools';
-import { forgetToolStatus, useToolStatus } from '@/lib/tool-status';
-import type { Provider, Tool } from '@/types/larakube';
-
-type CatalogEntry = Omit<Tool, 'installed' | 'path' | 'version'>;
-
-type WslState = {
-    state: 'ready' | 'missing' | 'no-distro' | 'old-version' | 'broken';
-    distro: string | null;
-    version: number | null;
-    message: string;
-    command: string | null;
-};
+import CliMissing from '@/components/setup/cli-missing';
+import UsageChoice from '@/components/setup/usage-choice';
+import ToolCatalogList, {
+    type CatalogEntry,
+} from '@/components/setup/tool-catalog';
+import WslCheck, { type WslState } from '@/components/setup/wsl-check';
+import { useToolStatus } from '@/lib/tool-status';
+import type { Provider } from '@/types/larakube';
 
 type Props = {
     windows: boolean;
@@ -143,19 +133,12 @@ export default function Readiness({
                     )}
                     <div className="grid grid-cols-2 items-start gap-4.5">
                         <Card label="Command-line tools">
-                            {catalog
-                                .filter(
-                                    (entry) =>
-                                        usage === 'apps' || !entry.localOnly,
-                                )
-                                .map((entry) => (
-                                    <ToolRow
-                                        key={entry.slug}
-                                        entry={entry}
-                                        channel={selectedChannel}
-                                        refresh={refresh}
-                                    />
-                                ))}
+                            <ToolCatalogList
+                                catalog={catalog}
+                                channel={selectedChannel}
+                                refresh={refresh}
+                                showLocalOnly={usage === 'apps'}
+                            />
                         </Card>
                         <Card label="Cloud accounts">
                             <Deferred
@@ -183,35 +166,17 @@ export default function Readiness({
                                                                     provider,
                                                                 )
                                                             }
-                                                            className="gap-1.5"
+                                                            className="w-33 justify-center gap-1.5"
                                                         >
                                                             <Users className="size-3.5" />
                                                             <span>
                                                                 {provider
                                                                     .credentials
                                                                     .ready
-                                                                    ? provider.accounts &&
-                                                                      provider
-                                                                          .accounts
-                                                                          .length >
-                                                                          1
-                                                                        ? `Accounts (${provider.accounts.length})`
-                                                                        : 'Accounts / Keys'
+                                                                    ? 'Accounts / Keys'
                                                                     : 'Connect'}
                                                             </span>
                                                         </Button>
-                                                        {provider.slug ===
-                                                            'gcp' && (
-                                                            <GcpSignIn
-                                                                label={
-                                                                    provider
-                                                                        .credentials
-                                                                        .ready
-                                                                        ? 'Switch'
-                                                                        : 'Sign in'
-                                                                }
-                                                            />
-                                                        )}
                                                         <StatusPill
                                                             tone={
                                                                 provider
@@ -224,7 +189,13 @@ export default function Readiness({
                                                             {provider
                                                                 .credentials
                                                                 .ready
-                                                                ? 'Ready'
+                                                                ? provider.accounts &&
+                                                                  provider
+                                                                      .accounts
+                                                                      .length >
+                                                                      1
+                                                                    ? `Ready (${provider.accounts.length})`
+                                                                    : 'Ready'
                                                                 : 'Not connected'}
                                                         </StatusPill>
                                                     </div>
@@ -281,83 +252,6 @@ export default function Readiness({
                 />
             )}
         </AppLayout>
-    );
-}
-
-const USAGES: { value: 'tools' | 'apps'; title: string; detail: string }[] = [
-    {
-        value: 'tools',
-        title: 'Install tools on a server',
-        detail: 'Create servers and set up chat, a wiki, sign-in and more for your team. Nothing runs on this computer.',
-    },
-    {
-        value: 'apps',
-        title: 'Build and run apps here',
-        detail: 'Everything above, plus creating apps and running them on this computer to work on them.',
-    },
-];
-
-function UsageChoice({ usage }: { usage: 'tools' | 'apps' | null }) {
-    return (
-        <div className="mb-4.5">
-            <p className="mb-2 text-sm font-medium">
-                What will you use LaraKube Desktop for?
-                {usage === null && (
-                    <span className="ml-2 font-normal text-accent">
-                        Choose one
-                    </span>
-                )}
-            </p>
-            <div
-                role="radiogroup"
-                aria-label="What this computer is for"
-                className="grid grid-cols-2 gap-3"
-            >
-                {USAGES.map((option) => {
-                    const selected = usage === option.value;
-
-                    return (
-                        <button
-                            key={option.value}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            onClick={() =>
-                                router.post(
-                                    '/setup/usage',
-                                    { usage: option.value },
-                                    { preserveScroll: true, only: ['usage'] },
-                                )
-                            }
-                            className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 text-left transition ${
-                                selected
-                                    ? 'border-accent bg-accent-tint'
-                                    : 'border-line bg-surface hover:border-faint hover:bg-paper'
-                            }`}
-                        >
-                            <span
-                                aria-hidden="true"
-                                className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 ${
-                                    selected
-                                        ? 'border-accent bg-accent text-white'
-                                        : 'border-faint bg-surface'
-                                }`}
-                            >
-                                {selected && <Check className="size-3" />}
-                            </span>
-                            <span>
-                                <span className="block text-sm font-semibold">
-                                    {option.title}
-                                </span>
-                                <span className="mt-1 block text-xs leading-relaxed text-soft">
-                                    {option.detail}
-                                </span>
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
     );
 }
 
@@ -465,332 +359,6 @@ function TerminalIntegrationCard({
                 </ListRow>
             </Card>
         </div>
-    );
-}
-
-type WslStep = 'enable' | 'download' | 'import';
-
-const WSL_STEP_LABELS: Record<WslStep, string> = {
-    enable: 'Turning on Windows Subsystem for Linux',
-    download: 'Downloading LaraKube Linux (about 300 MB)',
-    import: 'Installing LaraKube Linux',
-};
-
-async function runWslStep(step: WslStep) {
-    const token = decodeURIComponent(
-        document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] ?? '',
-    );
-    const response = await fetch(`/setup/wsl/${step}`, {
-        method: 'POST',
-        headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token },
-    });
-
-    return (await response.json()) as { ok: boolean; message: string };
-}
-
-function WslCheck({ wsl }: { wsl?: WslState | null }) {
-    const [working, setWorking] = useState<WslStep | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [restart, setRestart] = useState(false);
-
-    if (!wsl) {
-        return (
-            <Card label="LaraKube Linux">
-                <p className="flex items-center gap-2 py-3 text-sm text-soft">
-                    <RefreshCw className="size-4 animate-spin" />
-                    Checking LaraKube Linux…
-                </p>
-            </Card>
-        );
-    }
-
-    const run = async (steps: WslStep[]) => {
-        setError(null);
-
-        for (const step of steps) {
-            setWorking(step);
-            const result = await runWslStep(step).catch(() => ({
-                ok: false,
-                message: 'LaraKube Desktop could not reach itself. Try again.',
-            }));
-
-            if (!result.ok) {
-                setWorking(null);
-                setError(result.message);
-
-                return;
-            }
-        }
-
-        setWorking(null);
-
-        if (steps[0] === 'enable') {
-            setRestart(true);
-
-            return;
-        }
-
-        forgetToolStatus();
-        router.reload();
-    };
-
-    const steps: WslStep[] | null =
-        wsl.state === 'missing'
-            ? ['enable']
-            : wsl.state === 'no-distro'
-              ? ['download', 'import']
-              : null;
-
-    return (
-        <Card label="LaraKube Linux">
-            <div className="flex items-start gap-3 py-3">
-                <AlertCircle className="mt-0.5 size-5 shrink-0 text-accent" />
-                <div className="space-y-3 text-sm">
-                    <p className="font-medium">{wsl.message}</p>
-                    {restart ? (
-                        <p className="text-soft">
-                            If Windows asked you to restart, restart now. Then
-                            open LaraKube Desktop again and it will finish
-                            setting up.
-                        </p>
-                    ) : steps ? (
-                        <>
-                            <p className="text-soft">
-                                {wsl.state === 'missing'
-                                    ? 'LaraKube Desktop runs its tools in a small Linux that Windows provides. Windows will ask for permission once.'
-                                    : 'LaraKube Desktop will download its own small Linux, with every tool ready. It stays separate from anything else on this computer.'}
-                            </p>
-                            <Button
-                                disabled={working !== null}
-                                onClick={() => run(steps)}
-                            >
-                                {working
-                                    ? `${WSL_STEP_LABELS[working]}…`
-                                    : wsl.state === 'missing'
-                                      ? 'Turn on WSL'
-                                      : 'Set up LaraKube Linux'}
-                            </Button>
-                        </>
-                    ) : wsl.command ? (
-                        <div className="flex items-center justify-between gap-3 rounded-lg bg-term px-3 py-2 font-mono text-xs text-term-bright">
-                            <code>{wsl.command}</code>
-                            <CopyButton value={wsl.command} />
-                        </div>
-                    ) : (
-                        <p className="text-soft">
-                            Restart your computer, and make sure virtualization
-                            is turned on in the BIOS. Then open LaraKube Desktop
-                            and press Check again.
-                        </p>
-                    )}
-                    {error && <p className="text-accent">{error}</p>}
-                </div>
-            </div>
-        </Card>
-    );
-}
-
-function ToolRow({
-    entry,
-    channel,
-    refresh,
-}: {
-    entry: CatalogEntry;
-    channel: string;
-    refresh: number;
-}) {
-    const { status, checking } = useToolStatus(entry.slug, refresh);
-    const tool = status ? { ...entry, ...status } : null;
-
-    return (
-        <ListRow
-            action={
-                tool && !checking ? (
-                    <ToolState tool={tool} channel={channel} />
-                ) : (
-                    <RefreshCw className="size-4 animate-spin text-faint" />
-                )
-            }
-        >
-            <TwoLine
-                title={
-                    entry.required ? entry.label : `${entry.label} · optional`
-                }
-                detail={
-                    tool?.installed
-                        ? (tool.version ?? tool.path)
-                        : entry.purpose
-                }
-                mono={tool?.installed}
-            />
-        </ListRow>
-    );
-}
-
-function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
-    if (tool.installed) {
-        return (
-            <div className="flex items-center gap-2">
-                {tool.slug === 'larakube' && (
-                    <Link
-                        href="/setup/cli/update"
-                        data={{ channel }}
-                        method="post"
-                        as="button"
-                        className={buttonClass('secondary', 'sm')}
-                    >
-                        <ArrowUpCircle className="size-3.5" />
-                        <span>Update</span>
-                    </Link>
-                )}
-                <StatusPill tone="ok">Installed</StatusPill>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex items-center gap-2">
-            {tool.installable && (
-                <Link
-                    href={install(tool.slug).url}
-                    data={{ channel }}
-                    method="post"
-                    as="button"
-                    className={buttonClass('secondary', 'sm')}
-                >
-                    <Download className="size-3.5" />
-                    <span>Install</span>
-                </Link>
-            )}
-            <StatusPill tone={tool.required ? 'bad' : 'muted'}>
-                Missing
-            </StatusPill>
-        </div>
-    );
-}
-
-function CliMissing({
-    windows,
-    diagnostic,
-    command,
-    channel,
-    onChannelChange,
-}: {
-    windows: boolean;
-    diagnostic: string | null;
-    command: string;
-    channel: string;
-    onChannelChange: (channel: string) => void;
-}) {
-    const [installing, setInstalling] = useState(false);
-
-    const handleInstall = () => {
-        setInstalling(true);
-        router.post(
-            '/setup/tools/larakube/install',
-            { channel },
-            {
-                onFinish: () => setInstalling(false),
-            },
-        );
-    };
-
-    if (windows) {
-        return (
-            <Card tone="error" className="p-6.5">
-                <h2 className="text-lg font-semibold tracking-[-0.015em]">
-                    The LaraKube CLI did not answer
-                </h2>
-                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                    It comes with LaraKube Linux, so it should already be there.
-                    Press Check again; if this stays, send the details below.
-                </p>
-                {diagnostic && (
-                    <pre className="mt-3 max-w-full overflow-x-auto rounded-lg bg-term px-3 py-2 font-mono text-xs whitespace-pre-wrap text-term-bright">
-                        {diagnostic}
-                    </pre>
-                )}
-            </Card>
-        );
-    }
-
-    return (
-        <Card tone="error" className="p-6.5">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <h2 className="text-lg font-semibold tracking-[-0.015em]">
-                        Install the LaraKube CLI
-                    </h2>
-                    <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        LaraKube Desktop runs everything through the LaraKube
-                        CLI. Install it in one click without touching the
-                        terminal, or run the command below.
-                    </p>
-                </div>
-
-                {/* Release Channel Selector */}
-                <div className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 ring-1 ring-line">
-                    <span className="text-xs font-medium text-soft">
-                        Channel:
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() => onChannelChange('canary')}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            channel === 'canary'
-                                ? 'bg-brand text-white shadow-2xs'
-                                : 'hover:text-foreground text-soft'
-                        }`}
-                    >
-                        Canary
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onChannelChange('stable')}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            channel === 'stable'
-                                ? 'bg-brand text-white shadow-2xs'
-                                : 'hover:text-foreground text-soft'
-                        }`}
-                    >
-                        Stable
-                    </button>
-                </div>
-            </div>
-
-            <div className="mt-5 flex items-center gap-3">
-                <Button
-                    type="button"
-                    variant="primary"
-                    onClick={handleInstall}
-                    disabled={installing}
-                    className="gap-2 px-5 py-2.5 text-sm"
-                >
-                    {installing ? (
-                        <RefreshCw className="size-4 animate-spin" />
-                    ) : (
-                        <Download className="size-4" />
-                    )}
-                    <span>
-                        {installing
-                            ? 'Downloading and installing…'
-                            : `Install LaraKube CLI (${channel === 'canary' ? 'Canary' : 'Stable'})`}
-                    </span>
-                </Button>
-            </div>
-
-            <div className="mt-6 border-t border-line/60 pt-4">
-                <p className="mb-2 text-xs text-soft">
-                    Or install manually via Terminal:
-                </p>
-                <div className="flex max-w-2xl items-center justify-between gap-3 rounded-[10px] bg-surface px-3 py-2.5 ring-1 ring-line">
-                    <code className="truncate font-mono text-xs">
-                        $ {command}
-                    </code>
-                    <CopyButton value={command} />
-                </div>
-            </div>
-        </Card>
     );
 }
 

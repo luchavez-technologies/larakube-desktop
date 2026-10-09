@@ -39,7 +39,9 @@ class ReadinessController extends Controller
             'usage' => ['required', 'string', 'in:'.implode(',', GlobalSettings::USAGES)],
         ]);
 
-        $settings->update(['usage' => $validated['usage']]);
+        // Picking "tools" means no app repos, so Projects/Dev Boxes default to
+        // hidden — a person can still turn them back on from Settings afterward.
+        $settings->update(['usage' => $validated['usage'], 'hideProjects' => $validated['usage'] === 'tools']);
 
         return back();
     }
