@@ -12,6 +12,7 @@ use App\Services\LaraKube\CloudAccount;
 use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ContextHealth;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
@@ -31,13 +32,14 @@ class ServerController extends Controller
         ]);
     }
 
-    public function create(Request $request, ReadinessCheck $readiness): Response
+    public function create(Request $request, ReadinessCheck $readiness, GlobalSettings $settings): Response
     {
         $project = $request->integer('project') > 0 ? Project::find($request->integer('project')) : null;
 
         return Inertia::render('servers/create', [
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
             'project' => $project ? ['id' => $project->id, 'name' => basename($project->path)] : null,
+            'defaultProvider' => $settings->get()['defaultCloudProvider'],
         ]);
     }
 
@@ -101,6 +103,7 @@ class ServerController extends Controller
         ProjectInspector $inspector,
         ToolCatalog $toolCatalog,
         ClusterMetrics $clusterMetrics,
+        ContextHealth $health,
     ): Response {
         $stack = $catalog->find($server);
 
@@ -152,6 +155,9 @@ class ServerController extends Controller
             'backup' => Inertia::defer(fn (): ?array => $context !== null ? $status->backup($context) : null, 'backup'),
             'clusterUsers' => Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
             'nodeMetrics' => Inertia::defer(fn (): ?array => $context !== null ? $clusterMetrics->nodeMetrics($context) : null, 'nodeMetrics'),
+            // "Ready" only ever meant "provisioning finished" — this is the live
+            // signal that overrides the badge when the cluster stopped answering since.
+            'reachable' => Inertia::defer(fn (): bool => $context === null || ($health->check([$context])[$context] ?? false), 'reachable'),
         ]);
     }
 

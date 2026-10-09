@@ -12,7 +12,7 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
 import { ServerActions } from '@/components/server-dialogs';
-import StatusPill from '@/components/status-pill';
+import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
@@ -43,17 +43,18 @@ export default function ServersIndex({
     const leftovers =
         servers?.filter((server) => server.status !== 'ready') ?? [];
 
-    // Which discovered clusters still answer, so the ones that never will can be offered for removal.
+    // Live reachability for every ready server, not just discovered ones —
+    // "Ready" only ever meant "provisioning finished," never "still answers."
     const [health, setHealth] = useState<Record<string, boolean>>({});
-    const discoveredContexts = (servers ?? [])
-        .filter((server) => server.kind === 'discovered' && server.context)
+    const readyContexts = (servers ?? [])
+        .filter((server) => server.status === 'ready' && server.context)
         .map((server) => server.context as string);
-    const discoveredKey = discoveredContexts.join('|');
+    const readyKey = readyContexts.join('|');
 
     useEffect(() => {
-        if (discoveredContexts.length === 0) return;
+        if (readyContexts.length === 0) return;
 
-        const query = discoveredContexts
+        const query = readyContexts
             .map((context) => `contexts[]=${encodeURIComponent(context)}`)
             .join('&');
 
@@ -64,10 +65,18 @@ export default function ServersIndex({
             .then((answers: Record<string, boolean>) => setHealth(answers))
             .catch(() => undefined);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [discoveredKey]);
+    }, [readyKey]);
 
     const reachable = (server: Server): boolean | undefined =>
         server.context ? health[server.context] : undefined;
+
+    // "Ready" only ever meant "provisioning finished" — fold the live check
+    // into one coherent badge instead of showing both at once, which read as
+    // a contradiction (a green "Ready" pill next to an "Unreachable" badge).
+    const statusBadge = (server: Server): [string, Tone] =>
+        server.status === 'ready' && reachable(server) === false
+            ? ['Unreachable', 'warn']
+            : serverStatus[server.status];
 
     return (
         <AppLayout title="Servers">
@@ -146,7 +155,7 @@ export default function ServersIndex({
                                     <tbody>
                                         {servers?.map((server) => {
                                             const [label, tone] =
-                                                serverStatus[server.status];
+                                                statusBadge(server);
 
                                             return (
                                                 <tr
@@ -184,13 +193,6 @@ export default function ServersIndex({
                                                                 'discovered' && (
                                                                 <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
                                                                     Discovered
-                                                                </span>
-                                                            )}
-                                                            {reachable(
-                                                                server,
-                                                            ) === false && (
-                                                                <span className="rounded bg-warn-tint px-1.5 py-0.5 text-[10px] font-semibold text-warn">
-                                                                    Unreachable
                                                                 </span>
                                                             )}
                                                             {server.isCurrent && (
@@ -242,8 +244,7 @@ export default function ServersIndex({
                             /* Card Grid View */
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
                                 {servers?.map((server) => {
-                                    const [label, tone] =
-                                        serverStatus[server.status];
+                                    const [label, tone] = statusBadge(server);
 
                                     return (
                                         <div
@@ -278,12 +279,6 @@ export default function ServersIndex({
                                                         'discovered' && (
                                                         <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
                                                             Discovered
-                                                        </span>
-                                                    )}
-                                                    {reachable(server) ===
-                                                        false && (
-                                                        <span className="rounded bg-warn-tint px-1.5 py-0.5 text-[10px] font-semibold text-warn">
-                                                            Unreachable
                                                         </span>
                                                     )}
                                                     {server.isCurrent && (

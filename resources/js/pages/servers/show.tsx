@@ -21,7 +21,7 @@ import { DestroyServerDialog } from '@/components/server-dialogs';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
-import StatusPill from '@/components/status-pill';
+import StatusPill, { type Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import AppLayout from '@/layouts/app-layout';
@@ -66,6 +66,7 @@ export default function ShowServer({
     backup,
     clusterUsers,
     nodeMetrics,
+    reachable,
 }: {
     server: Server;
     projects?: Project[];
@@ -77,6 +78,8 @@ export default function ShowServer({
     backup?: BackupStatus | null;
     clusterUsers?: ClusterUser[] | null;
     nodeMetrics?: NodeMetrics | null;
+    /** The live kubectl reachability check — optimistically true until it loads, so a healthy cluster never flashes a warning. */
+    reachable?: boolean;
 }) {
     const { url } = usePage();
     const [dialog, setDialog] = useState<Dialog>(() => {
@@ -88,8 +91,11 @@ export default function ShowServer({
             : null;
     });
     const [revokingUser, setRevokingUser] = useState<ClusterUser | null>(null);
-    const [label, tone] = serverStatus[server.status];
     const ready = server.status === 'ready';
+    const unreachable = ready && reachable === false;
+    const [label, tone]: [string, Tone] = unreachable
+        ? ['Unreachable', 'warn']
+        : serverStatus[server.status];
 
     const allTools = verifiedTools ?? lastVerifiedTools;
     const installedTools = allTools

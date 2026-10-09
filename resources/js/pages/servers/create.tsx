@@ -26,10 +26,12 @@ export default function CreateServer({
     providers,
     project,
     kind = 'server',
+    defaultProvider,
 }: {
     providers?: Provider[] | null;
     project: { id: number; name: string } | null;
     kind?: 'server' | 'dev-box';
+    defaultProvider?: string;
 }) {
     const devBox = kind === 'dev-box';
 
@@ -60,6 +62,7 @@ export default function CreateServer({
                         providers={providers}
                         projectId={project?.id ?? null}
                         devBox={devBox}
+                        defaultProvider={defaultProvider}
                     />
                 ) : (
                     <p className="text-sm text-soft">
@@ -75,16 +78,22 @@ function ServerForm({
     providers,
     projectId,
     devBox,
+    defaultProvider,
 }: {
     providers: Provider[];
     projectId: number | null;
     devBox: boolean;
+    defaultProvider?: string;
 }) {
     const startSize = (candidate: Provider) =>
         devBox
             ? (candidate.defaultDevBoxSize ?? candidate.defaultVpsSize)
             : candidate.defaultVpsSize;
     const initial =
+        providers.find(
+            (provider) =>
+                provider.slug === defaultProvider && provider.credentials.ready,
+        ) ??
         providers.find((provider) => provider.credentials.ready) ??
         providers[0];
     const form = useForm({
@@ -141,297 +150,315 @@ function ServerForm({
     }
 
     return (
-        <form onSubmit={submit} className="max-w-3xl">
-            <p className="mb-2.5 text-[13px] font-medium">Cloud provider</p>
-            <div className="grid grid-cols-2 gap-3">
-                {providers.map((candidate) => (
-                    <button
-                        key={candidate.slug}
-                        type="button"
-                        onClick={() => selectProvider(candidate)}
-                        className={cn(
-                            'flex items-center justify-between rounded-xl bg-surface px-4 py-3.5 text-left transition',
-                            candidate.slug === provider.slug
-                                ? 'ring-2 ring-servers'
-                                : 'ring-1 ring-line hover:ring-faint',
-                        )}
-                    >
-                        <div className="flex items-center gap-3">
-                            <ProviderLogo provider={candidate.slug} size="sm" />
-                            <span className="text-sm font-medium">
-                                {candidate.label}
-                            </span>
-                        </div>
-                        <StatusPill
-                            tone={candidate.credentials.ready ? 'ok' : 'muted'}
-                        >
-                            {candidate.credentials.ready
-                                ? 'Ready'
-                                : 'Not connected'}
-                        </StatusPill>
-                    </button>
-                ))}
-            </div>
-
-            {provider.accounts && provider.accounts.length > 0 && (
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 ring-1 ring-line">
-                    <div className="flex items-center gap-2.5">
-                        <Users className="size-4 text-soft" />
-                        <div>
-                            <span className="text-foreground text-xs font-medium">
-                                Account / Profile:
-                            </span>
-                            <span className="ml-2 font-mono text-xs text-soft">
-                                {form.data.account ||
-                                    provider.activeAccount ||
-                                    'default'}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {provider.accounts.length > 1 && (
-                            <SelectMenu
-                                value={form.data.account}
-                                accent="servers"
-                                triggerClassName="h-7 bg-background px-2.5 py-1 text-xs"
-                                onChange={(value) =>
-                                    form.setData('account', value)
-                                }
-                                options={provider.accounts.map((acc) => ({
-                                    value: acc.id,
-                                    label: acc.isDefault
-                                        ? `${acc.label} · (Default)`
-                                        : acc.label,
-                                }))}
-                            />
-                        )}
-                        <Button
+        <>
+            <form onSubmit={submit} className="max-w-3xl">
+                <p className="mb-2.5 text-[13px] font-medium">Cloud provider</p>
+                <div className="grid grid-cols-2 gap-3">
+                    {providers.map((candidate) => (
+                        <button
+                            key={candidate.slug}
                             type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setShowAccountModal(true)}
+                            onClick={() => selectProvider(candidate)}
+                            className={cn(
+                                'flex items-center justify-between rounded-xl bg-surface px-4 py-3.5 text-left transition',
+                                candidate.slug === provider.slug
+                                    ? 'ring-2 ring-servers'
+                                    : 'ring-1 ring-line hover:ring-faint',
+                            )}
                         >
-                            <Plus className="size-3" />
-                            <span>Manage Accounts</span>
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            {(needsGcpLogin || needsAwsKeys) && (
-                <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
-                    {cliMissing ? (
-                        <>
-                            <span>
-                                {provider.credentials.hint} Install it from
-                                Setup first, then come back here.
-                            </span>
-                            <Link
-                                href={readiness().url}
-                                className={buttonClass(
-                                    'secondary',
-                                    'sm',
-                                    'shrink-0',
-                                )}
+                            <div className="flex items-center gap-3">
+                                <ProviderLogo
+                                    provider={candidate.slug}
+                                    size="sm"
+                                />
+                                <span className="text-sm font-medium">
+                                    {candidate.label}
+                                </span>
+                            </div>
+                            <StatusPill
+                                tone={
+                                    candidate.credentials.ready ? 'ok' : 'muted'
+                                }
                             >
-                                Open Setup
-                            </Link>
-                        </>
-                    ) : needsGcpLogin ? (
-                        <>
+                                {candidate.credentials.ready
+                                    ? 'Ready'
+                                    : 'Not connected'}
+                            </StatusPill>
+                        </button>
+                    ))}
+                </div>
+
+                {provider.accounts && provider.accounts.length > 0 && (
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 ring-1 ring-line">
+                        <div className="flex items-center gap-2.5">
+                            <Users className="size-4 text-soft" />
+                            <div>
+                                <span className="text-foreground text-xs font-medium">
+                                    Account / Profile:
+                                </span>
+                                <span className="ml-2 font-mono text-xs text-soft">
+                                    {form.data.account ||
+                                        provider.activeAccount ||
+                                        'default'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {provider.accounts.length > 1 && (
+                                <SelectMenu
+                                    value={form.data.account}
+                                    accent="servers"
+                                    triggerClassName="h-7 bg-background px-2.5 py-1 text-xs"
+                                    onChange={(value) =>
+                                        form.setData('account', value)
+                                    }
+                                    options={provider.accounts.map((acc) => ({
+                                        value: acc.id,
+                                        label: acc.isDefault
+                                            ? `${acc.label} · (Default)`
+                                            : acc.label,
+                                    }))}
+                                />
+                            )}
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => setShowAccountModal(true)}
+                            >
+                                <Plus className="size-3" />
+                                <span>Manage Accounts</span>
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {(needsGcpLogin || needsAwsKeys) && (
+                    <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
+                        {cliMissing ? (
+                            <>
+                                <span>
+                                    {provider.credentials.hint} Install it from
+                                    Setup first, then come back here.
+                                </span>
+                                <Link
+                                    href={readiness().url}
+                                    className={buttonClass(
+                                        'secondary',
+                                        'sm',
+                                        'shrink-0',
+                                    )}
+                                >
+                                    Open Setup
+                                </Link>
+                            </>
+                        ) : needsGcpLogin ? (
+                            <>
+                                <span>
+                                    {provider.credentials.hint} Authorize with
+                                    Google to continue.
+                                </span>
+                                <GcpSignIn label="Sign in with Google" />
+                            </>
+                        ) : (
                             <span>
-                                {provider.credentials.hint} Authorize with
-                                Google to continue.
+                                {provider.credentials.hint} Enter your AWS keys
+                                below to continue.
                             </span>
-                            <GcpSignIn label="Sign in with Google" />
-                        </>
-                    ) : (
-                        <span>
-                            {provider.credentials.hint} Enter your AWS keys
-                            below to continue.
-                        </span>
-                    )}
-                </div>
-            )}
+                        )}
+                    </div>
+                )}
 
-            <div className="mt-5 space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
-                <Field
-                    label={devBox ? 'Dev box name' : 'Server name'}
-                    hint="Lowercase letters, numbers and dashes."
-                    error={form.errors.stack_name}
-                >
-                    <input
-                        value={form.data.stack_name}
-                        onChange={(event) =>
-                            form.setData('stack_name', event.target.value)
-                        }
-                        placeholder="workshop-demo"
-                        autoFocus
-                        spellCheck={false}
-                        className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
-                    />
-                </Field>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <Field label="Region" error={form.errors.region}>
-                        <Select
-                            value={form.data.region}
-                            onChange={(value) => form.setData('region', value)}
-                            options={provider.regions}
-                        />
-                    </Field>
+                <div className="mt-5 space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
                     <Field
-                        label="Size"
-                        error={form.errors.size}
-                        hint={pricingNote(provider)}
-                    >
-                        <Select
-                            value={form.data.size}
-                            onChange={(value) => form.setData('size', value)}
-                            options={provider.vpsSizes}
-                        />
-                    </Field>
-                </div>
-
-                {needsToken && (
-                    <Field
-                        label={`${provider.label} API token`}
-                        hint="Used for this run only. Never saved."
-                        error={form.errors.api_token}
+                        label={devBox ? 'Dev box name' : 'Server name'}
+                        hint="Lowercase letters, numbers and dashes."
+                        error={form.errors.stack_name}
                     >
                         <input
-                            type="password"
-                            value={form.data.api_token}
+                            value={form.data.stack_name}
                             onChange={(event) =>
-                                form.setData('api_token', event.target.value)
+                                form.setData('stack_name', event.target.value)
                             }
-                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                            placeholder="workshop-demo"
+                            autoFocus
+                            spellCheck={false}
+                            className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
                         />
                     </Field>
-                )}
 
-                {provider.slug === 'aws' && provider.credentials.ready && (
-                    <div className="flex items-center justify-between border-t border-line/60 pt-3 text-xs text-soft">
-                        <span>
-                            Using saved AWS credentials (~/.aws/credentials)
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (overrideAwsKeys) {
-                                    form.setData('aws_access_key_id', '');
-                                    form.setData('aws_secret_access_key', '');
+                    <div className="grid grid-cols-2 gap-4">
+                        <Field label="Region" error={form.errors.region}>
+                            <Select
+                                value={form.data.region}
+                                onChange={(value) =>
+                                    form.setData('region', value)
                                 }
-                                setOverrideAwsKeys(!overrideAwsKeys);
-                            }}
-                            className="flex items-center gap-1 font-medium text-servers hover:underline"
-                        >
-                            <Key className="size-3" />
-                            <span>
-                                {overrideAwsKeys
-                                    ? 'Use saved credentials'
-                                    : 'Use different AWS keys'}
-                            </span>
-                        </button>
-                    </div>
-                )}
-
-                {needsAwsKeys && (
-                    <div className="space-y-4 border-t border-line/60 pt-3">
-                        <AwsPolicyHelper />
-                        <Field
-                            label="AWS Access Key ID"
-                            error={form.errors.aws_access_key_id}
-                        >
-                            <input
-                                type="text"
-                                placeholder="AKIAIOSFODNN7EXAMPLE"
-                                value={form.data.aws_access_key_id}
-                                onChange={(event) =>
-                                    form.setData(
-                                        'aws_access_key_id',
-                                        event.target.value,
-                                    )
-                                }
-                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                options={provider.regions}
                             />
                         </Field>
                         <Field
-                            label="AWS Secret Access Key"
-                            error={form.errors.aws_secret_access_key}
+                            label="Size"
+                            error={form.errors.size}
+                            hint={pricingNote(provider)}
+                        >
+                            <Select
+                                value={form.data.size}
+                                onChange={(value) =>
+                                    form.setData('size', value)
+                                }
+                                options={provider.vpsSizes}
+                            />
+                        </Field>
+                    </div>
+
+                    {needsToken && (
+                        <Field
+                            label={`${provider.label} API token`}
+                            hint="Used for this run only. Never saved."
+                            error={form.errors.api_token}
                         >
                             <input
                                 type="password"
-                                placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                value={form.data.aws_secret_access_key}
+                                value={form.data.api_token}
                                 onChange={(event) =>
                                     form.setData(
-                                        'aws_secret_access_key',
+                                        'api_token',
                                         event.target.value,
                                     )
                                 }
                                 className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
                             />
                         </Field>
-                    </div>
-                )}
+                    )}
 
-                {!devBox && (
-                    <CloudflareOption
-                        value={form.data.cloudflare_token}
-                        error={form.errors.cloudflare_token}
-                        onChange={(value) =>
-                            form.setData('cloudflare_token', value)
-                        }
-                    />
-                )}
-            </div>
+                    {provider.slug === 'aws' && provider.credentials.ready && (
+                        <div className="flex items-center justify-between border-t border-line/60 pt-3 text-xs text-soft">
+                            <span>
+                                Using saved AWS credentials (~/.aws/credentials)
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (overrideAwsKeys) {
+                                        form.setData('aws_access_key_id', '');
+                                        form.setData(
+                                            'aws_secret_access_key',
+                                            '',
+                                        );
+                                    }
+                                    setOverrideAwsKeys(!overrideAwsKeys);
+                                }}
+                                className="flex items-center gap-1 font-medium text-servers hover:underline"
+                            >
+                                <Key className="size-3" />
+                                <span>
+                                    {overrideAwsKeys
+                                        ? 'Use saved credentials'
+                                        : 'Use different AWS keys'}
+                                </span>
+                            </button>
+                        </div>
+                    )}
 
-            <div className="mt-5 flex items-center justify-between gap-4">
-                <p className="text-[13px] text-soft">
-                    {price
-                        ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                        : `Billed by ${provider.label}. You can destroy it any time.`}
-                </p>
-                <div className="flex items-center gap-2.5">
-                    <Link
-                        href={(devBox ? devBoxesIndex() : index()).url}
-                        className={buttonClass('ghost')}
-                    >
-                        Cancel
-                    </Link>
-                    <Button
-                        type="submit"
-                        disabled={
-                            form.processing ||
-                            needsGcpLogin ||
-                            form.data.stack_name.trim() === '' ||
-                            (needsToken && form.data.api_token.trim() === '') ||
-                            (needsAwsKeys &&
-                                (form.data.aws_access_key_id.trim() === '' ||
-                                    form.data.aws_secret_access_key.trim() ===
-                                        ''))
-                        }
-                    >
-                        <Plus className="size-4" />
-                        <span>
-                            {form.processing
-                                ? 'Starting…'
-                                : devBox
-                                  ? 'Create dev box'
-                                  : 'Create server'}
-                        </span>
-                    </Button>
+                    {needsAwsKeys && (
+                        <div className="space-y-4 border-t border-line/60 pt-3">
+                            <AwsPolicyHelper />
+                            <Field
+                                label="AWS Access Key ID"
+                                error={form.errors.aws_access_key_id}
+                            >
+                                <input
+                                    type="text"
+                                    placeholder="AKIAIOSFODNN7EXAMPLE"
+                                    value={form.data.aws_access_key_id}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'aws_access_key_id',
+                                            event.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+                            <Field
+                                label="AWS Secret Access Key"
+                                error={form.errors.aws_secret_access_key}
+                            >
+                                <input
+                                    type="password"
+                                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                    value={form.data.aws_secret_access_key}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'aws_secret_access_key',
+                                            event.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+                        </div>
+                    )}
+
+                    {!devBox && (
+                        <CloudflareOption
+                            value={form.data.cloudflare_token}
+                            error={form.errors.cloudflare_token}
+                            onChange={(value) =>
+                                form.setData('cloudflare_token', value)
+                            }
+                        />
+                    )}
                 </div>
-            </div>
 
+                <div className="mt-5 flex items-center justify-between gap-4">
+                    <p className="text-[13px] text-soft">
+                        {price
+                            ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                            : `Billed by ${provider.label}. You can destroy it any time.`}
+                    </p>
+                    <div className="flex items-center gap-2.5">
+                        <Link
+                            href={(devBox ? devBoxesIndex() : index()).url}
+                            className={buttonClass('ghost')}
+                        >
+                            Cancel
+                        </Link>
+                        <Button
+                            type="submit"
+                            disabled={
+                                form.processing ||
+                                needsGcpLogin ||
+                                form.data.stack_name.trim() === '' ||
+                                (needsToken &&
+                                    form.data.api_token.trim() === '') ||
+                                (needsAwsKeys &&
+                                    (form.data.aws_access_key_id.trim() ===
+                                        '' ||
+                                        form.data.aws_secret_access_key.trim() ===
+                                            ''))
+                            }
+                        >
+                            <Plus className="size-4" />
+                            <span>
+                                {form.processing
+                                    ? 'Starting…'
+                                    : devBox
+                                      ? 'Create dev box'
+                                      : 'Create server'}
+                            </span>
+                        </Button>
+                    </div>
+                </div>
+            </form>
             {showAccountModal && (
                 <CloudAccountsModal
                     provider={provider}
                     onClose={() => setShowAccountModal(false)}
                 />
             )}
-        </form>
+        </>
     );
 }
 

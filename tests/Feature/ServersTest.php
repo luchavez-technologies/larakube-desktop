@@ -81,6 +81,24 @@ test('a server page shows that server, and an unknown one is a 404', function ()
     File::deleteDirectory($bin);
 });
 
+test('a server page flags itself unreachable when the live kubectl check fails, without changing the stored status', function () {
+    $bin = serversFakeCli();
+    File::put("{$bin}/kubectl", "#!/bin/sh\n");
+    chmod("{$bin}/kubectl", 0755);
+    Cache::flush();
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => serversStacks()])),
+        '*--raw=/readyz*' => Process::result(exitCode: 1),
+    ]);
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('server.status', 'ready')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('reachable', false)));
+
+    File::deleteDirectory($bin);
+});
+
 test('a server page lists projects bound to that server', function () {
     $bin = serversFakeCli();
     serversFakeStacks();
