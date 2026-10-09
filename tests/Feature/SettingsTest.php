@@ -11,7 +11,6 @@ test('settings page renders with global configuration and AI agents', function (
             ->component('settings/index')
             ->has('settings')
             ->has('allowedTlds')
-            ->has('aiProviders')
             ->has('cloudProviders')
         );
 });
@@ -22,15 +21,13 @@ test('settings can be updated and saved to config', function () {
     $settings->shouldReceive('experimental')->andReturnFalse();
     $settings->shouldReceive('update')->once()->with(Mockery::on(function (array $data): bool {
         return ($data['localTld'] ?? null) === 'test'
-            && ($data['email'] ?? null) === 'admin@example.com'
-            && ($data['aiProvider'] ?? null) === 'anthropic';
+            && ($data['email'] ?? null) === 'admin@example.com';
     }));
     app()->instance(GlobalSettings::class, $settings);
 
     $this->post(route('settings.update'), [
         'localTld' => 'test',
         'email' => 'admin@example.com',
-        'aiProvider' => 'anthropic',
     ])->assertRedirect();
 });
 

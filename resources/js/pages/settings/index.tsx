@@ -8,6 +8,7 @@ import {
     Laptop,
     Layers,
     Moon,
+    RotateCw,
     Save,
     Sun,
     Trash2,
@@ -36,10 +37,7 @@ type SettingsProps = {
         theme?: ThemeMode;
         localTld: string;
         email: string | null;
-        aiProvider: string;
         defaultCloudProvider: string;
-        hasDoToken: boolean;
-        hasHetznerToken: boolean;
         shareToken: string | null;
         hideProjects?: boolean;
         experimental?: boolean;
@@ -47,7 +45,6 @@ type SettingsProps = {
         detectedAgents: Record<string, AgentInfo>;
     };
     allowedTlds: string[];
-    aiProviders: Record<string, string>;
     cloudProviders: Record<string, string>;
     contexts?: string[];
     currentContext?: string | null;
@@ -58,11 +55,7 @@ type SettingsForm = {
     theme?: ThemeMode;
     localTld: string;
     email: string;
-    aiProvider: string;
-    aiKey: string;
     defaultCloudProvider: string;
-    doToken: string;
-    hetznerToken: string;
     shareToken: string;
     hideProjects: boolean;
     experimental: boolean;
@@ -98,7 +91,6 @@ const themeOptions: {
 export default function SettingsIndex({
     settings,
     allowedTlds,
-    aiProviders,
     cloudProviders,
     contexts = [],
     currentContext = null,
@@ -118,11 +110,7 @@ export default function SettingsIndex({
         theme: settings.theme ?? 'system',
         localTld: settings.localTld,
         email: settings.email ?? '',
-        aiProvider: settings.aiProvider,
-        aiKey: '',
         defaultCloudProvider: settings.defaultCloudProvider,
-        doToken: '',
-        hetznerToken: '',
         shareToken: settings.shareToken ?? '',
         hideProjects: settings.hideProjects ?? false,
         experimental: settings.experimental ?? false,
@@ -281,16 +269,12 @@ export default function SettingsIndex({
                                 <input
                                     type="checkbox"
                                     checked={form.data.hideProjects}
-                                    onChange={(e) => {
+                                    onChange={(e) =>
                                         form.setData(
                                             'hideProjects',
                                             e.target.checked,
-                                        );
-                                        localStorage.setItem(
-                                            'larakube_hide_projects',
-                                            String(e.target.checked),
-                                        );
-                                    }}
+                                        )
+                                    }
                                     className="mt-0.5 size-4 rounded border-line text-brand accent-brand focus:ring-brand"
                                 />
                                 <div>
@@ -308,6 +292,32 @@ export default function SettingsIndex({
                                     </span>
                                 </div>
                             </label>
+
+                            <div className="flex items-center justify-between gap-3 border-t border-line/60 pt-3">
+                                <div>
+                                    <span className="block text-xs font-medium text-ink">
+                                        Welcome wizard
+                                    </span>
+                                    <span className="mt-0.5 block text-xs leading-relaxed text-soft">
+                                        Redo the first-run questions (what
+                                        you're using LaraKube Desktop for, which
+                                        cloud providers you deploy to).
+                                    </span>
+                                </div>
+                                <Form method="post" action="/onboarding/reset">
+                                    {({ processing }) => (
+                                        <Button
+                                            type="submit"
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            <RotateCw className="size-3.5" />
+                                            <span>Redo onboarding</span>
+                                        </Button>
+                                    )}
+                                </Form>
+                            </div>
                         </div>
                     </Card>
 
@@ -341,123 +351,27 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* Cloud Providers */}
-                    <Card label="Cloud Providers & Tokens">
-                        <div className="space-y-4">
-                            <div>
-                                <label className="mb-1.5 block text-xs font-medium text-ink">
-                                    Default Cloud Provider
-                                </label>
-                                <SelectMenu
-                                    value={form.data.defaultCloudProvider}
-                                    triggerClassName="h-8 py-1.5 text-xs"
-                                    onChange={(value) =>
-                                        form.setData(
-                                            'defaultCloudProvider',
-                                            value,
-                                        )
-                                    }
-                                    options={Object.entries(cloudProviders).map(
-                                        ([slug, label]) => ({
-                                            value: slug,
-                                            label: `${label} (${slug})`,
-                                        }),
-                                    )}
-                                />
-                            </div>
-
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <label className="mb-1.5 block text-xs font-medium text-ink">
-                                        DigitalOcean API Token
-                                    </label>
-                                    {settings.hasDoToken && (
-                                        <StatusPill tone="ok">
-                                            Configured
-                                        </StatusPill>
-                                    )}
-                                </div>
-                                <input
-                                    type="password"
-                                    value={form.data.doToken}
-                                    onChange={(e) =>
-                                        form.setData('doToken', e.target.value)
-                                    }
-                                    placeholder={
-                                        settings.hasDoToken
-                                            ? '••••••••••••••••••••••••'
-                                            : 'dop_v1_...'
-                                    }
-                                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-brand"
-                                />
-                            </div>
-
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <label className="mb-1.5 block text-xs font-medium text-ink">
-                                        Hetzner Cloud Token
-                                    </label>
-                                    {settings.hasHetznerToken && (
-                                        <StatusPill tone="ok">
-                                            Configured
-                                        </StatusPill>
-                                    )}
-                                </div>
-                                <input
-                                    type="password"
-                                    value={form.data.hetznerToken}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'hetznerToken',
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder={
-                                        settings.hasHetznerToken
-                                            ? '••••••••••••••••••••••••'
-                                            : 'Token from Hetzner Console'
-                                    }
-                                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-brand"
-                                />
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* AI Configuration */}
-                    <Card label="AI Provider">
-                        <div className="space-y-4">
-                            <div>
-                                <label className="mb-1.5 block text-xs font-medium text-ink">
-                                    Preferred AI Provider
-                                </label>
-                                <SelectMenu
-                                    value={form.data.aiProvider}
-                                    triggerClassName="h-8 py-1.5 text-xs"
-                                    onChange={(value) =>
-                                        form.setData('aiProvider', value)
-                                    }
-                                    options={Object.entries(aiProviders).map(
-                                        ([slug, label]) => ({
-                                            value: slug,
-                                            label,
-                                        }),
-                                    )}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="mb-1.5 block text-xs font-medium text-ink">
-                                    API Key (Update key for selected provider)
-                                </label>
-                                <input
-                                    type="password"
-                                    value={form.data.aiKey}
-                                    onChange={(e) =>
-                                        form.setData('aiKey', e.target.value)
-                                    }
-                                    placeholder="sk-..."
-                                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-brand"
-                                />
-                            </div>
+                    <Card label="Default Cloud Provider">
+                        <div className="space-y-2">
+                            <SelectMenu
+                                value={form.data.defaultCloudProvider}
+                                triggerClassName="h-8 py-1.5 text-xs"
+                                onChange={(value) =>
+                                    form.setData('defaultCloudProvider', value)
+                                }
+                                options={Object.entries(cloudProviders).map(
+                                    ([slug, label]) => ({
+                                        value: slug,
+                                        label: `${label} (${slug})`,
+                                    }),
+                                )}
+                            />
+                            <p className="text-xs leading-relaxed text-soft">
+                                Pre-selected on the Create Server page.
+                                Connecting accounts and tokens for each provider
+                                happens there, or from Setup's Cloud accounts
+                                card.
+                            </p>
                         </div>
                     </Card>
 
@@ -576,6 +490,7 @@ export default function SettingsIndex({
                                                 </p>
                                             </div>
                                             <Form
+                                                method="post"
                                                 action={`/settings/bridge/${slug}`}
                                             >
                                                 {({ processing }) => (

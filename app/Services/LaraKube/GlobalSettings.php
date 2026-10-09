@@ -13,9 +13,7 @@ class GlobalSettings
     /** What this computer is for: `tools` installs Cluster Tools on servers, `apps` also builds and runs apps locally. */
     public const USAGES = ['tools', 'apps'];
 
-    public const AI_PROVIDERS = ['anthropic' => 'Anthropic (Claude)', 'openai' => 'OpenAI', 'gemini' => 'Google Gemini'];
-
-    public const CLOUD_PROVIDERS = ['do' => 'DigitalOcean', 'hetzner' => 'Hetzner Cloud', 'gcp' => 'Google Cloud', 'aws' => 'Amazon Web Services'];
+    public const CLOUD_PROVIDERS = ['gcp' => 'Google Cloud', 'aws' => 'Amazon Web Services', 'do' => 'DigitalOcean', 'hetzner' => 'Hetzner Cloud'];
 
     public const WSL_SHUTDOWN_MODES = ['terminate', 'shutdown', 'disabled'];
 
@@ -28,15 +26,14 @@ class GlobalSettings
      *     theme: string,
      *     localTld: string,
      *     email: ?string,
-     *     aiProvider: string,
      *     defaultCloudProvider: string,
-     *     hasDoToken: bool,
-     *     hasHetznerToken: bool,
      *     shareToken: ?string,
      *     hideProjects: bool,
      *     experimental: bool,
      *     cliChannel: string,
      *     usage: ?string,
+     *     intendedProviders: list<string>,
+     *     onboardingCompletedAt: ?string,
      *     wslShutdownMode: string,
      *     detectedAgents: array<string, array{name: string, installed: bool, bridged: bool}>
      * }
@@ -69,15 +66,14 @@ class GlobalSettings
             'theme' => $this->getTheme(),
             'localTld' => (string) ($config['localTld'] ?? 'kube'),
             'email' => is_string($config['email'] ?? null) ? $config['email'] : null,
-            'aiProvider' => (string) ($config['aiProvider'] ?? 'anthropic'),
             'defaultCloudProvider' => (string) ($config['defaultCloudProvider'] ?? 'do'),
-            'hasDoToken' => ! empty($config['doToken']),
-            'hasHetznerToken' => ! empty($config['hetznerToken']),
             'shareToken' => is_string($config['shareToken'] ?? null) ? $config['shareToken'] : null,
             'hideProjects' => (bool) ($config['hideProjects'] ?? false),
             'experimental' => (bool) ($config['experimental'] ?? false),
             'cliChannel' => (string) ($config['cliChannel'] ?? 'canary'),
             'usage' => in_array($config['usage'] ?? null, self::USAGES, true) ? $config['usage'] : null,
+            'intendedProviders' => $this->intendedProviders(),
+            'onboardingCompletedAt' => is_string($config['onboardingCompletedAt'] ?? null) ? $config['onboardingCompletedAt'] : null,
             'wslShutdownMode' => $this->wslShutdownMode(),
             'detectedAgents' => $agents,
         ];
@@ -138,6 +134,41 @@ class GlobalSettings
         return (bool) ($this->readConfig()['experimental'] ?? false);
     }
 
+    /**
+     * Cloud providers the person said they plan to deploy to, picked during
+     * onboarding. Empty means "not decided yet" — treated as "show everything"
+     * everywhere this is read, never as "none".
+     *
+     * @return list<string>
+     */
+    public function intendedProviders(): array
+    {
+        $config = $this->readConfig();
+        $providers = is_array($config['intendedProviders'] ?? null) ? $config['intendedProviders'] : [];
+
+        return array_values(array_intersect($providers, array_keys(self::CLOUD_PROVIDERS)));
+    }
+
+    public function hasCompletedOnboarding(): bool
+    {
+        return is_string($this->readConfig()['onboardingCompletedAt'] ?? null);
+    }
+
+    public function completeOnboarding(): void
+    {
+        $config = $this->readConfig();
+        $config['onboardingCompletedAt'] = now()->toIso8601String();
+        $this->writeConfig($config);
+    }
+
+    /** Lets the person redo the wizard from Settings. */
+    public function resetOnboarding(): void
+    {
+        $config = $this->readConfig();
+        $config['onboardingCompletedAt'] = null;
+        $this->writeConfig($config);
+    }
+
     public function wslShutdownMode(): string
     {
         $config = $this->readConfig();
@@ -172,10 +203,6 @@ class GlobalSettings
             $config['email'] = ! empty($data['email']) ? (string) $data['email'] : null;
         }
 
-        if (isset($data['aiProvider']) && array_key_exists($data['aiProvider'], self::AI_PROVIDERS)) {
-            $config['aiProvider'] = $data['aiProvider'];
-        }
-
         if (isset($data['defaultCloudProvider']) && array_key_exists($data['defaultCloudProvider'], self::CLOUD_PROVIDERS)) {
             $config['defaultCloudProvider'] = $data['defaultCloudProvider'];
         }
@@ -188,16 +215,12 @@ class GlobalSettings
             $config['usage'] = $data['usage'];
         }
 
+        if (array_key_exists('intendedProviders', $data) && is_array($data['intendedProviders'])) {
+            $config['intendedProviders'] = array_values(array_intersect($data['intendedProviders'], array_keys(self::CLOUD_PROVIDERS)));
+        }
+
         if (isset($data['wslShutdownMode']) && in_array($data['wslShutdownMode'], self::WSL_SHUTDOWN_MODES, true)) {
             $config['wslShutdownMode'] = $data['wslShutdownMode'];
-        }
-
-        if (! empty($data['doToken'])) {
-            $config['doToken'] = (string) $data['doToken'];
-        }
-
-        if (! empty($data['hetznerToken'])) {
-            $config['hetznerToken'] = (string) $data['hetznerToken'];
         }
 
         if (array_key_exists('shareToken', $data)) {
@@ -210,11 +233,6 @@ class GlobalSettings
 
         if (array_key_exists('experimental', $data)) {
             $config['experimental'] = (bool) $data['experimental'];
-        }
-
-        if (! empty($data['aiKey']) && is_string($data['aiKey'])) {
-            $provider = $config['aiProvider'] ?? 'anthropic';
-            $config['aiKeys'][$provider] = $data['aiKey'];
         }
 
         $this->writeConfig($config);
