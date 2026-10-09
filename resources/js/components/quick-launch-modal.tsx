@@ -462,10 +462,20 @@ export default function QuickLaunchModal({
     useEffect(() => {
         if (currentServer?.account && currentServer.account.includes('@')) {
             setAdminEmail(currentServer.account);
+            return;
+        }
+        // The domain the person is actually launching on (the base domain
+        // they picked, not the app's own subdomain prefix) reads as a real
+        // admin address — a per-server ".local" placeholder didn't.
+        const domain = useCustomDomain
+            ? customDomain.trim().toLowerCase()
+            : baseDomain.trim().toLowerCase();
+        if (domain) {
+            setAdminEmail(`admin@${domain}`);
         } else if (currentServer?.ip) {
             setAdminEmail(`admin@${currentServer.name}.local`);
         }
-    }, [currentServer]);
+    }, [currentServer, baseDomain, useCustomDomain, customDomain]);
 
     const selectedDomainMeta = useMemo(
         () => domains.find((d) => d.domain === baseDomain),
@@ -633,7 +643,7 @@ export default function QuickLaunchModal({
                         </div>
                         <div>
                             <h2 className="text-base font-semibold text-ink">
-                                1-Click Quick Launch
+                                Quick Launch
                             </h2>
                             <p className="text-xs text-soft">
                                 {launchedRun ? (
