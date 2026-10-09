@@ -23,6 +23,10 @@ enum RunKind: string
     case RevokeDevBoxAccess = 'revoke-dev-box-access';
     /** A server made with cloud:create, rebooted over SSH. */
     case RestartServer = 'restart-server';
+    /** A server LaraKube already manages, re-run through k3s provisioning without destroying it. */
+    case RepairServer = 'repair-server';
+    /** A server's VM resized (CPU/RAM/disk) live via OpenTofu. */
+    case ResizeServer = 'resize-server';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */
     case InstallTool = 'install-tool';
     /** The CLI's local setup (container runtime and a local k3s cluster), run with temporary passwordless sudo. */

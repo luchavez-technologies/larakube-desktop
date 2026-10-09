@@ -12,6 +12,7 @@ use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\ContextHealth;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\RunNotifier;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
@@ -116,6 +117,17 @@ class RecordRunOutput
 
             if ($server !== null) {
                 SyncServerDomainsJob::dispatch($server->id);
+            }
+        }
+
+        // Repair/resize exist to bring a broken cluster back — the next page
+        // visit should see that immediately, not a cached "unreachable" from
+        // before the fix.
+        if ($context !== null && in_array($run->kind, [RunKind::RepairServer, RunKind::ResizeServer], true)) {
+            app(ContextHealth::class)->forget($context);
+
+            if ($server !== null) {
+                SyncClusterToolsJob::dispatch($server->id);
             }
         }
 

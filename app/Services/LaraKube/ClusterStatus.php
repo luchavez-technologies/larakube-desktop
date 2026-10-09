@@ -81,6 +81,24 @@ class ClusterStatus
         Cache::forget("cluster-status:backup:{$context}");
     }
 
+    /**
+     * Plain-language cluster health — node pressure, OOM kills, pods stuck
+     * Pending for lack of room — from `cloud:diagnose --json`. The one check
+     * that explains *why* a cluster is unreachable instead of just saying so.
+     * Deliberately uncached, unlike dns/tls/backup above: this is read on
+     * demand (a server page visit, never polled), there's no external rate
+     * limit to protect, and "is this stranded right now" is exactly the kind
+     * of answer that must never be minutes stale.
+     *
+     * @return array<mixed>|null
+     */
+    public function diagnose(string $context): ?array
+    {
+        $report = $this->json(['cloud:diagnose', 'production', "--context={$context}", '--json'], 60);
+
+        return is_array($report) && ($report['success'] ?? false) === true ? $report : null;
+    }
+
     public function forgetDns(string $context): void
     {
         Cache::forget("cluster-status:dns:{$context}");

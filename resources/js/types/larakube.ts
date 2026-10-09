@@ -174,6 +174,9 @@ export type Server = {
     hasExternalDns?: boolean;
 };
 
+export type DiagnoseIssue = { title: string; description: string; fix: string };
+export type DiagnoseReport = { success: boolean; issues: DiagnoseIssue[] };
+
 export type ServerDomain = {
     domain: string;
     externalDns: boolean;

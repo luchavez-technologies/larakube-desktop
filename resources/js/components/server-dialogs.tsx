@@ -1,11 +1,12 @@
 import { Form } from '@inertiajs/react';
 import { useState } from 'react';
-import { RotateCw, Trash2, Unplug } from 'lucide-react';
+import { ArrowUpCircle, RotateCw, Trash2, Unplug, Wrench } from 'lucide-react';
 import Button from '@/components/button';
+import SelectMenu from '@/components/select-menu';
 import { remove as removeContext } from '@/routes/context';
-import { destroy, restart } from '@/routes/servers';
+import { destroy, repair, resize, restart } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
-import type { Server } from '@/types/larakube';
+import type { Provider, Server } from '@/types/larakube';
 
 export function DestroyServerDialog({
     server,
@@ -144,6 +145,112 @@ export function RestartServerDialog({
                             <RotateCw className="size-4" />
                             <span>
                                 {processing ? 'Starting…' : 'Restart server'}
+                            </span>
+                        </Button>
+                    </>
+                )}
+            </Form>
+        </Shell>
+    );
+}
+
+export function RepairServerDialog({
+    server,
+    onClose,
+}: {
+    server: Server;
+    onClose: () => void;
+}) {
+    return (
+        <Shell onClose={onClose}>
+            <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                Repair {server.name}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-soft">
+                LaraKube re-hardens the server, reinstalls k3s, re-syncs the
+                kubeconfig, and redeploys Traefik if it's missing — over SSH,
+                without destroying the server. Anything already fine is left
+                alone, so this is safe to run even if nothing turns out to be
+                wrong.
+            </p>
+            <Form
+                action={repair(server.name)}
+                className="mt-5 flex justify-end gap-2.5"
+            >
+                {({ processing }) => (
+                    <>
+                        <Button variant="secondary" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={processing}>
+                            <Wrench className="size-4" />
+                            <span>
+                                {processing ? 'Starting…' : 'Repair server'}
+                            </span>
+                        </Button>
+                    </>
+                )}
+            </Form>
+        </Shell>
+    );
+}
+
+export function ResizeServerDialog({
+    server,
+    providers,
+    onClose,
+}: {
+    server: Server;
+    providers?: Provider[] | null;
+    onClose: () => void;
+}) {
+    const provider = providers?.find((p) => p.slug === server.provider);
+    const [size, setSize] = useState(provider?.defaultVpsSize ?? '');
+
+    return (
+        <Shell onClose={onClose}>
+            <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                Resize {server.name}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-soft">
+                Changes the server's CPU and RAM live through your provider.
+                Many providers reboot the server to apply it — LaraKube waits
+                until it's serving again before finishing.
+            </p>
+            {!provider ? (
+                <p className="mt-4 text-sm text-soft">
+                    Loading available sizes…
+                </p>
+            ) : (
+                <div className="mt-4">
+                    <span className="mb-1.5 block text-xs font-medium text-soft">
+                        New size
+                    </span>
+                    <SelectMenu
+                        value={size}
+                        onChange={setSize}
+                        options={provider.vpsSizes}
+                        accent="servers"
+                    />
+                </div>
+            )}
+            <Form
+                action={resize(server.name)}
+                transform={(data) => ({ ...data, size })}
+                className="mt-5 flex justify-end gap-2.5"
+            >
+                {({ processing }) => (
+                    <>
+                        <Button variant="secondary" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={processing || !provider || !size}
+                        >
+                            <ArrowUpCircle className="size-4" />
+                            <span>
+                                {processing ? 'Starting…' : 'Resize server'}
                             </span>
                         </Button>
                     </>

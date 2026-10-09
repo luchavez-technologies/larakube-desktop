@@ -104,6 +104,7 @@ class ServerController extends Controller
         ToolCatalog $toolCatalog,
         ClusterMetrics $clusterMetrics,
         ContextHealth $health,
+        ReadinessCheck $readiness,
     ): Response {
         $stack = $catalog->find($server);
 
@@ -158,6 +159,12 @@ class ServerController extends Controller
             // "Ready" only ever meant "provisioning finished" — this is the live
             // signal that overrides the badge when the cluster stopped answering since.
             'reachable' => Inertia::defer(fn (): bool => $context === null || ($health->check([$context])[$context] ?? false), 'reachable'),
+            'diagnosis' => $stack['kind'] === 'vps'
+                ? Inertia::defer(fn (): ?array => $context !== null ? $status->diagnose($context) : null, 'diagnosis')
+                : null,
+            'providers' => $stack['kind'] === 'vps'
+                ? Inertia::defer(fn (): ?array => $readiness->providers(), 'providers')
+                : null,
         ]);
     }
 
@@ -229,6 +236,61 @@ class ServerController extends Controller
         );
 
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /**
+     * Re-runs k3s provisioning (harden, install k3s, sync kubeconfig,
+     * redeploy Traefik-if-missing) against a server LaraKube already manages,
+     * without destroying the VM — for when the cluster is broken but the box
+     * itself still answers over SSH. Every step is idempotent, so this is
+     * always safe to retry.
+     */
+    public function repair(Request $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $stack = $catalog->find($server);
+
+        abort_if($stack === null || $stack['kind'] !== 'vps', 404);
+
+        $run = $runner->start(
+            label: "Repair server {$server}",
+            arguments: ['cloud:repair', "--stack={$server}", '--force'],
+            kind: RunKind::RepairServer,
+            subject: $server,
+            meta: ['server' => $server, 'context' => $stack['context']],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $stack['context'],
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /**
+     * Resizes the VM's CPU/RAM/disk live via OpenTofu, then waits for SSH and
+     * Kubernetes to come back — many providers reboot to apply a live resize.
+     */
+    public function resize(Request $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $stack = $catalog->find($server);
+
+        abort_if($stack === null || $stack['kind'] !== 'vps' || $stack['status'] !== 'ready', 404);
+
+        $size = $request->validate(['size' => ['required', 'string']])['size'];
+
+        $run = $runner->start(
+            label: "Resize server {$server}",
+            arguments: ['cloud:scale', $server, "--size={$size}", '--force'],
+            kind: RunKind::ResizeServer,
+            subject: $server,
+            meta: ['server' => $server, 'context' => $stack['context'], 'size' => $size],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $stack['context'],
+        );
+
+        return to_route('runs.show', $run);
     }
 
     /**

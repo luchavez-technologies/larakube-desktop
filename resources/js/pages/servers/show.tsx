@@ -17,7 +17,12 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
-import { DestroyServerDialog } from '@/components/server-dialogs';
+import {
+    DestroyServerDialog,
+    RepairServerDialog,
+    ResizeServerDialog,
+} from '@/components/server-dialogs';
+import DiagnoseCard from '@/components/diagnose-card';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
@@ -41,9 +46,11 @@ import type {
     BackupStatus,
     ClusterTool,
     ClusterUser,
+    DiagnoseReport,
     NodeMetrics,
     PlexStatus,
     Project,
+    Provider,
     Server,
 } from '@/types/larakube';
 
@@ -53,7 +60,14 @@ type TlsReport = {
     zones?: string[];
     cannotRenew?: string[];
 };
-type Dialog = 'destroy' | 'domain' | 'ssl' | 'grantAccess' | null;
+type Dialog =
+    | 'destroy'
+    | 'domain'
+    | 'ssl'
+    | 'grantAccess'
+    | 'repair'
+    | 'resize'
+    | null;
 
 export default function ShowServer({
     server,
@@ -67,6 +81,8 @@ export default function ShowServer({
     clusterUsers,
     nodeMetrics,
     reachable,
+    diagnosis,
+    providers,
 }: {
     server: Server;
     projects?: Project[];
@@ -80,6 +96,8 @@ export default function ShowServer({
     nodeMetrics?: NodeMetrics | null;
     /** The live kubectl reachability check — optimistically true until it loads, so a healthy cluster never flashes a warning. */
     reachable?: boolean;
+    diagnosis?: DiagnoseReport | null;
+    providers?: Provider[] | null;
 }) {
     const { url } = usePage();
     const [dialog, setDialog] = useState<Dialog>(() => {
@@ -157,6 +175,24 @@ export default function ShowServer({
 
             <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">
                 <div className="flex flex-col gap-4.5">
+                    {server.kind === 'vps' && (unreachable || ready) && (
+                        <Deferred
+                            data="diagnosis"
+                            fallback={
+                                <Card label="Diagnose">
+                                    <CheckingRow title="Checking cluster health…" />
+                                </Card>
+                            }
+                        >
+                            <DiagnoseCard
+                                diagnosis={diagnosis}
+                                unreachable={unreachable}
+                                onRepair={() => setDialog('repair')}
+                                onResize={() => setDialog('resize')}
+                            />
+                        </Deferred>
+                    )}
+
                     {ready && (
                         <Deferred
                             data="nodeMetrics"
@@ -452,7 +488,9 @@ export default function ShowServer({
                     <Deferred
                         data="plex"
                         fallback={
-                            <CheckingRow title="Checking Plex Commons…" />
+                            <Card label="Plex Commons">
+                                <CheckingRow title="Checking Plex Commons…" />
+                            </Card>
                         }
                     >
                         <PlexCommonsCard
@@ -464,7 +502,11 @@ export default function ShowServer({
 
                     <Deferred
                         data="backup"
-                        fallback={<CheckingRow title="Checking backups…" />}
+                        fallback={
+                            <Card label="Backups">
+                                <CheckingRow title="Checking backups…" />
+                            </Card>
+                        }
                     >
                         <BackupsCard
                             server={server}
@@ -513,7 +555,11 @@ export default function ShowServer({
 
                     <Deferred
                         data="clusterUsers"
-                        fallback={<CheckingRow title="Checking team access…" />}
+                        fallback={
+                            <Card label="Team Access & RBAC">
+                                <CheckingRow title="Checking team access…" />
+                            </Card>
+                        }
                     >
                         <TeamAccessCard
                             users={clusterUsers}
@@ -545,6 +591,19 @@ export default function ShowServer({
             {dialog === 'destroy' && (
                 <DestroyServerDialog
                     server={server}
+                    onClose={() => setDialog(null)}
+                />
+            )}
+            {dialog === 'repair' && (
+                <RepairServerDialog
+                    server={server}
+                    onClose={() => setDialog(null)}
+                />
+            )}
+            {dialog === 'resize' && (
+                <ResizeServerDialog
+                    server={server}
+                    providers={providers}
                     onClose={() => setDialog(null)}
                 />
             )}
@@ -989,7 +1048,11 @@ function TeamAccessCard({
     onRevoke: (user: ClusterUser) => void;
 }) {
     if (users === undefined) {
-        return <CheckingRow title="Checking team access…" />;
+        return (
+            <Card label="Team Access & RBAC">
+                <CheckingRow title="Checking team access…" />
+            </Card>
+        );
     }
 
     const userList = users ?? [];
