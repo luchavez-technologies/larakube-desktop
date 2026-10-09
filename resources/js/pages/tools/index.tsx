@@ -21,12 +21,14 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
+import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import { show as showRun } from '@/routes/runs';
+import { show as showServer } from '@/routes/servers';
 import {
     index as toolsIndex,
     refresh,
@@ -367,9 +369,23 @@ export default function ToolsIndex({
                             options={servers.map((candidate) => ({
                                 value: candidate.name,
                                 label: candidate.name,
+                                icon: (
+                                    <ProviderLogo
+                                        slug={candidate.provider}
+                                        size="xs"
+                                    />
+                                ),
                             }))}
                         />
                     </div>
+                    <Link
+                        href={showServer(server.name).url}
+                        className={buttonClass('secondary')}
+                        title={`Open ${server.name} in Servers`}
+                    >
+                        <ExternalLink className="size-3.5" />
+                        <span>Open server</span>
+                    </Link>
                     <Link
                         href={refresh(server.name).url}
                         method="post"
