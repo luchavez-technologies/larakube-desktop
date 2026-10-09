@@ -991,6 +991,7 @@ function AddEnvironmentDialog({
 
                 <Form
                     action={endpoint}
+                    method="post"
                     onSuccess={() => {
                         const envName = name.trim().toLowerCase();
                         if (envName && onCreated) {
