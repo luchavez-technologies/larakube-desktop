@@ -4,13 +4,97 @@ namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
 use App\Models\Project;
+use App\Models\Server;
+use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterMetrics;
+use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\PlexCommonsServices;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class PlexController extends Controller
 {
+    public function __construct(private StackCatalog $stacks) {}
+
+    /** Entry route from sidebar: redirects to last browsed server or first ready server. */
+    public function entry(CurrentServer $current): RedirectResponse
+    {
+        $ready = array_values(array_filter($this->stacks->all() ?? [], fn (array $stack): bool => $stack['status'] === 'ready' && $stack['context'] !== null));
+        $names = array_column($ready, 'name');
+        $resolved = $current->resolve($names);
+
+        return $resolved === null ? to_route('servers.index') : to_route('servers.plex.index', $resolved);
+    }
+
+    /** Plex Commons overview for the selected server. */
+    public function index(string $server, ClusterStatus $status, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, CurrentServer $current): Response
+    {
+        $stack = $this->readyServer($server);
+        $current->remember($server);
+
+        $context = (string) $stack['context'];
+        $servers = array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready'));
+
+        return Inertia::render('plex/index', [
+            'server' => $stack,
+            'servers' => $servers,
+            'plex' => Inertia::defer(fn (): ?array => $status->plex($context), 'plex'),
+            'services' => Inertia::defer(function () use ($status, $context, $commonsServices): ?array {
+                $plex = $status->plex($context);
+
+                return $plex !== null && $plex['initialized'] ? $commonsServices->describe($plex['services']) : null;
+            }, 'services'),
+            'podMetrics' => Inertia::defer(fn (): ?array => $metrics->podMetrics($context, 'larakube-plex'), 'podMetrics'),
+        ]);
+    }
+
+    /** Clears the cached plex:show report so the page re-reads the cluster. */
+    public function refresh(string $server, ClusterStatus $status): RedirectResponse
+    {
+        $context = (string) $this->readyServer($server)['context'];
+        $status->forgetPlex($context);
+
+        return back();
+    }
+
+    /** Provisions on-demand Commons credentials for a tenant that isn't a recognized LaraKube project. */
+    public function provision(Request $request, string $server, CliRunner $runner): RedirectResponse
+    {
+        $request->validate([
+            'tenant' => ['required', 'string', 'max:255'],
+            'services' => ['required', 'array', 'min:1'],
+            'services.*' => ['string', 'in:db,redis,s3'],
+        ]);
+
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $tenant = $request->string('tenant')->trim()->toString();
+        $services = $request->array('services');
+
+        $args = ['plex:provision', 'local', "--context={$context}", "--tenant={$tenant}", '--force'];
+        foreach ($services as $service) {
+            $args[] = "--service={$service}";
+        }
+
+        $run = $runner->start(
+            label: "Provision Commons credentials for {$tenant} on {$server}",
+            arguments: $args,
+            kind: RunKind::PlexProvision,
+            subject: $tenant,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     public function initServer(string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
     {
         $stack = $stacks->find($server);
@@ -121,5 +205,22 @@ class PlexController extends Controller
         );
 
         return to_route('projects.show', $project);
+    }
+
+    /**
+     * Resolve a server that is ready and has a valid Kubernetes context.
+     *
+     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, status: string, account?: ?string}
+     */
+    private function readyServer(string $server): array
+    {
+        $stack = $this->stacks->find($server);
+
+        abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
+
+        Server::syncFromStack($stack);
+
+        /** @var array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, status: string, account?: ?string} $stack */
+        return $stack;
     }
 }

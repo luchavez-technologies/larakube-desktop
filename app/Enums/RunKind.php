@@ -68,6 +68,7 @@ enum RunKind: string
     case PlexStop = 'plex-stop';
     case PlexJoin = 'plex-join';
     case PlexLeave = 'plex-leave';
+    case PlexProvision = 'plex-provision';
     case ContextImport = 'context-import';
     case ContextSwitch = 'context-switch';
     case ContextBackup = 'context-backup';

@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Database, Layers, Pause, Play } from 'lucide-react';
+import { Database, ExternalLink, Layers, Pause, Play } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import { ListRow, TwoLine } from '@/components/list-row';
@@ -48,6 +48,18 @@ export default function PlexCommonsCard({
                     ) : (
                         <StatusPill tone="muted">Not initialized</StatusPill>
                     )}
+                    <Link
+                        href={`/servers/${server.name}/plex`}
+                        className={buttonClass(
+                            'ghost',
+                            'sm',
+                            'gap-1 text-soft',
+                        )}
+                        title="Open the full Plex Commons page"
+                    >
+                        <ExternalLink className="size-3" />
+                        <span>Open</span>
+                    </Link>
                     {initialized && (
                         <>
                             <Link

@@ -75,6 +75,8 @@ Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->na
 Route::post('/servers/{server}/plex/init', [PlexController::class, 'initServer'])->name('servers.plex.init');
 Route::post('/servers/{server}/plex/start', [PlexController::class, 'startServer'])->name('servers.plex.start');
 Route::post('/servers/{server}/plex/stop', [PlexController::class, 'stopServer'])->name('servers.plex.stop');
+Route::post('/servers/{server}/plex/refresh', [PlexController::class, 'refresh'])->name('servers.plex.refresh');
+Route::post('/servers/{server}/plex/provision', [PlexController::class, 'provision'])->name('servers.plex.provision');
 Route::post('/servers/{server}/backups/setup', [BackupController::class, 'setup'])->name('servers.backups.setup');
 Route::post('/servers/{server}/backups/schedule', [BackupController::class, 'schedule'])->name('servers.backups.schedule');
 Route::post('/servers/{server}/backups/unschedule', [BackupController::class, 'unschedule'])->name('servers.backups.unschedule');
@@ -154,6 +156,9 @@ Route::post('/projects/{project}/scaling/resources', [ProjectScalingController::
 Route::get('/projects/{project}/dotenv/status', [ProjectDotenvController::class, 'status'])->name('projects.dotenv.status');
 Route::post('/projects/{project}/dotenv/push', [ProjectDotenvController::class, 'push'])->name('projects.dotenv.push');
 Route::post('/projects/{project}/dotenv/pull', [ProjectDotenvController::class, 'pull'])->name('projects.dotenv.pull');
+
+Route::get('/plex', [PlexController::class, 'entry'])->name('plex');
+Route::get('/servers/{server}/plex', [PlexController::class, 'index'])->name('servers.plex.index');
 
 Route::get('/mail', [MailController::class, 'entry'])->name('mail');
 Route::get('/servers/{server}/mail', [MailController::class, 'index'])->name('servers.mail.index');

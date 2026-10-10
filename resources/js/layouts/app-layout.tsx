@@ -10,11 +10,12 @@ import {
     Settings,
     Code2,
     Mail,
+    Layers,
     HelpCircle,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
-import { dashboard, mail, readiness, tools } from '@/routes';
+import { dashboard, mail, plex, readiness, tools } from '@/routes';
 import { show as helpShow } from '@/routes/help';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
@@ -50,7 +51,8 @@ const navigation: NavItem[] = [
         active: (url) =>
             url.startsWith('/servers') &&
             !url.includes('/tools') &&
-            !url.includes('/mail'),
+            !url.includes('/mail') &&
+            !url.includes('/plex'),
         accent: 'bg-servers',
         icon: Server,
     },
@@ -89,6 +91,15 @@ const navigation: NavItem[] = [
             url.startsWith('/mail') || /^\/servers\/[^/]+\/mail/.test(url),
         accent: 'bg-emerald-600',
         icon: Mail,
+    },
+    {
+        label: 'Plex Commons',
+        description: 'Shared infrastructure',
+        href: plex().url,
+        active: (url) =>
+            url.startsWith('/plex') || /^\/servers\/[^/]+\/plex/.test(url),
+        accent: 'bg-violet-600',
+        icon: Layers,
     },
     {
         label: 'Activity',
