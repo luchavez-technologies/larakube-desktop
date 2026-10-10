@@ -22,7 +22,6 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
-import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
@@ -363,9 +362,6 @@ export default function ToolsIndex({
                         value={server.name}
                         accent="tools"
                         buildHref={(name) => toolsIndex(name).url}
-                        renderIcon={(candidate) => (
-                            <ProviderLogo slug={candidate.provider} size="xs" />
-                        )}
                     />
                     <Link
                         href={showServer(server.name).url}
