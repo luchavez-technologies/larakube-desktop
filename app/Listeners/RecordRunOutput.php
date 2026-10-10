@@ -104,6 +104,15 @@ class RecordRunOutput
             app(ClusterStatus::class)->forgetBackup($context);
         }
 
+        // Busted on completion, not when the action is clicked — the run is
+        // async, so the state the click triggers doesn't exist yet at click
+        // time. Covers provision/evict/rotate/add-service (PlexInit) and
+        // start/stop, whichever outcome (success or failure can both change
+        // what's actually running).
+        if ($context !== null && $run->kind?->changesPlex()) {
+            app(ClusterStatus::class)->forgetPlex($context);
+        }
+
         if ($context !== null && $run->kind === RunKind::ConnectDomain) {
             app(ClusterStatus::class)->forgetDns($context);
 

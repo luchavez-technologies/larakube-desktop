@@ -5,9 +5,11 @@ use App\Models\Project;
 use App\Models\Run;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Inertia\Testing\AssertableInertia;
+use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 
 function plexSandbox(): array
@@ -286,4 +288,34 @@ test('rotating a tenant\'s credential runs plex:rotate scoped to its database', 
     expect(Run::sole()->kind)->toBe(RunKind::PlexRotate);
 
     File::deleteDirectory($sandbox['home']);
+});
+
+test('a Plex run busts the cached report on completion, not when it starts', function () {
+    // Busted on completion because the run is async — the state the click
+    // triggers doesn't exist yet at click time, only once the run finishes.
+    Cache::put('cluster-status:plex:larakube-34.27.253.31', ['initialized' => true], 600);
+
+    $run = Run::create([
+        'label' => 'Add mysql to the Commons on workshop-demo',
+        'command' => ['larakube', 'plex:init'],
+        'kind' => RunKind::PlexInit,
+        'meta' => ['server' => 'workshop-demo', 'context' => 'larakube-34.27.253.31'],
+    ]);
+    event(new ProcessExited($run->alias(), 0));
+
+    expect(Cache::has('cluster-status:plex:larakube-34.27.253.31'))->toBeFalse();
+});
+
+test('a PlexJoin/PlexLeave run has no context to bust, so it is a no-op here', function () {
+    Cache::put('cluster-status:plex:larakube-34.27.253.31', ['initialized' => true], 600);
+
+    $run = Run::create([
+        'label' => 'Join Plex Commons',
+        'command' => ['larakube', 'plex:join'],
+        'kind' => RunKind::PlexJoin,
+        'meta' => ['project' => '1'],
+    ]);
+    event(new ProcessExited($run->alias(), 0));
+
+    expect(Cache::has('cluster-status:plex:larakube-34.27.253.31'))->toBeTrue();
 });

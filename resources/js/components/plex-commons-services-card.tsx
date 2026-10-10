@@ -82,7 +82,10 @@ function ServiceCategoryRow({
     category: PlexServiceCategoryDetail;
 }) {
     const Icon = CATEGORY_ICON[category.key] ?? Database;
-    const active = category.options.find((option) => option.enabled);
+    // plex:init --services= is additive — a category can legitimately have
+    // more than one engine active at once (e.g. Postgres AND MySQL running
+    // side by side). Show every active one's details, not just the first.
+    const activeOptions = category.options.filter((option) => option.enabled);
 
     return (
         <div className="py-3 first:pt-0 last:pb-0">
@@ -101,16 +104,30 @@ function ServiceCategoryRow({
                     ))}
                 </div>
             </div>
-            {active && active.details.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 pl-[7.5rem] text-[11px] text-soft">
-                    {active.details.map((row) => (
-                        <span key={row.label}>
-                            {row.label}:{' '}
-                            <span className="font-mono text-ink">
-                                {row.value ?? '••••••••'}
-                            </span>
-                        </span>
-                    ))}
+            {activeOptions.some((option) => option.details.length > 0) && (
+                <div className="mt-1.5 space-y-0.5 pl-[7.5rem] text-[11px] text-soft">
+                    {activeOptions
+                        .filter((option) => option.details.length > 0)
+                        .map((option) => (
+                            <div
+                                key={option.driver}
+                                className="flex flex-wrap gap-x-4 gap-y-0.5"
+                            >
+                                {activeOptions.length > 1 && (
+                                    <span className="font-medium text-ink">
+                                        {option.label}:
+                                    </span>
+                                )}
+                                {option.details.map((row) => (
+                                    <span key={row.label}>
+                                        {row.label}:{' '}
+                                        <span className="font-mono text-ink">
+                                            {row.value ?? '••••••••'}
+                                        </span>
+                                    </span>
+                                ))}
+                            </div>
+                        ))}
                 </div>
             )}
         </div>

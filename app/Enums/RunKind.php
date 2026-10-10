@@ -116,6 +116,16 @@ enum RunKind: string
         return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailConfigureRelay], true);
     }
 
+    /**
+     * PlexJoin/PlexLeave excluded on purpose: those carry `project`/`environment`
+     * in meta, never `context` — the Plex Commons page's cache is keyed by
+     * context, so there's nothing for this run kind to bust there anyway.
+     */
+    public function changesPlex(): bool
+    {
+        return in_array($this, [self::PlexInit, self::PlexStart, self::PlexStop, self::PlexProvision, self::PlexEvict, self::PlexRotate], true);
+    }
+
     /** The Activity this run's completion is worth recording as, if any — deliberately narrow, see Activity. */
     public function activityType(): ?ActivityType
     {
