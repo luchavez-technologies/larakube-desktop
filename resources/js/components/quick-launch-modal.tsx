@@ -31,6 +31,7 @@ import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import StatusPill from '@/components/status-pill';
 import { sendJson } from '@/lib/http';
+import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { runStatus } from '@/lib/servers';
 import { open } from '@/routes';
 import { create as createServer } from '@/routes/servers';
@@ -152,6 +153,8 @@ export default function QuickLaunchModal({
     servers,
     activeCommonsServices = [],
 }: Props) {
+    useRightDrawerOpen(isOpen);
+
     const readyServers = useMemo(
         () => servers.filter((s) => s.status === 'ready' && s.context),
         [servers],

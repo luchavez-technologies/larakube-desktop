@@ -25,6 +25,7 @@ import ToolLogo from '@/components/tool-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
+import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import { open } from '@/routes';
 import { show as showRun } from '@/routes/runs';
@@ -1789,6 +1790,10 @@ function InstallDialog({
     isNewInstance?: boolean;
     onClose: () => void;
 }) {
+    // Mounting this dialog at all IS it being open — unlike QuickLaunchModal,
+    // the parent conditionally renders it rather than passing an isOpen prop.
+    useRightDrawerOpen(true);
+
     const knownDomains = useMemo(() => {
         const map = new Map<string, ServerDomain>();
         if (domains) {

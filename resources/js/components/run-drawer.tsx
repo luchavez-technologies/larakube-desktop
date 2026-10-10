@@ -13,7 +13,9 @@ import {
 import LogPanel from '@/components/log-panel';
 import StatusPill from '@/components/status-pill';
 import { sendJson } from '@/lib/http';
+import { useIsAnyRightDrawerOpen } from '@/lib/right-drawer-open';
 import { runStatus } from '@/lib/servers';
+import { cn } from '@/lib/utils';
 import { cancel as cancelRoute, show as showRunRoute } from '@/routes/runs';
 
 type ActiveRunSummary = {
@@ -60,6 +62,7 @@ export default function RunDrawer() {
     });
     const [expanded, setExpanded] = useState(Boolean(activeRunFromProps?.id));
     const [dismissed, setDismissed] = useState(false);
+    const moveAside = useIsAnyRightDrawerOpen();
 
     // Synchronize currentRunId with activeRun from Inertia page props
     useEffect(() => {
@@ -150,8 +153,14 @@ export default function RunDrawer() {
             // Below every drawer/modal overlay (all z-50, mounted later in the
             // DOM so they'd otherwise win the tie and sit on top) so an open
             // drawer's own footer buttons are never covered by this HUD —
-            // still comfortably above ordinary page content.
-            className="fixed right-6 bottom-4 z-40 flex flex-col items-end"
+            // still comfortably above ordinary page content. A right-anchored
+            // drawer being open would otherwise hide this completely behind
+            // it (exactly where Quick Launch tells someone to come look for
+            // it), so it moves to the opposite corner instead.
+            className={cn(
+                'fixed bottom-4 z-40 flex flex-col',
+                moveAside ? 'left-6 items-start' : 'right-6 items-end',
+            )}
         >
             {/* Expanded Drawer / Terminal Panel */}
             {expanded && (
