@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import { cn } from '@/lib/utils';
 import ServerSwitcher from '@/components/server-switcher';
 import PlexCommonsServicesCard from '@/components/plex-commons-services-card';
 import SyncStatusBadge, {
@@ -237,22 +238,103 @@ function ResourceUsageCard({ metrics }: { metrics?: PodMetrics | null }) {
     );
 }
 
-function ProvisionForm({ server }: { server: Server }) {
-    const [services, setServices] = useState<string[]>(['db', 'redis', 's3']);
+// Mirrors PlexProvisionCommand::enabledCommonsDatabaseDriver()/
+// enabledCommonsStorageDriver() in the CLI exactly (cli/app/Commands/Plex/
+// PlexProvisionCommand.php): when more than one engine in a category is
+// active, `--service=db`/`--service=s3` silently resolves to the FIRST one
+// enabled in this order (DatabaseDriver/StorageDriver's own enum
+// declaration order), not a choice the operator makes here. Shown explicitly
+// so "Database" never hides which engine a tenant actually gets.
+const DATABASE_DRIVER_PRIORITY = [
+    'mysql',
+    'mariadb',
+    'postgres',
+    'mongodb',
+    'sqlite',
+];
+const STORAGE_DRIVER_PRIORITY = ['seaweedfs', 'minio', 'garage'];
+
+function firstActiveOption(
+    services: PlexCommonsServicesReport | null | undefined,
+    categoryKey: string,
+    priority: string[],
+): { driver: string; label: string } | null {
+    const options =
+        services?.categories.find((c) => c.key === categoryKey)?.options ?? [];
+    const enabled = new Map(
+        options.filter((o) => o.enabled).map((o) => [o.driver, o.label]),
+    );
+
+    for (const driver of priority) {
+        const label = enabled.get(driver);
+        if (label) {
+            return { driver, label };
+        }
+    }
+
+    return null;
+}
+
+function ProvisionForm({
+    server,
+    services,
+}: {
+    server: Server;
+    services?: PlexCommonsServicesReport | null;
+}) {
+    const activeDb = firstActiveOption(
+        services,
+        'database',
+        DATABASE_DRIVER_PRIORITY,
+    );
+    const activeStorage = firstActiveOption(
+        services,
+        'storage',
+        STORAGE_DRIVER_PRIORITY,
+    );
+    const redisActive = Boolean(
+        services?.categories
+            .find((c) => c.key === 'cache')
+            ?.options.some((o) => o.enabled && o.driver === 'redis'),
+    );
+
+    const [selected, setSelected] = useState<string[]>(['db', 'redis', 's3']);
 
     const toggle = (service: string) => {
-        setServices((current) =>
+        setSelected((current) =>
             current.includes(service)
                 ? current.filter((s) => s !== service)
                 : [...current, service],
         );
     };
 
+    const rows: {
+        service: string;
+        label: string;
+        available: boolean;
+    }[] = [
+        {
+            service: 'db',
+            label: activeDb ? `Database (${activeDb.label})` : 'Database',
+            available: activeDb !== null,
+        },
+        { service: 'redis', label: 'Redis', available: redisActive },
+        {
+            service: 's3',
+            label: activeStorage ? `S3 (${activeStorage.label})` : 'S3',
+            available: activeStorage !== null,
+        },
+    ];
+
     return (
         <Card label="Provision custom credentials">
             <p className="text-xs text-soft">
                 For an app that isn&apos;t a recognized LaraKube project —
                 credentials are shown once, never stored.
+            </p>
+            <p className="mt-1.5 text-xs text-soft">
+                These only work for apps reachable from inside this cluster — a
+                pod on this server, not a client over the public internet.
             </p>
             <Form
                 action={provision(server.name).url}
@@ -276,25 +358,34 @@ function ProvisionForm({ server }: { server: Server }) {
                     <label className="block text-xs font-medium text-soft">
                         Services
                     </label>
-                    <div className="mt-1.5 flex gap-3">
-                        {(['db', 'redis', 's3'] as const).map((service) => (
+                    <div className="mt-1.5 flex flex-wrap gap-3">
+                        {rows.map(({ service, label, available }) => (
                             <label
                                 key={service}
-                                className="flex items-center gap-1.5 text-xs text-ink"
+                                className={cn(
+                                    'flex items-center gap-1.5 text-xs',
+                                    available
+                                        ? 'text-ink'
+                                        : 'cursor-not-allowed text-faint',
+                                )}
+                                title={
+                                    available
+                                        ? undefined
+                                        : `No ${service === 'db' ? 'database' : service === 's3' ? 'object storage' : 'Redis'} engine is active on this Commons yet.`
+                                }
                             >
                                 <input
                                     type="checkbox"
                                     name="services[]"
                                     value={service}
-                                    checked={services.includes(service)}
+                                    checked={
+                                        available && selected.includes(service)
+                                    }
+                                    disabled={!available}
                                     onChange={() => toggle(service)}
                                     className="rounded border-line"
                                 />
-                                {service === 'db'
-                                    ? 'Database'
-                                    : service === 'redis'
-                                      ? 'Redis'
-                                      : 'S3'}
+                                {label}
                             </label>
                         ))}
                     </div>
@@ -613,7 +704,7 @@ export default function PlexIndex({
                             <ResourceUsageCard metrics={podMetrics} />
                         </Deferred>
 
-                        <ProvisionForm server={server} />
+                        <ProvisionForm server={server} services={services} />
                     </div>
                 </div>
             )}
