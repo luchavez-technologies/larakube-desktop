@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncMailJob;
+use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Models\Activity;
 use App\Models\Run;
@@ -111,6 +112,10 @@ class RecordRunOutput
         // what's actually running).
         if ($context !== null && $run->kind?->changesPlex()) {
             app(ClusterStatus::class)->forgetPlex($context);
+
+            if ($server !== null) {
+                SyncPlexJob::dispatch($server->id);
+            }
         }
 
         if ($context !== null && $run->kind === RunKind::ConnectDomain) {

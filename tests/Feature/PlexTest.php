@@ -1,13 +1,16 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncPlexJob;
 use App\Models\Project;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
@@ -197,11 +200,29 @@ test('adding a driver that is already active, or not yet provisionable, is rejec
     File::deleteDirectory($sandbox['home']);
 });
 
-test('refreshing Plex Commons forgets the cached report', function () {
+test('refreshing Plex Commons forgets the cached report and re-syncs the persisted one', function () {
     $sandbox = plexSandbox();
     Process::fake(plexPageFakes());
 
+    // A visit first (deferred props and all — they only resolve against
+    // loadDeferredProps(), not a plain GET), so the persisted report exists
+    // and is marked fresh. Otherwise "stale" before and after refresh would
+    // look identical.
+    $this->get(route('servers.plex.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page->where('plex.initialized', true)));
+    $server = Server::firstWhere('context', 'larakube-34.27.253.31');
+    expect($server->plex_sync_status)->toBe('fresh');
+
     $this->post(route('servers.plex.refresh', 'workshop-demo'))->assertRedirect();
+
+    // QUEUE_CONNECTION=sync in tests, so the re-sync this dispatches has
+    // already run by the time the request returns — ending fresh again
+    // (not stuck on "stale"), proving the persisted row actually updates,
+    // not just the old Cache key.
+    $server->refresh();
+    expect($server->plex_sync_status)->toBe('fresh')
+        ->and($server->plex_last_synced_at)->not->toBeNull();
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -304,6 +325,44 @@ test('a Plex run busts the cached report on completion, not when it starts', fun
     event(new ProcessExited($run->alias(), 0));
 
     expect(Cache::has('cluster-status:plex:larakube-34.27.253.31'))->toBeFalse();
+});
+
+test('a stale, unreachable cluster still shows the last known report instead of going blank', function () {
+    $sandbox = plexSandbox();
+    $server = Server::create([
+        'name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-34.27.253.31', 'status' => 'ready',
+        'plex_data' => ['initialized' => true, 'context' => 'larakube-34.27.253.31', 'services' => [], 'serviceCatalog' => [], 'tenants' => ['tool' => [], 'project' => [], 'custom' => []]],
+        'plex_sync_status' => 'stale', 'plex_last_synced_at' => now()->subHours(2),
+    ]);
+    Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+        ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => null, 'ip' => null, 'context' => 'larakube-34.27.253.31', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+    ]])), '*plex:show*' => Process::result(output: '', exitCode: 1), '*top*pods*' => Process::result(output: '')]);
+
+    $this->get(route('servers.plex.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('plex/index')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('plex.initialized', true)));
+
+    $server->refresh();
+    expect($server->plex_sync_status)->toBe('error');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a Plex run also dispatches a background re-sync of the persisted report', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-34.27.253.31', 'status' => 'ready']);
+
+    $run = Run::create([
+        'label' => 'Add mysql to the Commons on workshop-demo',
+        'command' => ['larakube', 'plex:init'],
+        'kind' => RunKind::PlexInit,
+        'meta' => ['server' => 'workshop-demo', 'context' => 'larakube-34.27.253.31'],
+    ]);
+    event(new ProcessExited($run->alias(), 0));
+
+    Queue::assertPushed(SyncPlexJob::class, fn (SyncPlexJob $job): bool => $job->serverId === $server->id);
 });
 
 test('a PlexJoin/PlexLeave run has no context to bust, so it is a no-op here', function () {

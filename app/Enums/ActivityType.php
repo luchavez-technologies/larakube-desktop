@@ -14,6 +14,7 @@ enum ActivityType: string
     case ToolSyncFailed = 'tool-sync-failed';
 
     case DomainsSyncFailed = 'domains-sync-failed';
+    case PlexSyncFailed = 'plex-sync-failed';
 
     case MailDeployed = 'mail-deployed';
     case MailAccountCreated = 'mail-account-created';

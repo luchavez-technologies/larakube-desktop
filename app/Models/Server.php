@@ -30,6 +30,10 @@ use Illuminate\Support\Carbon;
  * @property string $domains_sync_status
  * @property Carbon|null $domains_last_synced_at
  * @property string|null $domains_last_sync_error
+ * @property string $plex_sync_status
+ * @property Carbon|null $plex_last_synced_at
+ * @property string|null $plex_last_sync_error
+ * @property array<string, mixed>|null $plex_data
  */
 class Server extends Model
 {
@@ -52,6 +56,10 @@ class Server extends Model
         'domains_sync_status',
         'domains_last_synced_at',
         'domains_last_sync_error',
+        'plex_sync_status',
+        'plex_last_synced_at',
+        'plex_last_sync_error',
+        'plex_data',
     ];
 
     /**
@@ -63,6 +71,8 @@ class Server extends Model
             'bindings' => 'array',
             'last_synced_at' => 'datetime',
             'domains_last_synced_at' => 'datetime',
+            'plex_last_synced_at' => 'datetime',
+            'plex_data' => 'array',
         ];
     }
 

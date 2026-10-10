@@ -1,4 +1,4 @@
-import { Deferred, Form, Link } from '@inertiajs/react';
+import { Deferred, Form, Link, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ExternalLink,
@@ -13,6 +13,9 @@ import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ServerSwitcher from '@/components/server-switcher';
 import PlexCommonsServicesCard from '@/components/plex-commons-services-card';
+import SyncStatusBadge, {
+    type SyncStatus,
+} from '@/components/sync-status-badge';
 import ToolLogo from '@/components/tool-logo';
 import AppLayout from '@/layouts/app-layout';
 import { show as showServer } from '@/routes/servers';
@@ -309,15 +312,27 @@ export default function PlexIndex({
     server,
     servers,
     plex,
+    plexSync,
     services,
     podMetrics,
 }: {
     server: Server;
     servers: Server[];
     plex?: PlexStatus | null;
+    plexSync: {
+        status: SyncStatus;
+        lastSyncedAt: string | null;
+        error: string | null;
+    };
     services?: PlexCommonsServicesReport | null;
     podMetrics?: PodMetrics | null;
 }) {
+    usePoll(
+        2000,
+        { only: ['plex', 'services', 'plexSync'] },
+        { autoStart: plexSync.status === 'syncing' },
+    );
+
     if (plex === undefined) {
         return (
             <AppLayout title="Plex Commons">
@@ -365,9 +380,19 @@ export default function PlexIndex({
         <AppLayout title="Plex Commons">
             <header className="mb-6 flex items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
-                        Plex Commons
-                    </h1>
+                    <div className="flex items-center gap-2.5">
+                        <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
+                            Plex Commons
+                        </h1>
+                        {initialized && (
+                            <SyncStatusBadge
+                                status={plexSync.status}
+                                lastSyncedAt={plexSync.lastSyncedAt}
+                                error={plexSync.error}
+                                subject="Commons"
+                            />
+                        )}
+                    </div>
                     <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
                         Shared infrastructure for tenant apps and Cluster Tools
                         — resource usage, connected tenants, and on-demand

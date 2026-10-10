@@ -8,7 +8,7 @@ use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterMetrics;
-use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\PlexCatalog;
 use App\Services\LaraKube\PlexCommonsServices;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -31,7 +31,7 @@ class PlexController extends Controller
     }
 
     /** Plex Commons overview for the selected server. */
-    public function index(string $server, ClusterStatus $status, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, CurrentServer $current): Response
+    public function index(string $server, PlexCatalog $plex, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, CurrentServer $current): Response
     {
         $stack = $this->readyServer($server);
         $current->remember($server);
@@ -42,23 +42,24 @@ class PlexController extends Controller
         return Inertia::render('plex/index', [
             'server' => $stack,
             'servers' => $servers,
-            'plex' => Inertia::defer(fn (): ?array => $status->plex($context), 'plex'),
-            'services' => Inertia::defer(function () use ($status, $context, $commonsServices): ?array {
-                $plex = $status->plex($context);
+            'plex' => Inertia::defer(fn (): ?array => $plex->forContext($context), 'plex'),
+            'plexSync' => $plex->syncState($context),
+            'services' => Inertia::defer(function () use ($plex, $context, $commonsServices): ?array {
+                $report = $plex->forContext($context);
 
-                return $plex !== null && $plex['initialized']
-                    ? $commonsServices->describe($plex['serviceCatalog'], $plex['services'])
+                return $report !== null && $report['initialized']
+                    ? $commonsServices->describe($report['serviceCatalog'], $report['services'])
                     : null;
             }, 'services'),
             'podMetrics' => Inertia::defer(fn (): ?array => $metrics->podMetrics($context, 'larakube-plex'), 'podMetrics'),
         ]);
     }
 
-    /** Clears the cached plex:show report so the page re-reads the cluster. */
-    public function refresh(string $server, ClusterStatus $status): RedirectResponse
+    /** Marks the Plex Commons report stale and re-syncs it in the background. */
+    public function refresh(string $server, PlexCatalog $plex): RedirectResponse
     {
         $context = (string) $this->readyServer($server)['context'];
-        $status->forgetPlex($context);
+        $plex->forget($context);
 
         return back();
     }
@@ -105,7 +106,7 @@ class PlexController extends Controller
      * disables a running service), so this just works out which drivers are
      * already active and adds the one requested to that list.
      */
-    public function addService(Request $request, string $server, ClusterStatus $status, CliRunner $runner): RedirectResponse
+    public function addService(Request $request, string $server, PlexCatalog $plexCatalog, CliRunner $runner): RedirectResponse
     {
         $request->validate(['driver' => ['required', 'string']]);
 
@@ -113,7 +114,7 @@ class PlexController extends Controller
         $context = (string) $stack['context'];
         $driver = $request->string('driver')->trim()->toString();
 
-        $plex = $status->plex($context);
+        $plex = $plexCatalog->forContext($context);
         abort_unless($plex !== null && $plex['initialized'], 404);
 
         $ready = false;
