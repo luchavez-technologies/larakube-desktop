@@ -12,7 +12,8 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ServerSwitcher from '@/components/server-switcher';
-import BackingServicesCard from '@/components/backing-services-card';
+import PlexCommonsServicesCard from '@/components/plex-commons-services-card';
+import ToolLogo from '@/components/tool-logo';
 import AppLayout from '@/layouts/app-layout';
 import { show as showServer } from '@/routes/servers';
 import { index as plexIndex, refresh, provision } from '@/routes/servers/plex';
@@ -21,7 +22,7 @@ import {
     rotate as rotateTenant,
 } from '@/routes/servers/plex/tenants';
 import type {
-    BackingServices,
+    PlexCommonsServicesReport,
     PlexStatus,
     PlexTenant,
     PodMetrics,
@@ -209,7 +210,7 @@ function ResourceUsageCard({ metrics }: { metrics?: PodMetrics | null }) {
                             className="flex items-center justify-between text-xs"
                         >
                             <div className="flex items-center gap-1.5">
-                                <span className="size-1.5 rounded-full bg-tools" />
+                                <ToolLogo slug={name} size="sm" />
                                 <span className="font-medium text-ink capitalize">
                                     {name}
                                 </span>
@@ -314,7 +315,7 @@ export default function PlexIndex({
     server: Server;
     servers: Server[];
     plex?: PlexStatus | null;
-    services?: BackingServices | null;
+    services?: PlexCommonsServicesReport | null;
     podMetrics?: PodMetrics | null;
 }) {
     if (plex === undefined) {
@@ -337,10 +338,28 @@ export default function PlexIndex({
 
     const initialized = Boolean(plex?.initialized);
     const toolTenants = plex?.tenants.tool ?? [];
-    const appTenants = [
-        ...(plex?.tenants.project ?? []),
-        ...(plex?.tenants.custom ?? []),
-    ];
+    const projectTenants = plex?.tenants.project ?? [];
+    const customTenants = plex?.tenants.custom ?? [];
+
+    // Several Commons resources (e.g. Forgejo's 3 separate S3 buckets) can
+    // belong to the same tool — grouped under one labeled, icon-bearing
+    // header instead of flat, unidentified rows.
+    const toolGroups = new Map<
+        string,
+        { tool: PlexTenant['clusterTool']; tenants: PlexTenant[] }
+    >();
+    for (const tenant of toolTenants) {
+        const key = tenant.clusterTool?.tool ?? tenant.name;
+        const group = toolGroups.get(key);
+        if (group) {
+            group.tenants.push(tenant);
+        } else {
+            toolGroups.set(key, {
+                tool: tenant.clusterTool,
+                tenants: [tenant],
+            });
+        }
+    }
 
     return (
         <AppLayout title="Plex Commons">
@@ -394,26 +413,46 @@ export default function PlexIndex({
                                 </Card>
                             }
                         >
-                            <BackingServicesCard
-                                label="Commons Services"
+                            <PlexCommonsServicesCard
+                                server={server.name}
                                 services={services}
-                                hasCommons
                             />
                         </Deferred>
 
                         <Card
-                            label={`Application Tenants${appTenants.length > 0 ? ` · ${appTenants.length}` : ''}`}
+                            label={`Project Tenants${projectTenants.length > 0 ? ` · ${projectTenants.length}` : ''}`}
                         >
-                            {appTenants.length === 0 ? (
+                            {projectTenants.length === 0 ? (
                                 <p className="py-2 text-xs text-soft">
-                                    No apps have joined this server&apos;s
-                                    Commons yet. Projects join from their own
-                                    dashboard; custom apps can be provisioned
-                                    below.
+                                    No recognized LaraKube projects have joined
+                                    this server&apos;s Commons yet — they join
+                                    from their own dashboard.
                                 </p>
                             ) : (
                                 <div className="space-y-2">
-                                    {appTenants.map((tenant) => (
+                                    {projectTenants.map((tenant) => (
+                                        <TenantRow
+                                            key={tenant.name}
+                                            server={server}
+                                            tenant={tenant}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </Card>
+
+                        <Card
+                            label={`Custom Tenants${customTenants.length > 0 ? ` · ${customTenants.length}` : ''}`}
+                        >
+                            {customTenants.length === 0 ? (
+                                <p className="py-2 text-xs text-soft">
+                                    For an app that isn&apos;t a recognized
+                                    LaraKube project — provision credentials for
+                                    one below.
+                                </p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {customTenants.map((tenant) => (
                                         <TenantRow
                                             key={tenant.name}
                                             server={server}
@@ -428,14 +467,40 @@ export default function PlexIndex({
                             <Card
                                 label={`Cluster Tools on this Commons · ${toolTenants.length}`}
                             >
-                                <div className="space-y-2">
-                                    {toolTenants.map((tenant) => (
-                                        <TenantRow
-                                            key={tenant.name}
-                                            server={server}
-                                            tenant={tenant}
-                                        />
-                                    ))}
+                                <div className="space-y-3">
+                                    {[...toolGroups.entries()].map(
+                                        ([key, group]) => (
+                                            <div key={key}>
+                                                <div className="mb-1.5 flex items-center gap-2">
+                                                    <ToolLogo
+                                                        tool={
+                                                            group.tool ?? {
+                                                                tool: key,
+                                                            }
+                                                        }
+                                                        size="sm"
+                                                    />
+                                                    <span className="text-xs font-semibold text-ink">
+                                                        {group.tool?.label ??
+                                                            key}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-2 pl-10">
+                                                    {group.tenants.map(
+                                                        (tenant) => (
+                                                            <TenantRow
+                                                                key={
+                                                                    tenant.name
+                                                                }
+                                                                server={server}
+                                                                tenant={tenant}
+                                                            />
+                                                        ),
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ),
+                                    )}
                                 </div>
                             </Card>
                         )}

@@ -393,6 +393,14 @@ export type ProjectEnvironment = {
     } | null;
 };
 
+/** The Cluster Tool a `tool`-bucket tenant's Commons resources belong to — null for project/custom tenants. */
+export type PlexTenantClusterTool = {
+    tool: string;
+    label: string;
+    logo: string;
+    icon: string;
+};
+
 export type PlexTenant = {
     name: string;
     database: string | null;
@@ -400,6 +408,24 @@ export type PlexTenant = {
     redisIndex: number | null;
     s3Bucket: string | null;
     rotation: { state: string; nextRotation: string | null } | null;
+    clusterTool: PlexTenantClusterTool | null;
+};
+
+/** One driver option within a Commons service category (e.g. "postgres" under "database"). */
+export type PlexServiceOption = {
+    driver: string;
+    label: string;
+    enabled: boolean;
+    /** False for a driver the CLI can't provision yet (e.g. Memcached, Typesense today) — still shown, as "coming soon". */
+    ready: boolean;
+};
+
+/** One Commons service category, grouped from the CLI's own driver enums — never a hand-maintained list. */
+export type PlexServiceCategory = {
+    key: string;
+    label: string;
+    active: string | null;
+    options: PlexServiceOption[];
 };
 
 export type PlexStatus = {
@@ -603,6 +629,33 @@ export type BackingService = {
 };
 
 export type BackingServices = { commons: boolean; services: BackingService[] };
+
+/**
+ * One driver option within a category on the Plex Commons page's OWN services
+ * card — deliberately a different shape from BackingService: that type answers
+ * "what does this one tool/project use" (never shows an unused alternative),
+ * this answers "what could this Commons offer, and what's active" for every
+ * category, which is why they're kept separate rather than shoehorned into one.
+ */
+export type PlexServiceOptionDetail = {
+    driver: string;
+    label: string;
+    enabled: boolean;
+    ready: boolean;
+    details: { label: string; value: string | null; secret: boolean }[];
+};
+
+export type PlexServiceCategoryDetail = {
+    key: string;
+    label: string;
+    active: string | null;
+    options: PlexServiceOptionDetail[];
+};
+
+export type PlexCommonsServicesReport = {
+    commons: boolean;
+    categories: PlexServiceCategoryDetail[];
+};
 
 export type NodeMetrics = {
     available: boolean;

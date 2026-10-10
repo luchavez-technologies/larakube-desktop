@@ -225,7 +225,7 @@ class ClusterStatus
      * so a transient unreachable cluster is never cached as "Commons not
      * initialized" for the next 10 minutes.
      *
-     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
      */
     public function plex(string $context): ?array
     {
@@ -242,7 +242,7 @@ class ClusterStatus
      * as "unknown" (null) rather than crashing a deferred prop or silently
      * passing garbage to ToolCommons::describe().
      *
-     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
      */
     private function parsePlexReport(mixed $report): ?array
     {
@@ -263,6 +263,7 @@ class ClusterStatus
             'initialized' => (bool) $report['initialized'],
             'context' => isset($report['context']) ? (string) $report['context'] : null,
             'services' => is_array($report['services']) ? $report['services'] : [],
+            'serviceCatalog' => is_array($report['serviceCatalog'] ?? null) ? $report['serviceCatalog'] : [],
             'tenants' => [
                 'tool' => $bucket($report['tenants']['tool'] ?? []),
                 'project' => $bucket($report['tenants']['project'] ?? []),

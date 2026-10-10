@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { HardDrive, MemoryStick, Search } from 'lucide-react';
 import {
+    SiMeilisearch,
     SiPocketbase,
     SiMatrix,
     SiOpenbao,
@@ -221,6 +223,45 @@ function getBrandVisual(
             containerClass:
                 'bg-rose-500/10 ring-1 ring-rose-500/25 text-[#C72E49] dark:text-[#FB7185]',
             icon: <SiMinio size={px} color="#C72E49" />,
+        };
+    }
+
+    // 11b. Plex Commons service drivers without a Simple Icons brand mark —
+    // a clean Lucide fallback with a distinct tint rather than a hand-drawn
+    // approximation of a logo this component has no verified source for.
+    if (id === 'seaweedfs') {
+        return {
+            containerClass:
+                'bg-amber-500/10 ring-1 ring-amber-500/25 text-amber-600 dark:text-amber-400',
+            icon: <HardDrive size={px} className={sizeClass} />,
+        };
+    }
+    if (id === 'garage') {
+        return {
+            containerClass:
+                'bg-orange-500/10 ring-1 ring-orange-500/25 text-orange-600 dark:text-orange-400',
+            icon: <HardDrive size={px} className={sizeClass} />,
+        };
+    }
+    if (id === 'meilisearch') {
+        return {
+            containerClass:
+                'bg-pink-500/10 ring-1 ring-pink-500/25 text-[#FF5CAA]',
+            icon: <SiMeilisearch size={px} color="#FF5CAA" />,
+        };
+    }
+    if (id === 'typesense') {
+        return {
+            containerClass:
+                'bg-teal-500/10 ring-1 ring-teal-500/25 text-teal-600 dark:text-teal-400',
+            icon: <Search size={px} className={sizeClass} />,
+        };
+    }
+    if (id === 'memcached') {
+        return {
+            containerClass:
+                'bg-sky-500/10 ring-1 ring-sky-500/25 text-sky-600 dark:text-sky-400',
+            icon: <MemoryStick size={px} className={sizeClass} />,
         };
     }
 

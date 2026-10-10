@@ -109,9 +109,18 @@ function plexPageFakes(): array
             'initialized' => true,
             'context' => 'larakube-34.27.253.31',
             'services' => ['postgres' => ['enabled' => true, 'host' => 'postgres.larakube-plex', 'port' => 5432]],
+            'serviceCatalog' => [
+                'database' => ['active' => 'postgres', 'options' => [
+                    'postgres' => ['label' => 'PostgreSQL', 'enabled' => true, 'ready' => true],
+                    'mysql' => ['label' => 'MySQL', 'enabled' => false, 'ready' => true],
+                ]],
+                'cache' => ['active' => null, 'options' => [
+                    'redis' => ['label' => 'Redis', 'enabled' => false, 'ready' => true],
+                ]],
+            ],
             'tenants' => [
-                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null]],
-                'project' => [['name' => 'shop_production', 'database' => 'shop_production', 'databaseService' => 'postgres', 'redisIndex' => 3, 's3Bucket' => null, 'rotation' => ['state' => 'managed', 'nextRotation' => '2026-10-20T00:00:00Z']]],
+                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null, 'clusterTool' => ['tool' => 'notes', 'label' => 'Outline', 'logo' => 'outline', 'icon' => '📝']]],
+                'project' => [['name' => 'shop_production', 'database' => 'shop_production', 'databaseService' => 'postgres', 'redisIndex' => 3, 's3Bucket' => null, 'rotation' => ['state' => 'managed', 'nextRotation' => '2026-10-20T00:00:00Z'], 'clusterTool' => null]],
                 'custom' => [],
             ],
         ])),
@@ -139,11 +148,48 @@ test('the Plex Commons page loads plex, services, and pod-metrics deferred props
             ->component('plex/index')
             ->loadDeferredProps(fn (AssertableInertia $page) => $page
                 ->where('plex.initialized', true)
-                ->where('services.services.0.name', 'Postgres')
+                ->where('services.categories.0.active', 'postgres')
+                ->where('services.categories.0.options.0.driver', 'postgres')
                 ->where('plex.tenants.tool.0.name', 'outline_wiki')
+                ->where('plex.tenants.tool.0.clusterTool.tool', 'notes')
                 ->where('plex.tenants.project.0.name', 'shop_production')
                 ->where('podMetrics.available', true)
                 ->where('podMetrics.components.postgres.podCount', 1)));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('adding a ready, inactive driver unions it with whatever is already active and runs plex:init', function () {
+    $sandbox = plexSandbox();
+    Process::fake(plexPageFakes());
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.plex.services.add', 'workshop-demo'), ['driver' => 'mysql'])
+        ->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:init', '--context=larakube-34.27.253.31', '--services=postgres,mysql', '--no-interaction',
+    ]);
+    expect(Run::sole()->kind)->toBe(RunKind::PlexInit);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('adding a driver that is already active, or not yet provisionable, is rejected', function () {
+    $sandbox = plexSandbox();
+    Process::fake(plexPageFakes());
+    ChildProcess::fake();
+
+    // Already active.
+    $this->post(route('servers.plex.services.add', 'workshop-demo'), ['driver' => 'postgres'])
+        ->assertStatus(422);
+
+    // Not ready (no memcached option in this fixture at all).
+    $this->post(route('servers.plex.services.add', 'workshop-demo'), ['driver' => 'memcached'])
+        ->assertStatus(422);
+
+    expect(Run::count())->toBe(0);
 
     File::deleteDirectory($sandbox['home']);
 });

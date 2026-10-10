@@ -46,7 +46,9 @@ class PlexController extends Controller
             'services' => Inertia::defer(function () use ($status, $context, $commonsServices): ?array {
                 $plex = $status->plex($context);
 
-                return $plex !== null && $plex['initialized'] ? $commonsServices->describe($plex['services']) : null;
+                return $plex !== null && $plex['initialized']
+                    ? $commonsServices->describe($plex['serviceCatalog'], $plex['services'])
+                    : null;
             }, 'services'),
             'podMetrics' => Inertia::defer(fn (): ?array => $metrics->podMetrics($context, 'larakube-plex'), 'podMetrics'),
         ]);
@@ -85,6 +87,56 @@ class PlexController extends Controller
             arguments: $args,
             kind: RunKind::PlexProvision,
             subject: $tenant,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    /**
+     * Enables one additional, currently-inactive driver on an existing Commons.
+     * `plex:init --services=` is already additive and non-destructive on a
+     * live Commons (confirmed in PlexInitCommand::resolveSpec() — re-running
+     * it unions the requested list with whatever's already active, never
+     * disables a running service), so this just works out which drivers are
+     * already active and adds the one requested to that list.
+     */
+    public function addService(Request $request, string $server, ClusterStatus $status, CliRunner $runner): RedirectResponse
+    {
+        $request->validate(['driver' => ['required', 'string']]);
+
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $driver = $request->string('driver')->trim()->toString();
+
+        $plex = $status->plex($context);
+        abort_unless($plex !== null && $plex['initialized'], 404);
+
+        $ready = false;
+        $active = [];
+        foreach ($plex['serviceCatalog'] as $category) {
+            foreach ($category['options'] ?? [] as $option => $meta) {
+                if ($meta['enabled'] ?? false) {
+                    $active[] = $option;
+                }
+                if ($option === $driver && ($meta['ready'] ?? false) && ! ($meta['enabled'] ?? false)) {
+                    $ready = true;
+                }
+            }
+        }
+        abort_unless($ready, 422);
+
+        $services = implode(',', [...$active, $driver]);
+
+        $run = $runner->start(
+            label: "Add {$driver} to the Commons on {$server}",
+            arguments: ['plex:init', "--context={$context}", "--services={$services}"],
+            kind: RunKind::PlexInit,
+            subject: $driver,
             meta: ['server' => $server, 'context' => $context],
             targetType: 'server',
             targetName: $server,
