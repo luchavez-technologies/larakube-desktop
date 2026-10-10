@@ -77,6 +77,8 @@ Route::post('/servers/{server}/plex/start', [PlexController::class, 'startServer
 Route::post('/servers/{server}/plex/stop', [PlexController::class, 'stopServer'])->name('servers.plex.stop');
 Route::post('/servers/{server}/plex/refresh', [PlexController::class, 'refresh'])->name('servers.plex.refresh');
 Route::post('/servers/{server}/plex/provision', [PlexController::class, 'provision'])->name('servers.plex.provision');
+Route::post('/servers/{server}/plex/tenants/{tenant}/evict', [PlexController::class, 'evictTenant'])->name('servers.plex.tenants.evict');
+Route::post('/servers/{server}/plex/tenants/{tenant}/rotate', [PlexController::class, 'rotateTenant'])->name('servers.plex.tenants.rotate');
 Route::post('/servers/{server}/backups/setup', [BackupController::class, 'setup'])->name('servers.backups.setup');
 Route::post('/servers/{server}/backups/schedule', [BackupController::class, 'schedule'])->name('servers.backups.schedule');
 Route::post('/servers/{server}/backups/unschedule', [BackupController::class, 'unschedule'])->name('servers.backups.unschedule');

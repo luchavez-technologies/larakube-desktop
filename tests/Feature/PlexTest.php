@@ -186,3 +186,57 @@ test('provisioning custom Commons credentials runs plex:provision', function () 
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('evicting a tenant runs plex:evict', function () {
+    $sandbox = plexSandbox();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('workshop-demo')->andReturn([
+        'name' => 'workshop-demo',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-34.27.253.31',
+        'status' => 'ready',
+        'account' => null,
+        'projectId' => null,
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.plex.tenants.evict', ['server' => 'workshop-demo', 'tenant' => 'outline_wiki']))->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:evict', 'local', '--context=larakube-34.27.253.31', '--tenant=outline_wiki', '--force', '--no-interaction',
+    ]);
+    expect(Run::sole()->kind)->toBe(RunKind::PlexEvict);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('rotating a tenant\'s credential runs plex:rotate scoped to its database', function () {
+    $sandbox = plexSandbox();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('workshop-demo')->andReturn([
+        'name' => 'workshop-demo',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-34.27.253.31',
+        'status' => 'ready',
+        'account' => null,
+        'projectId' => null,
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.plex.tenants.rotate', ['server' => 'workshop-demo', 'tenant' => 'outline_wiki']))->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:rotate', 'local', '--context=larakube-34.27.253.31', '--tenant=outline_wiki', '--only=db', '--force', '--no-interaction',
+    ]);
+    expect(Run::sole()->kind)->toBe(RunKind::PlexRotate);
+
+    File::deleteDirectory($sandbox['home']);
+});

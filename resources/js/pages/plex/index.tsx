@@ -7,6 +7,7 @@ import {
     Shield,
     Database,
     KeyRound,
+    Trash2,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -15,6 +16,10 @@ import BackingServicesCard from '@/components/backing-services-card';
 import AppLayout from '@/layouts/app-layout';
 import { show as showServer } from '@/routes/servers';
 import { index as plexIndex, refresh, provision } from '@/routes/servers/plex';
+import {
+    evict as evictTenant,
+    rotate as rotateTenant,
+} from '@/routes/servers/plex/tenants';
 import type {
     BackingServices,
     PlexStatus,
@@ -30,7 +35,61 @@ const ROTATION_LABEL: Record<string, { label: string; tone: string }> = {
     managed: { label: 'OpenBao-managed', tone: 'text-emerald-500' },
 };
 
-function TenantRow({ tenant }: { tenant: PlexTenant }) {
+function EvictConfirmDialog({
+    server,
+    tenant,
+    onCancel,
+}: {
+    server: Server;
+    tenant: PlexTenant;
+    onCancel: () => void;
+}) {
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
+            onClick={onCancel}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                className="w-full max-w-[440px] rounded-2xl bg-surface p-7 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                    Evict {tenant.name}?
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-soft">
+                    Frees its database, S3 bucket, and Redis index on this
+                    Commons. A safety backup is taken first. For the orphaned-
+                    tenant case — if the project still exists, use plex:leave
+                    from it instead.
+                </p>
+                <div className="mt-5 flex justify-end gap-2.5">
+                    <Button variant="secondary" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Form
+                        action={
+                            evictTenant({
+                                server: server.name,
+                                tenant: tenant.name,
+                            }).url
+                        }
+                        method="post"
+                    >
+                        <Button type="submit" variant="danger">
+                            <Trash2 className="h-4 w-4" />
+                            Evict
+                        </Button>
+                    </Form>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function TenantRow({ server, tenant }: { server: Server; tenant: PlexTenant }) {
+    const [confirmingEvict, setConfirmingEvict] = useState(false);
     const rotation = tenant.rotation
         ? (ROTATION_LABEL[tenant.rotation.state] ?? {
               label: tenant.rotation.state,
@@ -39,35 +98,70 @@ function TenantRow({ tenant }: { tenant: PlexTenant }) {
         : null;
 
     return (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper/60 p-3 text-xs">
-            <div className="min-w-0">
-                <div className="font-mono font-semibold text-ink">
-                    {tenant.name}
+        <>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper/60 p-3 text-xs">
+                <div className="min-w-0">
+                    <div className="font-mono font-semibold text-ink">
+                        {tenant.name}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-soft">
+                        {tenant.database && (
+                            <span className="inline-flex items-center gap-1">
+                                <Database className="size-3" />
+                                {tenant.database}
+                                {tenant.databaseService
+                                    ? ` (${tenant.databaseService})`
+                                    : ''}
+                            </span>
+                        )}
+                        {tenant.redisIndex !== null && (
+                            <span>Redis DB {tenant.redisIndex}</span>
+                        )}
+                        {tenant.s3Bucket && <span>S3 {tenant.s3Bucket}</span>}
+                    </div>
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-soft">
-                    {tenant.database && (
-                        <span className="inline-flex items-center gap-1">
-                            <Database className="size-3" />
-                            {tenant.database}
-                            {tenant.databaseService
-                                ? ` (${tenant.databaseService})`
-                                : ''}
+                <div className="flex shrink-0 items-center gap-2">
+                    {rotation && (
+                        <span
+                            className={`font-mono text-[10px] ${rotation.tone}`}
+                        >
+                            {rotation.label}
                         </span>
                     )}
-                    {tenant.redisIndex !== null && (
-                        <span>Redis DB {tenant.redisIndex}</span>
+                    {tenant.database && (
+                        <Link
+                            href={
+                                rotateTenant({
+                                    server: server.name,
+                                    tenant: tenant.name,
+                                }).url
+                            }
+                            method="post"
+                            as="button"
+                            className={buttonClass('ghost', 'sm', 'text-soft')}
+                            title="Rotate this tenant's database credential"
+                        >
+                            <RotateCw className="size-3" />
+                        </Link>
                     )}
-                    {tenant.s3Bucket && <span>S3 {tenant.s3Bucket}</span>}
+                    <button
+                        type="button"
+                        onClick={() => setConfirmingEvict(true)}
+                        className={buttonClass('ghost', 'sm', 'text-accent')}
+                        title="Evict this tenant from the Commons"
+                    >
+                        <Trash2 className="size-3" />
+                    </button>
                 </div>
             </div>
-            {rotation && (
-                <span
-                    className={`shrink-0 font-mono text-[10px] ${rotation.tone}`}
-                >
-                    {rotation.label}
-                </span>
+            {confirmingEvict && (
+                <EvictConfirmDialog
+                    server={server}
+                    tenant={tenant}
+                    onCancel={() => setConfirmingEvict(false)}
+                />
             )}
-        </div>
+        </>
     );
 }
 
@@ -322,6 +416,7 @@ export default function PlexIndex({
                                     {appTenants.map((tenant) => (
                                         <TenantRow
                                             key={tenant.name}
+                                            server={server}
                                             tenant={tenant}
                                         />
                                     ))}
@@ -337,6 +432,7 @@ export default function PlexIndex({
                                     {toolTenants.map((tenant) => (
                                         <TenantRow
                                             key={tenant.name}
+                                            server={server}
                                             tenant={tenant}
                                         />
                                     ))}

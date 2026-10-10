@@ -95,6 +95,46 @@ class PlexController extends Controller
         return to_route('runs.show', $run);
     }
 
+    /** Evicts an orphaned tenant from the Commons — the "no project checked out" case this page's own context fits. */
+    public function evictTenant(string $server, string $tenant, CliRunner $runner): RedirectResponse
+    {
+        $context = (string) $this->readyServer($server)['context'];
+
+        $run = $runner->start(
+            label: "Evict {$tenant} from the Commons on {$server}",
+            arguments: ['plex:evict', 'local', "--context={$context}", "--tenant={$tenant}", '--force'],
+            kind: RunKind::PlexEvict,
+            subject: $tenant,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    /** Rotates one tenant's database credential, next to the rotation badge already shown on this page. */
+    public function rotateTenant(string $server, string $tenant, CliRunner $runner): RedirectResponse
+    {
+        $context = (string) $this->readyServer($server)['context'];
+
+        $run = $runner->start(
+            label: "Rotate {$tenant}'s Commons credential on {$server}",
+            arguments: ['plex:rotate', 'local', "--context={$context}", "--tenant={$tenant}", '--only=db', '--force'],
+            kind: RunKind::PlexRotate,
+            subject: $tenant,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     public function initServer(string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
     {
         $stack = $stacks->find($server);
