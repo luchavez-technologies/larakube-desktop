@@ -350,13 +350,29 @@ export default function PlexIndex({
                     <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
                         Plex Commons
                     </h1>
+                    <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
+                        Shared infrastructure for tenant apps and Cluster Tools
+                        — resource usage, connected tenants, and on-demand
+                        credentials.
+                    </p>
                 </header>
-                <Card label="Plex Commons">
-                    <div className="flex items-center gap-3 py-2 text-soft">
-                        <Shield className="size-5 shrink-0 animate-pulse text-faint" />
-                        <p className="text-xs">Checking the server…</p>
+                {/* Shaped like the real page (ADR 0009) so this reads as
+                    "still loading", not as an empty or broken page. */}
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                    <div className="space-y-5 lg:col-span-2">
+                        <Card label="Commons Services">
+                            <div className="h-32 animate-pulse rounded-xl bg-paper" />
+                        </Card>
+                        <Card label="Cluster Tools">
+                            <div className="h-48 animate-pulse rounded-xl bg-paper" />
+                        </Card>
                     </div>
-                </Card>
+                    <div className="space-y-5">
+                        <Card label="Resource Usage">
+                            <div className="h-40 animate-pulse rounded-xl bg-paper" />
+                        </Card>
+                    </div>
+                </div>
             </AppLayout>
         );
     }
