@@ -327,13 +327,23 @@ export default function PlexIndex({
     services?: PlexCommonsServicesReport | null;
     podMetrics?: PodMetrics | null;
 }) {
+    // No persisted report yet (a never-synced server, right after a reset)
+    // only ever means "still checking" — plex_data is null until a sync has
+    // actually completed at least once, it is never null for a genuine
+    // "Commons isn't initialized" answer (that still comes back as a full
+    // report with initialized: false). Keep showing the loading state while
+    // that first background sync is in flight, and poll for it to land —
+    // the sync_status column itself may still read "stale" for a moment
+    // after dispatch, before the queue worker has actually claimed it.
+    const awaitingFirstSync = plex === null && plexSync.status !== 'error';
+
     usePoll(
         2000,
         { only: ['plex', 'services', 'plexSync'] },
-        { autoStart: plexSync.status === 'syncing' },
+        { autoStart: plexSync.status === 'syncing' || awaitingFirstSync },
     );
 
-    if (plex === undefined) {
+    if (plex === undefined || awaitingFirstSync) {
         return (
             <AppLayout title="Plex Commons">
                 <header className="mb-6">
@@ -351,7 +361,29 @@ export default function PlexIndex({
         );
     }
 
-    const initialized = Boolean(plex?.initialized);
+    if (plex === null) {
+        return (
+            <AppLayout title="Plex Commons">
+                <header className="mb-6">
+                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
+                        Plex Commons
+                    </h1>
+                </header>
+                <Card label="Plex Commons">
+                    <div className="flex items-center gap-3 py-2 text-warn">
+                        <Shield className="size-5 shrink-0 text-warn" />
+                        <p className="text-xs">
+                            Couldn&apos;t reach {server.name} to check Plex
+                            Commons
+                            {plexSync.error ? `: ${plexSync.error}` : '.'}
+                        </p>
+                    </div>
+                </Card>
+            </AppLayout>
+        );
+    }
+
+    const initialized = Boolean(plex.initialized);
     const toolTenants = plex?.tenants.tool ?? [];
     const projectTenants = plex?.tenants.project ?? [];
     const customTenants = plex?.tenants.custom ?? [];
