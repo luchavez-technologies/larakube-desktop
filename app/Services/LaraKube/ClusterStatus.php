@@ -216,40 +216,59 @@ class ClusterStatus
     }
 
     /**
-     * @return array{initialized: bool, services: array<string, mixed>, tenants: array<string, mixed>}|null
+     * {initialized, context, services, tenants: {tool, project, custom}}
+     * from `plex:show --json` — the Commons read every OTHER status method
+     * here already uses (dns/tls/backup shell to their own show/status
+     * command plus --json); this used to bypass the CLI entirely with two
+     * raw `kubectl get configmap` reads, duplicating ConfigMap-parsing logic
+     * a third time. Null (not a default empty shape) on a genuine failure,
+     * so a transient unreachable cluster is never cached as "Commons not
+     * initialized" for the next 10 minutes.
+     *
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
      */
     public function plex(string $context): ?array
     {
         return $this->remember("plex:{$context}", function () use ($context): ?array {
-            $cli = $this->locator->find('kubectl');
-
-            if ($cli === null) {
-                return null;
-            }
-
-            $isolated = $this->locator->isolate([$cli, "--context={$context}", 'get', 'configmap', 'plex-commons', '-n', 'larakube-plex', '-o', 'jsonpath={.data.commons\\.json}']);
-            $result = Process::env($isolated['environment'])->timeout(15)->run($isolated['command']);
-
-            if (! $result->successful() || trim($result->output()) === '') {
-                return [
-                    'initialized' => false,
-                    'services' => [],
-                    'tenants' => [],
-                ];
-            }
-
-            $spec = json_decode(trim($result->output()), true);
-
-            $regIsolated = $this->locator->isolate([$cli, "--context={$context}", 'get', 'configmap', 'plex-registry', '-n', 'larakube-plex', '-o', 'jsonpath={.data.registry\\.json}']);
-            $regResult = Process::env($regIsolated['environment'])->timeout(15)->run($regIsolated['command']);
-            $registry = json_decode(trim($regResult->output()), true);
-
-            return [
-                'initialized' => true,
-                'services' => is_array($spec) && isset($spec['services']) && is_array($spec['services']) ? $spec['services'] : [],
-                'tenants' => is_array($registry) && isset($registry['tenants']) && is_array($registry['tenants']) ? $registry['tenants'] : [],
-            ];
+            return $this->parsePlexReport($this->json(['plex:show', 'production', "--context={$context}", '--json'], 60));
         });
+    }
+
+    /**
+     * CLI JSON output is untrusted shape-wise (a bug in plex:show, or a
+     * version mismatch between an old Desktop build and a newer CLI, could
+     * both produce something unexpected) — validated explicitly here instead
+     * of trusting is_array($report) and casting, so a malformed report reads
+     * as "unknown" (null) rather than crashing a deferred prop or silently
+     * passing garbage to ToolCommons::describe().
+     *
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
+     */
+    private function parsePlexReport(mixed $report): ?array
+    {
+        if (! is_array($report) || ! isset($report['initialized'], $report['services'], $report['tenants']) || ! is_array($report['tenants'])) {
+            return null;
+        }
+
+        $bucket = function (mixed $value): array {
+            if (! is_array($value)) {
+                return [];
+            }
+
+            /** @var list<array<string, mixed>> */
+            return array_values(array_filter($value, 'is_array'));
+        };
+
+        return [
+            'initialized' => (bool) $report['initialized'],
+            'context' => isset($report['context']) ? (string) $report['context'] : null,
+            'services' => is_array($report['services']) ? $report['services'] : [],
+            'tenants' => [
+                'tool' => $bucket($report['tenants']['tool'] ?? []),
+                'project' => $bucket($report['tenants']['project'] ?? []),
+                'custom' => $bucket($report['tenants']['custom'] ?? []),
+            ],
+        ];
     }
 
     /**

@@ -28,7 +28,15 @@ export default function PlexCommonsCard({
     }
 
     const initialized = Boolean(plex?.initialized);
-    const tenantCount = Object.keys(plex?.tenants ?? {}).length;
+    // Flattened for this card's simple pill list — Phase 4 of the Plex
+    // Commons Desktop page gives the tool/project/custom split its own
+    // dedicated table instead of folding it back into one list.
+    const tenants = [
+        ...(plex?.tenants?.tool ?? []),
+        ...(plex?.tenants?.project ?? []),
+        ...(plex?.tenants?.custom ?? []),
+    ];
+    const tenantCount = tenants.length;
 
     return (
         <Card
@@ -155,23 +163,21 @@ export default function PlexCommonsCard({
                             </p>
                         ) : (
                             <div className="flex flex-wrap gap-2">
-                                {Object.entries(plex?.tenants ?? {}).map(
-                                    ([tenantId, info]) => (
-                                        <span
-                                            key={tenantId}
-                                            className="inline-flex items-center gap-1.5 rounded-md bg-paper px-2.5 py-1 text-xs font-medium ring-1 ring-line"
-                                        >
-                                            <span className="font-mono text-ink">
-                                                {tenantId}
-                                            </span>
-                                            {info.redis_index !== undefined && (
-                                                <span className="text-[10px] text-soft">
-                                                    (DB {info.redis_index})
-                                                </span>
-                                            )}
+                                {tenants.map((tenant) => (
+                                    <span
+                                        key={tenant.name}
+                                        className="inline-flex items-center gap-1.5 rounded-md bg-paper px-2.5 py-1 text-xs font-medium ring-1 ring-line"
+                                    >
+                                        <span className="font-mono text-ink">
+                                            {tenant.name}
                                         </span>
-                                    ),
-                                )}
+                                        {tenant.redisIndex !== null && (
+                                            <span className="text-[10px] text-soft">
+                                                (DB {tenant.redisIndex})
+                                            </span>
+                                        )}
+                                    </span>
+                                ))}
                             </div>
                         )}
                     </div>

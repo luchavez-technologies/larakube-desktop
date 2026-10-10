@@ -285,6 +285,7 @@ class ClusterToolController extends Controller
         $status->forgetDomains($context);
         $status->forgetDns($context);
         $status->forgetTls($context);
+        $status->forgetPlex($context);
 
         return to_route('servers.tools.index', $server);
     }

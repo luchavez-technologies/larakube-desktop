@@ -635,8 +635,6 @@ test('removing a tool passes --domain only when the CLI says the tool can run mo
 
 test('a tool\'s page carries what it holds on the Commons, for the shared backing services card', function () {
     $bin = clusterToolsFakeCli();
-    File::put("{$bin}/kubectl", "#!/bin/sh\n");
-    chmod("{$bin}/kubectl", 0755);
     $row = [
         'tool' => 'outline', 'instance' => 'wiki', 'icon' => '*', 'brand' => 'Outline', 'label' => 'Wiki', 'installed' => true,
         'commons' => ['databases' => ['outline_wiki'], 'redis' => [], 'buckets' => []],
@@ -648,8 +646,16 @@ test('a tool\'s page carries what it holds on the Commons, for the shared backin
             ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
         ]])),
         '*tool:list*' => Process::result(output: json_encode([$row])),
-        '*plex-commons*' => Process::result(output: json_encode(['services' => ['postgres' => ['enabled' => true]]])),
-        '*plex-registry*' => Process::result(output: json_encode(['tenants' => ['outline_wiki' => ['db' => 'outline_wiki', 'db_service' => 'postgres']]])),
+        '*plex:show*' => Process::result(output: json_encode([
+            'initialized' => true,
+            'context' => 'larakube-203.0.113.21',
+            'services' => ['postgres' => ['enabled' => true]],
+            'tenants' => [
+                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null]],
+                'project' => [],
+                'custom' => [],
+            ],
+        ])),
     ]);
 
     $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'outline', 'domain' => 'wiki.example.com']))

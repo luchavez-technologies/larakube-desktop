@@ -364,16 +364,22 @@ test('the domain pages are not there with experimental features off', function (
 
 test('a dev box page opens the tunnel through the CLI and reads Plex Commons through the kube-context it made', function () {
     $bin = devBoxProjectsCli();
-    File::put("{$bin}/kubectl", "#!/bin/sh\n");
-    chmod("{$bin}/kubectl", 0755);
     devBoxProjectsExperimental(true);
     Process::fake([
         '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
             ['name' => 'my-dev-box', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'us-central1', 'ip' => '203.0.113.50', 'sshKey' => '/k', 'context' => null, 'role' => 'dev', 'account' => null, 'projectId' => null, 'status' => 'ready'],
         ]])),
         '*devbox:connect*' => Process::result(output: json_encode(['success' => true, 'context' => 'larakube-devbox-my-dev-box', 'port' => 16443])),
-        '*plex-commons*' => Process::result(output: json_encode(['services' => ['postgres' => ['host' => 'postgres.larakube-plex']]])),
-        '*plex-registry*' => Process::result(output: json_encode(['tenants' => ['shop' => ['redis_index' => 1]]])),
+        '*plex:show*' => Process::result(output: json_encode([
+            'initialized' => true,
+            'context' => 'larakube-devbox-my-dev-box',
+            'services' => ['postgres' => ['host' => 'postgres.larakube-plex']],
+            'tenants' => [
+                'tool' => [],
+                'project' => [['name' => 'shop', 'database' => null, 'databaseService' => null, 'redisIndex' => 1, 's3Bucket' => null, 'rotation' => null]],
+                'custom' => [],
+            ],
+        ])),
     ]);
 
     $this->get(route('devboxes.show', ['box' => 'my-dev-box']))

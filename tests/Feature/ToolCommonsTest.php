@@ -2,10 +2,10 @@
 
 use App\Services\LaraKube\ToolCommons;
 
-$plex = ['initialized' => true, 'services' => [], 'tenants' => [
-    'outline_wiki' => ['db' => 'outline_wiki', 'db_service' => 'postgres', 'redis_index' => 4, 's3_bucket' => 'outline-wiki'],
-    'other_app' => ['db' => 'other_app', 'db_service' => 'mysql', 'redis_index' => 5, 's3_bucket' => 'other-app'],
-]];
+$plex = ['initialized' => true, 'services' => [], 'tenants' => ['tool' => [
+    ['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => 4, 's3Bucket' => 'outline-wiki', 'rotation' => null],
+    ['name' => 'other_app', 'database' => 'other_app', 'databaseService' => 'mysql', 'redisIndex' => 5, 's3Bucket' => 'other-app', 'rotation' => null],
+], 'project' => [], 'custom' => []]];
 
 test('a tool\'s names on the Commons become the same service tiles a project shows', function () use ($plex): void {
     $row = ['commons' => ['databases' => ['outline_wiki'], 'redis' => ['outline_wiki'], 'buckets' => ['outline-wiki']]];

@@ -18,6 +18,11 @@ test('a cluster that never answers reads as unknown, not as an error page', func
     File::ensureDirectoryExists($bin);
     File::put("{$bin}/kubectl", "#!/bin/sh\n");
     chmod("{$bin}/kubectl", 0755);
+    // plex() shells to `larakube plex:show --json` (like dns/tls/backup), not
+    // raw kubectl — needs its own fake binary so the timeout actually comes
+    // from the faked Process::run() below, not from find() finding nothing.
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
     app()->instance(ToolLocator::class, new ToolLocator([$bin]));
 
     Process::fake(['*' => fn () => throw new ProcessTimedOutException(

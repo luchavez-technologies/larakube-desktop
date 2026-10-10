@@ -12,7 +12,7 @@ class ToolCommons
 {
     /**
      * @param  array<string, mixed>  $row  a tool:list row
-     * @param  array{initialized: bool, services: array<string, mixed>, tenants: array<string, mixed>}|null  $plex
+     * @param  array{initialized: bool, context?: ?string, services: array<string, mixed>, tenants: array{tool?: list<array<string, mixed>>, project?: list<array<string, mixed>>, custom?: list<array<string, mixed>>}}|null  $plex
      * @return array{commons: bool, services: list<array<string, mixed>>}|null null when the tool holds nothing on the Commons
      */
     public function describe(array $row, ?array $plex): ?array
@@ -26,49 +26,50 @@ class ToolCommons
             return null;
         }
 
-        $tenants = is_array($plex['tenants'] ?? null) ? $plex['tenants'] : [];
+        // A Cluster Tool's own Commons tenant always lands in the 'tool'
+        // bucket (plex:show --json groups by ClusterTool::forCommonsResource()
+        // — exactly what makes a registry entry "a tool's", by definition).
+        $tenants = is_array($plex['tenants']['tool'] ?? null) ? $plex['tenants']['tool'] : [];
         $services = [];
 
         if ($databases !== []) {
-            $tenant = $this->tenant($tenants, $databases, 'db');
-            $services[] = $this->service('database', 'Database', $tenant['db_service'] ?? null, array_filter([
-                ['label' => 'Database', 'value' => $tenant['db'] ?? $databases[0]],
-                isset($tenant['db_service']) ? ['label' => 'Engine', 'value' => (string) $tenant['db_service']] : null,
+            $tenant = $this->tenant($tenants, $databases, 'database');
+            $services[] = $this->service('database', 'Database', $tenant['databaseService'] ?? null, array_filter([
+                ['label' => 'Database', 'value' => $tenant['database'] ?? $databases[0]],
+                isset($tenant['databaseService']) ? ['label' => 'Engine', 'value' => (string) $tenant['databaseService']] : null,
             ]));
         }
 
         if ($redis !== []) {
             $tenant = $this->tenant($tenants, $redis, null);
             $services[] = $this->service('cache', 'Cache & queues', 'redis', array_filter([
-                isset($tenant['redis_index']) ? ['label' => 'Database index', 'value' => (string) $tenant['redis_index']] : null,
+                isset($tenant['redisIndex']) ? ['label' => 'Database index', 'value' => (string) $tenant['redisIndex']] : null,
             ]));
         }
 
         if ($buckets !== []) {
-            $tenant = $this->tenant($tenants, $buckets, 's3_bucket');
-            $services[] = $this->service('storage', 'Object storage', null, [['label' => 'Bucket', 'value' => $tenant['s3_bucket'] ?? $buckets[0]]]);
+            $tenant = $this->tenant($tenants, $buckets, 's3Bucket');
+            $services[] = $this->service('storage', 'Object storage', null, [['label' => 'Bucket', 'value' => $tenant['s3Bucket'] ?? $buckets[0]]]);
         }
 
         return ['commons' => true, 'services' => $services];
     }
 
     /**
-     * The registry entry for one of the instance's names, matched by tenant id or by the field that holds it.
+     * The registry entry for one of the instance's names, matched by tenant name or by the field that holds it.
      *
-     * @param  array<string, mixed>  $tenants
+     * @param  list<array<string, mixed>>  $tenants
      * @param  list<string>  $names
      * @return array<string, mixed>
      */
     private function tenant(array $tenants, array $names, ?string $field): array
     {
-        foreach ($names as $name) {
-            if (is_array($tenants[$name] ?? null)) {
-                return $tenants[$name];
-            }
-        }
-
         foreach ($tenants as $tenant) {
-            if (is_array($tenant) && $field !== null && in_array($tenant[$field] ?? null, $names, true)) {
+            if (in_array($tenant['name'] ?? null, $names, true)) {
+                return $tenant;
+            }
+
+            if ($field !== null && in_array($tenant[$field] ?? null, $names, true)) {
                 return $tenant;
             }
         }

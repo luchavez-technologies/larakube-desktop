@@ -391,22 +391,30 @@ export type ProjectEnvironment = {
     } | null;
 };
 
+export type PlexTenant = {
+    name: string;
+    database: string | null;
+    databaseService: string | null;
+    redisIndex: number | null;
+    s3Bucket: string | null;
+    rotation: { state: string; nextRotation: string | null } | null;
+};
+
 export type PlexStatus = {
     initialized: boolean;
+    context: string | null;
     services: Record<
         string,
         { service?: string; host?: string; port?: number } | string
     >;
-    tenants: Record<
-        string,
-        {
-            db?: string;
-            db_service?: string;
-            redis_index?: number;
-            s3_bucket?: string;
-            namespace?: string;
-        }
-    >;
+    // From plex:show --json's kind split: a tool's own Commons tenant, a
+    // recognized LaraKube project's, or one `plex:provision`-created for a
+    // custom app — see plans/active/plex-commons-desktop-page.md Decision 3.
+    tenants: {
+        tool: PlexTenant[];
+        project: PlexTenant[];
+        custom: PlexTenant[];
+    };
 };
 
 export type ClusterUser = {

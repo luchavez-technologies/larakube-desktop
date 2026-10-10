@@ -639,8 +639,12 @@ test('the New project page reports the local Commons so the form can say what it
     Process::fake([
         '*current-context*' => Process::result(output: "orbstack\n"),
         '*cluster-info*' => Process::result(output: 'ok'),
-        '*plex-commons*' => Process::result(output: json_encode(['services' => ['postgres' => ['enabled' => true], 'redis' => ['enabled' => false]]])),
-        '*plex-registry*' => Process::result(output: json_encode(['tenants' => ['blog' => []]])),
+        '*plex:show*' => Process::result(output: json_encode([
+            'initialized' => true,
+            'context' => 'orbstack',
+            'services' => ['postgres' => ['enabled' => true], 'redis' => ['enabled' => false]],
+            'tenants' => ['tool' => [], 'project' => [], 'custom' => []],
+        ])),
         '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
     ]);
 
