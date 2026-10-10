@@ -34,6 +34,7 @@ import {
     SiPenpot,
     SiReactiveresume,
     SiWordpress,
+    SiGooglechrome,
 } from '@icons-pack/react-simple-icons';
 import type { ClusterTool } from '@/types/larakube';
 
@@ -95,6 +96,16 @@ export default function ToolLogo({
             {tool?.icon ?? '🛠️'}
         </span>
     );
+}
+
+/**
+ * Just the brand mark, no badge/container — for a small inline spot (a pill,
+ * a compact list row) where ToolLogo's fixed size-8+ box doesn't fit. null
+ * when nothing is known for this slug, so a caller can fall back to its own
+ * generic icon instead of rendering nothing.
+ */
+export function brandIcon(slug: string, px = 12): ReactNode | null {
+    return getBrandVisual(slug.toLowerCase(), px, 'size-3')?.icon ?? null;
 }
 
 function getBrandVisual(
@@ -758,6 +769,22 @@ function getBrandVisual(
             containerClass:
                 'bg-blue-500/10 ring-1 ring-blue-500/25 text-[#2563EB]',
             icon: <SiAdminer size={px} color="#2563EB" />,
+        };
+    }
+
+    // 41. Headless Chrome / headless-shell (Plex Commons' Render driver —
+    // the real Kubernetes component is chromedp/headless-shell, a stripped
+    // headless-Chromium build, not full Google Chrome, but it's the closest
+    // recognizable brand mark a person will actually place at a glance.
+    if (
+        id === 'headless-shell' ||
+        id === 'chrome' ||
+        id === 'headless-chrome'
+    ) {
+        return {
+            containerClass:
+                'bg-amber-500/10 ring-1 ring-amber-500/25 text-[#EA4335]',
+            icon: <SiGooglechrome size={px} color="#EA4335" />,
         };
     }
 

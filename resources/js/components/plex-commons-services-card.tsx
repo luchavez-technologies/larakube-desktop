@@ -1,4 +1,5 @@
-import { Link } from '@inertiajs/react';
+import { Form } from '@inertiajs/react';
+import { useState } from 'react';
 import {
     Check,
     Database,
@@ -9,7 +10,9 @@ import {
     Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import Button from '@/components/button';
 import Card from '@/components/card';
+import { brandIcon } from '@/components/tool-logo';
 import { cn } from '@/lib/utils';
 import type {
     PlexCommonsServicesReport,
@@ -27,14 +30,16 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
 };
 
 function ServiceOptionPill({
-    server,
     categoryIcon: Icon,
     option,
+    onRequestAdd,
 }: {
-    server: string;
     categoryIcon: LucideIcon;
     option: PlexServiceOptionDetail;
+    onRequestAdd: (option: PlexServiceOptionDetail) => void;
 }) {
+    const mark = brandIcon(option.driver);
+
     if (option.enabled) {
         return (
             <span
@@ -42,6 +47,7 @@ function ServiceOptionPill({
                 title={`Active: ${option.label}`}
             >
                 <Check className="size-3 text-ok dark:text-emerald-400" />
+                {mark}
                 {option.label}
             </span>
         );
@@ -50,36 +56,86 @@ function ServiceOptionPill({
     if (!option.ready) {
         return (
             <span
-                className="inline-flex items-center gap-1 rounded-md bg-badge/70 px-2 py-0.5 text-xs text-soft ring-1 ring-line/50"
+                className="inline-flex items-center gap-1 rounded-md bg-badge/70 px-2 py-0.5 text-xs text-soft opacity-60 ring-1 ring-line/50 grayscale"
                 title={`${option.label} isn't wired up yet — coming soon`}
             >
-                <Icon className="size-3 text-soft" />
+                {mark ?? <Icon className="size-3 text-soft" />}
                 {option.label}
             </span>
         );
     }
 
     return (
-        <Link
-            href={addService(server).url}
-            method="post"
-            data={{ driver: option.driver }}
-            as="button"
+        <button
+            type="button"
+            onClick={() => onRequestAdd(option)}
             className="inline-flex items-center gap-1 rounded-md bg-badge/70 px-2 py-0.5 text-xs text-soft ring-1 ring-line/50 transition hover:bg-badge hover:text-ink"
             title={`Add ${option.label} to this Commons`}
         >
             <Plus className="size-3" />
+            {mark}
             {option.label}
-        </Link>
+        </button>
+    );
+}
+
+function AddServiceConfirmDialog({
+    server,
+    option,
+    onCancel,
+}: {
+    server: string;
+    option: PlexServiceOptionDetail;
+    onCancel: () => void;
+}) {
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
+            onClick={onCancel}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                className="w-full max-w-[440px] rounded-2xl bg-surface p-7 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                    Add {option.label} to this Commons?
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-soft">
+                    Deploys a new shared {option.label} instance that runs
+                    continuously for every tenant on this server — extra CPU,
+                    memory, and disk, on top of what&apos;s already running.
+                    Worth checking the server has room, especially on a smaller
+                    instance.
+                </p>
+                <div className="mt-5 flex justify-end gap-2.5">
+                    <Button variant="secondary" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Form action={addService(server).url} method="post">
+                        <input
+                            type="hidden"
+                            name="driver"
+                            value={option.driver}
+                        />
+                        <Button type="submit" variant="primary">
+                            <Plus className="h-4 w-4" />
+                            Add {option.label}
+                        </Button>
+                    </Form>
+                </div>
+            </div>
+        </div>
     );
 }
 
 function ServiceCategoryRow({
-    server,
     category,
+    onRequestAdd,
 }: {
-    server: string;
     category: PlexServiceCategoryDetail;
+    onRequestAdd: (option: PlexServiceOptionDetail) => void;
 }) {
     const Icon = CATEGORY_ICON[category.key] ?? Database;
     // plex:init --services= is additive — a category can legitimately have
@@ -97,9 +153,9 @@ function ServiceCategoryRow({
                     {category.options.map((option) => (
                         <ServiceOptionPill
                             key={option.driver}
-                            server={server}
                             categoryIcon={Icon}
                             option={option}
+                            onRequestAdd={onRequestAdd}
                         />
                     ))}
                 </div>
@@ -143,6 +199,9 @@ export default function PlexCommonsServicesCard({
     services?: PlexCommonsServicesReport | null;
     className?: string;
 }) {
+    const [pendingAdd, setPendingAdd] =
+        useState<PlexServiceOptionDetail | null>(null);
+
     return (
         <Card label="Commons Services" className={cn(className)}>
             {services === undefined ? (
@@ -157,11 +216,18 @@ export default function PlexCommonsServicesCard({
                     {services.categories.map((category) => (
                         <ServiceCategoryRow
                             key={category.key}
-                            server={server}
                             category={category}
+                            onRequestAdd={setPendingAdd}
                         />
                     ))}
                 </div>
+            )}
+            {pendingAdd && (
+                <AddServiceConfirmDialog
+                    server={server}
+                    option={pendingAdd}
+                    onCancel={() => setPendingAdd(null)}
+                />
             )}
         </Card>
     );
