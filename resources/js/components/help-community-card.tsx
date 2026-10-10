@@ -33,12 +33,6 @@ const GET_HELP: HelpLink[] = [
         icon: <SiDiscord className="size-4" color="#5865F2" />,
     },
     {
-        label: 'help@larakube.app',
-        detail: 'Product support',
-        href: 'mailto:help@larakube.app',
-        icon: <Mail className="size-4 text-soft" />,
-    },
-    {
         label: 'help@luchtech.dev',
         detail: 'General / company inquiries',
         href: 'mailto:help@luchtech.dev',
