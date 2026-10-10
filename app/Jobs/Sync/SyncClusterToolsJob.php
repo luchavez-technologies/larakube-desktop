@@ -34,12 +34,17 @@ class SyncClusterToolsJob extends SyncJob
             return;
         }
 
+        // Captured before the "syncing" update below overwrites every row's
+        // status — markError()'s own exists() check would otherwise always
+        // see "syncing" and never recognise a repeat failure.
+        $wasAlreadyErrored = ClusterTool::where('server_id', $server->id)->where('sync_status', 'error')->exists();
+
         ClusterTool::where('server_id', $server->id)->update(['sync_status' => 'syncing']);
 
         $cli = $locator->find('larakube');
 
         if ($cli === null) {
-            $this->markError($server->id, 'The LaraKube CLI is not installed.');
+            $this->markError($server->id, 'The LaraKube CLI is not installed.', $wasAlreadyErrored);
 
             return;
         }
@@ -49,7 +54,7 @@ class SyncClusterToolsJob extends SyncJob
         try {
             $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
         } catch (ProcessTimedOutException) {
-            $this->markError($server->id, 'Timed out waiting for the cluster.');
+            $this->markError($server->id, 'Timed out waiting for the cluster.', $wasAlreadyErrored);
 
             return;
         }
@@ -57,7 +62,7 @@ class SyncClusterToolsJob extends SyncJob
         $decoded = json_decode(trim($result->output()), true);
 
         if (! $result->successful() || ! is_array($decoded) || ! array_is_list($decoded)) {
-            $this->markError($server->id, 'tool:list did not return a valid list.');
+            $this->markError($server->id, 'tool:list did not return a valid list.', $wasAlreadyErrored);
 
             return;
         }
@@ -111,10 +116,8 @@ class SyncClusterToolsJob extends SyncJob
         });
     }
 
-    private function markError(int $serverId, string $message): void
+    private function markError(int $serverId, string $message, bool $alreadyErrored): void
     {
-        $alreadyErrored = ClusterTool::where('server_id', $serverId)->where('sync_status', 'error')->exists();
-
         ClusterTool::where('server_id', $serverId)->update(['sync_status' => 'error', 'last_sync_error' => $message]);
 
         if (! $alreadyErrored) {
