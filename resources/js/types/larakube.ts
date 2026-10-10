@@ -115,6 +115,8 @@ export type Run = {
         tool?: string;
         /** 'dev' when the run acts on a dev box. */
         role?: string;
+        /** 'vps' or 'managed' — which server type a create-server run is provisioning. */
+        targetKind?: string;
         project?: string;
         app?: string;
         teammate?: string;

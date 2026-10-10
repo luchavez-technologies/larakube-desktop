@@ -38,6 +38,7 @@ test('creating a server starts a non-interactive cloud:create child process', fu
         ->and($run->label)->toBe('Create server my-first-server')
         ->and($run->kind)->toBe(RunKind::CreateServer)
         ->and($run->subject)->toBe('my-first-server')
+        ->and($run->meta['targetKind'] ?? null)->toBe('vps')
         ->and(implode(' ', $run->command))->not->toContain('dop_v1_secret');
 
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => $alias === $run->alias()
@@ -120,7 +121,8 @@ test('creating a managed cluster passes --managed, --node-count, --ha, and skips
     ])->assertRedirect();
 
     $run = Run::sole();
-    expect($run->label)->toBe('Create managed cluster my-cluster');
+    expect($run->label)->toBe('Create managed cluster my-cluster')
+        ->and($run->meta['targetKind'] ?? null)->toBe('managed');
 
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => array_slice($cmd, 4) === [
         "{$bin}/larakube", 'cloud:create', '--provider=gcp', '--managed', '--node-count=3', '--ha',

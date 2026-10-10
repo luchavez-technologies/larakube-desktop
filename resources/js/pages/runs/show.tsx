@@ -122,6 +122,8 @@ export default function ShowRun({ run }: { run: Run }) {
     const [showLog, setShowLog] = useState(run.status !== 'succeeded');
     const [label, tone] = runStatus[run.status];
     const isDevBox = run.kind === 'create-dev-box';
+    const isManagedServer =
+        run.kind === 'create-server' && run.meta?.targetKind === 'managed';
     const isCreate = run.kind === 'create-server' || isDevBox;
     const server = run.meta?.server ?? run.serverName ?? null;
 
@@ -237,7 +239,13 @@ export default function ShowRun({ run }: { run: Run }) {
                 <RunSteps
                     output={run.output}
                     status={run.status}
-                    kind={isDevBox ? 'dev-box' : 'server'}
+                    kind={
+                        isDevBox
+                            ? 'dev-box'
+                            : isManagedServer
+                              ? 'managed'
+                              : 'server'
+                    }
                 />
             )}
 

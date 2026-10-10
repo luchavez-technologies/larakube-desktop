@@ -96,7 +96,7 @@ class ServerController extends Controller
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::CreateServer,
             subject: $stackName,
-            meta: $project !== null ? ['project' => (string) $project->id] : [],
+            meta: ['targetKind' => $targetKind, ...($project !== null ? ['project' => (string) $project->id] : [])],
             cwd: $project?->path,
             targetType: 'server',
             targetName: $stackName,

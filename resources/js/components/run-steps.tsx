@@ -1,27 +1,47 @@
 import { cn } from '@/lib/utils';
 import type { RunStatus } from '@/types/larakube';
 
+type Step = { label: string; done: RegExp; failed?: RegExp };
+
 /**
  * cloud:create's phases, each marked done when its closing CLI message shows up
  * in the log. Matches log text, so it degrades to "unknown progress" rather than
- * breaking if a message changes.
+ * breaking if a message changes. `failed` additionally catches a step whose OWN
+ * failure text appears in the log — rendered red regardless of the overall run
+ * status, since a sub-step can fail (e.g. Traefik) without the whole run exiting
+ * non-zero (the cluster itself still provisioned and is usable).
  */
-const SERVER_STEPS: { label: string; done: RegExp }[] = [
+const SERVER_STEPS: Step[] = [
     { label: 'Provision', done: /Apply complete!/ },
     { label: 'Wait for SSH', done: /SSH is up/ },
     { label: 'Harden', done: /Hardened:/ },
     { label: 'Install k3s', done: /K3s installed\.|k3s is ready\./ },
     { label: 'Kubeconfig', done: /Kubeconfig synced/ },
-    { label: 'Traefik', done: /Traefik deployed|Traefik is already installed/ },
+    {
+        label: 'Traefik',
+        done: /Traefik deployed|Traefik is already installed/,
+        failed: /Traefik deploy failed/,
+    },
 ];
 
 /** devbox:create: the same server work, then the local stack set up on the box. */
-const DEV_BOX_STEPS: { label: string; done: RegExp }[] = [
+const DEV_BOX_STEPS: Step[] = [
     { label: 'Provision', done: /Apply complete!/ },
     { label: 'Wait for SSH', done: /SSH is up/ },
     { label: 'Harden', done: /Hardened:/ },
     { label: 'Install CLI', done: /Setting up Podman and a local cluster/ },
     { label: 'Podman and cluster', done: /Native k3s cluster is ready!/ },
+];
+
+/** cloud:create --managed (DOKS/GKE/EKS): Terraform apply, then Traefik via cloud:init:{provider}. No SSH/hardening/k3s install — those are VPS-only. */
+const MANAGED_STEPS: Step[] = [
+    { label: 'Provision', done: /Apply complete!/ },
+    { label: 'Cluster ready', done: /Cluster ready\. Context:/ },
+    {
+        label: 'Traefik',
+        done: /LoadBalancer IP:|Traefik is already installed/,
+        failed: /Traefik installation failed\./,
+    },
 ];
 
 export default function RunSteps({
@@ -31,9 +51,14 @@ export default function RunSteps({
 }: {
     output: string;
     status: RunStatus;
-    kind?: 'server' | 'dev-box';
+    kind?: 'server' | 'dev-box' | 'managed';
 }) {
-    const STEPS = kind === 'dev-box' ? DEV_BOX_STEPS : SERVER_STEPS;
+    const STEPS =
+        kind === 'dev-box'
+            ? DEV_BOX_STEPS
+            : kind === 'managed'
+              ? MANAGED_STEPS
+              : SERVER_STEPS;
     const doneCount =
         status === 'succeeded'
             ? STEPS.length
@@ -49,12 +74,14 @@ export default function RunSteps({
     return (
         <ol className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-surface px-4.5 py-3.5 ring-1 ring-line ring-inset">
             {STEPS.map((step, index) => {
-                const state =
-                    index < reached
-                        ? 'done'
-                        : index === reached
-                          ? currentState
-                          : 'todo';
+                const hasFailed = step.failed?.test(output) ?? false;
+                const state = hasFailed
+                    ? 'bad'
+                    : index < reached
+                      ? 'done'
+                      : index === reached
+                        ? currentState
+                        : 'todo';
 
                 return (
                     <li key={step.label} className="flex items-center gap-2">
