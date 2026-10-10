@@ -40,28 +40,31 @@ class SyncPlexJob extends SyncJob
         // never recognise a repeat failure.
         $wasAlreadyErrored = $server->plex_sync_status === 'error';
 
-        $server->update(['plex_sync_status' => 'syncing']);
-
+        // The whole body is guarded, not just the CLI call — a failure in
+        // the "syncing" update itself (a schema out of date with the code,
+        // a locked database) must still end in a visible, recorded error
+        // state rather than an uncaught exception that leaves the row stuck
+        // forever and the page polling with nothing to show for it.
         try {
+            $server->update(['plex_sync_status' => 'syncing']);
+
             $report = $status->plex($server->context);
+
+            if ($report === null) {
+                $this->markError($server, 'Could not reach the cluster.', $wasAlreadyErrored);
+
+                return;
+            }
+
+            $server->update([
+                'plex_data' => $report,
+                'plex_sync_status' => 'fresh',
+                'plex_last_synced_at' => now(),
+                'plex_last_sync_error' => null,
+            ]);
         } catch (\Throwable $e) {
             $this->markError($server, $e->getMessage(), $wasAlreadyErrored);
-
-            return;
         }
-
-        if ($report === null) {
-            $this->markError($server, 'Could not reach the cluster.', $wasAlreadyErrored);
-
-            return;
-        }
-
-        $server->update([
-            'plex_data' => $report,
-            'plex_sync_status' => 'fresh',
-            'plex_last_synced_at' => now(),
-            'plex_last_sync_error' => null,
-        ]);
     }
 
     private function markError(Server $server, string $message, bool $alreadyErrored): void

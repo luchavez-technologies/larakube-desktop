@@ -39,81 +39,90 @@ class SyncClusterToolsJob extends SyncJob
         // see "syncing" and never recognise a repeat failure.
         $wasAlreadyErrored = ClusterTool::where('server_id', $server->id)->where('sync_status', 'error')->exists();
 
-        ClusterTool::where('server_id', $server->id)->update(['sync_status' => 'syncing']);
-
-        $cli = $locator->find('larakube');
-
-        if ($cli === null) {
-            $this->markError($server->id, 'The LaraKube CLI is not installed.', $wasAlreadyErrored);
-
-            return;
-        }
-
-        $isolated = $locator->isolate([$cli, 'tool:list', "--context={$server->context}", '--json', '--no-interaction']);
-
+        // The whole body is guarded, not just the CLI call — a failure in
+        // the "syncing" update itself (a schema out of date with the code, a
+        // locked database) must still end in a visible, recorded error state
+        // rather than an uncaught exception that leaves every row stuck
+        // forever and the page polling with nothing to show for it.
         try {
-            $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
-        } catch (ProcessTimedOutException) {
-            $this->markError($server->id, 'Timed out waiting for the cluster.', $wasAlreadyErrored);
+            ClusterTool::where('server_id', $server->id)->update(['sync_status' => 'syncing']);
 
-            return;
-        }
+            $cli = $locator->find('larakube');
 
-        $decoded = json_decode(trim($result->output()), true);
+            if ($cli === null) {
+                $this->markError($server->id, 'The LaraKube CLI is not installed.', $wasAlreadyErrored);
 
-        if (! $result->successful() || ! is_array($decoded) || ! array_is_list($decoded)) {
-            $this->markError($server->id, 'tool:list did not return a valid list.', $wasAlreadyErrored);
-
-            return;
-        }
-
-        /** @var list<array<string, mixed>> $decoded */
-        DB::transaction(function () use ($server, $decoded): void {
-            $seenKeys = [];
-
-            foreach ($decoded as $position => $row) {
-                $tool = (string) ($row['tool'] ?? '');
-
-                if ($tool === '') {
-                    continue;
-                }
-
-                $host = isset($row['host']) && $row['host'] !== '' ? (string) $row['host'] : null;
-                $seenKeys[] = $tool.'|'.($host ?? '');
-
-                $wasNew = ! ClusterTool::where('server_id', $server->id)->where('tool', $tool)->where('host', $host)->exists();
-
-                $clusterTool = ClusterTool::updateOrCreate(
-                    ['server_id' => $server->id, 'tool' => $tool, 'host' => $host],
-                    [
-                        'instance' => isset($row['instance']) ? (string) $row['instance'] : null,
-                        'installed' => (bool) ($row['installed'] ?? false),
-                        'multi_instance' => $row['multiInstance'] ?? true,
-                        'position' => $position,
-                        'data' => $row,
-                        'sync_status' => 'fresh',
-                        'last_synced_at' => now(),
-                        'last_sync_error' => null,
-                    ],
-                );
-
-                if ($wasNew) {
-                    Activity::create([
-                        'server_id' => $server->id,
-                        'cluster_tool_id' => $clusterTool->id,
-                        'type' => ActivityType::ToolFirstSynced,
-                        'title' => "Found {$tool} on {$server->name}",
-                        'occurred_at' => now(),
-                    ]);
-                }
+                return;
             }
 
-            // A tool the CLI no longer reports was removed outside a tracked Run (or the registry changed) — drop its row.
-            ClusterTool::where('server_id', $server->id)
-                ->get()
-                ->reject(fn (ClusterTool $row): bool => in_array($row->tool.'|'.($row->host ?? ''), $seenKeys, true))
-                ->each(fn (ClusterTool $row) => $row->delete());
-        });
+            $isolated = $locator->isolate([$cli, 'tool:list', "--context={$server->context}", '--json', '--no-interaction']);
+
+            try {
+                $result = Process::env($isolated['environment'])->timeout(180)->run($isolated['command']);
+            } catch (ProcessTimedOutException) {
+                $this->markError($server->id, 'Timed out waiting for the cluster.', $wasAlreadyErrored);
+
+                return;
+            }
+
+            $decoded = json_decode(trim($result->output()), true);
+
+            if (! $result->successful() || ! is_array($decoded) || ! array_is_list($decoded)) {
+                $this->markError($server->id, 'tool:list did not return a valid list.', $wasAlreadyErrored);
+
+                return;
+            }
+
+            /** @var list<array<string, mixed>> $decoded */
+            DB::transaction(function () use ($server, $decoded): void {
+                $seenKeys = [];
+
+                foreach ($decoded as $position => $row) {
+                    $tool = (string) ($row['tool'] ?? '');
+
+                    if ($tool === '') {
+                        continue;
+                    }
+
+                    $host = isset($row['host']) && $row['host'] !== '' ? (string) $row['host'] : null;
+                    $seenKeys[] = $tool.'|'.($host ?? '');
+
+                    $wasNew = ! ClusterTool::where('server_id', $server->id)->where('tool', $tool)->where('host', $host)->exists();
+
+                    $clusterTool = ClusterTool::updateOrCreate(
+                        ['server_id' => $server->id, 'tool' => $tool, 'host' => $host],
+                        [
+                            'instance' => isset($row['instance']) ? (string) $row['instance'] : null,
+                            'installed' => (bool) ($row['installed'] ?? false),
+                            'multi_instance' => $row['multiInstance'] ?? true,
+                            'position' => $position,
+                            'data' => $row,
+                            'sync_status' => 'fresh',
+                            'last_synced_at' => now(),
+                            'last_sync_error' => null,
+                        ],
+                    );
+
+                    if ($wasNew) {
+                        Activity::create([
+                            'server_id' => $server->id,
+                            'cluster_tool_id' => $clusterTool->id,
+                            'type' => ActivityType::ToolFirstSynced,
+                            'title' => "Found {$tool} on {$server->name}",
+                            'occurred_at' => now(),
+                        ]);
+                    }
+                }
+
+                // A tool the CLI no longer reports was removed outside a tracked Run (or the registry changed) — drop its row.
+                ClusterTool::where('server_id', $server->id)
+                    ->get()
+                    ->reject(fn (ClusterTool $row): bool => in_array($row->tool.'|'.($row->host ?? ''), $seenKeys, true))
+                    ->each(fn (ClusterTool $row) => $row->delete());
+            });
+        } catch (\Throwable $e) {
+            $this->markError($server->id, $e->getMessage(), $wasAlreadyErrored);
+        }
     }
 
     private function markError(int $serverId, string $message, bool $alreadyErrored): void
