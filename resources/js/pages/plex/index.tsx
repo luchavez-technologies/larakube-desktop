@@ -467,25 +467,39 @@ export default function PlexIndex({
                             <Card
                                 label={`Cluster Tools on this Commons · ${toolTenants.length}`}
                             >
-                                <div className="space-y-3">
+                                <div className="divide-y divide-line">
                                     {[...toolGroups.entries()].map(
                                         ([key, group]) => (
-                                            <div key={key}>
-                                                <div className="mb-1.5 flex items-center gap-2">
+                                            <div
+                                                key={key}
+                                                className="py-3 first:pt-0 last:pb-0"
+                                            >
+                                                <div className="mb-2 flex items-center gap-3">
                                                     <ToolLogo
                                                         tool={
                                                             group.tool ?? {
                                                                 tool: key,
                                                             }
                                                         }
-                                                        size="sm"
+                                                        size="md"
                                                     />
-                                                    <span className="text-xs font-semibold text-ink">
-                                                        {group.tool?.label ??
-                                                            key}
-                                                    </span>
+                                                    <div className="flex min-w-0 items-center gap-2">
+                                                        <span className="truncate text-sm font-semibold text-ink">
+                                                            {group.tool?.name ??
+                                                                key}
+                                                        </span>
+                                                        {group.tool
+                                                            ?.tagline && (
+                                                            <span className="max-w-[220px] truncate rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                                {
+                                                                    group.tool
+                                                                        .tagline
+                                                                }
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-2 pl-10">
+                                                <div className="space-y-2 pl-[52px]">
                                                     {group.tenants.map(
                                                         (tenant) => (
                                                             <TenantRow

@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import {
+    Check,
     Database,
     FileImage,
     HardDrive,
@@ -9,7 +10,6 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Card from '@/components/card';
-import ToolLogo from '@/components/tool-logo';
 import { cn } from '@/lib/utils';
 import type {
     PlexCommonsServicesReport,
@@ -28,15 +28,20 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
 
 function ServiceOptionPill({
     server,
+    categoryIcon: Icon,
     option,
 }: {
     server: string;
+    categoryIcon: LucideIcon;
     option: PlexServiceOptionDetail;
 }) {
     if (option.enabled) {
         return (
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-ok-tint px-2.5 py-1 text-xs font-semibold text-ok ring-1 ring-ok/30 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30">
-                <ToolLogo slug={option.driver} size="sm" />
+            <span
+                className="inline-flex items-center gap-1 rounded-md bg-ok-tint px-2 py-0.5 text-xs font-semibold text-ok ring-1 ring-ok/30 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30"
+                title={`Active: ${option.label}`}
+            >
+                <Check className="size-3 text-ok dark:text-emerald-400" />
                 {option.label}
             </span>
         );
@@ -45,9 +50,10 @@ function ServiceOptionPill({
     if (!option.ready) {
         return (
             <span
-                className="inline-flex items-center gap-1.5 rounded-lg bg-badge/50 px-2.5 py-1 text-xs text-faint ring-1 ring-line/40"
+                className="inline-flex items-center gap-1 rounded-md bg-badge/70 px-2 py-0.5 text-xs text-soft ring-1 ring-line/50"
                 title={`${option.label} isn't wired up yet — coming soon`}
             >
+                <Icon className="size-3 text-soft" />
                 {option.label}
             </span>
         );
@@ -59,16 +65,16 @@ function ServiceOptionPill({
             method="post"
             data={{ driver: option.driver }}
             as="button"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-paper px-2.5 py-1 text-xs text-soft ring-1 ring-line transition hover:bg-badge hover:text-ink"
+            className="inline-flex items-center gap-1 rounded-md bg-badge/70 px-2 py-0.5 text-xs text-soft ring-1 ring-line/50 transition hover:bg-badge hover:text-ink"
             title={`Add ${option.label} to this Commons`}
         >
-            <Plus className="size-3.5" />
+            <Plus className="size-3" />
             {option.label}
         </Link>
     );
 }
 
-function ServiceCategorySection({
+function ServiceCategoryRow({
     server,
     category,
 }: {
@@ -79,33 +85,33 @@ function ServiceCategorySection({
     const active = category.options.find((option) => option.enabled);
 
     return (
-        <div>
-            <div className="mb-1.5 flex items-center gap-1.5">
-                <Icon className="size-3.5 text-faint" />
-                <span className="text-[11px] font-medium tracking-wider text-faint uppercase">
+        <div className="py-3 first:pt-0 last:pb-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="w-28 shrink-0 text-xs font-medium text-soft">
                     {category.label}
                 </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-                {category.options.map((option) => (
-                    <ServiceOptionPill
-                        key={option.driver}
-                        server={server}
-                        option={option}
-                    />
-                ))}
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {category.options.map((option) => (
+                        <ServiceOptionPill
+                            key={option.driver}
+                            server={server}
+                            categoryIcon={Icon}
+                            option={option}
+                        />
+                    ))}
+                </div>
             </div>
             {active && active.details.length > 0 && (
-                <dl className="mt-2 space-y-0.5 text-[11px]">
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 pl-[7.5rem] text-[11px] text-soft">
                     {active.details.map((row) => (
-                        <div key={row.label} className="flex gap-2">
-                            <dt className="shrink-0 text-soft">{row.label}:</dt>
-                            <dd className="min-w-0 truncate font-mono text-ink">
+                        <span key={row.label}>
+                            {row.label}:{' '}
+                            <span className="font-mono text-ink">
                                 {row.value ?? '••••••••'}
-                            </dd>
-                        </div>
+                            </span>
+                        </span>
                     ))}
-                </dl>
+                </div>
             )}
         </div>
     );
@@ -130,9 +136,9 @@ export default function PlexCommonsServicesCard({
                     Update it from Setup.
                 </p>
             ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="divide-y divide-line">
                     {services.categories.map((category) => (
-                        <ServiceCategorySection
+                        <ServiceCategoryRow
                             key={category.key}
                             server={server}
                             category={category}

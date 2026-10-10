@@ -396,7 +396,10 @@ export type ProjectEnvironment = {
 /** The Cluster Tool a `tool`-bucket tenant's Commons resources belong to — null for project/custom tenants. */
 export type PlexTenantClusterTool = {
     tool: string;
-    label: string;
+    /** Short product name, e.g. "Outline" — same field tool:list --json sends. */
+    name: string;
+    /** Short one-line descriptor, e.g. "Team Wiki & Knowledge Base". */
+    tagline: string;
     logo: string;
     icon: string;
 };
@@ -409,23 +412,6 @@ export type PlexTenant = {
     s3Bucket: string | null;
     rotation: { state: string; nextRotation: string | null } | null;
     clusterTool: PlexTenantClusterTool | null;
-};
-
-/** One driver option within a Commons service category (e.g. "postgres" under "database"). */
-export type PlexServiceOption = {
-    driver: string;
-    label: string;
-    enabled: boolean;
-    /** False for a driver the CLI can't provision yet (e.g. Memcached, Typesense today) — still shown, as "coming soon". */
-    ready: boolean;
-};
-
-/** One Commons service category, grouped from the CLI's own driver enums — never a hand-maintained list. */
-export type PlexServiceCategory = {
-    key: string;
-    label: string;
-    active: string | null;
-    options: PlexServiceOption[];
 };
 
 export type PlexStatus = {

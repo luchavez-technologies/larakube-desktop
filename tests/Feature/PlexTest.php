@@ -119,7 +119,7 @@ function plexPageFakes(): array
                 ]],
             ],
             'tenants' => [
-                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null, 'clusterTool' => ['tool' => 'notes', 'label' => 'Outline', 'logo' => 'outline', 'icon' => '📝']]],
+                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null, 'clusterTool' => ['tool' => 'notes', 'name' => 'Outline', 'tagline' => 'Team Wiki & Knowledge Base', 'logo' => 'outline', 'icon' => '📝']]],
                 'project' => [['name' => 'shop_production', 'database' => 'shop_production', 'databaseService' => 'postgres', 'redisIndex' => 3, 's3Bucket' => null, 'rotation' => ['state' => 'managed', 'nextRotation' => '2026-10-20T00:00:00Z'], 'clusterTool' => null]],
                 'custom' => [],
             ],
@@ -152,6 +152,7 @@ test('the Plex Commons page loads plex, services, and pod-metrics deferred props
                 ->where('services.categories.0.options.0.driver', 'postgres')
                 ->where('plex.tenants.tool.0.name', 'outline_wiki')
                 ->where('plex.tenants.tool.0.clusterTool.tool', 'notes')
+                ->where('plex.tenants.tool.0.clusterTool.name', 'Outline')
                 ->where('plex.tenants.project.0.name', 'shop_production')
                 ->where('podMetrics.available', true)
                 ->where('podMetrics.components.postgres.podCount', 1)));
