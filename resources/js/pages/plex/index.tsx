@@ -1,5 +1,6 @@
 import { Deferred, Form, Link, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import {
     ExternalLink,
     RotateCw,
@@ -308,6 +309,62 @@ function ProvisionForm({ server }: { server: Server }) {
     );
 }
 
+// Shared across the loading, error, and loaded states so the server picker
+// and Refresh action are never only reachable from one of them (a prior
+// version dropped these while loading or erroring, stranding anyone who
+// landed there with no way to switch servers or retry).
+function PlexPageHeader({
+    server,
+    servers,
+    badge,
+}: {
+    server: Server;
+    servers: Server[];
+    badge?: ReactNode;
+}) {
+    return (
+        <header className="mb-6 flex items-center justify-between gap-6">
+            <div>
+                <div className="flex items-center gap-2.5">
+                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
+                        Plex Commons
+                    </h1>
+                    {badge}
+                </div>
+                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
+                    Shared infrastructure for tenant apps and Cluster Tools —
+                    resource usage, connected tenants, and on-demand
+                    credentials.
+                </p>
+            </div>
+            <div className="flex items-center gap-2.5">
+                <ServerSwitcher
+                    servers={servers}
+                    value={server.name}
+                    buildHref={(name) => plexIndex(name).url}
+                />
+                <Link
+                    href={showServer(server.name).url}
+                    className={buttonClass('secondary')}
+                    title={`Open ${server.name} in Servers`}
+                >
+                    <ExternalLink className="size-3.5" />
+                    <span>Open server</span>
+                </Link>
+                <Link
+                    href={refresh(server.name).url}
+                    method="post"
+                    as="button"
+                    className={buttonClass('secondary')}
+                >
+                    <RotateCw className="size-3.5" />
+                    <span>Refresh</span>
+                </Link>
+            </div>
+        </header>
+    );
+}
+
 export default function PlexIndex({
     server,
     servers,
@@ -346,16 +403,7 @@ export default function PlexIndex({
     if (plex === undefined || awaitingFirstSync) {
         return (
             <AppLayout title="Plex Commons">
-                <header className="mb-6">
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
-                        Plex Commons
-                    </h1>
-                    <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        Shared infrastructure for tenant apps and Cluster Tools
-                        — resource usage, connected tenants, and on-demand
-                        credentials.
-                    </p>
-                </header>
+                <PlexPageHeader server={server} servers={servers} />
                 {/* Shaped like the real page (ADR 0009) so this reads as
                     "still loading", not as an empty or broken page. */}
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -380,11 +428,7 @@ export default function PlexIndex({
     if (plex === null) {
         return (
             <AppLayout title="Plex Commons">
-                <header className="mb-6">
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
-                        Plex Commons
-                    </h1>
-                </header>
+                <PlexPageHeader server={server} servers={servers} />
                 <Card label="Plex Commons">
                     <div className="flex items-center gap-3 py-2 text-warn">
                         <Shield className="size-5 shrink-0 text-warn" />
@@ -426,52 +470,20 @@ export default function PlexIndex({
 
     return (
         <AppLayout title="Plex Commons">
-            <header className="mb-6 flex items-center justify-between gap-6">
-                <div>
-                    <div className="flex items-center gap-2.5">
-                        <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
-                            Plex Commons
-                        </h1>
-                        {initialized && (
-                            <SyncStatusBadge
-                                status={plexSync.status}
-                                lastSyncedAt={plexSync.lastSyncedAt}
-                                error={plexSync.error}
-                                subject="Commons"
-                            />
-                        )}
-                    </div>
-                    <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        Shared infrastructure for tenant apps and Cluster Tools
-                        — resource usage, connected tenants, and on-demand
-                        credentials.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2.5">
-                    <ServerSwitcher
-                        servers={servers}
-                        value={server.name}
-                        buildHref={(name) => plexIndex(name).url}
-                    />
-                    <Link
-                        href={showServer(server.name).url}
-                        className={buttonClass('secondary')}
-                        title={`Open ${server.name} in Servers`}
-                    >
-                        <ExternalLink className="size-3.5" />
-                        <span>Open server</span>
-                    </Link>
-                    <Link
-                        href={refresh(server.name).url}
-                        method="post"
-                        as="button"
-                        className={buttonClass('secondary')}
-                    >
-                        <RotateCw className="size-3.5" />
-                        <span>Refresh</span>
-                    </Link>
-                </div>
-            </header>
+            <PlexPageHeader
+                server={server}
+                servers={servers}
+                badge={
+                    initialized && (
+                        <SyncStatusBadge
+                            status={plexSync.status}
+                            lastSyncedAt={plexSync.lastSyncedAt}
+                            error={plexSync.error}
+                            subject="Commons"
+                        />
+                    )
+                }
+            />
 
             {!initialized ? (
                 <PlexEmptyState server={server} />
