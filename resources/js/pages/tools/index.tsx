@@ -1,4 +1,4 @@
-import { Form, Link, router } from '@inertiajs/react';
+import { Form, Link } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     RotateCw,
@@ -17,6 +17,7 @@ import {
     Download,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import ServerSwitcher from '@/components/server-switcher';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
@@ -357,27 +358,15 @@ export default function ToolsIndex({
                         mode={viewMode}
                         onChange={handleViewModeChange}
                     />
-                    <div className="flex h-9 items-center gap-2.5 rounded-lg bg-surface pl-3 ring-1 ring-line">
-                        <span className="text-xs text-soft">Server</span>
-                        <SelectMenu
-                            value={server.name}
-                            accent="tools"
-                            triggerClassName="h-9 rounded-lg bg-transparent px-2 ring-0 hover:ring-0"
-                            onChange={(value) =>
-                                router.visit(toolsIndex(value).url)
-                            }
-                            options={servers.map((candidate) => ({
-                                value: candidate.name,
-                                label: candidate.name,
-                                icon: (
-                                    <ProviderLogo
-                                        slug={candidate.provider}
-                                        size="xs"
-                                    />
-                                ),
-                            }))}
-                        />
-                    </div>
+                    <ServerSwitcher
+                        servers={servers}
+                        value={server.name}
+                        accent="tools"
+                        buildHref={(name) => toolsIndex(name).url}
+                        renderIcon={(candidate) => (
+                            <ProviderLogo slug={candidate.provider} size="xs" />
+                        )}
+                    />
                     <Link
                         href={showServer(server.name).url}
                         className={buttonClass('secondary')}

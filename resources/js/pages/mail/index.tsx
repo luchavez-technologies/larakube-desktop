@@ -1,9 +1,10 @@
-import { Head, Link, router, usePoll } from '@inertiajs/react';
+import { Head, Link, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import { Globe, Send, Settings, ExternalLink, Inbox } from 'lucide-react';
 import { buttonClass } from '@/components/button';
-import SelectMenu from '@/components/select-menu';
+import ServerSwitcher from '@/components/server-switcher';
 import { open } from '@/routes';
+import { index as mailIndex } from '@/routes/servers/mail';
 import AppLayout from '@/layouts/app-layout';
 import SyncStatusBadge, {
     type SyncStatus,
@@ -140,20 +141,11 @@ export default function MailIndex({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
-                        <div className="flex h-9 items-center gap-2.5 rounded-lg bg-surface pl-3 ring-1 ring-line">
-                            <span className="text-xs text-soft">Server</span>
-                            <SelectMenu
-                                value={server.name}
-                                triggerClassName="h-9 rounded-lg bg-transparent px-2 ring-0 hover:ring-0"
-                                onChange={(value) =>
-                                    router.visit(`/servers/${value}/mail`)
-                                }
-                                options={servers.map((candidate) => ({
-                                    value: candidate.name,
-                                    label: candidate.name,
-                                }))}
-                            />
-                        </div>
+                        <ServerSwitcher
+                            servers={servers}
+                            value={server.name}
+                            buildHref={(name) => mailIndex(name).url}
+                        />
 
                         {isInstalled && serverInfo?.webmailUrl && (
                             <Link
