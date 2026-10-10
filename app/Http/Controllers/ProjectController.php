@@ -674,13 +674,18 @@ class ProjectController extends Controller
             return back()->withErrors(['server' => 'Choose one of your ready servers.']);
         }
 
-        // cloud:configure, not env: env's existing-environment branch never
-        // touches the cloud target at all (a silent no-op on every rebind
-        // attempt) — cloud:configure --rebind is the one path that actually
-        // overwrites it, non-interactively, with a clear error instead of a
-        // silent no-op if --rebind is ever dropped by mistake.
+        // cloud:configure --only=target, not env: env's existing-environment
+        // branch never touches the cloud target at all (a silent no-op on
+        // every rebind attempt) — cloud:configure --rebind is the one path
+        // that actually overwrites it, non-interactively, with a clear error
+        // instead of a silent no-op if --rebind is ever dropped by mistake.
+        // --only=target specifically (not the bare command): the bare command
+        // also chains a Commons-join prompt and a full CI/registry re-config
+        // afterward, which can fail for reasons that have nothing to do with
+        // rebinding (no git remote, gh/tea not logged in) and would wrongly
+        // report this as failed even though the rebind itself already saved.
         $args = [
-            'cloud:configure', $environment, "--context={$server['context']}", '--rebind', '--web-hosts=',
+            'cloud:configure', $environment, '--only=target', "--context={$server['context']}", '--rebind', '--web-hosts=',
         ];
 
         if (! empty($server['sshKey'])) {

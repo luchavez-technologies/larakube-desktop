@@ -129,7 +129,7 @@ test('multi-environment server linking, host configuration, and deployment', fun
 
     $bin = "{$sandbox['bin']}/larakube";
     foreach ([
-        ['cloud:configure', 'staging', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts='],
+        ['cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts='],
         ['cloud:configure', 'staging', '--only=hosts', '--web-host=staging.example.com'],
         ['cloud:deploy', 'staging'],
     ] as $arguments) {
@@ -500,7 +500,7 @@ test('linking a ready server creates the production environment on it, with no p
 
     $bin = "{$sandbox['bin']}/larakube";
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        $bin, 'cloud:configure', 'production', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts=', '--no-interaction',
+        $bin, 'cloud:configure', 'production', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts=', '--no-interaction',
     ] && $cwd === $sandbox['app']);
     expect(Run::sole()->kind)->toBe(RunKind::LinkServer);
 
@@ -565,7 +565,7 @@ test('linking a server supports custom environments like staging', function () {
 
     $bin = "{$sandbox['bin']}/larakube";
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        $bin, 'cloud:configure', 'staging', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts=', '--no-interaction',
+        $bin, 'cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts=', '--no-interaction',
     ] && $cwd === $sandbox['app']);
 
     File::deleteDirectory($sandbox['home']);
