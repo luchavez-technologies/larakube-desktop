@@ -54,6 +54,8 @@ interface AppOption {
     capabilities: ToolCommonsCapabilities;
     defaultDb?: string;
     availableDbs?: Array<{ id: string; label: string; desc: string }>;
+    /** Where this app's admin/dashboard UI actually lives, if not the bare domain (e.g. PocketBase's own admin is `/_/`, not `/`). */
+    adminPath?: string;
 }
 
 const APPS: AppOption[] = [
@@ -64,6 +66,7 @@ const APPS: AppOption[] = [
         description:
             'Lightweight SQLite database with realtime subscriptions, file storage, and built-in auth.',
         defaultSubdomain: 'pb',
+        adminPath: '/_/',
         capabilities: {
             databases: ['sqlite'],
             cache: [],
@@ -95,6 +98,7 @@ const APPS: AppOption[] = [
             'Blazing fast ServerSideUp FrankenPHP pod with zero-RAM SQLite or shared Plex MySQL.',
         defaultSubdomain: 'blog',
         defaultDb: 'sqlite',
+        adminPath: '/wp-admin',
         capabilities: {
             databases: ['sqlite', 'mysql', 'mariadb'],
             cache: [],
@@ -738,6 +742,7 @@ export default function QuickLaunchModal({
                         run={launchedRun}
                         tool={launchedTool}
                         appName={currentApp.name}
+                        adminPath={currentApp.adminPath}
                         credentials={credentials}
                         credentialsLoading={
                             launchedRun.status === 'succeeded' &&
@@ -2140,6 +2145,7 @@ function LaunchedRunPanel({
     run,
     tool,
     appName,
+    adminPath,
     credentials,
     credentialsLoading,
     onClose,
@@ -2148,6 +2154,7 @@ function LaunchedRunPanel({
     run: LaunchedRun;
     tool: LaunchedTool | null;
     appName: string;
+    adminPath?: string;
     credentials: ToolCredentials | null;
     credentialsLoading: boolean;
     onClose: () => void;
@@ -2202,27 +2209,36 @@ function LaunchedRunPanel({
                             </span>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 rounded-lg bg-paper/60 px-3 py-2">
-                            <div className="min-w-0">
-                                <span className="block text-[10px] text-faint uppercase">
-                                    Admin URL
-                                </span>
-                                <span className="block truncate font-mono text-xs text-brand">
-                                    https://{tool.domain}
-                                </span>
-                            </div>
-                            <Link
-                                href={open().url}
-                                method="post"
-                                data={{ url: `https://${tool.domain}` }}
-                                as="button"
-                                title="Open in default browser"
-                                className={buttonClass('secondary', 'sm')}
-                            >
-                                <ExternalLink className="size-3.5" />
-                                <span>Open</span>
-                            </Link>
-                        </div>
+                        {(() => {
+                            const adminUrl = `https://${tool.domain}${adminPath ?? ''}`;
+
+                            return (
+                                <div className="flex items-center justify-between gap-2 rounded-lg bg-paper/60 px-3 py-2">
+                                    <div className="min-w-0">
+                                        <span className="block text-[10px] text-faint uppercase">
+                                            Admin URL
+                                        </span>
+                                        <span className="block truncate font-mono text-xs text-brand">
+                                            {adminUrl}
+                                        </span>
+                                    </div>
+                                    <Link
+                                        href={open().url}
+                                        method="post"
+                                        data={{ url: adminUrl }}
+                                        as="button"
+                                        title="Open in default browser"
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                        )}
+                                    >
+                                        <ExternalLink className="size-3.5" />
+                                        <span>Open</span>
+                                    </Link>
+                                </div>
+                            );
+                        })()}
 
                         {credentialsLoading && (
                             <p className="flex items-center gap-1.5 text-xs text-soft">
