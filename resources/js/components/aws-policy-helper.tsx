@@ -1,50 +1,140 @@
 import { ShieldCheck } from 'lucide-react';
 import CopyButton from '@/components/copy-button';
 
-export const MINIMAL_AWS_IAM_POLICY = JSON.stringify(
+const EC2_STATEMENT = {
+    Sid: 'LaraKubeEC2LeastPrivilege',
+    Effect: 'Allow',
+    Action: [
+        'ec2:Describe*',
+        'ec2:ImportKeyPair',
+        'ec2:DeleteKeyPair',
+        'ec2:CreateSecurityGroup',
+        'ec2:DeleteSecurityGroup',
+        'ec2:AuthorizeSecurityGroupIngress',
+        'ec2:AuthorizeSecurityGroupEgress',
+        'ec2:RevokeSecurityGroupIngress',
+        'ec2:RevokeSecurityGroupEgress',
+        'ec2:RunInstances',
+        'ec2:StartInstances',
+        'ec2:StopInstances',
+        'ec2:TerminateInstances',
+        'ec2:ModifyInstanceAttribute',
+        'ec2:CreateVolume',
+        'ec2:AttachVolume',
+        'ec2:DetachVolume',
+        'ec2:DeleteVolume',
+        'ec2:ModifyVolume',
+        'ec2:ModifyVolumeAttribute',
+        'ec2:CreateNetworkInterface',
+        'ec2:AttachNetworkInterface',
+        'ec2:DeleteNetworkInterface',
+        'ec2:ModifyNetworkInterfaceAttribute',
+        'ec2:CreateTags',
+        'ec2:DeleteTags',
+    ],
+    Resource: '*',
+};
+
+// Matches the role lifecycle and policy attachments LaraKube's own EKS
+// Terraform (resources/views/tofu/aws/managed.blade.php) creates — two roles
+// named "{cluster}-cluster-role"/"{cluster}-node-role", each with managed
+// policies attached, never an inline policy.
+const EKS_STATEMENTS = [
     {
-        Version: '2012-10-17',
-        Statement: [
-            {
-                Sid: 'LaraKubeEC2LeastPrivilege',
-                Effect: 'Allow',
-                Action: [
-                    'ec2:Describe*',
-                    'ec2:ImportKeyPair',
-                    'ec2:DeleteKeyPair',
-                    'ec2:CreateSecurityGroup',
-                    'ec2:DeleteSecurityGroup',
-                    'ec2:AuthorizeSecurityGroupIngress',
-                    'ec2:AuthorizeSecurityGroupEgress',
-                    'ec2:RevokeSecurityGroupIngress',
-                    'ec2:RevokeSecurityGroupEgress',
-                    'ec2:RunInstances',
-                    'ec2:StartInstances',
-                    'ec2:StopInstances',
-                    'ec2:TerminateInstances',
-                    'ec2:ModifyInstanceAttribute',
-                    'ec2:CreateVolume',
-                    'ec2:AttachVolume',
-                    'ec2:DetachVolume',
-                    'ec2:DeleteVolume',
-                    'ec2:ModifyVolume',
-                    'ec2:ModifyVolumeAttribute',
-                    'ec2:CreateNetworkInterface',
-                    'ec2:AttachNetworkInterface',
-                    'ec2:DeleteNetworkInterface',
-                    'ec2:ModifyNetworkInterfaceAttribute',
-                    'ec2:CreateTags',
-                    'ec2:DeleteTags',
-                ],
-                Resource: '*',
-            },
+        Sid: 'LaraKubeEksClusterAndNodegroup',
+        Effect: 'Allow',
+        Action: [
+            'eks:CreateCluster',
+            'eks:DescribeCluster',
+            'eks:DeleteCluster',
+            'eks:ListClusters',
+            'eks:TagResource',
+            'eks:UntagResource',
+            'eks:UpdateClusterConfig',
+            'eks:UpdateClusterVersion',
+            'eks:CreateNodegroup',
+            'eks:DescribeNodegroup',
+            'eks:DeleteNodegroup',
+            'eks:ListNodegroups',
+            'eks:UpdateNodegroupConfig',
+            'eks:UpdateNodegroupVersion',
+        ],
+        Resource: '*',
+    },
+    {
+        Sid: 'LaraKubeEksRoleLifecycle',
+        Effect: 'Allow',
+        Action: [
+            'iam:CreateRole',
+            'iam:DeleteRole',
+            'iam:GetRole',
+            'iam:TagRole',
+            'iam:AttachRolePolicy',
+            'iam:DetachRolePolicy',
+            'iam:ListAttachedRolePolicies',
+        ],
+        Resource: [
+            'arn:aws:iam::*:role/*-cluster-role',
+            'arn:aws:iam::*:role/*-node-role',
         ],
     },
+    {
+        // EKS assumes these roles on your behalf when it creates the cluster
+        // and node group — PassRole is what actually lets that handoff happen.
+        Sid: 'LaraKubeEksPassRole',
+        Effect: 'Allow',
+        Action: 'iam:PassRole',
+        Resource: [
+            'arn:aws:iam::*:role/*-cluster-role',
+            'arn:aws:iam::*:role/*-node-role',
+        ],
+        Condition: {
+            StringEquals: {
+                'iam:PassedToService': [
+                    'eks.amazonaws.com',
+                    'ec2.amazonaws.com',
+                ],
+            },
+        },
+    },
+    {
+        // One-time per account: EKS creates its own service-linked roles the
+        // first time a cluster or managed node group is created there.
+        Sid: 'LaraKubeEksServiceLinkedRole',
+        Effect: 'Allow',
+        Action: 'iam:CreateServiceLinkedRole',
+        Resource: 'arn:aws:iam::*:role/aws-service-role/*',
+        Condition: {
+            StringEquals: {
+                'iam:AWSServiceName': [
+                    'eks.amazonaws.com',
+                    'eks-nodegroup.amazonaws.com',
+                ],
+            },
+        },
+    },
+];
+
+export const MINIMAL_AWS_IAM_POLICY = JSON.stringify(
+    { Version: '2012-10-17', Statement: [EC2_STATEMENT] },
     null,
     2,
 );
 
-export default function AwsPolicyHelper({ className }: { className?: string }) {
+export const MINIMAL_AWS_IAM_POLICY_WITH_EKS = JSON.stringify(
+    { Version: '2012-10-17', Statement: [EC2_STATEMENT, ...EKS_STATEMENTS] },
+    null,
+    2,
+);
+
+export default function AwsPolicyHelper({
+    className,
+    includeEks = false,
+}: {
+    className?: string;
+    /** Managed Kubernetes (EKS) is selected — the policy needs IAM role + EKS actions on top of EC2, not EC2 alone. */
+    includeEks?: boolean;
+}) {
     return (
         <div
             className={`space-y-2.5 rounded-xl border border-line bg-paper/60 p-3.5 text-xs text-soft ${
@@ -56,32 +146,69 @@ export default function AwsPolicyHelper({ className }: { className?: string }) {
                     <ShieldCheck className="size-4 text-emerald-500" />
                     <span>AWS IAM Permissions</span>
                     <span className="rounded-full bg-badge px-2 py-0.5 text-[10px] text-soft">
-                        EC2 Only
+                        {includeEks ? 'EC2 + EKS' : 'EC2 Only'}
                     </span>
                 </div>
                 <CopyButton
-                    value={MINIMAL_AWS_IAM_POLICY}
+                    value={
+                        includeEks
+                            ? MINIMAL_AWS_IAM_POLICY_WITH_EKS
+                            : MINIMAL_AWS_IAM_POLICY
+                    }
                     label="Copy Minimal Policy JSON"
                     variant="secondary"
                     size="sm"
                 />
             </div>
-            <p className="leading-relaxed">
-                <strong className="text-foreground">Quick Setup:</strong> Under{' '}
-                <em className="text-foreground font-medium not-italic">
-                    Attach policies directly
-                </em>
-                , search and attach{' '}
-                <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                    AmazonEC2FullAccess
-                </code>
-                .
-            </p>
-            <p className="text-[11px] leading-relaxed text-soft">
-                For strict least privilege, copy our minimal policy JSON above
-                and create a custom IAM policy in AWS with only the required EC2
-                instance, security group, and volume actions.
-            </p>
+            {includeEks ? (
+                <>
+                    <p className="leading-relaxed">
+                        <strong className="text-foreground">
+                            No one-click shortcut here:
+                        </strong>{' '}
+                        AWS's EKS-named managed policies (like{' '}
+                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                            AmazonEKSClusterPolicy
+                        </code>
+                        ) are for the cluster's own internal role once it's
+                        running — not for the account creating it. There's no
+                        AWS-managed policy for that; copy the JSON above and
+                        create a custom policy with it.
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-soft">
+                        In a hurry on a disposable/workshop account and not
+                        worried about least privilege? Attaching{' '}
+                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                            AdministratorAccess
+                        </code>{' '}
+                        works too — just never do that on an account you
+                        actually care about securing.
+                    </p>
+                </>
+            ) : (
+                <>
+                    <p className="leading-relaxed">
+                        <strong className="text-foreground">
+                            Quick Setup:
+                        </strong>{' '}
+                        Under{' '}
+                        <em className="text-foreground font-medium not-italic">
+                            Attach policies directly
+                        </em>
+                        , search and attach{' '}
+                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                            AmazonEC2FullAccess
+                        </code>
+                        .
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-soft">
+                        For strict least privilege, copy our minimal policy JSON
+                        above and create a custom IAM policy in AWS with only
+                        the required EC2 instance, security group, and volume
+                        actions.
+                    </p>
+                </>
+            )}
         </div>
     );
 }

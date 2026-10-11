@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +52,8 @@ type Props = {
     panelClassName?: string;
     align?: 'left' | 'right';
     'aria-label'?: string;
+    /** Shows a filter box at the top of the panel — turn on once a list is long enough that scanning it beats scrolling it. */
+    searchable?: boolean;
 };
 
 /**
@@ -74,14 +76,22 @@ export default function SelectMenu({
     triggerClassName,
     panelClassName,
     align = 'left',
+    searchable = false,
     ...rest
 }: Props) {
     const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
     const ref = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!open) {
+            setQuery('');
             return;
+        }
+
+        if (searchable) {
+            searchRef.current?.focus();
         }
 
         function onPointerDown(event: MouseEvent) {
@@ -101,11 +111,22 @@ export default function SelectMenu({
             document.removeEventListener('mousedown', onPointerDown);
             document.removeEventListener('keydown', onKeyDown);
         };
-    }, [open]);
+    }, [open, searchable]);
 
     const selected = options.find((option) => option.value === value);
     const ring = accentRing[accent];
     let lastGroup: string | undefined;
+
+    const needle = query.trim().toLowerCase();
+    const visibleOptions =
+        searchable && needle !== ''
+            ? options.filter((option) => {
+                  const haystack =
+                      `${option.value} ${typeof option.label === 'string' ? option.label : ''}`.toLowerCase();
+
+                  return haystack.includes(needle);
+              })
+            : options;
 
     return (
         <div ref={ref} className={cn('relative', className)}>
@@ -149,14 +170,37 @@ export default function SelectMenu({
                         panelClassName,
                     )}
                 >
+                    {searchable && (
+                        <div className="sticky top-0 z-10 mb-1 flex items-center gap-1.5 rounded-xl bg-surface px-2.5 py-1.5 ring-1 ring-line">
+                            <Search className="size-3.5 shrink-0 text-faint" />
+                            <input
+                                ref={searchRef}
+                                type="text"
+                                value={query}
+                                onChange={(event) =>
+                                    setQuery(event.target.value)
+                                }
+                                onClick={(event) => event.stopPropagation()}
+                                placeholder="Filter…"
+                                className="w-full bg-transparent text-xs outline-none placeholder:text-faint"
+                            />
+                        </div>
+                    )}
+
                     {panelLabel && (
                         <div className="px-2.5 py-1.5 text-[10px] font-semibold tracking-wider text-faint uppercase">
                             {panelLabel}
                         </div>
                     )}
 
+                    {searchable && visibleOptions.length === 0 && (
+                        <p className="px-2.5 py-3 text-center text-xs text-faint">
+                            No matches for "{query}".
+                        </p>
+                    )}
+
                     <div className="flex flex-col gap-0.5">
-                        {options.map((option) => {
+                        {visibleOptions.map((option) => {
                             const showGroupHeader =
                                 option.group !== undefined &&
                                 option.group !== lastGroup;

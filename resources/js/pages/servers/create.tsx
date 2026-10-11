@@ -1,4 +1,4 @@
-import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
+import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { ChevronDown, Key, Users, Plus } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
@@ -6,6 +6,7 @@ import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
+import InfoTooltip from '@/components/info-tooltip';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
 import SelectMenu from '@/components/select-menu';
@@ -375,6 +376,7 @@ function ServerForm({
                                     form.setData('region', value)
                                 }
                                 options={provider.regions}
+                                searchable={provider.regions.length > 8}
                             />
                         </Field>
                         <Field
@@ -388,6 +390,7 @@ function ServerForm({
                                     form.setData('size', value)
                                 }
                                 options={sizeOptions}
+                                searchable={sizeOptions.length > 8}
                             />
                         </Field>
                     </div>
@@ -413,7 +416,31 @@ function ServerForm({
                                 />
                             </Field>
                             {provider.haOption === 'boolean' ? (
-                                <Field label="Control plane">
+                                <Field
+                                    label={
+                                        <span className="inline-flex items-center gap-1">
+                                            Control plane
+                                            <InfoTooltip side="right">
+                                                The control plane is what runs
+                                                Kubernetes itself (the API
+                                                server, scheduler, etcd) —
+                                                separate from your worker
+                                                node(s). Unchecked, it runs in a
+                                                single zone for free: fine for
+                                                learning or a demo, but an
+                                                outage in that zone takes the
+                                                whole cluster down with it.
+                                                Checked, it spans multiple zones
+                                                for{' '}
+                                                {provider.haCost ??
+                                                    'an extra charge'}
+                                                , so the cluster survives one
+                                                zone going down — what most
+                                                production setups choose.
+                                            </InfoTooltip>
+                                        </span>
+                                    }
+                                >
                                     <label className="flex h-9 items-center gap-2 text-sm">
                                         <input
                                             type="checkbox"
@@ -436,7 +463,35 @@ function ServerForm({
                                 </Field>
                             ) : (
                                 provider.haOption === 'always' && (
-                                    <Field label="Control plane">
+                                    <Field
+                                        label={
+                                            <span className="inline-flex items-center gap-1">
+                                                Control plane
+                                                <InfoTooltip side="right">
+                                                    The control plane is what
+                                                    runs Kubernetes itself (the
+                                                    API server, scheduler, etcd)
+                                                    — separate from your
+                                                    node(s). {
+                                                        provider.label
+                                                    }{' '}
+                                                    always spans it across
+                                                    multiple availability zones
+                                                    — there's no cheaper,
+                                                    single-zone option to opt
+                                                    out of — which is why it
+                                                    isn't a checkbox here like
+                                                    it is for some other
+                                                    providers. It costs{' '}
+                                                    {provider.haCost ??
+                                                        'a flat hourly fee'}
+                                                    , billed on top of your
+                                                    node(s) regardless of
+                                                    cluster size.
+                                                </InfoTooltip>
+                                            </span>
+                                        }
+                                    >
                                         <p className="flex h-9 items-center text-sm text-soft">
                                             High availability included
                                         </p>
@@ -497,7 +552,7 @@ function ServerForm({
 
                     {needsAwsKeys && (
                         <div className="space-y-4 border-t border-line/60 pt-3">
-                            <AwsPolicyHelper />
+                            <AwsPolicyHelper includeEks={isManaged} />
                             <Field
                                 label="AWS Access Key ID"
                                 error={form.errors.aws_access_key_id}
@@ -616,10 +671,42 @@ function estimateManagedCost(
 
 /** The optional Cloudflare step: what it gives, how to get a token, and that it can wait. */
 /** Says where the sizes and prices come from, so a stale one is never passed off as current. */
-function pricingNote(provider: Provider): string | undefined {
+function pricingNote(provider: Provider): ReactNode {
     const pricing = provider.pricing;
 
     if (!pricing) return undefined;
+
+    // AWS/GCP: their size-listing APIs carry no price at all, so this is
+    // never a live number — regardless of whether the regions/sizes
+    // themselves were just confirmed live or are the static fallback.
+    if (pricing.priceIsEstimated) {
+        const regionsNote =
+            pricing.source === 'live'
+                ? `Regions and sizes confirmed live from ${provider.label}.`
+                : `Regions and sizes are our best-known list for ${provider.label}.`;
+
+        return (
+            <>
+                {regionsNote} Prices are estimates —{' '}
+                {pricing.officialPricingUrl ? (
+                    <button
+                        type="button"
+                        className="underline hover:text-ink"
+                        onClick={() =>
+                            router.post('/open', {
+                                url: pricing.officialPricingUrl,
+                            })
+                        }
+                    >
+                        see {provider.label}&rsquo;s current pricing
+                    </button>
+                ) : (
+                    `see ${provider.label}'s current pricing`
+                )}
+                .
+            </>
+        );
+    }
 
     if (pricing.source === 'live') {
         return `Prices from ${provider.label}, fetched ${ago(pricing.asOf)}.`;
@@ -725,8 +812,8 @@ function Field({
     error,
     children,
 }: {
-    label: string;
-    hint?: string;
+    label: ReactNode;
+    hint?: ReactNode;
     error?: string;
     children: ReactNode;
 }) {
@@ -751,10 +838,12 @@ function Select({
     value,
     onChange,
     options,
+    searchable = false,
 }: {
     value: string;
     onChange: (value: string) => void;
     options: { value: string; label: string }[];
+    searchable?: boolean;
 }) {
     return (
         <SelectMenu
@@ -762,6 +851,7 @@ function Select({
             onChange={onChange}
             accent="servers"
             options={options}
+            searchable={searchable}
         />
     );
 }
