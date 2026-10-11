@@ -25,6 +25,7 @@ function workspacesExperimental(bool $on): void
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturn($on);
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     app()->instance(GlobalSettings::class, $settings);
 }
 

@@ -27,6 +27,7 @@ import DiagnoseCard from '@/components/diagnose-card';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
+import Redactable from '@/components/redactable';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
@@ -150,11 +151,15 @@ export default function ShowServer({
                             className="inline-flex items-center gap-1.5"
                         >
                             <Users className="size-3 text-soft" />
-                            <span>{server.account}</span>
+                            <Redactable value={server.account} kind="account" />
                         </span>
                     ),
                     server.region && <span key="region">{server.region}</span>,
-                    server.ip && <span key="ip">{server.ip}</span>,
+                    server.ip && (
+                        <span key="ip">
+                            <Redactable value={server.ip} kind="ip" />
+                        </span>
+                    ),
                     <span key="kind">
                         {server.kind === 'vps'
                             ? 'single-node k3s'
@@ -554,7 +559,12 @@ export default function ShowServer({
                                 >
                                     <TwoLine
                                         title="kubectl context"
-                                        detail={server.context}
+                                        detail={
+                                            <Redactable
+                                                value={server.context}
+                                                kind="account"
+                                            />
+                                        }
                                         mono
                                         truncate={false}
                                     />

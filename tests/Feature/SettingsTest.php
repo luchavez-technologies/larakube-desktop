@@ -19,6 +19,7 @@ test('settings can be updated and saved to config', function () {
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnFalse();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     $settings->shouldReceive('update')->once()->with(Mockery::on(function (array $data): bool {
         return ($data['localTld'] ?? null) === 'test'
             && ($data['email'] ?? null) === 'admin@example.com';
@@ -35,6 +36,7 @@ test('bridging an AI agent configures MCP servers', function () {
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnFalse();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     $settings->shouldReceive('bridge')->with('antigravity')->once()->andReturnTrue();
     app()->instance(GlobalSettings::class, $settings);
 
@@ -47,6 +49,7 @@ test('hideProjects preference can be saved to config', function () {
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnTrue();
     $settings->shouldReceive('experimental')->andReturnFalse();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     $settings->shouldReceive('update')->once()->with(Mockery::on(function (array $data): bool {
         return ($data['hideProjects'] ?? null) === true;
     }));
@@ -100,4 +103,44 @@ test('global settings gets and sets theme', function () {
 
     $settings->setTheme('system');
     expect($settings->getTheme())->toBe('system');
+});
+
+test('global settings gets and sets demo mode and its hidden-server list', function () {
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+
+    $settings = app(GlobalSettings::class);
+
+    expect($settings->demoMode())->toBeFalse()
+        ->and($settings->demoHiddenServers())->toBe([]);
+
+    $settings->update([
+        'demoMode' => true,
+        'demoHiddenServers' => ['prod-main', 'client-acme'],
+    ]);
+
+    expect($settings->demoMode())->toBeTrue()
+        ->and($settings->demoHiddenServers())->toBe(['prod-main', 'client-acme'])
+        ->and($settings->get()['demoMode'])->toBeTrue()
+        ->and($settings->get()['demoHiddenServers'])->toBe(['prod-main', 'client-acme']);
+
+    $settings->update(['demoMode' => false]);
+
+    expect($settings->demoMode())->toBeFalse()
+        ->and($settings->demoHiddenServers())->toBe(['prod-main', 'client-acme']);
+
+    File::deleteDirectory($home);
+});
+
+test('demo mode is shared to every Inertia page like hideProjects and experimental', function () {
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+    app(GlobalSettings::class)->update(['demoMode' => true]);
+
+    $this->get(route('settings.show'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('demoMode', true));
+
+    File::deleteDirectory($home);
 });

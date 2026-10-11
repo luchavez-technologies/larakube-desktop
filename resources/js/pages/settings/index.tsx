@@ -1,4 +1,4 @@
-import { Form, router, useForm } from '@inertiajs/react';
+import { Deferred, Form, router, useForm } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -42,6 +42,8 @@ type SettingsProps = {
         hideProjects?: boolean;
         experimental?: boolean;
         cliChannel?: string;
+        demoMode?: boolean;
+        demoHiddenServers?: string[];
         detectedAgents: Record<string, AgentInfo>;
     };
     allowedTlds: string[];
@@ -49,6 +51,7 @@ type SettingsProps = {
     contexts?: string[];
     currentContext?: string | null;
     windows?: boolean;
+    serverNames?: string[] | null;
 };
 
 type SettingsForm = {
@@ -60,6 +63,8 @@ type SettingsForm = {
     hideProjects: boolean;
     experimental: boolean;
     cliChannel: string;
+    demoMode: boolean;
+    demoHiddenServers: string[];
 };
 
 const themeOptions: {
@@ -95,6 +100,7 @@ export default function SettingsIndex({
     contexts = [],
     currentContext = null,
     windows = false,
+    serverNames,
 }: SettingsProps) {
     const [activeTheme, setActiveTheme] = useState<ThemeMode>(
         settings.theme ?? 'system',
@@ -115,7 +121,18 @@ export default function SettingsIndex({
         hideProjects: settings.hideProjects ?? false,
         experimental: settings.experimental ?? false,
         cliChannel: settings.cliChannel ?? 'canary',
+        demoMode: settings.demoMode ?? false,
+        demoHiddenServers: settings.demoHiddenServers ?? [],
     });
+
+    function toggleHiddenServer(name: string, hidden: boolean) {
+        form.setData(
+            'demoHiddenServers',
+            hidden
+                ? [...form.data.demoHiddenServers, name]
+                : form.data.demoHiddenServers.filter((n) => n !== name),
+        );
+    }
 
     function selectTheme(theme: ThemeMode) {
         setActiveTheme(theme);
@@ -348,6 +365,91 @@ export default function SettingsIndex({
                                 </span>
                             </div>
                         </label>
+                    </Card>
+
+                    {/* Demo Mode */}
+                    <Card label="Demo Mode">
+                        <div className="space-y-3">
+                            <label className="flex cursor-pointer items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    checked={form.data.demoMode}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'demoMode',
+                                            e.target.checked,
+                                        )
+                                    }
+                                    className="mt-0.5 size-4 rounded border-line text-brand accent-brand focus:ring-brand"
+                                />
+                                <div>
+                                    <span className="block text-xs font-medium text-ink">
+                                        Mask sensitive values on screen
+                                    </span>
+                                    <span className="mt-0.5 block text-xs leading-relaxed text-soft">
+                                        For presenting on a shared screen. IP
+                                        addresses and account identifiers show
+                                        as a placeholder with a click-to-reveal
+                                        button, and the servers checked below
+                                        drop out of the Servers list entirely.
+                                        Reversible — turn it off and everything
+                                        comes back exactly as it was. Save to
+                                        apply.
+                                    </span>
+                                </div>
+                            </label>
+
+                            <div className="border-t border-line/60 pt-3">
+                                <span className="mb-1.5 block text-xs font-medium text-ink">
+                                    Hide these servers while Demo Mode is on
+                                </span>
+                                <Deferred
+                                    data="serverNames"
+                                    fallback={
+                                        <p className="text-xs text-soft">
+                                            Asking the LaraKube CLI…
+                                        </p>
+                                    }
+                                >
+                                    {serverNames == null ? (
+                                        <p className="text-xs text-soft">
+                                            The LaraKube CLI isn't ready yet.
+                                        </p>
+                                    ) : serverNames.length === 0 ? (
+                                        <p className="text-xs text-soft">
+                                            No servers yet.
+                                        </p>
+                                    ) : (
+                                        <div className="max-h-44 space-y-1.5 overflow-y-auto">
+                                            {serverNames.map((name) => (
+                                                <label
+                                                    key={name}
+                                                    className="flex cursor-pointer items-center gap-2.5 text-xs"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={form.data.demoHiddenServers.includes(
+                                                            name,
+                                                        )}
+                                                        onChange={(e) =>
+                                                            toggleHiddenServer(
+                                                                name,
+                                                                e.target
+                                                                    .checked,
+                                                            )
+                                                        }
+                                                        className="size-3.5 rounded border-line text-brand accent-brand focus:ring-brand"
+                                                    />
+                                                    <span className="font-mono text-ink">
+                                                        {name}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </Deferred>
+                            </div>
+                        </div>
                     </Card>
 
                     {/* Cloud Providers */}

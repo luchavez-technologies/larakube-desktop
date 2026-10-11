@@ -5,6 +5,7 @@ import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { sendJson } from '@/lib/http';
 import LogPanel from '@/components/log-panel';
+import Redactable from '@/components/redactable';
 import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
@@ -421,7 +422,7 @@ function DevBoxCreatedCard({ run }: { run: Run }) {
                     <div>
                         <dt className="text-xs text-soft">IP address</dt>
                         <dd className="mt-1 font-mono text-sm font-medium">
-                            {result.ip}
+                            <Redactable value={result.ip} kind="ip" />
                         </dd>
                     </div>
                 )}
@@ -444,12 +445,16 @@ function DevBoxCreatedCard({ run }: { run: Run }) {
 
 function CreatedCard({ run }: { run: Run }) {
     const result = run.result ?? {};
-    const facts = [
-        ['IP address', result.ip],
-        ['kubectl context', result.context],
-        ['SSH', run.subject ? `ssh ${run.subject}` : null],
-    ].filter(
-        (fact): fact is [string, string] =>
+    // Only the IP and kubectl context can identify/expose the real
+    // infrastructure — the SSH line is just `ssh {server name}`, the same
+    // name already shown in this page's own heading, so it's left plain.
+    const factList: Array<[string, unknown, 'ip' | 'account' | null]> = [
+        ['IP address', result.ip, 'ip'],
+        ['kubectl context', result.context, 'account'],
+        ['SSH', run.subject ? `ssh ${run.subject}` : null, null],
+    ];
+    const facts = factList.filter(
+        (fact): fact is [string, string, 'ip' | 'account' | null] =>
             typeof fact[1] === 'string' && fact[1] !== '',
     );
 
@@ -459,11 +464,15 @@ function CreatedCard({ run }: { run: Run }) {
                 Your server is ready
             </h2>
             <dl className="mt-3 flex flex-wrap gap-10">
-                {facts.map(([term, value]) => (
+                {facts.map(([term, value, kind]) => (
                     <div key={term}>
                         <dt className="text-xs text-soft">{term}</dt>
                         <dd className="mt-1 font-mono text-sm font-medium">
-                            {value}
+                            {kind ? (
+                                <Redactable value={value} kind={kind} />
+                            ) : (
+                                value
+                            )}
                         </dd>
                     </div>
                 ))}

@@ -3,6 +3,7 @@ import { Plus, ArrowRight } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
+import Redactable from '@/components/redactable';
 import StatusPill from '@/components/status-pill';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
 import AppLayout from '@/layouts/app-layout';
@@ -382,8 +383,15 @@ export default function DashboardIndex({
                                             </StatusPill>
                                         </div>
                                         <p className="mt-0.5 truncate font-mono text-xs text-soft">
-                                            {server.ip ?? 'Provisioning IP…'} ·{' '}
-                                            {server.provider.toUpperCase()}
+                                            {server.ip ? (
+                                                <Redactable
+                                                    value={server.ip}
+                                                    kind="ip"
+                                                />
+                                            ) : (
+                                                'Provisioning IP…'
+                                            )}{' '}
+                                            · {server.provider.toUpperCase()}
                                         </p>
                                     </div>
                                     <Link

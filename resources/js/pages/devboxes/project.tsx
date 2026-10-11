@@ -29,6 +29,7 @@ import ProjectTerminalCard, {
     type ProjectRun,
 } from '@/components/project-terminal-card';
 import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
+import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
@@ -585,7 +586,11 @@ function Header({
                                         <code className="text-wrap break-all select-all">
                                             ssh -i{' '}
                                             {devBox.sshKey ?? '~/.ssh/id_rsa'}{' '}
-                                            larakube@{devBox.ip}
+                                            larakube@
+                                            <Redactable
+                                                value={devBox.ip ?? ''}
+                                                kind="ip"
+                                            />
                                         </code>
                                         <CopyButton
                                             value={`ssh -i ${devBox.sshKey ?? '~/.ssh/id_rsa'} larakube@${devBox.ip}`}
@@ -894,7 +899,12 @@ function DevBoxConnectionCard({
                     >
                         <TwoLine
                             title="SSH Endpoint"
-                            detail={`larakube@${devBox.ip}`}
+                            detail={
+                                <>
+                                    larakube@
+                                    <Redactable value={devBox.ip} kind="ip" />
+                                </>
+                            }
                             mono
                         />
                     </ListRow>

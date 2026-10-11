@@ -7,6 +7,7 @@ test('the home route sends a computer without the CLI to Setup', function () {
     $settings->shouldReceive('hasCompletedOnboarding')->andReturnTrue();
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnFalse();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     app()->instance(GlobalSettings::class, $settings);
 
     $this->get(route('home'))->assertRedirect(route('readiness'));

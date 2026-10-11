@@ -6,6 +6,7 @@ import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
+import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
@@ -113,7 +114,14 @@ export default function Workspaces({
                             }
                             options={servers.map((s) => ({
                                 value: s.name,
-                                label: s.ip ? `${s.name} (${s.ip})` : s.name,
+                                label: s.ip ? (
+                                    <>
+                                        {s.name} (
+                                        <Redactable value={s.ip} kind="ip" />)
+                                    </>
+                                ) : (
+                                    s.name
+                                ),
                             }))}
                         />
                     )

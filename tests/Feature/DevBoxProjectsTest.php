@@ -27,6 +27,7 @@ function devBoxProjectsExperimental(bool $on): void
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturn($on);
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     $settings->shouldReceive('get')->andReturn(['cliChannel' => 'canary']);
     app()->instance(GlobalSettings::class, $settings);
 }
@@ -213,6 +214,7 @@ test('updating the CLI on a box runs the installer there on the channel Desktop 
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnTrue();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     $settings->shouldReceive('get')->andReturn(['cliChannel' => $channel]);
     app()->instance(GlobalSettings::class, $settings);
     Process::fake(['*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
@@ -240,6 +242,7 @@ test('updating the CLI on a box via Inertia returns back to stay on the dev box 
     $settings = mock(GlobalSettings::class);
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnTrue();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     $settings->shouldReceive('get')->andReturn(['cliChannel' => 'stable']);
     app()->instance(GlobalSettings::class, $settings);
     devBoxProjectsStacks();

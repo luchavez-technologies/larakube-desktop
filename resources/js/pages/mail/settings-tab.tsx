@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ExternalLink,
@@ -42,8 +42,10 @@ type Props = {
 };
 
 export default function SettingsTab({ server, info }: Props) {
+    const { demoMode } = usePage<{ demoMode?: boolean }>().props;
     const [showPassword, setShowPassword] = useState(false);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
+    const [hostRevealed, setHostRevealed] = useState(false);
 
     const copyValue = (key: string, val: string) => {
         void navigator.clipboard.writeText(val);
@@ -51,7 +53,11 @@ export default function SettingsTab({ server, info }: Props) {
         setTimeout(() => setCopiedKey(null), 2000);
     };
 
+    // Only the IP fallback is sensitive — info?.host is a real domain, fine to show.
     const host = info?.host || server.ip || `${server.name}.test`;
+    const hostIsIp = !info?.host && !!server.ip;
+    const hostMasked = Boolean(demoMode) && hostIsIp && !hostRevealed;
+    const displayHost = hostMasked ? '•••.•••.•••.•••' : host;
 
     const envSnippet = `MAIL_MAILER=smtp
 MAIL_HOST=${host}
@@ -61,6 +67,10 @@ MAIL_PASSWORD=your-account-password
 MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS="your-account@yourdomain.com"
 MAIL_FROM_NAME="\${APP_NAME}"`;
+
+    const displayEnvSnippet = hostMasked
+        ? envSnippet.replace(host, displayHost)
+        : envSnippet;
 
     return (
         <div className="space-y-6">
@@ -76,8 +86,20 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                 <p className="mt-0.5 text-soft">
                                     Host:{' '}
                                     <span className="font-mono text-ink">
-                                        {host}
-                                    </span>{' '}
+                                        {displayHost}
+                                    </span>
+                                    {hostMasked && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setHostRevealed(true)
+                                            }
+                                            title="Hidden in Demo Mode — click to reveal"
+                                            className="ml-1 inline-flex align-middle text-faint hover:text-soft"
+                                        >
+                                            <Eye className="h-3 w-3" />
+                                        </button>
+                                    )}{' '}
                                     · Port{' '}
                                     <span className="font-mono font-bold text-ink">
                                         993
@@ -106,8 +128,20 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                 <p className="mt-0.5 text-soft">
                                     Host:{' '}
                                     <span className="font-mono text-ink">
-                                        {host}
-                                    </span>{' '}
+                                        {displayHost}
+                                    </span>
+                                    {hostMasked && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setHostRevealed(true)
+                                            }
+                                            title="Hidden in Demo Mode — click to reveal"
+                                            className="ml-1 inline-flex align-middle text-faint hover:text-soft"
+                                        >
+                                            <Eye className="h-3 w-3" />
+                                        </button>
+                                    )}{' '}
                                     · Port{' '}
                                     <span className="font-mono font-bold text-ink">
                                         465
@@ -136,8 +170,20 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                 <p className="mt-0.5 text-soft">
                                     Host:{' '}
                                     <span className="font-mono text-ink">
-                                        {host}
-                                    </span>{' '}
+                                        {displayHost}
+                                    </span>
+                                    {hostMasked && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setHostRevealed(true)
+                                            }
+                                            title="Hidden in Demo Mode — click to reveal"
+                                            className="ml-1 inline-flex align-middle text-faint hover:text-soft"
+                                        >
+                                            <Eye className="h-3 w-3" />
+                                        </button>
+                                    )}{' '}
                                     · Port{' '}
                                     <span className="font-mono font-bold text-ink">
                                         587
@@ -317,7 +363,7 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
 
                     <div className="relative rounded-lg border border-line bg-paper p-3">
                         <pre className="font-mono text-[11px] leading-relaxed text-ink">
-                            {envSnippet}
+                            {displayEnvSnippet}
                         </pre>
                         <div className="absolute top-3 right-3">
                             <Button

@@ -30,6 +30,8 @@ class GlobalSettings
      *     shareToken: ?string,
      *     hideProjects: bool,
      *     experimental: bool,
+     *     demoMode: bool,
+     *     demoHiddenServers: list<string>,
      *     cliChannel: string,
      *     usage: ?string,
      *     intendedProviders: list<string>,
@@ -70,6 +72,8 @@ class GlobalSettings
             'shareToken' => is_string($config['shareToken'] ?? null) ? $config['shareToken'] : null,
             'hideProjects' => (bool) ($config['hideProjects'] ?? false),
             'experimental' => (bool) ($config['experimental'] ?? false),
+            'demoMode' => (bool) ($config['demoMode'] ?? false),
+            'demoHiddenServers' => $this->demoHiddenServers(),
             'cliChannel' => (string) ($config['cliChannel'] ?? 'canary'),
             'usage' => in_array($config['usage'] ?? null, self::USAGES, true) ? $config['usage'] : null,
             'intendedProviders' => $this->intendedProviders(),
@@ -132,6 +136,32 @@ class GlobalSettings
     public function experimental(): bool
     {
         return (bool) ($this->readConfig()['experimental'] ?? false);
+    }
+
+    /**
+     * Whether Demo Mode is on — masks IPs/account identifiers/credentials
+     * across the app and drops demoHiddenServers() from the Servers list,
+     * both purely at render time. Reversible: turning this off needs no
+     * cleanup, since nothing underneath (CLI, cluster, the servers
+     * themselves) is ever touched by either effect.
+     */
+    public function demoMode(): bool
+    {
+        return (bool) ($this->readConfig()['demoMode'] ?? false);
+    }
+
+    /**
+     * Server names to drop from the Servers list (and 404 directly) while
+     * demoMode() is on — set ahead of time, independent of whether Demo Mode
+     * is currently on, so it's ready the moment it's switched on.
+     *
+     * @return list<string>
+     */
+    public function demoHiddenServers(): array
+    {
+        $servers = $this->readConfig()['demoHiddenServers'] ?? null;
+
+        return is_array($servers) ? array_values(array_filter($servers, 'is_string')) : [];
     }
 
     /**
@@ -233,6 +263,14 @@ class GlobalSettings
 
         if (array_key_exists('experimental', $data)) {
             $config['experimental'] = (bool) $data['experimental'];
+        }
+
+        if (array_key_exists('demoMode', $data)) {
+            $config['demoMode'] = (bool) $data['demoMode'];
+        }
+
+        if (array_key_exists('demoHiddenServers', $data) && is_array($data['demoHiddenServers'])) {
+            $config['demoHiddenServers'] = array_values(array_filter($data['demoHiddenServers'], 'is_string'));
         }
 
         $this->writeConfig($config);

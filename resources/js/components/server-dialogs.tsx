@@ -2,6 +2,7 @@ import { Form } from '@inertiajs/react';
 import { useState } from 'react';
 import { ArrowUpCircle, RotateCw, Trash2, Unplug, Wrench } from 'lucide-react';
 import Button from '@/components/button';
+import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import { remove as removeContext } from '@/routes/context';
 import { destroy, repair, resize, restart } from '@/routes/servers';
@@ -34,9 +35,14 @@ export function DestroyServerDialog({
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-soft">
                     This deletes the {provider} server
-                    {server.ip ? ` ${server.ip}` : ''}, its firewall rules, and
-                    every Cluster Tool and app running on it. It can't be
-                    undone.
+                    {server.ip && (
+                        <>
+                            {' '}
+                            <Redactable value={server.ip} kind="ip" />
+                        </>
+                    )}
+                    , its firewall rules, and every Cluster Tool and app running
+                    on it. It can't be undone.
                 </p>
                 <Form action={destroy(server.name)} className="mt-4">
                     {({ errors, processing }) => (

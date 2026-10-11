@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Wsl;
 use Illuminate\Http\RedirectResponse;
@@ -13,7 +14,7 @@ use Inertia\Response;
 
 class SettingsController extends Controller
 {
-    public function show(GlobalSettings $settings, ToolLocator $locator, Wsl $wsl): Response
+    public function show(GlobalSettings $settings, ToolLocator $locator, Wsl $wsl, StackCatalog $catalog): Response
     {
         $cli = $locator->find('kubectl');
         $contexts = [];
@@ -41,6 +42,11 @@ class SettingsController extends Controller
             'contexts' => $contexts,
             'currentContext' => $currentContext,
             'windows' => $wsl->isWindows(),
+            'serverNames' => Inertia::defer(function () use ($catalog): ?array {
+                $stacks = $catalog->all();
+
+                return $stacks === null ? null : array_map(fn (array $stack): string => $stack['name'], $stacks);
+            }),
         ]);
     }
 
@@ -56,6 +62,9 @@ class SettingsController extends Controller
             'experimental' => ['nullable', 'boolean'],
             'cliChannel' => ['nullable', 'string', 'in:canary,stable'],
             'wslShutdownMode' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::WSL_SHUTDOWN_MODES)],
+            'demoMode' => ['nullable', 'boolean'],
+            'demoHiddenServers' => ['nullable', 'array'],
+            'demoHiddenServers.*' => ['string'],
         ]);
 
         $settings->update($validated);

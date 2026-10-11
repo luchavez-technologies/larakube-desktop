@@ -24,6 +24,7 @@ function onboarded(): void
     $settings->shouldReceive('hasCompletedOnboarding')->andReturnTrue();
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnFalse();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     app()->instance(GlobalSettings::class, $settings);
 }
 
@@ -32,6 +33,7 @@ test('a first launch that has not finished onboarding is sent to the wizard', fu
     $settings->shouldReceive('hasCompletedOnboarding')->andReturnFalse();
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturnFalse();
+    $settings->shouldReceive('demoMode')->andReturnFalse();
     app()->instance(GlobalSettings::class, $settings);
 
     $this->get(route('dashboard'))->assertRedirect(route('onboarding'));

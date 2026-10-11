@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import Button from '@/components/button';
 import CopyButton from '@/components/copy-button';
+import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
@@ -235,7 +236,16 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
                                 onChange={setProject}
                                 options={projects.map((candidate) => ({
                                     value: candidate.id,
-                                    label: `${candidate.name} (${candidate.id})`,
+                                    label: (
+                                        <>
+                                            {candidate.name} (
+                                            <Redactable
+                                                value={candidate.id}
+                                                kind="account"
+                                            />
+                                            )
+                                        </>
+                                    ),
                                 }))}
                             />
                         )}

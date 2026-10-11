@@ -23,6 +23,7 @@ import DevBoxExportModal from '@/components/devbox-export-modal';
 import DevBoxGrantModal from '@/components/devbox-grant-modal';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
+import Redactable from '@/components/redactable';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
 import ProviderLogo from '@/components/provider-logo';
 import {
@@ -87,7 +88,11 @@ export default function ShowDevBox({
                         </span>
                     </span>,
                     box.region && <span key="region">{box.region}</span>,
-                    box.ip && <span key="ip">{box.ip}</span>,
+                    box.ip && (
+                        <span key="ip">
+                            <Redactable value={box.ip} kind="ip" />
+                        </span>
+                    ),
                     <span key="kind">dev box</span>,
                 ].filter(Boolean)}
             />

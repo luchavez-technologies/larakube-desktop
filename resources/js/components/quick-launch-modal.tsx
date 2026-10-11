@@ -27,6 +27,7 @@ import Button, { buttonClass } from '@/components/button';
 import CopyButton from '@/components/copy-button';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import InfoTooltip from '@/components/info-tooltip';
+import Redactable from '@/components/redactable';
 import ToolLogo from '@/components/tool-logo';
 import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
@@ -150,7 +151,10 @@ export default function QuickLaunchModal({
 }: Props) {
     useRightDrawerOpen(isOpen);
 
-    const { untested } = usePage<{ untested: Untested }>().props;
+    const { untested, demoMode } = usePage<{
+        untested: Untested;
+        demoMode?: boolean;
+    }>().props;
 
     const readyServers = useMemo(
         () => servers.filter((s) => s.status === 'ready' && s.context),
@@ -544,7 +548,14 @@ export default function QuickLaunchModal({
     }, [readyServers, selectedServerName]);
 
     useEffect(() => {
-        if (currentServer?.account && currentServer.account.includes('@')) {
+        // In Demo Mode, don't silently copy a real account email (the AWS/GCP
+        // account this server was created under) into a field that's about
+        // to be shown on screen — fall through to the domain-based default.
+        if (
+            !demoMode &&
+            currentServer?.account &&
+            currentServer.account.includes('@')
+        ) {
             setAdminEmail(currentServer.account);
             return;
         }
@@ -559,7 +570,7 @@ export default function QuickLaunchModal({
         } else if (currentServer?.ip) {
             setAdminEmail(`admin@${currentServer.name}.local`);
         }
-    }, [currentServer, baseDomain, useCustomDomain, customDomain]);
+    }, [currentServer, baseDomain, useCustomDomain, customDomain, demoMode]);
 
     const appSupportsMail = Boolean(
         currentApp.capabilities.mail?.includes('smtp'),
@@ -1059,8 +1070,16 @@ export default function QuickLaunchModal({
                                                                     </div>
                                                                     <p className="mt-0.5 font-mono text-[11px] text-soft">
                                                                         IP:{' '}
-                                                                        {s.ip ??
-                                                                            'local'}
+                                                                        {s.ip ? (
+                                                                            <Redactable
+                                                                                value={
+                                                                                    s.ip
+                                                                                }
+                                                                                kind="ip"
+                                                                            />
+                                                                        ) : (
+                                                                            'local'
+                                                                        )}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -1635,7 +1654,12 @@ export default function QuickLaunchModal({
                                                             Points to
                                                         </span>
                                                         <span className="font-semibold text-ink">
-                                                            {currentServer.ip}
+                                                            <Redactable
+                                                                value={
+                                                                    currentServer.ip
+                                                                }
+                                                                kind="ip"
+                                                            />
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1894,8 +1918,16 @@ export default function QuickLaunchModal({
                                                     )
                                                 </span>
                                                 <span className="block font-mono text-[11px] text-soft">
-                                                    {currentServer?.ip ??
-                                                        'local'}
+                                                    {currentServer?.ip ? (
+                                                        <Redactable
+                                                            value={
+                                                                currentServer.ip
+                                                            }
+                                                            kind="ip"
+                                                        />
+                                                    ) : (
+                                                        'local'
+                                                    )}
                                                 </span>
                                             </div>
                                             <div>
@@ -1922,9 +1954,21 @@ export default function QuickLaunchModal({
                                                     )}
                                                 </span>
                                                 <span className="block text-[11px] text-soft">
-                                                    {hasExternalDns
-                                                        ? 'Cloudflare managed'
-                                                        : `Points to ${currentServer?.ip ?? 'server'}`}
+                                                    {hasExternalDns ? (
+                                                        'Cloudflare managed'
+                                                    ) : currentServer?.ip ? (
+                                                        <>
+                                                            Points to{' '}
+                                                            <Redactable
+                                                                value={
+                                                                    currentServer.ip
+                                                                }
+                                                                kind="ip"
+                                                            />
+                                                        </>
+                                                    ) : (
+                                                        'Points to server'
+                                                    )}
                                                 </span>
                                             </div>
                                             <div>
@@ -2389,7 +2433,7 @@ function CredentialRow({ label, value }: { label: string; value: string }) {
                     {label}
                 </span>
                 <span className="block truncate font-mono text-xs text-ink">
-                    {value}
+                    <Redactable value={value} kind="text" />
                 </span>
             </div>
             <CopyButton value={value} size="sm" />

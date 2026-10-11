@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
+import Redactable from '@/components/redactable';
 import { ServerActions } from '@/components/server-dialogs';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
@@ -206,7 +207,16 @@ export default function ServersIndex({
                                                         {server.region ?? '—'}
                                                     </td>
                                                     <td className="font-mono text-[13px]">
-                                                        {server.ip ?? '—'}
+                                                        {server.ip ? (
+                                                            <Redactable
+                                                                value={
+                                                                    server.ip
+                                                                }
+                                                                kind="ip"
+                                                            />
+                                                        ) : (
+                                                            '—'
+                                                        )}
                                                     </td>
                                                     <td>
                                                         <StatusPill tone={tone}>
@@ -294,8 +304,16 @@ export default function ServersIndex({
                                                 </div>
                                                 <div className="mt-3 flex items-center justify-between">
                                                     <span className="font-mono text-[11px] text-faint">
-                                                        {server.ip ??
-                                                            'Provisioning IP…'}
+                                                        {server.ip ? (
+                                                            <Redactable
+                                                                value={
+                                                                    server.ip
+                                                                }
+                                                                kind="ip"
+                                                            />
+                                                        ) : (
+                                                            'Provisioning IP…'
+                                                        )}
                                                     </span>
                                                     <span className="text-sm font-medium text-brand hover:underline">
                                                         View →

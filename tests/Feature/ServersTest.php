@@ -3,6 +3,7 @@
 use App\Enums\RunKind;
 use App\Models\Project;
 use App\Models\Run;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\TerminalLauncher;
 use Illuminate\Support\Facades\Cache;
@@ -327,6 +328,52 @@ test('a finished Connect a domain run drops the cached DNS status', function () 
     event(new ProcessExited($run->alias(), 0));
 
     expect(Cache::has('cluster-status:dns:larakube-203.0.113.21'))->toBeFalse();
+});
+
+function serversDemoModeHiding(array $hidden): string
+{
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+    app(GlobalSettings::class)->update(['demoMode' => true, 'demoHiddenServers' => $hidden]);
+
+    return $home;
+}
+
+test('demo mode drops hidden servers from the list, and a direct visit to one 404s', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $home = serversDemoModeHiding(['cancel-test']);
+
+    $this->get(route('servers.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->has('servers', 1)
+                ->where('servers.0.name', 'workshop-demo')));
+
+    $this->get(route('servers.show', 'cancel-test'))->assertNotFound();
+    $this->get(route('servers.show', 'workshop-demo'))->assertOk();
+
+    File::deleteDirectory($bin);
+    File::deleteDirectory($home);
+});
+
+test('demo mode off shows every server, even ones on the hidden list', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+    app(GlobalSettings::class)->update(['demoMode' => false, 'demoHiddenServers' => ['cancel-test']]);
+
+    $this->get(route('servers.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->has('servers', 2)));
+
+    $this->get(route('servers.show', 'cancel-test'))->assertOk();
+
+    File::deleteDirectory($bin);
+    File::deleteDirectory($home);
 });
 
 test('a server page asks for its backup state on its own, in one call', function () {

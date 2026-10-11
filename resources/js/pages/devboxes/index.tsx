@@ -4,6 +4,7 @@ import { ChevronRight, Download, Plus, Settings } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import DevBoxImportModal from '@/components/devbox-import-modal';
 import PageHeader from '@/components/page-header';
+import Redactable from '@/components/redactable';
 import ProviderLogo from '@/components/provider-logo';
 import { ServerActions } from '@/components/server-dialogs';
 import ExperimentalBadge from '@/components/experimental-badge';
@@ -209,7 +210,14 @@ function DevBoxList({
                                 </div>
                                 <div className="mt-3 flex items-center justify-between">
                                     <span className="font-mono text-[11px] text-faint">
-                                        {box.ip ?? 'Provisioning IP…'}
+                                        {box.ip ? (
+                                            <Redactable
+                                                value={box.ip}
+                                                kind="ip"
+                                            />
+                                        ) : (
+                                            'Provisioning IP…'
+                                        )}
                                     </span>
                                     <span className="text-sm font-medium text-brand hover:underline">
                                         View →
@@ -276,7 +284,11 @@ function DevBoxList({
                                     {box.region ?? '—'}
                                 </td>
                                 <td className="font-mono text-[13px]">
-                                    {box.ip ?? '—'}
+                                    {box.ip ? (
+                                        <Redactable value={box.ip} kind="ip" />
+                                    ) : (
+                                        '—'
+                                    )}
                                 </td>
                                 <td>
                                     <StatusPill tone={tone}>{label}</StatusPill>

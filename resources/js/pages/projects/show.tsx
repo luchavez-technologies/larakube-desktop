@@ -43,6 +43,7 @@ import Sparkline from '@/components/metrics/sparkline';
 import Card from '@/components/card';
 import FrameworkBadge from '@/components/framework-badge';
 import ProviderLogo from '@/components/provider-logo';
+import Redactable from '@/components/redactable';
 import EditorLogo from '@/components/editor-logo';
 import FrameworkFields, {
     defaultAnswers,
@@ -851,7 +852,14 @@ function CloudEnvironmentOverviewCard({
                                             )}
                                         </div>
                                         <p className="mt-0.5 font-mono text-[11px] text-soft">
-                                            {activeServer.ip ?? 'No public IP'}
+                                            {activeServer.ip ? (
+                                                <Redactable
+                                                    value={activeServer.ip}
+                                                    kind="ip"
+                                                />
+                                            ) : (
+                                                'No public IP'
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -1650,7 +1658,13 @@ function DeployDialog({
                                             >
                                                 {activeServer.name}
                                             </Link>{' '}
-                                            · {activeServer.ip}
+                                            ·{' '}
+                                            {activeServer.ip && (
+                                                <Redactable
+                                                    value={activeServer.ip}
+                                                    kind="ip"
+                                                />
+                                            )}
                                             {activeServerProvider && (
                                                 <span className="ml-1.5 rounded bg-line/60 px-1 text-[10px] text-soft">
                                                     {providerLabels[
@@ -2054,7 +2068,23 @@ function AddEnvironmentDialog({
                                     onChange={setServer}
                                     options={readyServers.map((s) => ({
                                         value: s.name,
-                                        label: `${s.name}${s.provider ? ` (${providerLabels[s.provider] ?? s.provider})` : ''}${s.ip ? ` · ${s.ip}` : ''}`,
+                                        label: (
+                                            <>
+                                                {s.name}
+                                                {s.provider
+                                                    ? ` (${providerLabels[s.provider] ?? s.provider})`
+                                                    : ''}
+                                                {s.ip && (
+                                                    <>
+                                                        {' · '}
+                                                        <Redactable
+                                                            value={s.ip}
+                                                            kind="ip"
+                                                        />
+                                                    </>
+                                                )}
+                                            </>
+                                        ),
                                     }))}
                                 />
                                 {errors.server && (
@@ -2296,7 +2326,23 @@ function LinkServerForm({
                             onChange={setServer}
                             options={servers.map((candidate) => ({
                                 value: candidate.name,
-                                label: `${candidate.name}${candidate.provider ? ` (${providerLabels[candidate.provider] ?? candidate.provider})` : ''}${candidate.ip ? ` · ${candidate.ip}` : ''}`,
+                                label: (
+                                    <>
+                                        {candidate.name}
+                                        {candidate.provider
+                                            ? ` (${providerLabels[candidate.provider] ?? candidate.provider})`
+                                            : ''}
+                                        {candidate.ip && (
+                                            <>
+                                                {' · '}
+                                                <Redactable
+                                                    value={candidate.ip}
+                                                    kind="ip"
+                                                />
+                                            </>
+                                        )}
+                                    </>
+                                ),
                             }))}
                         />
                         <Button

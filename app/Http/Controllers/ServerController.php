@@ -26,11 +26,30 @@ use Inertia\Response;
 
 class ServerController extends Controller
 {
-    public function index(StackCatalog $catalog): Response
+    public function index(StackCatalog $catalog, GlobalSettings $settings): Response
     {
         return Inertia::render('servers/index', [
-            'servers' => Inertia::defer(fn (): ?array => $catalog->all()),
+            'servers' => Inertia::defer(fn (): ?array => $this->visibleStacks($catalog->all(), $settings)),
         ]);
+    }
+
+    /**
+     * Drops demoHiddenServers() while Demo Mode is on — a pure read-time
+     * filter, never persisted or applied to the cluster/CLI itself, so
+     * turning Demo Mode off needs no cleanup at all.
+     *
+     * @param  ?list<array<string, mixed>>  $stacks
+     * @return ?list<array<string, mixed>>
+     */
+    private function visibleStacks(?array $stacks, GlobalSettings $settings): ?array
+    {
+        if ($stacks === null || ! $settings->demoMode()) {
+            return $stacks;
+        }
+
+        $hidden = $settings->demoHiddenServers();
+
+        return array_values(array_filter($stacks, fn (array $stack): bool => ! in_array($stack['name'], $hidden, true)));
     }
 
     public function create(Request $request, ReadinessCheck $readiness, GlobalSettings $settings): Response
@@ -119,10 +138,12 @@ class ServerController extends Controller
         ClusterMetrics $clusterMetrics,
         ContextHealth $health,
         ReadinessCheck $readiness,
+        GlobalSettings $settings,
     ): Response {
         $stack = $catalog->find($server);
 
         abort_if($stack === null || ($stack['role'] ?? 'deploy') === 'dev', 404);
+        abort_if($settings->demoMode() && in_array($stack['name'], $settings->demoHiddenServers(), true), 404);
 
         $context = $stack['status'] === 'ready' ? $stack['context'] : null;
 

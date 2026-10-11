@@ -3,6 +3,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Check, Plus, Trash2, X, Users, AlertCircle } from 'lucide-react';
 import Button from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
+import Redactable from '@/components/redactable';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import GcpSignIn from '@/components/gcp-sign-in';
 import SelectMenu from '@/components/select-menu';
@@ -253,7 +254,12 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                                         </div>
                                                         {acc.meta && (
                                                             <p className="font-mono text-[11px] text-soft">
-                                                                {acc.meta}
+                                                                <Redactable
+                                                                    value={
+                                                                        acc.meta
+                                                                    }
+                                                                    kind="account"
+                                                                />
                                                             </p>
                                                         )}
                                                     </div>

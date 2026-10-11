@@ -24,6 +24,7 @@ import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
+import Redactable from '@/components/redactable';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
@@ -2303,7 +2304,10 @@ function InstallDialog({
                                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
                                                     <Check className="size-3" />{' '}
                                                     A record points to{' '}
-                                                    {server.ip}
+                                                    <Redactable
+                                                        value={server.ip ?? ''}
+                                                        kind="ip"
+                                                    />
                                                 </span>
                                             ) : null}
                                         </div>
@@ -2321,7 +2325,13 @@ function InstallDialog({
                                                     <>
                                                         Traffic resolves to{' '}
                                                         <span className="font-mono text-ink">
-                                                            {server.ip}
+                                                            <Redactable
+                                                                value={
+                                                                    server.ip ??
+                                                                    ''
+                                                                }
+                                                                kind="ip"
+                                                            />
                                                         </span>
                                                         . Traefik will route
                                                         requests and issue Let's
@@ -2340,8 +2350,16 @@ function InstallDialog({
                                                         </span>
                                                         ) pointing to{' '}
                                                         <span className="font-mono text-ink">
-                                                            {server.ip ??
-                                                                'the server'}
+                                                            {server.ip ? (
+                                                                <Redactable
+                                                                    value={
+                                                                        server.ip
+                                                                    }
+                                                                    kind="ip"
+                                                                />
+                                                            ) : (
+                                                                'the server'
+                                                            )}
                                                         </span>
                                                         , Traefik will route
                                                         traffic and issue Let's
