@@ -5,6 +5,7 @@ import {
     ExternalLink,
     Search,
     ArrowDownToLine,
+    ArrowUpCircle,
     Play,
     Pause,
     Trash2,
@@ -1348,6 +1349,15 @@ function InstalledCard({
                     )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                    <button
+                        type="button"
+                        disabled
+                        title="Coming soon — upgrade this tool's image version in place when a newer one is available."
+                        className={buttonClass('secondary', 'sm', 'h-8 px-3')}
+                    >
+                        <ArrowUpCircle className="size-3.5" />
+                        <span>Update</span>
+                    </button>
                     <Link
                         href={href}
                         className={buttonClass('secondary', 'sm', 'h-8 px-3')}
