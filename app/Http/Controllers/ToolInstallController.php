@@ -72,6 +72,36 @@ class ToolInstallController extends Controller
     }
 
     /**
+     * Brings an already-installed command-line tool up to date — `setup
+     * --tools={tool} --update`, the same CLI flag every other install here
+     * goes through, just asking it to upgrade rather than only install when
+     * missing.
+     */
+    public function updateTool(string $tool, CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, ToolLocator $locator, Request $request): RedirectResponse
+    {
+        if ($tool === 'larakube') {
+            return $this->updateCli($runner, $installer, $readiness, $locator, $request);
+        }
+
+        $definition = ReadinessCheck::TOOLS[$tool] ?? null;
+
+        abort_if($definition === null || ! $definition['installable'], 404);
+
+        $run = $runner->start(
+            label: "Update {$definition['label']}",
+            arguments: $tool === 'podman' ? ['runtime:install', '--runtime=podman', '--update'] : ['setup', "--tools={$tool}", '--update'],
+            kind: RunKind::InstallTool,
+            subject: $tool,
+            targetType: 'tool',
+            targetName: $definition['label'],
+            tool: $tool,
+            environment: 'local',
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /**
      * Brings the LaraKube CLI up to date. Inside the Windows distro that is the CLI's own `update` (its user can sudo without a
      * password); on a Mac or Linux it is the same download that installed it, which replaces the file in place.
      */

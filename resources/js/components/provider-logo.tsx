@@ -5,6 +5,9 @@ import {
     SiGooglecloud,
     SiDocker,
     SiKubernetes,
+    SiOpentofu,
+    SiGit,
+    SiPodman,
 } from '@icons-pack/react-simple-icons';
 import { Cloud, Server } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -77,6 +80,7 @@ function resolveVisual(id: string): Visual {
                     'bg-[#D50C2D]/10 text-[#D50C2D] border-[#D50C2D]/25',
             };
         case 'gcp':
+        case 'gcloud':
         case 'google':
         case 'googlecloud':
         case 'googlecloudplatform':
@@ -109,16 +113,48 @@ function resolveVisual(id: string): Visual {
                 containerClass:
                     'bg-[#2496ED]/10 text-[#2496ED] border-[#2496ED]/25',
             };
+        case 'podman':
+            return {
+                icon: <SiPodman />,
+                containerClass:
+                    'bg-[#892CA0]/10 text-[#892CA0] border-[#892CA0]/25',
+            };
+        case 'git':
+            return {
+                icon: <SiGit />,
+                containerClass:
+                    'bg-[#F03C2E]/10 text-[#F03C2E] border-[#F03C2E]/25',
+            };
         case 'k3d':
         case 'kind':
         case 'minikube':
         case 'orbstack':
         case 'k8s':
         case 'kubernetes':
+        case 'kubectl':
+        case 'k9s':
             return {
                 icon: <SiKubernetes />,
                 containerClass:
                     'bg-[#326CE5]/10 text-[#326CE5] border-[#326CE5]/25',
+            };
+        case 'tofu':
+        case 'opentofu':
+            return {
+                icon: <SiOpentofu />,
+                containerClass:
+                    'bg-[#FFDA18]/15 text-neutral-800 dark:text-neutral-100 border-[#FFDA18]/35',
+            };
+        case 'larakube':
+            return {
+                icon: (
+                    <img
+                        src="/logo.png"
+                        alt=""
+                        className="size-full object-contain"
+                    />
+                ),
+                containerClass: 'border-line bg-surface',
             };
         case 'local':
             return {

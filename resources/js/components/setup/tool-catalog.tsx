@@ -2,8 +2,9 @@ import { Link } from '@inertiajs/react';
 import { Download, RefreshCw, ArrowUpCircle } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import { ListRow, TwoLine } from '@/components/list-row';
+import ProviderLogo from '@/components/provider-logo';
 import StatusPill from '@/components/status-pill';
-import { install } from '@/routes/setup/tools';
+import { install, update } from '@/routes/setup/tools';
 import { useToolStatus } from '@/lib/tool-status';
 import type { Tool } from '@/types/larakube';
 
@@ -31,17 +32,24 @@ export function ToolRow({
                 )
             }
         >
-            <TwoLine
-                title={
-                    entry.required ? entry.label : `${entry.label} · optional`
-                }
-                detail={
-                    tool?.installed
-                        ? (tool.version ?? tool.path)
-                        : entry.purpose
-                }
-                mono={tool?.installed}
-            />
+            <div className="flex min-w-0 items-center gap-3">
+                <ProviderLogo slug={entry.slug} size="sm" />
+                <div className="min-w-0">
+                    <TwoLine
+                        title={
+                            entry.required
+                                ? entry.label
+                                : `${entry.label} · optional`
+                        }
+                        detail={
+                            tool?.installed
+                                ? (tool.version ?? tool.path)
+                                : entry.purpose
+                        }
+                        mono={tool?.installed}
+                    />
+                </div>
+            </div>
         </ListRow>
     );
 }
@@ -50,7 +58,7 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     if (tool.installed) {
         return (
             <div className="flex items-center gap-2">
-                {tool.slug === 'larakube' && (
+                {tool.slug === 'larakube' ? (
                     <Link
                         href="/setup/cli/update"
                         data={{ channel }}
@@ -61,6 +69,18 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                         <ArrowUpCircle className="size-3.5" />
                         <span>Update</span>
                     </Link>
+                ) : (
+                    tool.installable && (
+                        <Link
+                            href={update(tool.slug).url}
+                            method="post"
+                            as="button"
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            <ArrowUpCircle className="size-3.5" />
+                            <span>Update</span>
+                        </Link>
+                    )
                 )}
                 <StatusPill tone="ok">Installed</StatusPill>
             </div>

@@ -15,6 +15,7 @@ import Card from '@/components/card';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { ListRow, TwoLine } from '@/components/list-row';
+import ProviderLogo from '@/components/provider-logo';
 import SelectMenu from '@/components/select-menu';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
@@ -209,17 +210,27 @@ export default function Readiness({
                                                     </div>
                                                 }
                                             >
-                                                <TwoLine
-                                                    title={provider.label}
-                                                    detail={
-                                                        provider.activeAccount
-                                                            ? `Active account: ${provider.activeAccount}`
-                                                            : (provider
-                                                                  .credentials
-                                                                  .hint ??
-                                                              'Credentials verified')
-                                                    }
-                                                />
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <ProviderLogo
+                                                        slug={provider.slug}
+                                                        size="sm"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <TwoLine
+                                                            title={
+                                                                provider.label
+                                                            }
+                                                            detail={
+                                                                provider.activeAccount
+                                                                    ? `Active account: ${provider.activeAccount}`
+                                                                    : (provider
+                                                                          .credentials
+                                                                          .hint ??
+                                                                      'Credentials verified')
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
                                             </ListRow>
                                         ))}
                                         <p className="mt-2 text-xs leading-relaxed text-soft">

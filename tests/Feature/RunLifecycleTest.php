@@ -3,8 +3,11 @@
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Services\LaraKube\CliInstaller;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
 use Native\Desktop\Events\ChildProcess\MessageReceived;
@@ -75,6 +78,58 @@ test('installing a tool delegates to larakube setup', function () {
     $this->post(route('setup.tools.install', 'git'))->assertNotFound();
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'setup', '--tools=tofu', '--no-interaction']);
+
+    File::deleteDirectory($directory);
+});
+
+test('updating a tool delegates to larakube setup --update', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/larakube", "#!/bin/sh\n");
+    chmod("{$directory}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
+    $fake = ChildProcess::fake();
+
+    $this->post(route('setup.tools.update', 'tofu'))->assertRedirect(route('runs.show', Run::sole()));
+    $this->post(route('setup.tools.update', 'git'))->assertNotFound();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'setup', '--tools=tofu', '--update', '--no-interaction']);
+
+    File::deleteDirectory($directory);
+});
+
+test('updating the larakube tool itself goes through the CLI self-updater, not setup --update', function () {
+    $tempBin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($tempBin);
+    app()->instance(
+        CliInstaller::class,
+        new CliInstaller(app(GlobalSettings::class), binDir: $tempBin),
+    );
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response('fake binary content longer than 1024 bytes '.str_repeat('A', 2048), 200),
+    ]);
+
+    $response = $this->post(route('setup.tools.update', 'larakube'), ['channel' => 'canary']);
+
+    $run = Run::sole();
+    $response->assertRedirect(route('runs.show', $run));
+    expect($run->label)->toContain('Install LaraKube CLI (canary)')
+        ->and($run->subject)->toBe('larakube');
+
+    File::deleteDirectory($tempBin);
+});
+
+test('updating Podman runs the runtime installer with --update, not setup --update', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/larakube", "#!/bin/sh\n");
+    chmod("{$directory}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
+    $fake = ChildProcess::fake();
+
+    $this->post(route('setup.tools.update', 'podman'))->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'runtime:install', '--runtime=podman', '--update', '--no-interaction']);
 
     File::deleteDirectory($directory);
 });
