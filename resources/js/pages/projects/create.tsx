@@ -27,6 +27,7 @@ import StatusPill, { type Tone } from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
+import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { cn } from '@/lib/utils';
 import { index as devBoxesIndex } from '@/routes/devboxes';
 import {
@@ -98,6 +99,7 @@ export default function CreateProject({
     const [searchQuery, setSearchQuery] = useState<string>('');
 
     const isRunRunning = activeRun?.status === 'running';
+    useCelebrateOnSuccess(activeRun?.status === 'succeeded');
 
     const { start, stop } = usePoll(
         1000,

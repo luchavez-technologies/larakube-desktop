@@ -33,6 +33,7 @@ import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { sendJson } from '@/lib/http';
+import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { runStatus } from '@/lib/servers';
 import { open } from '@/routes';
@@ -2223,6 +2224,7 @@ function LaunchedRunPanel({
     const isRunning = run.status === 'running';
     const isSucceeded = run.status === 'succeeded';
     const isFailed = !isRunning && !isSucceeded;
+    useCelebrateOnSuccess(isSucceeded);
     const [statusLabel, statusTone] = runStatus[
         run.status as keyof typeof runStatus
     ] ?? ['Unknown', 'muted'];

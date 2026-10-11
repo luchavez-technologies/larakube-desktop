@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'motion/react';
-import confetti from 'canvas-confetti';
 import {
     ArrowRight,
     Check,
@@ -19,6 +18,7 @@ import Card from '@/components/card';
 import ProviderLogo from '@/components/provider-logo';
 import ToolLogo from '@/components/tool-logo';
 import FrameworkLogo from '@/components/framework-logo';
+import { celebrate } from '@/lib/celebrate';
 import { cn } from '@/lib/utils';
 import CliMissing from '@/components/setup/cli-missing';
 import UsageChoice from '@/components/setup/usage-choice';
@@ -313,13 +313,7 @@ export default function OnboardingIndex({
             return;
         }
         celebrated.current = true;
-        void confetti({
-            particleCount: 90,
-            spread: 70,
-            startVelocity: 32,
-            origin: { y: 0.6 },
-            colors: ['#5683e0', '#2c9fc0', '#8457e0', '#15803d'],
-        });
+        celebrate();
     }, [currentStep]);
 
     const toggleProvider = (slug: string) => {

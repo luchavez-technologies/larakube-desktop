@@ -9,6 +9,7 @@ import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
+import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { open, readiness } from '@/routes';
 import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
@@ -126,6 +127,16 @@ export default function ShowRun({ run }: { run: Run }) {
         run.kind === 'create-server' && run.meta?.targetKind === 'managed';
     const isCreate = run.kind === 'create-server' || isDevBox;
     const server = run.meta?.server ?? run.serverName ?? null;
+    // Celebrated more broadly than isCreate's card-rendering scope — a
+    // cloned project gets no special card here at all, but it's still
+    // something just got created, so it still earns the confetti.
+    const celebratesOnSuccess =
+        isCreate ||
+        run.kind === 'new-project' ||
+        run.kind === 'new-dev-box-project' ||
+        run.kind === 'clone-project' ||
+        run.kind === 'clone-dev-box-project';
+    useCelebrateOnSuccess(run.status === 'succeeded' && celebratesOnSuccess);
 
     useEffect(() => {
         if (!running) stop();

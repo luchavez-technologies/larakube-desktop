@@ -63,6 +63,8 @@ export type RunKind =
     | 'connect-domain'
     | 'enable-ssl'
     | 'new-project'
+    | 'clone-project'
+    | 'clone-dev-box-project'
     | 'init-project'
     | 'link-server'
     | 'configure-host'
