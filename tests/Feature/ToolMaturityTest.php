@@ -9,7 +9,7 @@ test('ToolMaturity reports the tools, frameworks, and capabilities still being t
 
     expect($untested['tools'])->toBe(['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka'])
         ->and($untested['frameworks'])->toBe(['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs'])
-        ->and($untested['capabilities'])->toBe(['dev-boxes', 'vps-to-managed']);
+        ->and($untested['capabilities'])->toBe(['dev-boxes', 'vps-to-managed', 'backups']);
 });
 
 test('redefining a maturity feature changes what ToolMaturity reports, same as any other Pennant feature', function () {
@@ -23,6 +23,6 @@ test('the untested list is shared on every page, the same way hideProjects and e
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('untested.tools', ['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka'])
             ->where('untested.frameworks', ['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs'])
-            ->where('untested.capabilities', ['dev-boxes', 'vps-to-managed'])
+            ->where('untested.capabilities', ['dev-boxes', 'vps-to-managed', 'backups'])
         );
 });

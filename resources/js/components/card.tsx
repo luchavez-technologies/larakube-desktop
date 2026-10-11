@@ -22,7 +22,7 @@ export default function Card({
     className,
     children,
 }: {
-    label?: string;
+    label?: ReactNode;
     action?: ReactNode;
     tone?: keyof typeof tones;
     className?: string;

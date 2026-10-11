@@ -1,12 +1,31 @@
-import { Form, Link } from '@inertiajs/react';
+import { Form, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { AlertCircle, DatabaseBackup, FolderOpen } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import ExperimentalBadge from '@/components/experimental-badge';
 import { ListRow, TwoLine } from '@/components/list-row';
 import StatusPill from '@/components/status-pill';
 import { SCHEDULES, ago, describeSchedule, formatBytes } from '@/lib/backups';
-import type { BackupEntry, BackupStatus, Server } from '@/types/larakube';
+import type {
+    BackupEntry,
+    BackupStatus,
+    Server,
+    Untested,
+} from '@/types/larakube';
+
+function BackupsCardLabel() {
+    const { untested } = usePage<{ untested: Untested }>().props;
+
+    return (
+        <span className="inline-flex items-center gap-1.5">
+            Backups
+            {untested.capabilities.includes('backups') && (
+                <ExperimentalBadge compact />
+            )}
+        </span>
+    );
+}
 
 type Dialog = 'setup' | 'schedule' | 'prune' | { restore: BackupEntry } | null;
 
@@ -40,7 +59,7 @@ export default function BackupsCard({
 
     if (backup === undefined) {
         return (
-            <Card label="Backups">
+            <Card label={<BackupsCardLabel />}>
                 <p className="py-3 text-sm text-soft">Checking backups…</p>
             </Card>
         );
@@ -48,7 +67,7 @@ export default function BackupsCard({
 
     if (backup === null) {
         return (
-            <Card label="Backups">
+            <Card label={<BackupsCardLabel />}>
                 <p className="py-3 text-sm text-soft">
                     Couldn't read the backup status. Check that the server is
                     reachable and that the LaraKube CLI is up to date, then
@@ -62,7 +81,7 @@ export default function BackupsCard({
         return (
             <>
                 <Card
-                    label="Backups"
+                    label={<BackupsCardLabel />}
                     action={<StatusPill tone="bad">Not backed up</StatusPill>}
                 >
                     <div className="py-4 text-center">
@@ -106,7 +125,7 @@ export default function BackupsCard({
     return (
         <>
             <Card
-                label="Backups"
+                label={<BackupsCardLabel />}
                 action={
                     needsCard ? (
                         <StatusPill tone="bad">Action needed</StatusPill>
