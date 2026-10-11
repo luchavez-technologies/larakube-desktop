@@ -18,6 +18,7 @@ import Sparkline from '@/components/metrics/sparkline';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import type {
     FleetMetrics,
+    FrameworkCatalog,
     Project,
     RunStatus,
     Server,
@@ -50,6 +51,9 @@ type DashboardProps = {
         tone: 'ok' | 'warn' | 'muted' | 'bad';
     };
     fleetMetrics?: FleetMetrics | null;
+    projectCatalog?: FrameworkCatalog | null;
+    projectDevBoxes?: { name: string; ip: string | null }[];
+    defaultProjectParent?: string;
 };
 
 export default function DashboardIndex({
@@ -61,6 +65,9 @@ export default function DashboardIndex({
     unprotectedServers,
     localCluster,
     fleetMetrics,
+    projectCatalog,
+    projectDevBoxes,
+    defaultProjectParent,
 }: DashboardProps) {
     return (
         <AppLayout title="Dashboard">
@@ -92,6 +99,9 @@ export default function DashboardIndex({
                 servers={servers}
                 serversCount={stats.serversCount}
                 projectsCount={stats.projectsCount}
+                projectCatalog={projectCatalog}
+                projectDevBoxes={projectDevBoxes}
+                defaultProjectParent={defaultProjectParent}
             />
 
             {/* Quick Metrics */}

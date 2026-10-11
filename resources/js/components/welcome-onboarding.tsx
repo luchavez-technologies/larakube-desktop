@@ -1,15 +1,27 @@
 import { useState, useEffect } from 'react';
-import { Link } from '@inertiajs/react';
-import { Sparkles, X, Zap, ArrowRight } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { Rocket, Sparkles, X, Zap, ArrowRight } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
+import FrameworkLogo from '@/components/framework-logo';
 import ToolLogo from '@/components/tool-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import QuickLaunchModal, {
     type QuickLaunchAppId,
 } from '@/components/quick-launch-modal';
+import QuickLaunchProjectsModal, {
+    QUICK_LAUNCH_PROJECT_IDS,
+    type QuickLaunchProjectId,
+} from '@/components/quick-launch-projects-modal';
+import ExperimentalBadge from '@/components/experimental-badge';
 import { tools as toolsRoute } from '@/routes';
-import type { Server, ToolCommonsCapabilities } from '@/types/larakube';
+import { cn } from '@/lib/utils';
+import type {
+    FrameworkCatalog,
+    Server,
+    ToolCommonsCapabilities,
+    Untested,
+} from '@/types/larakube';
 
 interface QuickActionApp {
     id: QuickLaunchAppId;
@@ -70,6 +82,9 @@ type Props = {
     projectsCount: number;
     activeCommonsServices?: string[];
     onImportKubeconfig?: () => void;
+    projectCatalog?: FrameworkCatalog | null;
+    projectDevBoxes?: { name: string; ip: string | null }[];
+    defaultProjectParent?: string;
 };
 
 export default function WelcomeOnboarding({
@@ -78,7 +93,19 @@ export default function WelcomeOnboarding({
     projectsCount,
     activeCommonsServices = [],
     onImportKubeconfig,
+    projectCatalog,
+    projectDevBoxes = [],
+    defaultProjectParent = '',
 }: Props) {
+    // The same persona signal that already hides the Projects/Dev Boxes nav
+    // items for non-dev users (usage-choice.tsx) — the Tools/Projects switch
+    // is dev-only, so it reuses that rather than a new concept.
+    const { hideProjects, untested } = usePage<{
+        hideProjects: boolean;
+        untested: Untested;
+    }>().props;
+    const [mode, setMode] = useState<'tools' | 'projects'>('tools');
+
     const [dismissed, setDismissed] = useState(() => {
         if (serversCount > 0 || projectsCount > 0) {
             return (
@@ -97,6 +124,22 @@ export default function WelcomeOnboarding({
         setSelectedApp(appId);
         setModalOpen(true);
     };
+
+    const [projectModalOpen, setProjectModalOpen] = useState(false);
+    const [selectedFramework, setSelectedFramework] =
+        useState<QuickLaunchProjectId>('laravel');
+
+    const handleLaunchProject = (framework: QuickLaunchProjectId) => {
+        setSelectedFramework(framework);
+        setProjectModalOpen(true);
+    };
+
+    const quickLaunchFrameworks = (projectCatalog?.frameworks ?? []).filter(
+        (option) =>
+            QUICK_LAUNCH_PROJECT_IDS.includes(
+                option.slug as QuickLaunchProjectId,
+            ),
+    );
 
     useEffect(() => {
         if (serversCount > 0 || projectsCount > 0) {
@@ -240,72 +283,167 @@ export default function WelcomeOnboarding({
                     </div>
                 </div>
 
-                {/* 1-Click Companion Apps Grid */}
-                <div className="mt-5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-                    {FEATURED_APPS.map((app) => (
-                        <div
-                            key={app.id}
-                            className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
-                        >
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2.5">
-                                    <ToolLogo
-                                        tool={{
-                                            tool: app.id,
-                                            icon: '*',
-                                            label: app.name,
-                                            brand: app.name,
-                                            installed: false,
-                                            instance: '',
-                                            namespace: '',
-                                            host: null,
-                                            url: null,
-                                            installedAt: null,
-                                            sso: '—',
-                                            mail: 'N/A',
-                                            vpn: 'N/A',
-                                            sync: 'N/A',
-                                            rotation: 'N/A',
-                                        }}
-                                        size="md"
+                {/* Quick Launch: tools for everyone, projects (dev-only) via a mode switch */}
+                <div className="mt-5 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-ink">
+                        {mode === 'tools'
+                            ? '1-Click Companion Apps'
+                            : 'Quick Launch Projects'}
+                    </p>
+                    {!hideProjects && (
+                        <div className="inline-flex items-center rounded-lg bg-paper p-0.5 ring-1 ring-line">
+                            {(
+                                [
+                                    { id: 'tools', label: 'Tools' },
+                                    { id: 'projects', label: 'Projects' },
+                                ] as const
+                            ).map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setMode(tab.id)}
+                                    className={cn(
+                                        'rounded-md px-2.5 py-1 text-[11px] font-medium transition',
+                                        mode === tab.id
+                                            ? 'bg-surface text-ink shadow-2xs'
+                                            : 'text-soft hover:text-ink',
+                                    )}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div className="mt-2.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+                    {mode === 'tools'
+                        ? FEATURED_APPS.map((app) => (
+                              <div
+                                  key={app.id}
+                                  className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                              >
+                                  <div className="space-y-2">
+                                      <div className="flex items-center gap-2.5">
+                                          <ToolLogo
+                                              tool={{
+                                                  tool: app.id,
+                                                  icon: '*',
+                                                  label: app.name,
+                                                  brand: app.name,
+                                                  installed: false,
+                                                  instance: '',
+                                                  namespace: '',
+                                                  host: null,
+                                                  url: null,
+                                                  installedAt: null,
+                                                  sso: '—',
+                                                  mail: 'N/A',
+                                                  vpn: 'N/A',
+                                                  sync: 'N/A',
+                                                  rotation: 'N/A',
+                                              }}
+                                              size="md"
+                                          />
+                                          <div className="min-w-0">
+                                              <div className="flex flex-wrap items-center gap-1.5">
+                                                  <h3 className="truncate text-xs font-semibold text-ink">
+                                                      {app.name}
+                                                  </h3>
+                                                  {untested.tools.includes(
+                                                      app.id,
+                                                  ) && <ExperimentalBadge />}
+                                              </div>
+                                              <p className="truncate text-[10px] text-faint">
+                                                  {app.tagline}
+                                              </p>
+                                          </div>
+                                      </div>
+
+                                      <p className="line-clamp-2 min-h-[30px] text-[11px] text-soft">
+                                          {app.description}
+                                      </p>
+
+                                      <CommonsCapabilityPills
+                                          capabilities={app.capabilities}
+                                          activeCommonsServices={
+                                              activeCommonsServices
+                                          }
+                                          compact
+                                      />
+                                  </div>
+
+                                  <div className="mt-3.5 border-t border-line/60 pt-2.5">
+                                      <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="sm"
+                                          className="w-full justify-center"
+                                          onClick={() => handleLaunch(app.id)}
+                                      >
+                                          <Zap className="size-3.5" />
+                                          <span>Quick Launch</span>
+                                      </Button>
+                                  </div>
+                              </div>
+                          ))
+                        : quickLaunchFrameworks.length === 0
+                          ? projectCatalog === null
+                              ? null
+                              : [0, 1, 2].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="h-[170px] animate-pulse rounded-xl bg-paper"
                                     />
-                                    <div className="min-w-0">
-                                        <h3 className="truncate text-xs font-semibold text-ink">
-                                            {app.name}
-                                        </h3>
-                                        <p className="truncate text-[10px] text-faint">
-                                            {app.tagline}
+                                ))
+                          : quickLaunchFrameworks.map((option) => (
+                                <div
+                                    key={option.slug}
+                                    className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                                >
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <FrameworkLogo
+                                                slug={option.slug}
+                                                size="md"
+                                            />
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <h3 className="truncate text-xs font-semibold text-ink">
+                                                        {option.label}
+                                                    </h3>
+                                                    {untested.frameworks.includes(
+                                                        option.slug,
+                                                    ) && <ExperimentalBadge />}
+                                                </div>
+                                                <p className="truncate text-[10px] text-faint">
+                                                    {option.tech}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <p className="line-clamp-2 min-h-[30px] text-[11px] text-soft">
+                                            {option.description}
                                         </p>
                                     </div>
+
+                                    <div className="mt-3.5 border-t border-line/60 pt-2.5">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            className="w-full justify-center"
+                                            onClick={() =>
+                                                handleLaunchProject(
+                                                    option.slug as QuickLaunchProjectId,
+                                                )
+                                            }
+                                        >
+                                            <Rocket className="size-3.5" />
+                                            <span>Quick Launch</span>
+                                        </Button>
+                                    </div>
                                 </div>
-
-                                <p className="line-clamp-2 min-h-[30px] text-[11px] text-soft">
-                                    {app.description}
-                                </p>
-
-                                <CommonsCapabilityPills
-                                    capabilities={app.capabilities}
-                                    activeCommonsServices={
-                                        activeCommonsServices
-                                    }
-                                    compact
-                                />
-                            </div>
-
-                            <div className="mt-3.5 border-t border-line/60 pt-2.5">
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    className="w-full justify-center"
-                                    onClick={() => handleLaunch(app.id)}
-                                >
-                                    <Zap className="size-3.5" />
-                                    <span>Quick Launch</span>
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
+                            ))}
                 </div>
 
                 {/* Helpful Footnote */}
@@ -329,6 +467,15 @@ export default function WelcomeOnboarding({
                 initialApp={selectedApp}
                 servers={servers}
                 activeCommonsServices={activeCommonsServices}
+            />
+
+            <QuickLaunchProjectsModal
+                isOpen={projectModalOpen}
+                onClose={() => setProjectModalOpen(false)}
+                initialFramework={selectedFramework}
+                catalog={projectCatalog}
+                devBoxes={projectDevBoxes}
+                defaultParent={defaultProjectParent}
             />
         </div>
     );

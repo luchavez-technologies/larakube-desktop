@@ -7,6 +7,7 @@ use App\Models\Run;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FleetMetrics;
+use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
@@ -29,6 +30,7 @@ class DashboardController extends Controller
         FleetMetrics $fleetMetrics,
         DomainCatalog $domains,
         GlobalSettings $settings,
+        FrameworkCatalog $frameworks,
     ): Response|RedirectResponse {
         // A first launch gets the onboarding wizard before anything else — its
         // own install step is how the CLI gets installed, so this check comes
@@ -90,6 +92,16 @@ class DashboardController extends Controller
                 ->pluck('name')
                 ->values()
                 ->all(), 'backups'),
+            // For the dev-only Quick Launch Projects toggle (welcome-onboarding.tsx) — the
+            // same catalog/devBoxes/parent shape projects/create.tsx already uses.
+            'projectCatalog' => Inertia::defer(fn (): ?array => $frameworks->catalog() === null ? null : [
+                'categories' => $frameworks->catalog()['categories'],
+                'frameworks' => $frameworks->visible(),
+            ], 'projectCatalog'),
+            'projectDevBoxes' => Inertia::defer(fn (): array => $settings->experimental()
+                ? array_map(fn (array $box): array => ['name' => $box['name'], 'ip' => $box['ip'] ?? null], array_values(array_filter($stacks->devBoxes() ?? [], fn (array $box): bool => $box['status'] === 'ready')))
+                : [], 'projectDevBoxes'),
+            'defaultProjectParent' => ToolLocator::home(),
         ]);
     }
 }

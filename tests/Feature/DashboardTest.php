@@ -3,6 +3,7 @@
 use App\Models\Project;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
@@ -163,6 +164,45 @@ test('the dashboard warns about ready servers that have no backups', function ()
     $this->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page
         ->missing('unprotectedServers')
         ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('unprotectedServers', ['bare-vps'])));
+
+    File::deleteDirectory($bin);
+});
+
+test('the dashboard defers the project catalog, dev boxes, and default parent for Quick Launch Projects', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $frameworks = mock(FrameworkCatalog::class);
+    $frameworks->shouldReceive('catalog')->andReturn([
+        'categories' => [['id' => 'web', 'label' => 'Web']],
+        'frameworks' => [],
+    ]);
+    $frameworks->shouldReceive('visible')->andReturn([
+        ['slug' => 'laravel', 'label' => 'Laravel', 'description' => 'PHP', 'category' => 'web', 'tech' => 'PHP', 'fields' => []],
+    ]);
+    app()->instance(FrameworkCatalog::class, $frameworks);
+
+    $this->get(route('dashboard'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('projectCatalog')
+            ->missing('projectDevBoxes')
+            ->where('defaultProjectParent', ToolLocator::home())
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('projectCatalog.frameworks.0.slug', 'laravel')
+                ->where('projectDevBoxes', [])
+            ));
 
     File::deleteDirectory($bin);
 });
