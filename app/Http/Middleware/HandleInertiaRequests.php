@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\ToolMaturity;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -44,6 +45,7 @@ class HandleInertiaRequests extends Middleware
             'theme' => fn () => rescue(fn () => app(GlobalSettings::class)->getTheme(), 'system', report: false),
             'hideProjects' => app(GlobalSettings::class)->hideProjects(),
             'experimental' => app(GlobalSettings::class)->experimental(),
+            'untested' => app(ToolMaturity::class)->untested(),
             'activeRun' => fn () => Run::query()
                 ->where('status', RunStatus::Running)
                 ->latest('id')

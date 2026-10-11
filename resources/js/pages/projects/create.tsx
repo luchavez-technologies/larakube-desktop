@@ -1,4 +1,4 @@
-import { Link, router, useForm, usePoll } from '@inertiajs/react';
+import { Link, router, useForm, usePoll, usePage } from '@inertiajs/react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -24,6 +24,7 @@ import FrameworkFields, {
 import LogPanel from '@/components/log-panel';
 import PageHeader from '@/components/page-header';
 import StatusPill, { type Tone } from '@/components/status-pill';
+import ExperimentalBadge from '@/components/experimental-badge';
 import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ import type {
     FrameworkCatalog,
     FrameworkInfo,
     NewAppAnswers,
+    Untested,
 } from '@/types/larakube';
 
 type ActiveRun = {
@@ -76,6 +78,7 @@ export default function CreateProject({
     email: string;
     activeRun?: ActiveRun | null;
 }) {
+    const { untested } = usePage<{ untested: Untested }>().props;
     const form = useForm<{
         framework: string;
         parent: string;
@@ -448,6 +451,12 @@ export default function CreateProject({
                                                             CMS
                                                         </span>
                                                     ) : null}
+                                                    {!option.comingSoon &&
+                                                        untested.frameworks.includes(
+                                                            slug,
+                                                        ) && (
+                                                            <ExperimentalBadge />
+                                                        )}
                                                 </div>
 
                                                 {/* Active selection check indicator */}
@@ -717,9 +726,15 @@ export default function CreateProject({
                                     </div>
                                     {devBoxes.length > 0 && (
                                         <div className="space-y-2 px-5.5 pt-5.5">
-                                            <p className="text-[13px] font-semibold text-ink">
-                                                Where do you want to make it?
-                                            </p>
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <p className="text-[13px] font-semibold text-ink">
+                                                    Where do you want to make
+                                                    it?
+                                                </p>
+                                                {untested.capabilities.includes(
+                                                    'dev-boxes',
+                                                ) && <ExperimentalBadge />}
+                                            </div>
                                             <div className="grid grid-cols-2 gap-2.5">
                                                 {[
                                                     {

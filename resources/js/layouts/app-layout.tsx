@@ -14,7 +14,9 @@ import {
     HelpCircle,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
+import ExperimentalBadge from '@/components/experimental-badge';
 import { cn } from '@/lib/utils';
+import type { Untested } from '@/types/larakube';
 import { dashboard, mail, plex, readiness, tools } from '@/routes';
 import { show as helpShow } from '@/routes/help';
 import { index as projectsIndex } from '@/routes/projects';
@@ -66,7 +68,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Dev Boxes',
-        description: 'Experimental',
+        description: 'Remote dev server',
         href: devBoxesIndex().url,
         active: (url) =>
             url.startsWith('/dev-boxes') || url.startsWith('/workspaces'),
@@ -146,6 +148,7 @@ export default function AppLayout({
         hideProjects?: boolean;
         experimental?: boolean;
         theme?: string;
+        untested?: Untested;
     }>();
     useEffect(listenForNotificationClicks, []);
 
@@ -214,9 +217,18 @@ export default function AppLayout({
                                 >
                                     <Icon className="size-4" />
                                 </span>
-                                <span className="leading-tight">
-                                    <span className="block text-sm font-medium">
+                                <span className="min-w-0 leading-tight">
+                                    <span className="flex flex-wrap items-center gap-1 text-sm font-medium">
                                         {item.label}
+                                        {item.label === 'Dev Boxes' &&
+                                            props.untested?.capabilities.includes(
+                                                'dev-boxes',
+                                            ) && (
+                                                <ExperimentalBadge
+                                                    compact
+                                                    side="right"
+                                                />
+                                            )}
                                     </span>
                                     <span className="block text-xs text-soft">
                                         {item.description}

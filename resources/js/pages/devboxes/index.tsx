@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Deferred, Link } from '@inertiajs/react';
+import { Deferred, Link, usePage } from '@inertiajs/react';
 import { ChevronRight, Download, Plus, Settings } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import DevBoxImportModal from '@/components/devbox-import-modal';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
 import { ServerActions } from '@/components/server-dialogs';
+import ExperimentalBadge from '@/components/experimental-badge';
 import StatusPill from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
@@ -14,7 +15,7 @@ import { create, show } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
 import { providerLabels } from '@/types/larakube';
-import type { Server } from '@/types/larakube';
+import type { Server, Untested } from '@/types/larakube';
 
 export default function DevBoxes({
     devBoxes,
@@ -23,6 +24,7 @@ export default function DevBoxes({
     devBoxes?: Server[] | null;
     disabled?: boolean;
 }) {
+    const { untested } = usePage<{ untested: Untested }>().props;
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [importOpen, setImportOpen] = useState(false);
 
@@ -43,7 +45,11 @@ export default function DevBoxes({
             <AppLayout title="Dev Boxes">
                 <PageHeader
                     title="Dev Boxes"
-                    badge={<StatusPill tone="warn">Experimental</StatusPill>}
+                    badge={
+                        untested.capabilities.includes('dev-boxes') && (
+                            <ExperimentalBadge side="bottom" />
+                        )
+                    }
                 />
                 <div className="rounded-2xl bg-surface px-8 py-14 text-center ring-1 ring-line ring-inset">
                     <p className="text-lg font-semibold tracking-[-0.015em]">
@@ -71,7 +77,11 @@ export default function DevBoxes({
         <AppLayout title="Dev Boxes">
             <PageHeader
                 title="Dev Boxes"
-                badge={<StatusPill tone="warn">Experimental</StatusPill>}
+                badge={
+                    untested.capabilities.includes('dev-boxes') && (
+                        <ExperimentalBadge side="bottom" />
+                    )
+                }
                 subtitle="A server you work on, like your own computer: Podman, a local cluster and the LaraKube CLI. Make an app there, run it, and deploy it from there. Billed by your provider."
                 actions={
                     <div className="flex items-center gap-2.5">

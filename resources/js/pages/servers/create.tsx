@@ -1,4 +1,4 @@
-import { Deferred, Link, useForm } from '@inertiajs/react';
+import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { ChevronDown, Key, Users, Plus } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
@@ -18,7 +18,7 @@ import {
     store as storeDevBox,
 } from '@/routes/devboxes';
 import { index, store } from '@/routes/servers';
-import type { Provider } from '@/types/larakube';
+import type { Provider, Untested } from '@/types/larakube';
 
 const tokenProviders = ['do', 'hetzner'];
 
@@ -85,6 +85,7 @@ function ServerForm({
     devBox: boolean;
     defaultProvider?: string;
 }) {
+    const { untested } = usePage<{ untested: Untested }>().props;
     const startSize = (candidate: Provider, targetKind: 'vps' | 'managed') =>
         targetKind === 'managed'
             ? (candidate.defaultManagedSize ?? candidate.defaultVpsSize)
@@ -333,6 +334,15 @@ function ServerForm({
                                     </span>
                                     <span className="block text-xs text-soft">
                                         k3s, single-node — cheapest, simplest
+                                        {untested.capabilities.includes(
+                                            'vps-to-managed',
+                                        ) && (
+                                            <>
+                                                . Switching to Managed later is
+                                                possible via the CLI, but that
+                                                path isn't fully validated yet.
+                                            </>
+                                        )}
                                     </span>
                                 </button>
                                 <button
