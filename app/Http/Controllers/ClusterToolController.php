@@ -331,7 +331,12 @@ class ClusterToolController extends Controller
     }
 
     /**
-     * The plain choices the CLI lists for installing this tool.
+     * The choices the CLI lists for installing this tool, minus `host` and
+     * `account` — this form already asks for those itself (`domain`,
+     * `admin_email`), so resolving them again here would double up. Every
+     * other role — `access` (proxied, vpn-only, ...) included — is a plain
+     * choice this generic form can resolve on its own, same as
+     * QuickActionController::optionFields().
      *
      * @param  array<string, mixed>  $row
      * @return list<array<string, mixed>>
@@ -341,7 +346,7 @@ class ClusterToolController extends Controller
         $fields = [];
 
         foreach (is_array($row['initFields'] ?? null) ? $row['initFields'] : [] as $field) {
-            if (is_array($field) && ($field['role'] ?? null) === 'option') {
+            if (is_array($field) && ! in_array($field['role'] ?? 'option', ['host', 'account'], true)) {
                 $fields[] = $field;
             }
         }

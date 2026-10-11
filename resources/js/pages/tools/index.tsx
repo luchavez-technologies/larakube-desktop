@@ -1877,15 +1877,48 @@ function InstallDialog({
         return `admin@${cleanDomain}`;
     }, [server.account, domain, selectedBaseDomain]);
 
-    // The tool's own choices, as the CLI describes them (an app name, whether to share the Commons...).
+    // The tool's own choices, as the CLI describes them (an app name, whether
+    // to share the Commons, "Proxied", "VPN only"...) — everything except
+    // `host`/`account`, which this dialog already asks for itself above.
     const optionFields = useMemo(
         () =>
-            (tool.initFields ?? []).filter((field) => field.role === 'option'),
+            (tool.initFields ?? []).filter(
+                (field) =>
+                    !['host', 'account'].includes(field.role ?? 'option'),
+            ),
         [tool.initFields],
     );
-    const [options, setOptions] = useState<NewAppAnswers>(() =>
-        defaultAnswers(optionFields),
-    );
+    const [options, setOptions] = useState<NewAppAnswers>(() => {
+        const answers = defaultAnswers(optionFields);
+
+        // Cloudflare already proxies every Ingress on this zone — deploying
+        // straight through DNS-only would be the surprising choice. Computed
+        // once, at mount, same as every other initial value here: this
+        // dialog remounts fresh each time it opens.
+        const matched = isCustomDomain
+            ? knownDomains.find(
+                  (d) =>
+                      d.externalDns &&
+                      customDomain.trim().toLowerCase() !== '' &&
+                      (customDomain.trim().toLowerCase() === d.domain ||
+                          customDomain
+                              .trim()
+                              .toLowerCase()
+                              .endsWith(`.${d.domain}`)),
+              )
+            : knownDomains.find(
+                  (d) => d.domain === selectedBaseDomain && d.externalDns,
+              );
+
+        if (
+            optionFields.some((field) => field.key === 'proxied') &&
+            matched?.dnsProvider === 'cloudflare'
+        ) {
+            answers.proxied = true;
+        }
+
+        return answers;
+    });
 
     const activeMatches = useMemo(() => {
         if (

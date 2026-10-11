@@ -595,14 +595,15 @@ test('a tool\'s own options reach the install as flags, the way the CLI describe
     ]);
     $fake = ChildProcess::fake();
 
-    // vpnOnly is an access setting, not a plain option: it is never passed from this form.
+    // vpnOnly is an access setting, not host/account — this form resolves it
+    // the same generic way as every plain option, same as Quick Launch does.
     $this->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'grafana']), [
         'domain' => 'grafana.example.com',
         'options' => ['appName' => 'Metrics', 'noLogs' => '1', 'vpnOnly' => '1'],
     ])->assertRedirect();
 
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        "{$bin}/larakube", 'tool:add', '--tool=grafana', '--context=larakube-203.0.113.21', '--domain=grafana.example.com', '--no-wire-sso', '--no-wire-mail', '--app-name=Metrics', '--no-logs', '--force', '--no-interaction',
+        "{$bin}/larakube", 'tool:add', '--tool=grafana', '--context=larakube-203.0.113.21', '--domain=grafana.example.com', '--no-wire-sso', '--no-wire-mail', '--app-name=Metrics', '--no-logs', '--vpn-only', '--force', '--no-interaction',
     ]);
 
     File::deleteDirectory($bin);
