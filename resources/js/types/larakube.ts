@@ -38,6 +38,9 @@ export type Provider = {
         source: 'live' | 'cached' | 'builtin';
         asOf: string | null;
         currency: string | null;
+        /** True for AWS/GCP: their size-listing APIs carry no price at all, so even a 'live' source never means a live price — only regions/sizes were confirmed live. */
+        priceIsEstimated?: boolean;
+        officialPricingUrl?: string | null;
     };
     credentials: { ready: boolean; hint: string | null };
     accounts?: ProviderAccount[];
