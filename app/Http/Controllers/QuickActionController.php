@@ -9,6 +9,7 @@ use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class QuickActionController extends Controller
 {
@@ -17,13 +18,30 @@ class QuickActionController extends Controller
         private ToolCatalog $tools,
     ) {}
 
+    /**
+     * A tool's own deploy options, as the CLI describes them — ADR 0010:
+     * Quick Launch draws these live rather than hand-curating a picker per
+     * tool, the same source `optionFields()` below already feeds `launch()`.
+     */
+    public function fields(Request $request): JsonResponse
+    {
+        $request->validate(['tool' => ['required', 'string', 'max:64'], 'server' => ['required', 'string', 'max:128']]);
+
+        $stack = $this->readyServer($request->string('server')->toString());
+        $context = (string) $stack['context'];
+        $row = $this->tools->find($context, $request->string('tool')->trim()->lower()->toString());
+
+        abort_if($row === null, 404);
+
+        return response()->json(['fields' => $this->optionFields($row)]);
+    }
+
     public function launch(QuickLaunchAppRequest $request, CliRunner $runner): JsonResponse
     {
         $server = $request->string('server')->toString();
         $tool = $request->string('tool')->trim()->lower()->toString();
         $domain = $request->string('domain')->trim()->lower()->toString();
         $adminEmail = $request->string('admin_email')->trim()->toString();
-        $database = $request->string('database')->trim()->lower()->toString();
 
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
@@ -44,9 +62,6 @@ class QuickActionController extends Controller
         }
 
         $extraOptions = (array) $request->input('options', []);
-        if ($database !== '' && $tool === 'wordpress') {
-            $extraOptions['db'] = $database;
-        }
 
         $resolved = app(FrameworkForm::class)->resolve(
             $this->optionFields($row),
@@ -60,14 +75,6 @@ class QuickActionController extends Controller
             ], 422);
         }
 
-        $extraFlags = [];
-        if ($database !== '' && $tool === 'wordpress') {
-            $dbFlag = "--db={$database}";
-            if (! in_array($dbFlag, $resolved['flags'], true)) {
-                $extraFlags[] = $dbFlag;
-            }
-        }
-
         // Arguments for tool:add
         $arguments = [
             'tool:add',
@@ -77,7 +84,6 @@ class QuickActionController extends Controller
             ...($adminEmail !== '' && $needsAdminEmail ? ["--admin-email={$adminEmail}"] : []),
             $request->boolean('wire_sso') ? '--wire-sso' : '--no-wire-sso',
             $request->boolean('wire_mail') ? '--wire-mail' : '--no-wire-mail',
-            ...$extraFlags,
             ...$resolved['flags'],
             ...($request->boolean('confirm_commons_restart') ? ['--confirm-commons-restart'] : []),
             '--force',
@@ -93,7 +99,7 @@ class QuickActionController extends Controller
                 'context' => $context,
                 'tool' => $tool,
                 'host' => $domain,
-                'database' => $database,
+                'options' => (string) json_encode($extraOptions),
                 ...($adminEmail !== '' ? ['admin_email' => $adminEmail] : []),
             ],
             targetType: 'tool',

@@ -22,7 +22,6 @@ class QuickLaunchAppRequest extends FormRequest
             'server' => ['required', 'string', 'max:128'],
             'domain' => ['required', 'string', 'max:200', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
             'admin_email' => ['nullable', 'string', 'email', 'max:255'],
-            'database' => ['nullable', 'string', 'in:sqlite,mysql,mariadb,postgres,postgresql'],
             'wire_sso' => ['boolean'],
             'wire_mail' => ['boolean'],
             'options' => ['array'],

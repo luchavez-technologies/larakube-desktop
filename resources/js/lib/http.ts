@@ -8,7 +8,7 @@ function xsrf(): string {
 export async function sendJson<T>(
     path: string,
     method: 'GET' | 'POST',
-    body?: Record<string, string>,
+    body?: Record<string, unknown>,
 ): Promise<{ ok: boolean; data: T & { message?: string } }> {
     const init: RequestInit = {
         method,

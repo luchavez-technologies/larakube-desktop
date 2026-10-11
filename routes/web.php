@@ -185,6 +185,7 @@ Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'sho
 Route::get('/servers/{server}/tools/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.tools.credentials');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');
+Route::get('/quick-actions/fields', [QuickActionController::class, 'fields'])->name('quick-actions.fields');
 Route::post('/quick-actions/launch', [QuickActionController::class, 'launch'])->name('quick-actions.launch');
 
 Route::post('/companions/add', [CompanionController::class, 'add'])->name('companions.add');

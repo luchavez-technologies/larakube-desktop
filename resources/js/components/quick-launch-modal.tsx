@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import CopyButton from '@/components/copy-button';
+import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import InfoTooltip from '@/components/info-tooltip';
 import ToolLogo from '@/components/tool-logo';
 import ProviderLogo from '@/components/provider-logo';
@@ -38,6 +39,8 @@ import { create as createServer } from '@/routes/servers';
 import { show as showRunRoute } from '@/routes/runs';
 import { cn } from '@/lib/utils';
 import type {
+    FrameworkField,
+    NewAppAnswers,
     Server,
     ServerDomain,
     ToolCommonsCapabilities,
@@ -52,8 +55,6 @@ interface AppOption {
     tagline: string;
     defaultSubdomain: string;
     capabilities: ToolCommonsCapabilities;
-    defaultDb?: string;
-    availableDbs?: Array<{ id: string; label: string; desc: string }>;
     /** Where this app's admin/dashboard UI actually lives, if not the bare domain (e.g. PocketBase's own admin is `/_/`, not `/`). */
     adminPath?: string;
 }
@@ -97,7 +98,6 @@ const APPS: AppOption[] = [
         description:
             'Blazing fast ServerSideUp FrankenPHP pod with zero-RAM SQLite or shared Plex MySQL.',
         defaultSubdomain: 'blog',
-        defaultDb: 'sqlite',
         adminPath: '/wp-admin',
         capabilities: {
             databases: ['sqlite', 'mysql', 'mariadb'],
@@ -106,18 +106,6 @@ const APPS: AppOption[] = [
             auth: [],
             mail: ['smtp'],
         },
-        availableDbs: [
-            {
-                id: 'sqlite',
-                label: 'SQLite (0 RAM, Instant)',
-                desc: 'Zero extra container RAM, pure performance',
-            },
-            {
-                id: 'mysql',
-                label: 'Plex MySQL / MariaDB',
-                desc: 'Standard production MySQL via shared Commons',
-            },
-        ],
     },
 ];
 
@@ -187,7 +175,13 @@ export default function QuickLaunchModal({
     const [customDomain, setCustomDomain] = useState<string>('');
     const [useCustomDomain, setUseCustomDomain] = useState<boolean>(false);
     const [adminEmail, setAdminEmail] = useState<string>('');
-    const [database, setDatabase] = useState<string>('');
+    // ADR 0010: a tool's own deploy options (e.g. n8n/WordPress's choice of
+    // database) are fetched live from the CLI's initFields, never hand-
+    // curated per app — fields is what the CLI reports for the current
+    // app+server, options is the person's answers to it.
+    const [fields, setFields] = useState<FrameworkField[]>([]);
+    const [options, setOptions] = useState<NewAppAnswers>({});
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [wireSso, setWireSso] = useState<boolean>(false);
     const [wireMail, setWireMail] = useState<boolean>(false);
     const [submitting, setSubmitting] = useState<boolean>(false);
@@ -440,24 +434,56 @@ export default function QuickLaunchModal({
         };
     }, [isOpen, selectedServerName, currentServer?.ip, isLocalServer]);
 
-    // Sync defaults when app or server changes
+    // Sync the subdomain default when the app changes.
     useEffect(() => {
         if (!isOpen) return;
         setSubdomain(currentApp.defaultSubdomain);
-        if (currentApp.availableDbs && currentApp.availableDbs.length > 0) {
+    }, [currentApp, isOpen]);
+
+    // ADR 0010: fetch this app's own deploy options live from the CLI,
+    // rather than a hand-curated picker per app — the same data the Tools
+    // page's Install dialog already draws its fields from.
+    useEffect(() => {
+        if (!isOpen || !selectedServerName) {
+            setFields([]);
+            setOptions({});
+            return;
+        }
+
+        let cancelled = false;
+
+        void (async () => {
+            const res = await sendJson<{
+                fields?: FrameworkField[];
+            }>(
+                `/quick-actions/fields?tool=${encodeURIComponent(currentApp.id)}&server=${encodeURIComponent(selectedServerName)}`,
+                'GET',
+            );
+
+            if (cancelled) return;
+
+            const fetched = res.ok ? (res.data.fields ?? []) : [];
+            setFields(fetched);
+
+            const answers = defaultAnswers(fetched);
+            // The one piece of cluster-aware "smart default" worth keeping:
+            // if a database choice exists and the Commons already runs
+            // MySQL/MariaDB, suggest that instead of each tool's own plain
+            // default — generalized by field key, not hardcoded to one app.
             const activeSet = new Set(clusterServices);
             if (
-                currentApp.id === 'wordpress' &&
+                fetched.some((field) => field.key === 'db') &&
                 (activeSet.has('mysql') || activeSet.has('mariadb'))
             ) {
-                setDatabase('mysql');
-            } else {
-                setDatabase(currentApp.defaultDb ?? 'sqlite');
+                answers.db = 'mysql';
             }
-        } else {
-            setDatabase('');
-        }
-    }, [currentApp, isOpen, clusterServices]);
+            setOptions(answers);
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [currentApp.id, selectedServerName, isOpen, clusterServices]);
 
     // Initial server selection and email
     useEffect(() => {
@@ -520,6 +546,38 @@ export default function QuickLaunchModal({
         clusterServices.includes('zitadel') ||
         clusterServices.includes('oidc');
 
+    // ADR 0010: whether this specific deploy will actually get SQLite,
+    // derived from the resolved option (a 'db' select, or a 'noPlex'-style
+    // confirm) rather than assumed from the app's identity — n8n with
+    // Postgres selected is not standalone, even though n8n *can* be.
+    const usesSqliteStorage = fields.some((field) => field.key === 'db')
+        ? options.db === 'sqlite'
+        : fields.some((field) => field.key === 'noPlex')
+          ? options.noPlex === true
+          : currentApp.capabilities.databases?.length === 1 &&
+            currentApp.capabilities.databases[0] === 'sqlite';
+
+    const databaseEngineLabel = (() => {
+        const dbField = fields.find((field) => field.key === 'db');
+        if (dbField) {
+            return (
+                dbField.options?.find((o) => o.value === options.db)?.label ??
+                (typeof options.db === 'string'
+                    ? options.db.toUpperCase()
+                    : 'Embedded SQLite')
+            );
+        }
+        if (fields.some((field) => field.key === 'noPlex')) {
+            return options.noPlex === true
+                ? 'Embedded SQLite'
+                : 'Plex Commons Postgres';
+        }
+        return usesSqliteStorage
+            ? 'Embedded SQLite'
+            : (currentApp.capabilities.databases?.[0]?.toUpperCase() ??
+                  'Embedded SQLite');
+    })();
+
     const resolvedDomain = useMemo(() => {
         if (useCustomDomain) {
             return customDomain.trim().toLowerCase() || 'app.example.com';
@@ -571,12 +629,13 @@ export default function QuickLaunchModal({
                 run?: { id: number; label: string; status: string };
                 tool?: { slug: string; displayName: string; domain: string };
                 message?: string;
+                errors?: Record<string, string[]>;
             }>('/quick-actions/launch', 'POST', {
                 tool: selectedAppId,
                 server: selectedServerName,
                 domain: resolvedDomain,
                 admin_email: adminEmail,
-                ...(database ? { database } : {}),
+                options,
                 wire_sso: wireSso ? '1' : '0',
                 wire_mail: wireMail ? '1' : '0',
                 confirm_commons_restart: confirmRestart ? '1' : '0',
@@ -585,6 +644,16 @@ export default function QuickLaunchModal({
             setSubmitting(false);
 
             if (!res.ok || !res.data.run) {
+                setFieldErrors(
+                    Object.fromEntries(
+                        Object.entries(res.data.errors ?? {}).map(
+                            ([key, messages]) => [
+                                key.replace(/^options\./, ''),
+                                messages[0],
+                            ],
+                        ),
+                    ),
+                );
                 setSubmitError(
                     res.data.message ?? 'Could not start the deployment.',
                 );
@@ -874,25 +943,14 @@ export default function QuickLaunchModal({
                                         </div>
                                         <p className="mt-1 leading-relaxed text-soft">
                                             {currentApp.description}
-                                            {currentApp.availableDbs &&
-                                            currentApp.availableDbs.length >
-                                                0 ? (
+                                            {(currentApp.capabilities.databases
+                                                ?.length ?? 0) > 1 ? (
                                                 <>
                                                     {' '}
-                                                    Default database is{' '}
-                                                    <strong className="text-ink">
-                                                        {currentApp.defaultDb ??
-                                                            'SQLite'}
-                                                    </strong>
-                                                    . Configurable in step 3.
+                                                    Database engine is
+                                                    configurable in step 3.
                                                 </>
-                                            ) : (
-                                                <>
-                                                    {' '}
-                                                    Uses lightweight embedded
-                                                    SQLite storage.
-                                                </>
-                                            )}
+                                            ) : null}
                                         </p>
                                     </div>
                                 </div>
@@ -1561,50 +1619,15 @@ export default function QuickLaunchModal({
                                         ) : null}
                                     </div>
 
-                                    {/* Database Engine Selector */}
-                                    {currentApp.availableDbs && (
-                                        <div>
-                                            <label className="mb-1.5 block text-xs font-medium text-soft">
-                                                Storage & Database Engine
-                                            </label>
-                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                {currentApp.availableDbs.map(
-                                                    (dbOption) => (
-                                                        <button
-                                                            key={dbOption.id}
-                                                            type="button"
-                                                            onClick={() =>
-                                                                setDatabase(
-                                                                    dbOption.id,
-                                                                )
-                                                            }
-                                                            className={cn(
-                                                                'flex flex-col rounded-xl p-2.5 text-left ring-1 transition',
-                                                                database ===
-                                                                    dbOption.id
-                                                                    ? 'bg-ok-tint text-ink ring-ok/30 dark:bg-emerald-500/10 dark:ring-emerald-500/50'
-                                                                    : 'bg-badge/40 text-soft ring-line/70 hover:bg-badge hover:text-ink',
-                                                            )}
-                                                        >
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-xs font-semibold">
-                                                                    {
-                                                                        dbOption.label
-                                                                    }
-                                                                </span>
-                                                                {database ===
-                                                                    dbOption.id && (
-                                                                    <Check className="size-3.5 text-ok dark:text-emerald-400" />
-                                                                )}
-                                                            </div>
-                                                            <span className="mt-0.5 text-[10px] text-faint">
-                                                                {dbOption.desc}
-                                                            </span>
-                                                        </button>
-                                                    ),
-                                                )}
-                                            </div>
-                                        </div>
+                                    {/* ADR 0010: this app's own deploy options, live from the CLI — not a hand-curated picker. */}
+                                    {fields.length > 0 && (
+                                        <FrameworkFields
+                                            fields={fields}
+                                            answers={options}
+                                            errors={fieldErrors}
+                                            errorPrefix="options"
+                                            onChange={setOptions}
+                                        />
                                     )}
 
                                     {/* Admin Email */}
@@ -1640,10 +1663,13 @@ export default function QuickLaunchModal({
                                             <p className="mt-1 text-[11px] leading-relaxed text-soft">
                                                 {currentApp.name} operates 100%
                                                 self-contained with built-in
-                                                authentication, embedded SQLite
-                                                storage, and automatic Traefik
-                                                SSL routing. No external mail
-                                                relay or SSO provider needed.
+                                                authentication
+                                                {usesSqliteStorage
+                                                    ? ', embedded SQLite storage,'
+                                                    : ''}{' '}
+                                                and automatic Traefik SSL
+                                                routing. No external mail relay
+                                                or SSO provider needed.
                                             </p>
                                         </div>
                                     ) : (
@@ -1869,9 +1895,7 @@ export default function QuickLaunchModal({
                                                     Database Engine
                                                 </span>
                                                 <span className="font-semibold text-ink">
-                                                    {database
-                                                        ? database.toUpperCase()
-                                                        : 'Embedded SQLite'}
+                                                    {databaseEngineLabel}
                                                 </span>
                                             </div>
                                             <div className="col-span-2">
