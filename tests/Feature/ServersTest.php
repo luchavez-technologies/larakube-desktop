@@ -4,6 +4,7 @@ use App\Enums\RunKind;
 use App\Models\Project;
 use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\TerminalLauncher;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -213,6 +214,68 @@ test('Automatic SSL runs tls:init and can reuse the stored token', function () {
 
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tls:init', 'production', '--context=larakube-203.0.113.21', '--force', '--no-interaction']
         && ! array_key_exists('LARAKUBE_CLOUDFLARE_TOKEN', $env ?? []));
+
+    File::deleteDirectory($bin);
+});
+
+function serversFakeStacksAndEverythingElse(): void
+{
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => serversStacks()])),
+        '*' => Process::result(),
+    ]);
+}
+
+test('Open in Terminal runs ssh for the server, through whatever this OS uses', function () {
+    $bin = serversFakeCli();
+    serversFakeStacksAndEverythingElse();
+    app()->instance(TerminalLauncher::class, new TerminalLauncher(windows: false, darwin: true));
+
+    $this->post(route('servers.terminal', 'workshop-demo'), ['type' => 'ssh'])->assertRedirect();
+
+    Process::assertRan(fn ($process): bool => $process->command[0] === 'osascript'
+        && str_contains(implode(' ', $process->command), 'ssh workshop-demo'));
+
+    File::deleteDirectory($bin);
+});
+
+test('Open in Terminal for kubectl launches k9s scoped to the context, only when k9s is installed', function () {
+    $bin = serversFakeCli();
+    serversFakeStacksAndEverythingElse();
+    app()->instance(TerminalLauncher::class, new TerminalLauncher(windows: false, darwin: true));
+
+    $this->post(route('servers.terminal', 'workshop-demo'), ['type' => 'kubectl'])->assertStatus(422);
+
+    File::put("{$bin}/k9s", "#!/bin/sh\n");
+    chmod("{$bin}/k9s", 0755);
+    Cache::flush();
+
+    $this->post(route('servers.terminal', 'workshop-demo'), ['type' => 'kubectl'])->assertRedirect();
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', $process->command), "k9s --context='larakube-203.0.113.21'"));
+
+    File::deleteDirectory($bin);
+});
+
+test('Open in Terminal is a 404 for an unfinished server, and 422 for an unknown type', function () {
+    $bin = serversFakeCli();
+    serversFakeStacksAndEverythingElse();
+
+    $this->post(route('servers.terminal', 'cancel-test'), ['type' => 'ssh'])->assertNotFound();
+    $this->post(route('servers.terminal', 'workshop-demo'), ['type' => 'rdp'])->assertSessionHasErrors('type');
+
+    File::deleteDirectory($bin);
+});
+
+test('a terminal that fails to open is reported, not silently swallowed', function () {
+    $bin = serversFakeCli();
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => serversStacks()])),
+        '*' => Process::result(exitCode: 1),
+    ]);
+    app()->instance(TerminalLauncher::class, new TerminalLauncher(windows: false, darwin: true));
+
+    $this->post(route('servers.terminal', 'workshop-demo'), ['type' => 'ssh'])->assertSessionHasErrors('terminal');
 
     File::deleteDirectory($bin);
 });

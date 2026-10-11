@@ -17,6 +17,7 @@ use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
+use App\Services\TerminalLauncher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -178,6 +179,7 @@ class ServerController extends Controller
             'providers' => $stack['kind'] === 'vps'
                 ? Inertia::defer(fn (): ?array => $readiness->providers(), 'providers')
                 : null,
+            'k9sInstalled' => $readiness->status('k9s')['installed'],
         ]);
     }
 
@@ -228,6 +230,35 @@ class ServerController extends Controller
         abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
 
         return $stack['context'];
+    }
+
+    /**
+     * Opens a new terminal window running `ssh {server}`, or k9s scoped to
+     * this server's kubectl context — the same commands the Connection
+     * card's own Copy buttons already put on the clipboard, just run for you
+     * instead of pasted.
+     */
+    public function terminal(Request $request, string $server, StackCatalog $catalog, ReadinessCheck $readiness, TerminalLauncher $launcher): RedirectResponse
+    {
+        $request->validate(['type' => ['required', 'in:ssh,kubectl']]);
+
+        $stack = $catalog->find($server);
+        abort_if($stack === null || $stack['status'] !== 'ready', 404);
+
+        if ($request->string('type')->toString() === 'ssh') {
+            $command = "ssh {$stack['name']}";
+        } else {
+            abort_if($stack['context'] === null, 404);
+            abort_unless($readiness->status('k9s')['installed'], 422);
+
+            $command = 'k9s --context='.escapeshellarg($stack['context']);
+        }
+
+        if (! $launcher->open($command)) {
+            return back()->withErrors(['terminal' => 'Could not open a terminal.']);
+        }
+
+        return back();
     }
 
     /** Reboots a server LaraKube made. Nothing else can be restarted: a kubeconfig cannot reboot a machine. */

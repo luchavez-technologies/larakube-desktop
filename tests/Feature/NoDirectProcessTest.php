@@ -12,6 +12,9 @@ test('processes are launched only through ToolLocator, apart from the few files 
         // Not yet distro-aware. Plan 10 step 3 (setup flow) and step 4 (editors); remove each when it is.
         'app/Services/Elevation.php',
         'app/Services/EditorLauncher.php',
+        // Opens a new, visible OS terminal window (osascript/wt.exe/cmd) — not a managed
+        // background tool invocation, so ToolLocator::isolate()'s run-and-capture shape doesn't fit.
+        'app/Services/TerminalLauncher.php',
     ];
 
     $found = [];

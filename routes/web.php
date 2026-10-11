@@ -72,6 +72,7 @@ Route::post('/servers/{server}/repair', [ServerController::class, 'repair'])->na
 Route::post('/servers/{server}/resize', [ServerController::class, 'resize'])->name('servers.resize');
 Route::post('/servers/{server}/dns', [ServerController::class, 'connectDomain'])->name('servers.dns');
 Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->name('servers.tls');
+Route::post('/servers/{server}/terminal', [ServerController::class, 'terminal'])->name('servers.terminal');
 Route::post('/servers/{server}/plex/init', [PlexController::class, 'initServer'])->name('servers.plex.init');
 Route::post('/servers/{server}/plex/start', [PlexController::class, 'startServer'])->name('servers.plex.start');
 Route::post('/servers/{server}/plex/stop', [PlexController::class, 'stopServer'])->name('servers.plex.stop');

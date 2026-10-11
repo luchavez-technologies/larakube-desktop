@@ -7,6 +7,7 @@ import {
     FolderGit2,
     HardDrive,
     Plus,
+    SquareTerminal,
     Trash2,
     Wrench,
     UserPlus,
@@ -37,7 +38,7 @@ import {
     index as projectsIndex,
     show as showProject,
 } from '@/routes/projects';
-import { dns, index, tls } from '@/routes/servers';
+import { dns, index, terminal, tls } from '@/routes/servers';
 import { index as toolsIndex, show as showTool } from '@/routes/servers/tools';
 import BackupsCard from '@/pages/servers/backups-card';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
@@ -83,6 +84,7 @@ export default function ShowServer({
     reachable,
     diagnosis,
     providers,
+    k9sInstalled,
 }: {
     server: Server;
     projects?: Project[];
@@ -98,6 +100,7 @@ export default function ShowServer({
     reachable?: boolean;
     diagnosis?: DiagnoseReport | null;
     providers?: Provider[] | null;
+    k9sInstalled: boolean;
 }) {
     const { url } = usePage();
     const [dialog, setDialog] = useState<Dialog>(() => {
@@ -522,7 +525,30 @@ export default function ShowServer({
                             {server.context && (
                                 <ListRow
                                     action={
-                                        <CopyButton value={server.context} />
+                                        <div className="flex items-center gap-1.5">
+                                            <CopyButton
+                                                value={server.context}
+                                            />
+                                            <Link
+                                                href={terminal(server.name).url}
+                                                method="post"
+                                                data={{ type: 'kubectl' }}
+                                                as="button"
+                                                disabled={!k9sInstalled}
+                                                title={
+                                                    k9sInstalled
+                                                        ? 'Open k9s for this context in a terminal'
+                                                        : 'Install k9s from Setup to use this'
+                                                }
+                                                className={buttonClass(
+                                                    'ghost',
+                                                    'sm',
+                                                )}
+                                            >
+                                                <SquareTerminal className="size-3.5" />
+                                                <span>Open in Terminal</span>
+                                            </Link>
+                                        </div>
                                     }
                                 >
                                     <TwoLine
@@ -534,7 +560,25 @@ export default function ShowServer({
                             )}
                             <ListRow
                                 action={
-                                    <CopyButton value={`ssh ${server.name}`} />
+                                    <div className="flex items-center gap-1.5">
+                                        <CopyButton
+                                            value={`ssh ${server.name}`}
+                                        />
+                                        <Link
+                                            href={terminal(server.name).url}
+                                            method="post"
+                                            data={{ type: 'ssh' }}
+                                            as="button"
+                                            title="Open an SSH session in a terminal"
+                                            className={buttonClass(
+                                                'ghost',
+                                                'sm',
+                                            )}
+                                        >
+                                            <SquareTerminal className="size-3.5" />
+                                            <span>Open in Terminal</span>
+                                        </Link>
+                                    </div>
                                 }
                             >
                                 <TwoLine
