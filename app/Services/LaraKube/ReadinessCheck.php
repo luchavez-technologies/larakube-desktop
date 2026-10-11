@@ -19,6 +19,7 @@ class ReadinessCheck
     public const TOOLS = [
         'larakube' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs every action in this app.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true],
         'kubectl' => ['label' => 'kubectl', 'purpose' => 'Talks to your Kubernetes clusters.', 'required' => true, 'versionArgs' => ['version', '--client'], 'installable' => true],
+        'k9s' => ['label' => 'k9s', 'purpose' => 'Terminal UI for browsing and managing Kubernetes clusters — optional, but what "Open in Terminal" uses on a server page.', 'required' => false, 'versionArgs' => ['version', '--short'], 'installable' => true],
         'tofu' => ['label' => 'OpenTofu', 'purpose' => 'Provisions new cloud servers.', 'required' => true, 'versionArgs' => ['version'], 'installable' => true],
         'aws' => ['label' => 'AWS CLI', 'purpose' => 'Needed for Amazon Web Services servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
         'gcloud' => ['label' => 'Google Cloud CLI', 'purpose' => 'Needed for Google Cloud servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
@@ -155,6 +156,9 @@ class ReadinessCheck
         }
 
         $firstLine = trim(strtok(trim($result->output()) ?: trim($result->errorOutput()), "\n") ?: '');
+        // k9s --short's columns are padded with runs of spaces ("Version              0.50.18") —
+        // collapsing is a no-op for every other tool's single-spaced first line.
+        $firstLine = (string) preg_replace('/\s+/', ' ', $firstLine);
 
         return $firstLine !== '' ? $firstLine : null;
     }
