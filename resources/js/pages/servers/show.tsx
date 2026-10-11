@@ -524,6 +524,7 @@ export default function ShowServer({
                         <Card label="Connection">
                             {server.context && (
                                 <ListRow
+                                    stack
                                     action={
                                         <div className="flex items-center gap-1.5">
                                             <CopyButton
@@ -555,10 +556,12 @@ export default function ShowServer({
                                         title="kubectl context"
                                         detail={server.context}
                                         mono
+                                        truncate={false}
                                     />
                                 </ListRow>
                             )}
                             <ListRow
+                                stack
                                 action={
                                     <div className="flex items-center gap-1.5">
                                         <CopyButton
@@ -585,6 +588,7 @@ export default function ShowServer({
                                     title="SSH"
                                     detail={`ssh ${server.name}`}
                                     mono
+                                    truncate={false}
                                 />
                             </ListRow>
                             <ListRow>
