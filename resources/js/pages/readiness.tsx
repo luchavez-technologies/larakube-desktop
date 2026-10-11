@@ -67,8 +67,16 @@ export default function Readiness({
 
     const [selectedChannel, setSelectedChannel] = useState(cliChannel);
     const [showAwsModal, setShowAwsModal] = useState(false);
-    const [accountModalProvider, setAccountModalProvider] =
-        useState<Provider | null>(null);
+    // Holds the slug, not the Provider object: the modal stays open across a
+    // "Set Default"/add/remove action, which reloads the `providers` prop in
+    // the background — a captured object snapshot would never pick that up,
+    // leaving the modal showing stale accounts after a change that actually
+    // succeeded. Looking the live object up by slug every render keeps it in sync.
+    const [accountModalProviderSlug, setAccountModalProviderSlug] = useState<
+        string | null
+    >(null);
+    const accountModalProvider =
+        providers?.find((p) => p.slug === accountModalProviderSlug) ?? null;
 
     return (
         <AppLayout title="Setup">
@@ -162,8 +170,8 @@ export default function Readiness({
                                                             variant="secondary"
                                                             size="sm"
                                                             onClick={() =>
-                                                                setAccountModalProvider(
-                                                                    provider,
+                                                                setAccountModalProviderSlug(
+                                                                    provider.slug,
                                                                 )
                                                             }
                                                             className="w-33 justify-center gap-1.5"
@@ -237,7 +245,7 @@ export default function Readiness({
             {accountModalProvider && (
                 <CloudAccountsModal
                     provider={accountModalProvider}
-                    onClose={() => setAccountModalProvider(null)}
+                    onClose={() => setAccountModalProviderSlug(null)}
                 />
             )}
 
