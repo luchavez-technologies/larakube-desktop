@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $server_id
  * @property string $domain
  * @property bool $external_dns
+ * @property ?string $dns_provider
  * @property bool $tls
  * @property bool $in_use
  */
@@ -26,6 +27,7 @@ class ServerDomain extends Model
         'server_id',
         'domain',
         'external_dns',
+        'dns_provider',
         'tls',
         'in_use',
     ];

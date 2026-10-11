@@ -186,6 +186,8 @@ export type DiagnoseReport = { success: boolean; issues: DiagnoseIssue[] };
 export type ServerDomain = {
     domain: string;
     externalDns: boolean;
+    /** Only meaningful when `externalDns` is true; null for a TLS-only or Ingress-only entry. */
+    dnsProvider?: 'cloudflare' | 'route53' | null;
     tls: boolean;
     inUse?: boolean;
 };

@@ -62,6 +62,7 @@ class SyncServerDomainsJob extends SyncJob
                         ['server_id' => $server->id, 'domain' => $domain],
                         [
                             'external_dns' => $row['externalDns'],
+                            'dns_provider' => $row['dnsProvider'] ?? null,
                             'tls' => $row['tls'],
                             'in_use' => $row['inUse'],
                         ],

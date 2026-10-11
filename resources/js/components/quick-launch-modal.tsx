@@ -444,6 +444,36 @@ export default function QuickLaunchModal({
         setSubdomain(currentApp.defaultSubdomain);
     }, [currentApp, isOpen]);
 
+    const selectedDomainMeta = useMemo(
+        () => domains.find((d) => d.domain === baseDomain),
+        [domains, baseDomain],
+    );
+
+    // The ServerDomain backing the chosen host, whichever way it was chosen —
+    // shared by hasExternalDns and the Cloudflare-specific check below so
+    // they can never disagree on which zone is actually in play.
+    const matchedExternalDnsDomain = useMemo(() => {
+        if (useCustomDomain) {
+            const trimmed = customDomain.trim().toLowerCase();
+            return trimmed === ''
+                ? undefined
+                : domains.find(
+                      (d) =>
+                          d.externalDns &&
+                          (trimmed === d.domain ||
+                              trimmed.endsWith(`.${d.domain}`)),
+                  );
+        }
+        return selectedDomainMeta?.externalDns ? selectedDomainMeta : undefined;
+    }, [useCustomDomain, customDomain, domains, selectedDomainMeta]);
+
+    const hasExternalDns = Boolean(matchedExternalDnsDomain);
+    // Route53-managed zones have no "Proxied" concept — the annotation it
+    // sets only means anything to Cloudflare, so only Cloudflare earns the
+    // smart default below.
+    const isCloudflareManaged =
+        matchedExternalDnsDomain?.dnsProvider === 'cloudflare';
+
     // ADR 0010: fetch this app's own deploy options live from the CLI,
     // rather than a hand-curated picker per app — the same data the Tools
     // page's Install dialog already draws its fields from.
@@ -481,13 +511,29 @@ export default function QuickLaunchModal({
             ) {
                 answers.db = 'mysql';
             }
+            // Cloudflare already proxies every Ingress on the zone — deploying
+            // straight through DNS-only would be the surprising choice, not
+            // the safe one, so default a "proxied" field on when the chosen
+            // host is actually Cloudflare-managed.
+            if (
+                fetched.some((field) => field.key === 'proxied') &&
+                isCloudflareManaged
+            ) {
+                answers.proxied = true;
+            }
             setOptions(answers);
         })();
 
         return () => {
             cancelled = true;
         };
-    }, [currentApp.id, selectedServerName, isOpen, clusterServices]);
+    }, [
+        currentApp.id,
+        selectedServerName,
+        isOpen,
+        clusterServices,
+        isCloudflareManaged,
+    ]);
 
     // Initial server selection and email
     useEffect(() => {
@@ -513,27 +559,6 @@ export default function QuickLaunchModal({
             setAdminEmail(`admin@${currentServer.name}.local`);
         }
     }, [currentServer, baseDomain, useCustomDomain, customDomain]);
-
-    const selectedDomainMeta = useMemo(
-        () => domains.find((d) => d.domain === baseDomain),
-        [domains, baseDomain],
-    );
-
-    const hasExternalDns = useMemo(() => {
-        if (useCustomDomain) {
-            const trimmed = customDomain.trim().toLowerCase();
-            return (
-                trimmed !== '' &&
-                domains.some(
-                    (d) =>
-                        d.externalDns &&
-                        (trimmed === d.domain ||
-                            trimmed.endsWith(`.${d.domain}`)),
-                )
-            );
-        }
-        return Boolean(selectedDomainMeta?.externalDns);
-    }, [useCustomDomain, customDomain, domains, selectedDomainMeta]);
 
     const appSupportsMail = Boolean(
         currentApp.capabilities.mail?.includes('smtp'),

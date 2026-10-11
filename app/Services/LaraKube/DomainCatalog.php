@@ -19,7 +19,7 @@ class DomainCatalog
     public const FRESH_SECONDS = SyncServerDomainsJob::FRESH_SECONDS;
 
     /**
-     * @return list<array{domain: string, externalDns: bool, tls: bool, inUse: bool}>|null
+     * @return list<array{domain: string, externalDns: bool, dnsProvider: ?string, tls: bool, inUse: bool}>|null
      */
     public function forContext(string $context): ?array
     {
@@ -34,6 +34,7 @@ class DomainCatalog
         return array_values($server->domains()->get()->map(fn (ServerDomain $row): array => [
             'domain' => $row->domain,
             'externalDns' => $row->external_dns,
+            'dnsProvider' => $row->dns_provider,
             'tls' => $row->tls,
             'inUse' => $row->in_use,
         ])->all());

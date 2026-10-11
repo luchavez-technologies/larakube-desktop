@@ -59,11 +59,39 @@ test('syncing domains upserts rows and marks the server fresh', function () {
 
     $exampleCom = ServerDomain::where('server_id', $server->id)->where('domain', 'example.com')->sole();
     expect($exampleCom->external_dns)->toBeTrue()
-        ->and($exampleCom->in_use)->toBeFalse();
+        ->and($exampleCom->in_use)->toBeFalse()
+        // No `provider` in the CLI row: the fixture predates --provider=
+        // support, when Cloudflare was the only option that ever existed.
+        ->and($exampleCom->dns_provider)->toBe('cloudflare');
 
     $otherNet = ServerDomain::where('server_id', $server->id)->where('domain', 'other.net')->sole();
     expect($otherNet->in_use)->toBeTrue()
-        ->and($otherNet->external_dns)->toBeFalse();
+        ->and($otherNet->external_dns)->toBeFalse()
+        ->and($otherNet->dns_provider)->toBeNull();
+
+    File::deleteDirectory($bin);
+});
+
+test('a Route53-managed zone is persisted with its own provider, not assumed Cloudflare', function () {
+    $bin = syncServerDomainsFakeCli();
+    $server = Server::create(['name' => 'alpha', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-alpha', 'status' => 'ready']);
+
+    Process::fake(function ($process) {
+        $cmd = implode(' ', (array) $process->command);
+
+        return match (true) {
+            str_contains($cmd, 'external-dns:list') => Process::result(output: json_encode([
+                ['slug' => 'aws1', 'zone' => 'example.com', 'ready' => true, 'provider' => 'route53'],
+            ])),
+            default => Process::result(output: ''),
+        };
+    });
+
+    SyncServerDomainsJob::dispatchSync($server->id);
+
+    $exampleCom = ServerDomain::where('server_id', $server->id)->where('domain', 'example.com')->sole();
+    expect($exampleCom->external_dns)->toBeTrue()
+        ->and($exampleCom->dns_provider)->toBe('route53');
 
     File::deleteDirectory($bin);
 });

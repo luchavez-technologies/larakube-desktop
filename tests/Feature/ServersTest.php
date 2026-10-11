@@ -297,8 +297,8 @@ test('the server page asks the server for DNS accounts and certificate status', 
             ->missing('dns')
             ->loadDeferredProps(['dns', 'tls'], fn (AssertableInertia $reload) => $reload
                 ->where('dns', [
-                    ['group' => 'first', 'zones' => ['one.example', 'two.example'], 'ready' => true],
-                    ['group' => 'second', 'zones' => ['three.example'], 'ready' => false],
+                    ['group' => 'first', 'zones' => ['one.example', 'two.example'], 'ready' => true, 'provider' => 'cloudflare'],
+                    ['group' => 'second', 'zones' => ['three.example'], 'ready' => false, 'provider' => 'cloudflare'],
                 ])
                 ->where('tls.challenge', 'dns')));
 

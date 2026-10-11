@@ -38,7 +38,9 @@ class ClusterStatus
             $groups = [];
             foreach ($rows as $row) {
                 $slug = (string) ($row['slug'] ?? '');
-                $groups[$slug] ??= ['group' => $slug, 'zones' => [], 'ready' => true];
+                // One tool:init --tool=external-dns instance holds one credential, so one
+                // provider — every row sharing a slug agrees, no need to merge.
+                $groups[$slug] ??= ['group' => $slug, 'zones' => [], 'ready' => true, 'provider' => (string) ($row['provider'] ?? 'cloudflare')];
                 $groups[$slug]['zones'][] = (string) ($row['zone'] ?? '');
                 $groups[$slug]['ready'] = $groups[$slug]['ready'] && (bool) ($row['ready'] ?? false);
             }
@@ -115,7 +117,7 @@ class ClusterStatus
      * - Cloudflare zones from TLS / Let's Encrypt
      * - Base domains extracted from live Ingresses
      *
-     * @return list<array{domain: string, externalDns: bool, tls: bool, inUse: bool}>
+     * @return list<array{domain: string, externalDns: bool, dnsProvider: ?string, tls: bool, inUse: bool}>
      */
     public function domains(string $context): array
     {
@@ -132,10 +134,12 @@ class ClusterStatus
                             $domains[$zone] ??= [
                                 'domain' => $zone,
                                 'externalDns' => true,
+                                'dnsProvider' => null,
                                 'tls' => false,
                                 'inUse' => false,
                             ];
                             $domains[$zone]['externalDns'] = true;
+                            $domains[$zone]['dnsProvider'] = $group['provider'] ?? null;
                         }
                     }
                 }
@@ -150,6 +154,7 @@ class ClusterStatus
                         $domains[$zone] ??= [
                             'domain' => $zone,
                             'externalDns' => false,
+                            'dnsProvider' => null,
                             'tls' => true,
                             'inUse' => false,
                         ];
@@ -172,6 +177,7 @@ class ClusterStatus
                             $domains[$base] ??= [
                                 'domain' => $base,
                                 'externalDns' => false,
+                                'dnsProvider' => null,
                                 'tls' => false,
                                 'inUse' => true,
                             ];
