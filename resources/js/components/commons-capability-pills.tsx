@@ -5,6 +5,20 @@ import { cn } from '@/lib/utils';
 type Props = {
     capabilities?: ToolCommonsCapabilities;
     activeCommonsServices?: string[];
+    /**
+     * This specific instance's own Commons tenants (a `ClusterTool` row's
+     * `commons` field), when known — overrides `activeCommonsServices` for
+     * the database/cache/storage pills so they reflect whether THIS
+     * instance actually joined the Commons, not whether the cluster runs
+     * one anywhere. Omit for a not-yet-installed tool, where there is no
+     * instance to be accurate about and the cluster-wide signal is the
+     * right question ("would installing this join an active service?").
+     */
+    instanceCommons?: {
+        databases: string[];
+        redis: string[];
+        buckets: string[];
+    };
     className?: string;
     compact?: boolean;
 };
@@ -12,6 +26,7 @@ type Props = {
 export default function CommonsCapabilityPills({
     capabilities,
     activeCommonsServices = [],
+    instanceCommons,
     className,
     compact = false,
 }: Props) {
@@ -22,6 +37,9 @@ export default function CommonsCapabilityPills({
     const activeSet = new Set(
         (activeCommonsServices ?? []).map((s) => s.toLowerCase()),
     );
+    const instanceDbActive = instanceCommons
+        ? instanceCommons.databases.length > 0
+        : null;
 
     const pills: Array<{
         key: string;
@@ -44,7 +62,8 @@ export default function CommonsCapabilityPills({
     }
     if (dbs.includes('mysql') || dbs.includes('mariadb')) {
         const isMysqlActive =
-            activeSet.has('mysql') || activeSet.has('mariadb');
+            instanceDbActive ??
+            (activeSet.has('mysql') || activeSet.has('mariadb'));
         pills.push({
             key: 'mysql',
             label: 'MySQL',
@@ -55,7 +74,8 @@ export default function CommonsCapabilityPills({
     }
     if (dbs.includes('postgresql') || dbs.includes('postgres')) {
         const isPgActive =
-            activeSet.has('postgresql') || activeSet.has('postgres');
+            instanceDbActive ??
+            (activeSet.has('postgresql') || activeSet.has('postgres'));
         pills.push({
             key: 'postgresql',
             label: 'Postgres',
@@ -68,7 +88,9 @@ export default function CommonsCapabilityPills({
     // Cache / Queue
     const cache = capabilities.cache ?? [];
     if (cache.includes('redis')) {
-        const isRedisActive = activeSet.has('redis');
+        const isRedisActive = instanceCommons
+            ? instanceCommons.redis.length > 0
+            : activeSet.has('redis');
         pills.push({
             key: 'redis',
             label: 'Redis',
@@ -85,10 +107,11 @@ export default function CommonsCapabilityPills({
         storage.includes('minio') ||
         storage.includes('garage')
     ) {
-        const isStorageActive =
-            activeSet.has('s3') ||
-            activeSet.has('minio') ||
-            activeSet.has('garage');
+        const isStorageActive = instanceCommons
+            ? instanceCommons.buckets.length > 0
+            : activeSet.has('s3') ||
+              activeSet.has('minio') ||
+              activeSet.has('garage');
         pills.push({
             key: 's3',
             label: 'S3 Storage',

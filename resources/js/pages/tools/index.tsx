@@ -1,4 +1,4 @@
-import { Form, Link } from '@inertiajs/react';
+import { Form, Link, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     RotateCw,
@@ -20,6 +20,7 @@ import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
+import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import ToolLogo from '@/components/tool-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
@@ -50,6 +51,7 @@ import type {
     Server,
     CompanionApp,
     ServerDomain,
+    Untested,
 } from '@/types/larakube';
 
 type Props = {
@@ -1232,6 +1234,7 @@ function InstalledCard({
     onAddInstance?: (tool: ClusterTool) => void;
     onCategoryClick?: (category: string) => void;
 }) {
+    const { untested } = usePage<{ untested: Untested }>().props;
     const url = tool.url?.split(' ')[0] ?? null;
     const href = detailUrl(server, tool);
     const canMulti = isMultiInstance(tool);
@@ -1254,6 +1257,9 @@ function InstalledCard({
                                 >
                                     {name}
                                 </Link>
+                                {untested.tools.includes(tool.tool) && (
+                                    <ExperimentalBadge />
+                                )}
                             </div>
                             <p className="mt-0.5 truncate text-xs text-soft">
                                 {tagline}
@@ -1305,6 +1311,7 @@ function InstalledCard({
                     <CommonsCapabilityPills
                         capabilities={tool.commonsCapabilities}
                         activeCommonsServices={activeCommonsServices}
+                        instanceCommons={tool.commons}
                         compact
                     />
                 )}
@@ -1369,6 +1376,7 @@ function AvailableCard({
     onInstall: () => void;
     onCategoryClick?: (category: string) => void;
 }) {
+    const { untested } = usePage<{ untested: Untested }>().props;
     const { summary } = describeTool(tool.label);
     const name = toolName(tool);
     const tagline = toolTagline(tool);
@@ -1383,9 +1391,14 @@ function AvailableCard({
                     <div className="flex min-w-0 items-center gap-3.5">
                         <ToolLogo tool={tool} size="lg" />
                         <div className="min-w-0">
-                            <h3 className="truncate text-[15px] font-semibold text-ink">
-                                {name}
-                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="truncate text-[15px] font-semibold text-ink">
+                                    {name}
+                                </h3>
+                                {untested.tools.includes(tool.tool) && (
+                                    <ExperimentalBadge />
+                                )}
+                            </div>
                             <p className="mt-0.5 truncate text-xs text-soft">
                                 {tagline}
                             </p>

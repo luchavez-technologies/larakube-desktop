@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { router, Link } from '@inertiajs/react';
+import { router, Link, usePage } from '@inertiajs/react';
 import {
     Zap,
     Rocket,
@@ -31,6 +31,7 @@ import ToolLogo from '@/components/tool-logo';
 import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import StatusPill from '@/components/status-pill';
+import ExperimentalBadge from '@/components/experimental-badge';
 import { sendJson } from '@/lib/http';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { runStatus } from '@/lib/servers';
@@ -44,6 +45,7 @@ import type {
     Server,
     ServerDomain,
     ToolCommonsCapabilities,
+    Untested,
 } from '@/types/larakube';
 
 export type QuickLaunchAppId = 'pocketbase' | 'n8n' | 'wordpress';
@@ -146,6 +148,8 @@ export default function QuickLaunchModal({
     activeCommonsServices = [],
 }: Props) {
     useRightDrawerOpen(isOpen);
+
+    const { untested } = usePage<{ untested: Untested }>().props;
 
     const readyServers = useMemo(
         () => servers.filter((s) => s.status === 'ready' && s.context),
@@ -908,9 +912,16 @@ export default function QuickLaunchModal({
                                                             )}
                                                         </div>
                                                         <div>
-                                                            <h4 className="text-xs font-bold text-ink">
-                                                                {app.name}
-                                                            </h4>
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                <h4 className="text-xs font-bold text-ink">
+                                                                    {app.name}
+                                                                </h4>
+                                                                {untested.tools.includes(
+                                                                    app.id,
+                                                                ) && (
+                                                                    <ExperimentalBadge />
+                                                                )}
+                                                            </div>
                                                             <p className="text-[10px] text-faint">
                                                                 {app.tagline}
                                                             </p>

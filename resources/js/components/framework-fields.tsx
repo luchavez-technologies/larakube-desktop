@@ -8,6 +8,16 @@ import type { FrameworkField, NewAppAnswers } from '@/types/larakube';
 const inputClass =
     'w-full rounded-lg border-0 bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-brand';
 
+/**
+ * A confirm field's default comes from the CLI as either a real boolean (a
+ * FLAG option, always `false`) or a string (a VALUE option standing in for
+ * one, e.g. `proxied`'s `'1'`/`'0'` — defaults ON, `--proxied=0` opts out) —
+ * never assume it's already a boolean.
+ */
+function isConfirmedByDefault(value: unknown): boolean {
+    return value === true || value === 'true' || value === 1 || value === '1';
+}
+
 export function defaultAnswers(fields: FrameworkField[]): NewAppAnswers {
     return Object.fromEntries(
         fields.map((field) => [
@@ -15,7 +25,7 @@ export function defaultAnswers(fields: FrameworkField[]): NewAppAnswers {
             field.type === 'multiselect'
                 ? []
                 : field.type === 'confirm'
-                  ? field.default === true
+                  ? isConfirmedByDefault(field.default)
                   : field.type === 'text'
                     ? ''
                     : (field.suggested ?? field.default ?? null),

@@ -36,8 +36,9 @@ beforeEach(function () {
                 'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
                 'commonsCapabilities' => ['databases' => ['sqlite', 'mysql', 'mariadb'], 'cache' => [], 'storage' => ['s3'], 'auth' => [], 'mail' => []],
                 'initFields' => [
-                    ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text'],
-                    ['key' => 'db', 'label' => 'Database', 'type' => 'select', 'flag' => '--db=', 'options' => [
+                    ['key' => 'domain', 'label' => 'Domain', 'type' => 'text', 'role' => 'host', 'flag' => '--domain='],
+                    ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text', 'role' => 'account'],
+                    ['key' => 'db', 'label' => 'Database', 'type' => 'select', 'role' => 'option', 'flag' => '--db=', 'options' => [
                         ['value' => 'sqlite', 'label' => 'SQLite'],
                         ['value' => 'mysql', 'label' => 'MySQL'],
                         ['value' => 'mariadb', 'label' => 'MariaDB'],
@@ -50,7 +51,9 @@ beforeEach(function () {
                 'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
                 'commonsCapabilities' => ['databases' => ['sqlite'], 'cache' => [], 'storage' => ['s3'], 'auth' => [], 'mail' => []],
                 'initFields' => [
-                    ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text'],
+                    ['key' => 'domain', 'label' => 'Domain', 'type' => 'text', 'role' => 'host', 'flag' => '--domain='],
+                    ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text', 'role' => 'account'],
+                    ['key' => 'proxied', 'label' => 'Proxied', 'type' => 'confirm', 'role' => 'access', 'flag' => '--proxied=', 'default' => '1'],
                 ],
             ],
             [
@@ -59,7 +62,8 @@ beforeEach(function () {
                 'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
                 'commonsCapabilities' => ['databases' => ['sqlite', 'postgresql'], 'cache' => ['redis'], 'storage' => ['s3'], 'auth' => [], 'mail' => []],
                 'initFields' => [
-                    ['key' => 'noPlex', 'label' => 'Bypass Plex Commons', 'type' => 'confirm', 'flag' => '--no-plex'],
+                    ['key' => 'domain', 'label' => 'Domain', 'type' => 'text', 'role' => 'host', 'flag' => '--domain='],
+                    ['key' => 'noPlex', 'label' => 'Bypass Plex Commons', 'type' => 'confirm', 'role' => 'option', 'flag' => '--no-plex'],
                 ],
             ],
         ], JSON_PRETTY_PRINT)),
@@ -181,6 +185,65 @@ test('quick launch n8n without --no-plex deploys onto Plex Commons Postgres, no 
     });
 });
 
+test('a proxied field that defaults on passes nothing when left at its default, so the checkbox is not a bare text input', function () {
+    $fake = ChildProcess::fake();
+
+    $this->post(route('quick-actions.launch'), [
+        'tool' => 'pocketbase',
+        'server' => 'prod-server',
+        'domain' => 'pb.example.com',
+        'admin_email' => 'admin@example.com',
+        'options' => ['proxied' => true],
+    ])->assertOk();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) {
+        $bin = $this->bin;
+
+        return array_slice($cmd, 4) === [
+            "{$bin}/larakube",
+            'tool:add',
+            '--tool=pocketbase',
+            '--context=larakube-198.51.100.10',
+            '--domain=pb.example.com',
+            '--admin-email=admin@example.com',
+            '--no-wire-sso',
+            '--no-wire-mail',
+            '--force',
+            '--no-interaction',
+        ];
+    });
+});
+
+test('unchecking a proxied field that defaults on explicitly opts out with --proxied=0', function () {
+    $fake = ChildProcess::fake();
+
+    $this->post(route('quick-actions.launch'), [
+        'tool' => 'pocketbase',
+        'server' => 'prod-server',
+        'domain' => 'pb.example.com',
+        'admin_email' => 'admin@example.com',
+        'options' => ['proxied' => false],
+    ])->assertOk();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) {
+        $bin = $this->bin;
+
+        return array_slice($cmd, 4) === [
+            "{$bin}/larakube",
+            'tool:add',
+            '--tool=pocketbase',
+            '--context=larakube-198.51.100.10',
+            '--domain=pb.example.com',
+            '--admin-email=admin@example.com',
+            '--no-wire-sso',
+            '--no-wire-mail',
+            '--proxied=0',
+            '--force',
+            '--no-interaction',
+        ];
+    });
+});
+
 test('an unavailable option value is rejected with a field-scoped error', function () {
     $response = $this->post(route('quick-actions.launch'), [
         'tool' => 'wordpress',
@@ -197,13 +260,14 @@ test('an unavailable option value is rejected with a field-scoped error', functi
 test('the fields endpoint returns a tool\'s own init fields, live', function () {
     $this->get(route('quick-actions.fields', ['tool' => 'n8n', 'server' => 'prod-server']))
         ->assertOk()
+        ->assertJsonMissingPath('fields.1') // domain (host role) is filtered: Quick Launch's own Domain/Host Address field already covers it
         ->assertJsonPath('fields.0.key', 'noPlex')
         ->assertJsonPath('fields.0.flag', '--no-plex');
 
     $this->get(route('quick-actions.fields', ['tool' => 'wordpress', 'server' => 'prod-server']))
         ->assertOk()
         ->assertJsonPath('fields.0.key', 'db')
-        ->assertJsonCount(1, 'fields'); // adminEmail is filtered out, same as launch()'s optionFields()
+        ->assertJsonCount(1, 'fields'); // domain (host) and adminEmail (account) are filtered out — Quick Launch already has dedicated UI for both
 
     $this->get(route('quick-actions.fields', ['tool' => 'nope', 'server' => 'prod-server']))
         ->assertNotFound();

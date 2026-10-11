@@ -259,6 +259,8 @@ export type ClusterTool = {
     initFields?: FrameworkField[];
     /** Standardized Plex Commons integration capabilities. */
     commonsCapabilities?: ToolCommonsCapabilities;
+    /** The names THIS instance actually holds on the shared Commons — empty for an instance that bypassed it (--no-plex), even when the tool itself can join one. */
+    commons?: { databases: string[]; redis: string[]; buckets: string[] };
 };
 
 export function toolCategories(tool: {
@@ -567,6 +569,17 @@ export type FrameworkCatalog = {
 export type NewAppQuestion = FrameworkField;
 
 export type NewAppAnswers = Record<string, string | string[] | boolean | null>;
+
+/**
+ * Tool/framework/capability slugs still being battle-tested — shared on
+ * every page via HandleInertiaRequests, same as `hideProjects`. A slug's
+ * absence from the relevant list means it's considered tested.
+ */
+export type Untested = {
+    tools: string[];
+    frameworks: string[];
+    capabilities: string[];
+};
 
 export type BackupSchedule = {
     scheduled: boolean;

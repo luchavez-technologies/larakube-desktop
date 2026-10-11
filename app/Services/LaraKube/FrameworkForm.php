@@ -33,7 +33,21 @@ class FrameworkForm
             $type = (string) ($field['type'] ?? 'text');
 
             if ($type === 'confirm') {
-                if ($answer === true || $answer === 'true' || $answer === 1 || $answer === '1') {
+                $checked = $answer === true || $answer === 'true' || $answer === 1 || $answer === '1';
+                $flag = (string) ($field['flag'] ?? '');
+
+                if (str_ends_with($flag, '=')) {
+                    // A VALUE option standing in for a boolean (e.g. `proxied`,
+                    // which defaults ON and takes `--proxied=0` to opt out) —
+                    // a bare flag can't express "explicitly off", so only pass
+                    // anything when the answer actually differs from default.
+                    $default = $field['default'] ?? false;
+                    $defaultChecked = $default === true || $default === 'true' || $default === 1 || $default === '1';
+
+                    if ($checked !== $defaultChecked) {
+                        $flags[] = $flag.($checked ? '1' : '0');
+                    }
+                } elseif ($checked) {
                     $flags = [...$flags, ...$this->flagsFor($field, null, true)];
                 }
 

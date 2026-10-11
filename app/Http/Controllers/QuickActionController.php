@@ -136,6 +136,12 @@ class QuickActionController extends Controller
     }
 
     /**
+     * A tool's init fields, minus the ones Quick Launch already has its own
+     * dedicated UI for: `host` (the Domain/Host Address picker) and `account`
+     * (the Administrator Email field) — rendering them again here would be a
+     * confusing duplicate, and for `host` specifically, resolving it into a
+     * second `--domain=` flag that could disagree with the dedicated one.
+     *
      * @param  array<string, mixed>  $row
      * @return list<array<string, mixed>>
      */
@@ -143,6 +149,6 @@ class QuickActionController extends Controller
     {
         $fields = is_array($row['initFields'] ?? null) ? $row['initFields'] : [];
 
-        return array_values(array_filter($fields, fn (array $field): bool => ($field['key'] ?? '') !== 'adminEmail'));
+        return array_values(array_filter($fields, fn (array $field): bool => ! in_array($field['role'] ?? 'option', ['host', 'account'], true)));
     }
 }
