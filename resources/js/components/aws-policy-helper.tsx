@@ -38,7 +38,11 @@ const EC2_STATEMENT = {
 // Matches the role lifecycle and policy attachments LaraKube's own EKS
 // Terraform (resources/views/tofu/aws/managed.blade.php) creates — two roles
 // named "{cluster}-cluster-role"/"{cluster}-node-role", each with managed
-// policies attached, never an inline policy.
+// policies attached, never an inline policy or instance profile. The AWS
+// provider still reads/clears inline policies and instance profiles on
+// every read and delete of an aws_iam_role regardless of whether either is
+// actually in use (same list AWS's own role-deletion runbook requires), so
+// those actions are needed even though nothing is ever found to remove.
 const EKS_STATEMENTS = [
     {
         Sid: 'LaraKubeEksClusterAndNodegroup',
@@ -72,6 +76,10 @@ const EKS_STATEMENTS = [
             'iam:AttachRolePolicy',
             'iam:DetachRolePolicy',
             'iam:ListAttachedRolePolicies',
+            'iam:ListRolePolicies',
+            'iam:DeleteRolePolicy',
+            'iam:ListInstanceProfilesForRole',
+            'iam:RemoveRoleFromInstanceProfile',
         ],
         Resource: [
             'arn:aws:iam::*:role/*-cluster-role',
@@ -112,6 +120,22 @@ const EKS_STATEMENTS = [
                 ],
             },
         },
+    },
+    {
+        // Before EKS creates either service-linked role above, it first
+        // checks whether one already exists — that check is a plain
+        // iam:GetRole, which carries no iam:AWSServiceName context key, so
+        // it can't be folded into the conditioned statement above (the
+        // condition would never match and the call would still be denied).
+        // Pinning the exact AWSServiceRoleForAmazonEKS(Nodegroup) ARNs still
+        // got denied live (verified with the AWS CLI) even though the
+        // documented aws-service-role/{principal}/{name} path looks right,
+        // so this covers the whole service-linked-role path instead — still
+        // a read-only action, still well short of Resource: '*'.
+        Sid: 'LaraKubeEksServiceLinkedRoleCheck',
+        Effect: 'Allow',
+        Action: 'iam:GetRole',
+        Resource: 'arn:aws:iam::*:role/aws-service-role/*',
     },
 ];
 
