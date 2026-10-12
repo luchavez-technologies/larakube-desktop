@@ -36,17 +36,116 @@ type Props = {
 
 type TabType = 'mailboxes' | 'domains' | 'relay' | 'settings';
 
+/** A pulsing placeholder line/block — always on a bg-surface card, never bare on the
+ * page background, since bg-paper (the pulse color) is too close to the page's own
+ * background to read as a skeleton out there. */
+function Pulse({ className }: { className?: string }) {
+    return <div className={`animate-pulse rounded-md bg-paper ${className}`} />;
+}
+
 function MailboxesSkeleton() {
     return (
-        <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                    key={i}
-                    className="h-14 animate-pulse rounded-xl bg-paper"
-                />
-            ))}
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <Pulse className="h-8 w-64 rounded-lg" />
+                <Pulse className="h-8 w-32 rounded-lg" />
+            </div>
+            <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+                <div className="border-b border-line bg-paper/50 px-5 py-3">
+                    <Pulse className="h-3 w-40" />
+                </div>
+                <div className="divide-y divide-line">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                        <div
+                            key={i}
+                            className="flex items-center gap-4 px-5 py-3.5"
+                        >
+                            <Pulse className="h-3.5 w-48" />
+                            <Pulse className="h-3.5 w-24" />
+                            <Pulse className="h-3.5 w-16" />
+                            <Pulse className="ml-auto h-7 w-20 rounded-lg" />
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
+}
+
+function DomainsSkeleton() {
+    return (
+        <div className="space-y-6">
+            <Pulse className="h-8 w-48 rounded-lg" />
+            <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                        key={i}
+                        className="flex items-center gap-4 rounded-2xl bg-surface p-5 ring-1 ring-line"
+                    >
+                        <Pulse className="size-10 shrink-0 rounded-xl" />
+                        <div className="flex-1 space-y-2">
+                            <Pulse className="h-3.5 w-40" />
+                            <Pulse className="h-3 w-56" />
+                        </div>
+                        <Pulse className="h-7 w-24 rounded-lg" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function RelaySkeleton() {
+    return (
+        <div className="space-y-6">
+            <div className="rounded-2xl bg-surface p-6 ring-1 ring-line">
+                <Pulse className="mb-5 h-4 w-56" />
+                <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="space-y-1.5">
+                            <Pulse className="h-3 w-28" />
+                            <Pulse className="h-9 w-full rounded-lg" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SettingsSkeleton() {
+    return (
+        <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+                {Array.from({ length: 2 }).map((_, i) => (
+                    <div
+                        key={i}
+                        className="rounded-2xl bg-surface p-6 ring-1 ring-line"
+                    >
+                        <Pulse className="mb-5 h-4 w-56" />
+                        <div className="space-y-3">
+                            {Array.from({ length: 3 }).map((_, j) => (
+                                <Pulse key={j} className="h-3.5 w-full" />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function MailSkeleton({ tab }: { tab: TabType }) {
+    switch (tab) {
+        case 'domains':
+            return <DomainsSkeleton />;
+        case 'relay':
+            return <RelaySkeleton />;
+        case 'settings':
+            return <SettingsSkeleton />;
+        default:
+            return <MailboxesSkeleton />;
+    }
 }
 
 export default function MailIndex({
@@ -228,7 +327,7 @@ export default function MailIndex({
 
                         {/* Active Tab Content */}
                         {loading ? (
-                            <MailboxesSkeleton />
+                            <MailSkeleton tab={activeTab} />
                         ) : (
                             <>
                                 {activeTab === 'mailboxes' && (
