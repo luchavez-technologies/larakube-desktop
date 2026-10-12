@@ -236,7 +236,7 @@ class ProjectController extends Controller
         $arguments = $frameworks->scaffoldArguments($framework, $name, $resolved['flags']);
 
         // The arguments and folder are kept so a failed create can be retried as is.
-        $runner->start(
+        $run = $runner->start(
             label: "Create {$framework['label']} app {$name}",
             arguments: $arguments,
             kind: RunKind::NewProject,
@@ -250,7 +250,7 @@ class ProjectController extends Controller
             environment: 'local',
         );
 
-        return to_route('projects.index');
+        return to_route('runs.show', $run);
     }
 
     /**
@@ -291,7 +291,7 @@ class ProjectController extends Controller
             Cache::forever(self::EMAIL_CACHE_KEY, trim($email));
         }
 
-        $runner->start(
+        $run = $runner->start(
             label: "Create {$framework['label']} app {$name} on {$box['name']}",
             arguments: $frameworks->scaffoldArguments($framework, $name, $resolved['flags']),
             kind: RunKind::NewDevBoxProject,
@@ -303,7 +303,7 @@ class ProjectController extends Controller
             devBox: $box,
         );
 
-        return to_route('devboxes.index');
+        return to_route('runs.show', $run);
     }
 
     public function clone(Request $request, CliRunner $runner): RedirectResponse

@@ -220,6 +220,24 @@ export default function ShowRun({ run }: { run: Run }) {
                                 <span>Open project</span>
                             </Link>
                         )}
+                    {run.kind === 'new-dev-box-project' &&
+                        run.status === 'succeeded' &&
+                        run.meta?.server && (
+                            <Link
+                                href={
+                                    run.meta.app
+                                        ? showBoxProject({
+                                              box: run.meta.server,
+                                              project: run.meta.app,
+                                          }).url
+                                        : showDevBox(run.meta.server).url
+                                }
+                                className={buttonClass('primary')}
+                            >
+                                <ArrowRight className="size-4" />
+                                <span>Open the dev box</span>
+                            </Link>
+                        )}
                     {!running && run.kind === 'destroy-server' && (
                         <Link
                             href={serversIndex().url}
