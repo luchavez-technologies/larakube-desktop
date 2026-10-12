@@ -150,23 +150,6 @@ class ProjectController extends Controller
         $offered = array_column($frameworks->visible(), 'slug');
         $defaultFramework = in_array($requestedFramework, $offered, true) ? $requestedFramework : 'laravel';
 
-        $activeRun = null;
-        if ($request->filled('run')) {
-            $r = Run::query()->whereKey($request->query('run'))->first();
-            if ($r instanceof Run) {
-                $activeRun = [
-                    'id' => $r->id,
-                    'label' => $r->label,
-                    'kind' => $r->kind?->value,
-                    'status' => $r->status->value,
-                    'output' => (string) $r->output,
-                    'startedAt' => $r->created_at?->toIso8601String(),
-                    'finishedAt' => $r->finished_at?->toIso8601String(),
-                    'meta' => $r->meta,
-                ];
-            }
-        }
-
         return Inertia::render('projects/create', [
             'catalog' => Inertia::defer(fn (): ?array => $frameworks->catalog() === null ? null : [
                 'categories' => $frameworks->catalog()['categories'],
@@ -188,7 +171,6 @@ class ProjectController extends Controller
             'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
             'name' => (string) $request->query('name', ''),
             'framework' => $defaultFramework,
-            'activeRun' => $activeRun,
         ]);
     }
 
@@ -254,7 +236,7 @@ class ProjectController extends Controller
         $arguments = $frameworks->scaffoldArguments($framework, $name, $resolved['flags']);
 
         // The arguments and folder are kept so a failed create can be retried as is.
-        $run = $runner->start(
+        $runner->start(
             label: "Create {$framework['label']} app {$name}",
             arguments: $arguments,
             kind: RunKind::NewProject,
@@ -268,12 +250,7 @@ class ProjectController extends Controller
             environment: 'local',
         );
 
-        return to_route('projects.create', [
-            'run' => $run->id,
-            'parent' => $parent,
-            'name' => $name,
-            'framework' => $input['framework'],
-        ]);
+        return to_route('projects.index');
     }
 
     /**
@@ -314,7 +291,7 @@ class ProjectController extends Controller
             Cache::forever(self::EMAIL_CACHE_KEY, trim($email));
         }
 
-        $run = $runner->start(
+        $runner->start(
             label: "Create {$framework['label']} app {$name} on {$box['name']}",
             arguments: $frameworks->scaffoldArguments($framework, $name, $resolved['flags']),
             kind: RunKind::NewDevBoxProject,
@@ -326,7 +303,7 @@ class ProjectController extends Controller
             devBox: $box,
         );
 
-        return to_route('projects.create', ['run' => $run->id, 'framework' => $input['framework'], 'name' => $name]);
+        return to_route('devboxes.index');
     }
 
     public function clone(Request $request, CliRunner $runner): RedirectResponse

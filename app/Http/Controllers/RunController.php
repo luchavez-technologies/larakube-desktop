@@ -197,6 +197,8 @@ class RunController extends Controller
             'exitCode' => $run->exit_code,
             'startedAt' => $run->created_at?->toIso8601String(),
             'finishedAt' => $run->finished_at?->toIso8601String(),
+            'subject' => $run->subject,
+            'meta' => $run->meta,
         ]);
     }
 

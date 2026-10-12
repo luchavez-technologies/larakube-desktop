@@ -1,22 +1,35 @@
 import { Link, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
+    ArrowRight,
     ChevronDown,
     ChevronUp,
     ExternalLink,
     Maximize2,
+    Plus,
     RefreshCw,
     X,
     CheckCircle2,
     AlertCircle,
 } from 'lucide-react';
+import { buttonClass } from '@/components/button';
 import LogPanel from '@/components/log-panel';
 import StatusPill from '@/components/status-pill';
 import { sendJson } from '@/lib/http';
 import { useIsAnyRightDrawerOpen } from '@/lib/right-drawer-open';
+import { celebratesOnSuccess } from '@/lib/run-kinds';
 import { runStatus } from '@/lib/servers';
+import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { cn } from '@/lib/utils';
+import { show as showDevBox } from '@/routes/devboxes';
+import { show as showBoxProject } from '@/routes/devboxes/projects';
+import {
+    create as createProject,
+    show as showProject,
+} from '@/routes/projects';
 import { cancel as cancelRoute, show as showRunRoute } from '@/routes/runs';
+import type { Run } from '@/types/larakube';
 
 type ActiveRunSummary = {
     id: number;
@@ -34,7 +47,57 @@ type StreamData = {
     exitCode: number | null;
     startedAt: string | null;
     finishedAt: string | null;
+    subject: string | null;
+    meta: Run['meta'];
 };
+
+/** The "what next" buttons a finished new-project run earns, the same ones its old inline terminal card offered. */
+function successActions(stream: StreamData): ReactNode {
+    if (
+        stream.kind !== 'new-project' &&
+        stream.kind !== 'new-dev-box-project'
+    ) {
+        return null;
+    }
+
+    const server = stream.meta?.server;
+    const app = stream.meta?.app;
+
+    return (
+        <>
+            <Link
+                href={createProject().url}
+                className={buttonClass('secondary', 'sm')}
+            >
+                <Plus className="size-3.5" />
+                <span>Create another</span>
+            </Link>
+            {stream.kind === 'new-project' && stream.meta?.project && (
+                <Link
+                    href={showProject(Number(stream.meta.project)).url}
+                    className={buttonClass('primary', 'sm')}
+                >
+                    <span>Open project</span>
+                    <ArrowRight className="size-3.5" />
+                </Link>
+            )}
+            {stream.kind === 'new-dev-box-project' && server && (
+                <Link
+                    href={
+                        (app
+                            ? showBoxProject({ box: server, project: app })
+                            : showDevBox(server)
+                        ).url
+                    }
+                    className={buttonClass('primary', 'sm')}
+                >
+                    <span>Open the dev box</span>
+                    <ArrowRight className="size-3.5" />
+                </Link>
+            )}
+        </>
+    );
+}
 
 export default function RunDrawer() {
     const page = usePage<{
@@ -56,6 +119,8 @@ export default function RunDrawer() {
                 exitCode: null,
                 startedAt: activeRunFromProps.created_at ?? null,
                 finishedAt: null,
+                subject: null,
+                meta: null,
             };
         }
         return null;
@@ -63,6 +128,11 @@ export default function RunDrawer() {
     const [expanded, setExpanded] = useState(Boolean(activeRunFromProps?.id));
     const [dismissed, setDismissed] = useState(false);
     const moveAside = useIsAnyRightDrawerOpen();
+
+    useCelebrateOnSuccess(
+        stream?.status === 'succeeded' &&
+            celebratesOnSuccess(stream?.kind ?? null),
+    );
 
     // Synchronize currentRunId with activeRun from Inertia page props
     useEffect(() => {
@@ -82,6 +152,8 @@ export default function RunDrawer() {
                           exitCode: null,
                           startedAt: activeRunFromProps.created_at ?? null,
                           finishedAt: null,
+                          subject: null,
+                          meta: null,
                       },
             );
         }
@@ -91,6 +163,17 @@ export default function RunDrawer() {
         activeRunFromProps?.status,
         activeRunFromProps?.created_at,
     ]);
+
+    // Pop the drawer back open the moment a run finishes, even if someone
+    // minimized it while it was running — that's exactly when the result
+    // (and its "what next" buttons) become worth seeing.
+    const wasRunning = useRef(false);
+    useEffect(() => {
+        if (wasRunning.current && stream?.status !== 'running') {
+            setExpanded(true);
+        }
+        wasRunning.current = stream?.status === 'running';
+    }, [stream?.status]);
 
     // Poll current run while it is active
     useEffect(() => {
@@ -128,6 +211,8 @@ export default function RunDrawer() {
     }, [currentRunId, stream?.status, dismissed]);
 
     if (
+        // This page already shows the active run's own full terminal inline
+        // — the floating HUD would just duplicate it.
         page.component === 'runs/show' ||
         !currentRunId ||
         dismissed ||
@@ -222,8 +307,8 @@ export default function RunDrawer() {
                     </div>
 
                     {/* Footer */}
-                    <div className="flex shrink-0 items-center justify-between border-t border-line bg-surface px-4 py-2 text-xs text-soft">
-                        <span>
+                    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line bg-surface px-4 py-2 text-xs text-soft">
+                        <span className="shrink-0">
                             {isRunning
                                 ? 'Process running in background'
                                 : `Run finished (${stream.status})`}
@@ -239,11 +324,12 @@ export default function RunDrawer() {
                                     Cancel process
                                 </Link>
                             )}
+                            {!isRunning && successActions(stream)}
                             {!isRunning && (
                                 <button
                                     type="button"
                                     onClick={() => setDismissed(true)}
-                                    className="rounded-md border border-line px-2.5 py-1 text-xs text-ink transition hover:bg-paper"
+                                    className={buttonClass('ghost', 'sm')}
                                 >
                                     Dismiss
                                 </button>

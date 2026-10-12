@@ -9,6 +9,7 @@ import Redactable from '@/components/redactable';
 import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
+import { celebratesOnSuccess } from '@/lib/run-kinds';
 import { runStatus } from '@/lib/servers';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { open, readiness } from '@/routes';
@@ -131,13 +132,9 @@ export default function ShowRun({ run }: { run: Run }) {
     // Celebrated more broadly than isCreate's card-rendering scope — a
     // cloned project gets no special card here at all, but it's still
     // something just got created, so it still earns the confetti.
-    const celebratesOnSuccess =
-        isCreate ||
-        run.kind === 'new-project' ||
-        run.kind === 'new-dev-box-project' ||
-        run.kind === 'clone-project' ||
-        run.kind === 'clone-dev-box-project';
-    useCelebrateOnSuccess(run.status === 'succeeded' && celebratesOnSuccess);
+    useCelebrateOnSuccess(
+        run.status === 'succeeded' && celebratesOnSuccess(run.kind ?? null),
+    );
 
     useEffect(() => {
         if (!running) stop();
