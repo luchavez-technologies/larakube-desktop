@@ -51,6 +51,21 @@ type StreamData = {
     meta: Run['meta'];
 };
 
+function placeholderStream(seed: ActiveRunSummary): StreamData {
+    return {
+        id: seed.id,
+        label: seed.label,
+        kind: null,
+        status: seed.status,
+        output: '',
+        exitCode: null,
+        startedAt: seed.created_at ?? null,
+        finishedAt: null,
+        subject: null,
+        meta: null,
+    };
+}
+
 /** The "what next" buttons a finished new-project run earns, the same ones its old inline terminal card offered. */
 function successActions(stream: StreamData): ReactNode {
     if (
@@ -99,93 +114,53 @@ function successActions(stream: StreamData): ReactNode {
     );
 }
 
-export default function RunDrawer() {
-    const page = usePage<{
-        activeRun?: ActiveRunSummary | null;
-    }>();
-
-    const activeRunFromProps = page.props.activeRun ?? null;
-    const [currentRunId, setCurrentRunId] = useState<number | null>(
-        activeRunFromProps?.id ?? null,
+/**
+ * One tracked run's card — either the big log panel (when it's the stack's
+ * single "expanded" slot) or a collapsed pill. Owns its own polling and
+ * confetti; the parent only owns which id (if any) is expanded.
+ */
+function TrackedRun({
+    seed,
+    expanded,
+    onExpand,
+    onCollapse,
+    onDismiss,
+    onFinished,
+}: {
+    seed: ActiveRunSummary;
+    expanded: boolean;
+    onExpand: (id: number) => void;
+    onCollapse: () => void;
+    onDismiss: (id: number) => void;
+    onFinished: (id: number) => void;
+}) {
+    const [stream, setStream] = useState<StreamData>(() =>
+        placeholderStream(seed),
     );
-    const [stream, setStream] = useState<StreamData | null>(() => {
-        if (activeRunFromProps?.id) {
-            return {
-                id: activeRunFromProps.id,
-                label: activeRunFromProps.label,
-                kind: null,
-                status: activeRunFromProps.status,
-                output: '',
-                exitCode: null,
-                startedAt: activeRunFromProps.created_at ?? null,
-                finishedAt: null,
-                subject: null,
-                meta: null,
-            };
-        }
-        return null;
-    });
-    const [expanded, setExpanded] = useState(Boolean(activeRunFromProps?.id));
-    const [dismissed, setDismissed] = useState(false);
-    const moveAside = useIsAnyRightDrawerOpen();
 
     useCelebrateOnSuccess(
-        stream?.status === 'succeeded' &&
-            celebratesOnSuccess(stream?.kind ?? null),
+        stream.status === 'succeeded' && celebratesOnSuccess(stream.kind),
     );
 
-    // Synchronize currentRunId with activeRun from Inertia page props
+    // Pop this card's log panel open the moment it finishes, even if it was
+    // minimized while running — but only if nothing else currently has the
+    // stack's one expanded slot (handled by the parent via onFinished).
+    const wasRunning = useRef(stream.status === 'running');
     useEffect(() => {
-        if (activeRunFromProps?.id) {
-            setCurrentRunId(activeRunFromProps.id);
-            setDismissed(false);
-            setExpanded(true);
-            setStream((prev) =>
-                prev?.id === activeRunFromProps.id
-                    ? prev
-                    : {
-                          id: activeRunFromProps.id,
-                          label: activeRunFromProps.label,
-                          kind: null,
-                          status: activeRunFromProps.status,
-                          output: '',
-                          exitCode: null,
-                          startedAt: activeRunFromProps.created_at ?? null,
-                          finishedAt: null,
-                          subject: null,
-                          meta: null,
-                      },
-            );
+        if (wasRunning.current && stream.status !== 'running') {
+            onFinished(seed.id);
         }
-    }, [
-        activeRunFromProps?.id,
-        activeRunFromProps?.label,
-        activeRunFromProps?.status,
-        activeRunFromProps?.created_at,
-    ]);
+        wasRunning.current = stream.status === 'running';
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stream.status]);
 
-    // Pop the drawer back open the moment a run finishes, even if someone
-    // minimized it while it was running — that's exactly when the result
-    // (and its "what next" buttons) become worth seeing.
-    const wasRunning = useRef(false);
+    // Poll this run while it is active.
     useEffect(() => {
-        if (wasRunning.current && stream?.status !== 'running') {
-            setExpanded(true);
-        }
-        wasRunning.current = stream?.status === 'running';
-    }, [stream?.status]);
-
-    // Poll current run while it is active
-    useEffect(() => {
-        if (!currentRunId || dismissed) {
-            return;
-        }
-
         let isMounted = true;
 
         const fetchStream = async () => {
             const res = await sendJson<StreamData>(
-                `/runs/${currentRunId}/stream`,
+                `/runs/${seed.id}/stream`,
                 'GET',
             );
 
@@ -197,7 +172,7 @@ export default function RunDrawer() {
         void fetchStream();
 
         const interval = setInterval(() => {
-            if (stream?.status && stream.status !== 'running') {
+            if (stream.status !== 'running') {
                 clearInterval(interval);
                 return;
             }
@@ -208,18 +183,8 @@ export default function RunDrawer() {
             isMounted = false;
             clearInterval(interval);
         };
-    }, [currentRunId, stream?.status, dismissed]);
-
-    if (
-        // This page already shows the active run's own full terminal inline
-        // — the floating HUD would just duplicate it.
-        page.component === 'runs/show' ||
-        !currentRunId ||
-        dismissed ||
-        !stream
-    ) {
-        return null;
-    }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seed.id, stream.status]);
 
     const isRunning = stream.status === 'running';
     const isSucceeded = stream.status === 'succeeded';
@@ -231,6 +196,192 @@ export default function RunDrawer() {
     const detach = async () => {
         await sendJson(`/runs/${stream.id}/detach`, 'POST');
     };
+
+    if (expanded) {
+        return (
+            <div className="mb-2 flex h-[460px] w-[620px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl transition-all">
+                {/* Header */}
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                        {isRunning && (
+                            <RefreshCw className="size-4 shrink-0 animate-spin text-brand" />
+                        )}
+                        {isSucceeded && (
+                            <CheckCircle2 className="size-4 shrink-0 text-ok" />
+                        )}
+                        {isFailed && (
+                            <AlertCircle className="size-4 shrink-0 text-accent" />
+                        )}
+                        <span className="truncate text-sm font-semibold tracking-tight text-ink">
+                            {stream.label}
+                        </span>
+                        <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            title="Detach into separate window"
+                            onClick={() => void detach()}
+                            className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                        >
+                            <ExternalLink className="size-4" />
+                        </button>
+                        <Link
+                            href={showRunRoute(stream.id).url}
+                            title="Open full screen"
+                            className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                        >
+                            <Maximize2 className="size-4" />
+                        </Link>
+                        <button
+                            type="button"
+                            title="Minimize"
+                            onClick={onCollapse}
+                            className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                        >
+                            <ChevronDown className="size-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Log Terminal Body */}
+                <div className="bg-term-bg min-h-0 flex-1 p-2 font-mono text-xs">
+                    <LogPanel
+                        output={stream.output}
+                        placeholder="Waiting for command output…"
+                        className="h-full"
+                    />
+                </div>
+
+                {/* Footer */}
+                <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line bg-surface px-4 py-2 text-xs text-soft">
+                    <span className="shrink-0">
+                        {isRunning
+                            ? 'Process running in background'
+                            : `Run finished (${stream.status})`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        {isRunning && (
+                            <Link
+                                href={cancelRoute(stream.id).url}
+                                method="post"
+                                as="button"
+                                className="rounded-md border border-line px-2.5 py-1 text-xs text-accent transition hover:bg-paper"
+                            >
+                                Cancel process
+                            </Link>
+                        )}
+                        {!isRunning && successActions(stream)}
+                        {!isRunning && (
+                            <button
+                                type="button"
+                                onClick={() => onDismiss(seed.id)}
+                                className={buttonClass('ghost', 'sm')}
+                            >
+                                Dismiss
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-3 rounded-full border border-line bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur-md transition-all hover:bg-surface">
+            <div className="flex items-center gap-2">
+                {isRunning && (
+                    <RefreshCw className="size-3.5 animate-spin text-brand" />
+                )}
+                {isSucceeded && <CheckCircle2 className="size-3.5 text-ok" />}
+                {isFailed && <AlertCircle className="size-3.5 text-accent" />}
+                <span className="max-w-[240px] truncate text-xs font-medium text-ink">
+                    {stream.label}
+                </span>
+                <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
+            </div>
+
+            <div className="flex items-center gap-1 border-l border-line pl-2">
+                <button
+                    type="button"
+                    onClick={() => onExpand(seed.id)}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink transition hover:bg-paper"
+                >
+                    <ChevronUp className="size-3.5" />
+                    <span>Logs</span>
+                </button>
+                <button
+                    type="button"
+                    title="Detach window"
+                    onClick={() => void detach()}
+                    className="rounded-md p-1 text-soft transition hover:bg-paper hover:text-ink"
+                >
+                    <ExternalLink className="size-3.5" />
+                </button>
+                {!isRunning && (
+                    <button
+                        type="button"
+                        title="Dismiss"
+                        onClick={() => onDismiss(seed.id)}
+                        className="rounded-md p-1 text-soft transition hover:bg-paper hover:text-ink"
+                    >
+                        <X className="size-3.5" />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default function RunDrawer() {
+    const page = usePage<{
+        activeRuns?: ActiveRunSummary[];
+    }>();
+
+    const activeRunsFromProps = page.props.activeRuns ?? [];
+    const incomingKey = activeRunsFromProps.map((run) => run.id).join(',');
+
+    // One card per run still being tracked, newest first. A run stays here
+    // (showing its final state) after it finishes, until dismissed —
+    // dropping out of activeRuns alone never removes its card.
+    const [seeds, setSeeds] = useState<ActiveRunSummary[]>(activeRunsFromProps);
+    const [expandedId, setExpandedId] = useState<number | null>(
+        activeRunsFromProps[0]?.id ?? null,
+    );
+    const moveAside = useIsAnyRightDrawerOpen();
+
+    useEffect(() => {
+        const known = new Set(seeds.map((seed) => seed.id));
+        const fresh = activeRunsFromProps.filter((run) => !known.has(run.id));
+
+        if (fresh.length === 0) {
+            return;
+        }
+
+        setSeeds((prev) => [...fresh, ...prev]);
+        // A newly started run takes over the one expanded slot — that's
+        // the run someone just kicked off and is presumably watching.
+        setExpandedId(fresh[0].id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [incomingKey]);
+
+    function dismiss(id: number) {
+        setSeeds((prev) => prev.filter((seed) => seed.id !== id));
+        setExpandedId((prev) => (prev === id ? null : prev));
+    }
+
+    function finished(id: number) {
+        // Only steal the expanded slot if nothing else is already in it —
+        // a run finishing shouldn't yank focus from one you're reading.
+        setExpandedId((prev) => prev ?? id);
+    }
+
+    if (page.component === 'runs/show' || seeds.length === 0) {
+        // The runs/show page already shows its own run's full terminal
+        // inline — the floating HUD would just duplicate that one card.
+        return null;
+    }
 
     return (
         <aside
@@ -247,147 +398,17 @@ export default function RunDrawer() {
                 moveAside ? 'left-6 items-start' : 'right-6 items-end',
             )}
         >
-            {/* Expanded Drawer / Terminal Panel */}
-            {expanded && (
-                <div className="mb-2 flex h-[460px] w-[620px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl transition-all">
-                    {/* Header */}
-                    <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                            {isRunning && (
-                                <RefreshCw className="size-4 shrink-0 animate-spin text-brand" />
-                            )}
-                            {isSucceeded && (
-                                <CheckCircle2 className="size-4 shrink-0 text-ok" />
-                            )}
-                            {isFailed && (
-                                <AlertCircle className="size-4 shrink-0 text-accent" />
-                            )}
-                            <span className="truncate text-sm font-semibold tracking-tight text-ink">
-                                {stream.label}
-                            </span>
-                            <StatusPill tone={statusTone}>
-                                {statusLabel}
-                            </StatusPill>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                type="button"
-                                title="Detach into separate window"
-                                onClick={() => void detach()}
-                                className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
-                            >
-                                <ExternalLink className="size-4" />
-                            </button>
-                            <Link
-                                href={showRunRoute(stream.id).url}
-                                title="Open full screen"
-                                className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
-                            >
-                                <Maximize2 className="size-4" />
-                            </Link>
-                            <button
-                                type="button"
-                                title="Minimize drawer"
-                                onClick={() => setExpanded(false)}
-                                className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
-                            >
-                                <ChevronDown className="size-4" />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Log Terminal Body */}
-                    <div className="bg-term-bg min-h-0 flex-1 p-2 font-mono text-xs">
-                        <LogPanel
-                            output={stream.output}
-                            placeholder="Waiting for command output…"
-                            fill
-                        />
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line bg-surface px-4 py-2 text-xs text-soft">
-                        <span className="shrink-0">
-                            {isRunning
-                                ? 'Process running in background'
-                                : `Run finished (${stream.status})`}
-                        </span>
-                        <div className="flex items-center gap-2">
-                            {isRunning && (
-                                <Link
-                                    href={cancelRoute(stream.id).url}
-                                    method="post"
-                                    as="button"
-                                    className="rounded-md border border-line px-2.5 py-1 text-xs text-accent transition hover:bg-paper"
-                                >
-                                    Cancel process
-                                </Link>
-                            )}
-                            {!isRunning && successActions(stream)}
-                            {!isRunning && (
-                                <button
-                                    type="button"
-                                    onClick={() => setDismissed(true)}
-                                    className={buttonClass('ghost', 'sm')}
-                                >
-                                    Dismiss
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Collapsed Bottom HUD Pill */}
-            {!expanded && (
-                <div className="flex items-center gap-3 rounded-full border border-line bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur-md transition-all hover:bg-surface">
-                    <div className="flex items-center gap-2">
-                        {isRunning && (
-                            <RefreshCw className="size-3.5 animate-spin text-brand" />
-                        )}
-                        {isSucceeded && (
-                            <CheckCircle2 className="size-3.5 text-ok" />
-                        )}
-                        {isFailed && (
-                            <AlertCircle className="size-3.5 text-accent" />
-                        )}
-                        <span className="max-w-[240px] truncate text-xs font-medium text-ink">
-                            {stream.label}
-                        </span>
-                        <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
-                    </div>
-
-                    <div className="flex items-center gap-1 border-l border-line pl-2">
-                        <button
-                            type="button"
-                            onClick={() => setExpanded(true)}
-                            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink transition hover:bg-paper"
-                        >
-                            <ChevronUp className="size-3.5" />
-                            <span>Logs</span>
-                        </button>
-                        <button
-                            type="button"
-                            title="Detach window"
-                            onClick={() => void detach()}
-                            className="rounded-md p-1 text-soft transition hover:bg-paper hover:text-ink"
-                        >
-                            <ExternalLink className="size-3.5" />
-                        </button>
-                        {!isRunning && (
-                            <button
-                                type="button"
-                                title="Dismiss"
-                                onClick={() => setDismissed(true)}
-                                className="rounded-md p-1 text-soft transition hover:bg-paper hover:text-ink"
-                            >
-                                <X className="size-3.5" />
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
+            {seeds.map((seed) => (
+                <TrackedRun
+                    key={seed.id}
+                    seed={seed}
+                    expanded={seed.id === expandedId}
+                    onExpand={setExpandedId}
+                    onCollapse={() => setExpandedId(null)}
+                    onDismiss={dismiss}
+                    onFinished={finished}
+                />
+            ))}
         </aside>
     );
 }

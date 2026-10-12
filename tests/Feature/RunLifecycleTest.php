@@ -247,6 +247,20 @@ test('runs.detach returns success JSON', function () {
         ->assertJson(['detached' => true]);
 });
 
+test('every running run is shared to every page, not just the latest, for the floating HUD to stack', function () {
+    $first = runLifecycleRun();
+    $second = runLifecycleRun();
+    $finished = runLifecycleRun();
+    $finished->update(['status' => RunStatus::Succeeded]);
+
+    $this->get(route('runs.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('activeRuns', 2)
+            ->where('activeRuns.0.id', $second->id)
+            ->where('activeRuns.1.id', $first->id)
+        );
+});
+
 test('runs.show renders the run details page with Inertia', function () {
     $run = runLifecycleRun();
     $run->update([

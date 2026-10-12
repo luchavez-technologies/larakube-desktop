@@ -47,10 +47,14 @@ class HandleInertiaRequests extends Middleware
             'experimental' => app(GlobalSettings::class)->experimental(),
             'demoMode' => app(GlobalSettings::class)->demoMode(),
             'untested' => app(ToolMaturity::class)->untested(),
-            'activeRun' => fn () => Run::query()
+            // Every run still going, not just the latest — the floating HUD
+            // stacks one card per run, so a long EKS create doesn't crowd out
+            // something started after it (ADR: multiple concurrent runs).
+            'activeRuns' => fn () => Run::query()
                 ->where('status', RunStatus::Running)
                 ->latest('id')
-                ->first(['id', 'label', 'status', 'created_at']),
+                ->limit(10)
+                ->get(['id', 'label', 'status', 'created_at']),
             'auth' => [
                 'user' => $request->user(),
             ],
