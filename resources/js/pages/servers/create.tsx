@@ -11,6 +11,7 @@ import {
     Users,
 } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
+import GcpPolicyHelper from '@/components/gcp-policy-helper';
 import Button, { buttonClass } from '@/components/button';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
@@ -1073,6 +1074,17 @@ function DnsAutomationOption({
                                         IAM role.
                                     </p>
                                 </div>
+
+                                <GcpPolicyHelper
+                                    includeCompute={false}
+                                    includeGke={false}
+                                    includeDns={true}
+                                    interactive={false}
+                                    projectId={
+                                        form.data.dns_gcp_project_id ||
+                                        undefined
+                                    }
+                                />
 
                                 <div className="flex items-center justify-between">
                                     <p className="text-[11px] text-soft">

@@ -16,6 +16,7 @@ import Button, { buttonClass } from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
 import Redactable from '@/components/redactable';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
+import GcpPolicyHelper from '@/components/gcp-policy-helper';
 import GcpSignIn from '@/components/gcp-sign-in';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
@@ -655,6 +656,12 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                     onSubmit={submitGcp}
                                     className="space-y-4"
                                 >
+                                    <GcpPolicyHelper
+                                        interactive={true}
+                                        projectId={parsedGcp?.projectId}
+                                        clientEmail={parsedGcp?.clientEmail}
+                                    />
+
                                     <div>
                                         <div className="flex items-center justify-between">
                                             <label className="text-foreground block text-xs font-medium">
