@@ -193,9 +193,9 @@ export default function AppLayout({
     );
 
     return (
-        <div className="flex min-h-screen">
+        <div className="flex h-screen overflow-hidden">
             <Head title={title} />
-            <aside className="sticky top-0 z-30 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
+            <aside className="z-30 flex h-full w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
                 <div className="mb-5 flex items-center justify-between px-2.5">
                     <div className="flex items-center gap-2.5">
                         <img
@@ -209,7 +209,7 @@ export default function AppLayout({
                     </div>
                     <NotificationBell />
                 </div>
-                <nav className="flex flex-col gap-1">
+                <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
                     {visibleNavigation.map((item) => {
                         const active = item.active(url);
                         const Icon = item.icon;
@@ -281,7 +281,12 @@ export default function AppLayout({
                     </ExternalLinkButton>
                 </div>
             </aside>
-            <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
+            <main
+                scroll-region="true"
+                className="min-w-0 flex-1 overflow-y-auto px-10 py-8"
+            >
+                {children}
+            </main>
             <RunDrawer />
         </div>
     );
