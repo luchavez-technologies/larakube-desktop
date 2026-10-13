@@ -76,3 +76,27 @@ test('projects are listed by the CLI as ids and names', function () {
 
     expect(app(GcpSignIn::class)->projects())->toBe([['id' => 'demo-123', 'name' => 'Demo']]);
 });
+
+test('saving gcp service account credentials delegates to CLI cloud:credentials', function () {
+    putenv('SystemRoot=C:\\Windows');
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    Process::fake([
+        '*which*' => Process::result(output: "/usr/local/bin/larakube\n"),
+        '*' => Process::result(output: json_encode([
+            'success' => true,
+            'provider' => 'gcp',
+            'project_id' => 'my-gcp-project',
+            'account' => 'sa@my-gcp-project.iam.gserviceaccount.com',
+        ])),
+    ]);
+
+    $saJson = json_encode([
+        'type' => 'service_account',
+        'project_id' => 'my-gcp-project',
+        'client_email' => 'sa@my-gcp-project.iam.gserviceaccount.com',
+    ]);
+
+    $this->post('/setup/cloud/gcp/service-account', ['credentials' => $saJson])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+});

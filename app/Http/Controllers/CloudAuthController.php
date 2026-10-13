@@ -94,4 +94,31 @@ class CloudAuthController extends Controller
             ? back()->with('success', "Google Cloud project set to {$validated['project_id']}.")
             : back()->withErrors(['gcp' => (string) ($result['error'] ?? 'Could not set the project.')]);
     }
+
+    public function saveGcpServiceAccount(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'credentials' => ['required', 'string'],
+        ]);
+
+        $result = $account->call(
+            ['cloud:credentials', '--provider=gcp'],
+            ['GCP_SERVICE_ACCOUNT_JSON' => $validated['credentials']],
+        );
+
+        $saved = ($result['success'] ?? false) === true;
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $saved,
+                'message' => $saved ? 'Google Cloud Service Account saved successfully.' : ($result['error'] ?? 'Could not save credentials.'),
+                'project_id' => $result['project_id'] ?? null,
+                'account' => $result['account'] ?? null,
+            ], $saved ? 200 : 422);
+        }
+
+        return $saved
+            ? back()->with('success', 'Google Cloud Service Account saved successfully.')
+            : back()->withErrors(['gcp' => (string) ($result['error'] ?? 'Could not save credentials.')]);
+    }
 }

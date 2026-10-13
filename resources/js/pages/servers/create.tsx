@@ -1,9 +1,17 @@
 import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, Globe, Key, Plus, Users } from 'lucide-react';
+import {
+    CheckCircle2,
+    ChevronDown,
+    FlaskConical,
+    Globe,
+    Key,
+    Plus,
+    Upload,
+    Users,
+} from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
-import { buttonClass } from '@/components/button';
-import Button from '@/components/button';
+import Button, { buttonClass } from '@/components/button';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
 import InfoTooltip from '@/components/info-tooltip';
@@ -747,6 +755,53 @@ function DnsAutomationOption({
 }) {
     const hasDns = form.data.dns_provider !== '';
 
+    const parsedGcpDns = (() => {
+        if (!form.data.dns_gcp_credentials) return null;
+        try {
+            const parsed = JSON.parse(
+                String(form.data.dns_gcp_credentials).trim(),
+            );
+            if (
+                parsed &&
+                typeof parsed === 'object' &&
+                parsed.type === 'service_account'
+            ) {
+                return {
+                    projectId: parsed.project_id as string | undefined,
+                    clientEmail: parsed.client_email as string | undefined,
+                };
+            }
+        } catch {
+            // not valid JSON yet
+        }
+        return null;
+    })();
+
+    const handleDnsGcpFileSelect = async (
+        e: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            form.setData('dns_gcp_credentials', text.trim());
+            try {
+                const parsed = JSON.parse(text.trim());
+                if (
+                    parsed.project_id &&
+                    (!form.data.dns_gcp_project_id ||
+                        form.data.dns_gcp_project_id === '')
+                ) {
+                    form.setData('dns_gcp_project_id', parsed.project_id);
+                }
+            } catch {
+                // ignore
+            }
+        } catch {
+            // ignore
+        }
+    };
+
     return (
         <details
             className="group rounded-xl bg-paper/60 ring-1 ring-line"
@@ -789,8 +844,14 @@ function DnsAutomationOption({
                                 label: 'None (Configure later or manually)',
                             },
                             { value: 'cloudflare', label: 'Cloudflare' },
-                            { value: 'route53', label: 'AWS Route 53' },
-                            { value: 'google', label: 'Google Cloud DNS' },
+                            {
+                                value: 'route53',
+                                label: 'AWS Route 53 (Experimental)',
+                            },
+                            {
+                                value: 'google',
+                                label: 'Google Cloud DNS (Experimental)',
+                            },
                         ]}
                     />
                 </Field>
@@ -875,6 +936,31 @@ function DnsAutomationOption({
 
                         {form.data.dns_provider === 'route53' && (
                             <div className="space-y-3">
+                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                                    <div className="flex items-center gap-1.5 font-semibold">
+                                        <FlaskConical className="size-3.5 shrink-0" />
+                                        <span>Experimental Provider</span>
+                                    </div>
+                                    <p className="mt-1 leading-relaxed text-soft">
+                                        AWS Route 53 integration is supported
+                                        via ExternalDNS &amp; cert-manager, but
+                                        has not yet been live-validated in this
+                                        environment. Ensure your AWS IAM
+                                        credentials have{' '}
+                                        <code className="text-foreground font-mono">
+                                            route53:ChangeResourceRecordSets
+                                        </code>
+                                        ,{' '}
+                                        <code className="text-foreground font-mono">
+                                            route53:ListResourceRecordSets
+                                        </code>
+                                        , and{' '}
+                                        <code className="text-foreground font-mono">
+                                            route53:ListHostedZonesByName
+                                        </code>{' '}
+                                        permissions.
+                                    </p>
+                                </div>
                                 {provider.slug === 'aws' && (
                                     <div className="flex justify-end">
                                         <button
@@ -966,8 +1052,33 @@ function DnsAutomationOption({
 
                         {form.data.dns_provider === 'google' && (
                             <div className="space-y-3">
-                                {provider.slug === 'gcp' && (
-                                    <div className="flex justify-end">
+                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                                    <div className="flex items-center gap-1.5 font-semibold">
+                                        <FlaskConical className="size-3.5 shrink-0" />
+                                        <span>Experimental Provider</span>
+                                    </div>
+                                    <p className="mt-1 leading-relaxed text-soft">
+                                        Google Cloud DNS automation is supported
+                                        via ExternalDNS &amp; cert-manager, but
+                                        has not yet been live-validated in this
+                                        environment. Ensure your GCP project has
+                                        the <strong>Cloud DNS API</strong>{' '}
+                                        enabled and the Service Account
+                                        possesses the{' '}
+                                        <code className="text-foreground font-mono">
+                                            roles/dns.admin
+                                        </code>{' '}
+                                        IAM role.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[11px] text-soft">
+                                        DNS zones can reside in the server's GCP
+                                        project or a separate centralized
+                                        project.
+                                    </p>
+                                    {provider.slug === 'gcp' && (
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -981,15 +1092,16 @@ function DnsAutomationOption({
                                                     );
                                                 }
                                             }}
-                                            className="flex items-center gap-1 text-xs font-medium text-servers hover:underline"
+                                            className="flex shrink-0 items-center gap-1 text-xs font-medium text-servers hover:underline"
                                         >
                                             <Key className="size-3" />
                                             <span>
                                                 Use server GCP project ID
                                             </span>
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
+
                                 <Field
                                     label="Google Cloud Project ID"
                                     error={form.errors.dns_gcp_project_id}
@@ -1007,24 +1119,101 @@ function DnsAutomationOption({
                                         className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
                                     />
                                 </Field>
-                                <Field
-                                    label="Service Account Credentials (JSON or path)"
-                                    hint="A Service Account key JSON string, or absolute path to a JSON file on this machine with roles/dns.admin."
-                                    error={form.errors.dns_gcp_credentials}
-                                >
+
+                                <div>
+                                    <div className="mb-1.5 flex items-center justify-between">
+                                        <div>
+                                            <label className="text-foreground block text-xs font-medium">
+                                                Service Account Credentials
+                                                (JSON or path)
+                                            </label>
+                                            <p className="mt-0.5 text-[11px] text-soft">
+                                                Key JSON string, or absolute
+                                                path on this machine with
+                                                roles/dns.admin.
+                                            </p>
+                                        </div>
+                                        <label
+                                            className={cn(
+                                                buttonClass('secondary', 'sm'),
+                                                'cursor-pointer text-xs',
+                                            )}
+                                        >
+                                            <Upload className="size-3" />
+                                            <span>Browse JSON File…</span>
+                                            <input
+                                                type="file"
+                                                accept=".json,application/json"
+                                                onChange={
+                                                    handleDnsGcpFileSelect
+                                                }
+                                                className="sr-only"
+                                            />
+                                        </label>
+                                    </div>
                                     <textarea
                                         rows={3}
                                         placeholder='{"type": "service_account", ...} or /path/to/key.json'
                                         value={form.data.dns_gcp_credentials}
-                                        onChange={(e) =>
+                                        onChange={(e) => {
+                                            const val = e.target.value;
                                             form.setData(
                                                 'dns_gcp_credentials',
-                                                e.target.value,
-                                            )
-                                        }
+                                                val,
+                                            );
+                                            try {
+                                                const parsed = JSON.parse(
+                                                    val.trim(),
+                                                );
+                                                if (
+                                                    parsed.project_id &&
+                                                    (!form.data
+                                                        .dns_gcp_project_id ||
+                                                        form.data
+                                                            .dns_gcp_project_id ===
+                                                            '')
+                                                ) {
+                                                    form.setData(
+                                                        'dns_gcp_project_id',
+                                                        parsed.project_id,
+                                                    );
+                                                }
+                                            } catch {
+                                                // not JSON yet
+                                            }
+                                        }}
                                         className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
                                     />
-                                </Field>
+                                    {form.errors.dns_gcp_credentials && (
+                                        <p className="mt-1 text-xs text-accent">
+                                            {form.errors.dns_gcp_credentials}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {parsedGcpDns && (
+                                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                        <CheckCircle2 className="size-4 shrink-0" />
+                                        <div>
+                                            <span className="font-semibold">
+                                                Detected Service Account:
+                                            </span>{' '}
+                                            <span className="font-mono">
+                                                {parsedGcpDns.clientEmail}
+                                            </span>
+                                            {parsedGcpDns.projectId && (
+                                                <span className="text-soft">
+                                                    {' '}
+                                                    (Project:{' '}
+                                                    <code className="text-foreground font-mono">
+                                                        {parsedGcpDns.projectId}
+                                                    </code>
+                                                    )
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>

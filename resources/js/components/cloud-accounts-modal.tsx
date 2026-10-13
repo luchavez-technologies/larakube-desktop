@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
-import { Check, Plus, Trash2, X, Users, AlertCircle } from 'lucide-react';
-import Button from '@/components/button';
+import {
+    Check,
+    CheckCircle2,
+    Plus,
+    Trash2,
+    Upload,
+    Users,
+    X,
+    AlertCircle,
+} from 'lucide-react';
+import Button, { buttonClass } from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
 import Redactable from '@/components/redactable';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
@@ -38,6 +47,31 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
         secret_access_key: '',
         region: provider.defaultRegion || 'us-east-1',
     });
+
+    // Form for GCP Service Account
+    const gcpForm = useForm({
+        credentials: '',
+    });
+
+    const parsedGcp = (() => {
+        if (!gcpForm.data.credentials) return null;
+        try {
+            const parsed = JSON.parse(gcpForm.data.credentials.trim());
+            if (
+                parsed &&
+                typeof parsed === 'object' &&
+                parsed.type === 'service_account'
+            ) {
+                return {
+                    projectId: parsed.project_id as string | undefined,
+                    clientEmail: parsed.client_email as string | undefined,
+                };
+            }
+        } catch {
+            // not valid JSON yet
+        }
+        return null;
+    })();
 
     const accounts = provider.accounts ?? [];
 
@@ -118,6 +152,37 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
         });
     }
 
+    function submitGcp(e: React.FormEvent) {
+        e.preventDefault();
+        setErrorMessage(null);
+        gcpForm.post('/setup/cloud/gcp/service-account', {
+            preserveScroll: true,
+            onSuccess: () => {
+                gcpForm.reset();
+                setActiveTab('accounts');
+                router.reload({ only: ['providers'] });
+            },
+            onError: (errors) => {
+                setErrorMessage(
+                    errors.gcp ||
+                        errors.credentials ||
+                        'Could not save GCP Service Account.',
+                );
+            },
+        });
+    }
+
+    async function handleGcpFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            gcpForm.setData('credentials', text.trim());
+        } catch {
+            setErrorMessage('Could not read the selected file.');
+        }
+    }
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
             <div className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-2xl bg-surface shadow-2xl ring-1 ring-line">
@@ -163,30 +228,26 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                         <Users className="size-3.5" />
                         <span>Registered Accounts ({accounts.length})</span>
                     </button>
-                    {provider.slug !== 'gcp' && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setActiveTab('add');
-                                setConfirmingDeleteId(null);
-                                setErrorMessage(null);
-                            }}
-                            className={cn(
-                                'ml-6 flex items-center gap-2 border-b-2 py-3 text-xs font-medium transition',
-                                activeTab === 'add'
-                                    ? 'border-foreground text-foreground'
-                                    : 'hover:text-foreground border-transparent text-soft',
-                            )}
-                        >
-                            <Plus className="size-3.5" />
-                            <span>
-                                Add{' '}
-                                {provider.slug === 'aws'
-                                    ? 'Profile'
-                                    : 'Account'}
-                            </span>
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setActiveTab('add');
+                            setConfirmingDeleteId(null);
+                            setErrorMessage(null);
+                        }}
+                        className={cn(
+                            'ml-6 flex items-center gap-2 border-b-2 py-3 text-xs font-medium transition',
+                            activeTab === 'add'
+                                ? 'border-foreground text-foreground'
+                                : 'hover:text-foreground border-transparent text-soft',
+                        )}
+                    >
+                        <Plus className="size-3.5" />
+                        <span>
+                            Add{' '}
+                            {provider.slug === 'aws' ? 'Profile' : 'Account'}
+                        </span>
+                    </button>
                 </div>
 
                 {/* Content Area with Slim Scrollbar */}
@@ -212,20 +273,16 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                         Connect your first {provider.label}{' '}
                                         account to get started.
                                     </p>
-                                    {provider.slug !== 'gcp' && (
-                                        <div className="mt-4">
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() =>
-                                                    setActiveTab('add')
-                                                }
-                                            >
-                                                <Plus className="size-3.5" />
-                                                <span>Add Account</span>
-                                            </Button>
-                                        </div>
-                                    )}
+                                    <div className="mt-4">
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => setActiveTab('add')}
+                                        >
+                                            <Plus className="size-3.5" />
+                                            <span>Add Account</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="bg-background/50 divide-y divide-line rounded-xl border border-line">
@@ -361,11 +418,21 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                             {/* GCP Google Auth info */}
                             {provider.slug === 'gcp' && (
                                 <div className="rounded-xl border border-line bg-surface p-4">
-                                    <p className="mb-3 text-xs text-soft">
-                                        Google Cloud CLI manages accounts and
-                                        projects natively. Switch or add Google
-                                        accounts below:
-                                    </p>
+                                    <div className="mb-3 flex items-center justify-between gap-3">
+                                        <p className="text-xs text-soft">
+                                            Google Cloud CLI manages accounts
+                                            and projects natively. Switch or add
+                                            Google accounts below:
+                                        </p>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => setActiveTab('add')}
+                                        >
+                                            <Plus className="size-3.5" />
+                                            <span>Add Service Account</span>
+                                        </Button>
+                                    </div>
                                     <GcpSignIn label="Sign in with another Google Account" />
                                 </div>
                             )}
@@ -562,6 +629,132 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                 </Button>
                             </div>
                         </form>
+                    )}
+
+                    {/* Tab: Add Service Account / User (GCP) */}
+                    {activeTab === 'add' && provider.slug === 'gcp' && (
+                        <div className="space-y-6">
+                            <form onSubmit={submitGcp} className="space-y-4">
+                                <div className="rounded-xl border border-line bg-surface/40 p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-foreground block text-xs font-semibold">
+                                                Service Account Key JSON
+                                            </label>
+                                            <p className="mt-0.5 text-[11px] text-soft">
+                                                The standard credentials file
+                                                from Google Cloud Console or
+                                                Firebase.
+                                            </p>
+                                        </div>
+                                        <label
+                                            className={cn(
+                                                buttonClass('secondary', 'sm'),
+                                                'cursor-pointer text-xs',
+                                            )}
+                                        >
+                                            <Upload className="size-3.5" />
+                                            <span>Browse JSON File…</span>
+                                            <input
+                                                type="file"
+                                                accept=".json,application/json"
+                                                onChange={handleGcpFileSelect}
+                                                className="sr-only"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div className="mt-3">
+                                        <textarea
+                                            rows={5}
+                                            value={gcpForm.data.credentials}
+                                            onChange={(e) =>
+                                                gcpForm.setData(
+                                                    'credentials',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder='{"type": "service_account", "project_id": "my-gcp-project", "client_email": "sa@...", ...}'
+                                            required
+                                            className="bg-background w-full rounded-lg p-3 font-mono text-xs ring-1 ring-line focus:ring-2 focus:ring-servers"
+                                        />
+                                        {gcpForm.errors.credentials && (
+                                            <p className="mt-1 text-xs text-accent">
+                                                {gcpForm.errors.credentials}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {parsedGcp && (
+                                        <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                            <CheckCircle2 className="size-4 shrink-0" />
+                                            <div>
+                                                <span className="font-semibold">
+                                                    Detected Service Account:
+                                                </span>{' '}
+                                                <span className="font-mono">
+                                                    {parsedGcp.clientEmail}
+                                                </span>
+                                                {parsedGcp.projectId && (
+                                                    <span className="text-soft">
+                                                        {' '}
+                                                        (Project:{' '}
+                                                        <code className="text-foreground font-mono">
+                                                            {
+                                                                parsedGcp.projectId
+                                                            }
+                                                        </code>
+                                                        )
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-4 flex justify-end gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                setActiveTab('accounts')
+                                            }
+                                        >
+                                            <X className="size-3.5" />
+                                            <span>Cancel</span>
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            disabled={
+                                                gcpForm.processing ||
+                                                !gcpForm.data.credentials
+                                            }
+                                        >
+                                            <Plus className="size-3.5" />
+                                            <span>Save Service Account</span>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <div className="flex items-center gap-3">
+                                <div className="h-px flex-1 bg-line" />
+                                <span className="text-[11px] font-medium tracking-wide text-soft uppercase">
+                                    Or Sign In With Google Account (OAuth)
+                                </span>
+                                <div className="h-px flex-1 bg-line" />
+                            </div>
+
+                            <div className="rounded-xl border border-line bg-surface/50 p-4">
+                                <p className="mb-3 text-xs text-soft">
+                                    Alternatively, authenticate interactively
+                                    with your personal or team Google account
+                                    via browser OAuth:
+                                </p>
+                                <GcpSignIn label="Sign in with Google Account" />
+                            </div>
+                        </div>
                     )}
                 </div>
 
