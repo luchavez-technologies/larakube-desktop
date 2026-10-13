@@ -65,6 +65,30 @@ export type RecentRunSummary = {
     finished_at: string | null;
 };
 
+export type NotificationItem = {
+    id: string;
+    type: string;
+    data: {
+        title?: string;
+        message?: string;
+        run_id?: number;
+        status?: RunStatus;
+        kind?: string | null;
+        duration?: string | null;
+        error?: string | null;
+        version?: string;
+        type?: string;
+        [key: string]: unknown;
+    };
+    read_at: string | null;
+    created_at: string | null;
+};
+
+export type NotificationPayload = {
+    unreadCount: number;
+    items: NotificationItem[];
+};
+
 export type RunKind =
     | 'create-server'
     | 'create-dev-box'

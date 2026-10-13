@@ -40,4 +40,16 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public static function defaultUser(): self
+    {
+        return static::firstOrCreate(
+            ['id' => 1],
+            [
+                'name' => 'LaraKube Operator',
+                'email' => 'operator@larakube.internal',
+                'password' => '',
+            ]
+        );
+    }
 }

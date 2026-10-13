@@ -45,5 +45,9 @@ test('inertia shares activeRuns and recentRuns for sidebar notification bell', f
                     ->where('status', 'running')
                     ->etc();
             });
+
+            // notifications should be shared with unreadCount and items
+            $page->has('notifications.unreadCount')
+                ->has('notifications.items');
         });
 });

@@ -4,9 +4,12 @@ namespace App\Http\Middleware;
 
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Models\User;
+use App\Notifications\RunFinishedNotification;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolMaturity;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -53,10 +56,43 @@ class HandleInertiaRequests extends Middleware
                 ->latest('id')
                 ->limit(5)
                 ->get(['id', 'label', 'status', 'kind', 'created_at', 'finished_at']),
+            'notifications' => function () {
+                $this->ensureNotificationsSeeded();
+                $user = User::defaultUser();
+
+                return [
+                    'unreadCount' => rescue(fn () => $user->unreadNotifications()->count(), 0, report: false),
+                    'items' => rescue(fn () => $user->notifications()->latest()->limit(15)->get()->map(fn (DatabaseNotification $n) => [
+                        'id' => $n->id,
+                        'type' => $n->type,
+                        'data' => $n->data,
+                        'read_at' => $n->read_at?->toIso8601String(),
+                        'created_at' => $n->created_at?->toIso8601String(),
+                    ]), [], report: false),
+                ];
+            },
             'auth' => [
                 'user' => $request->user(),
             ],
         ];
+    }
+
+    protected function ensureNotificationsSeeded(): void
+    {
+        rescue(function () {
+            $user = User::defaultUser();
+            if ($user->notifications()->count() === 0) {
+                $runs = Run::query()
+                    ->whereIn('status', [RunStatus::Succeeded, RunStatus::Failed])
+                    ->latest('id')
+                    ->limit(5)
+                    ->get();
+
+                foreach ($runs as $run) {
+                    $user->notify(new RunFinishedNotification($run));
+                }
+            }
+        }, report: false);
     }
 
     /**

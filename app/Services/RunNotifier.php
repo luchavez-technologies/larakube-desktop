@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Models\User;
+use App\Notifications\RunFinishedNotification;
+use App\Notifications\UpdateReadyNotification;
 use Native\Desktop\Facades\Notification;
 use Throwable;
 
@@ -19,6 +22,12 @@ class RunNotifier
     {
         if ($run->status === RunStatus::Cancelled || $run->finished_at === null || $run->created_at === null) {
             return;
+        }
+
+        try {
+            User::defaultUser()->notify(new RunFinishedNotification($run));
+        } catch (Throwable) {
+            // A notification must never turn a finished run into an error.
         }
 
         $seconds = (int) $run->created_at->diffInSeconds($run->finished_at, true);
@@ -39,6 +48,11 @@ class RunNotifier
 
     public function updateReady(string $version): void
     {
+        try {
+            User::defaultUser()->notify(new UpdateReadyNotification($version));
+        } catch (Throwable) {
+        }
+
         $this->show('LaraKube Desktop update ready', "Version {$version} is downloaded. Click to restart and finish updating.", 'update');
     }
 

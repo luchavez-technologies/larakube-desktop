@@ -13,6 +13,7 @@ use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
@@ -222,3 +223,7 @@ Route::post('/runs/{run}/detach', [RunController::class, 'detach'])->name('runs.
 Route::post('/runs/{run}/cancel', [RunController::class, 'cancel'])->name('runs.cancel');
 Route::post('/runs/{run}/reveal', [RunController::class, 'reveal'])->name('runs.reveal');
 Route::get('/runs/{run}/file', [RunController::class, 'fileContent'])->name('runs.file');
+
+Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
+Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');

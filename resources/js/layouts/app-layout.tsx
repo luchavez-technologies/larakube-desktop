@@ -195,7 +195,7 @@ export default function AppLayout({
     return (
         <div className="flex min-h-screen">
             <Head title={title} />
-            <aside className="sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
+            <aside className="sticky top-0 z-30 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
                 <div className="mb-5 flex items-center justify-between px-2.5">
                     <div className="flex items-center gap-2.5">
                         <img
