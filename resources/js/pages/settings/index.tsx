@@ -5,6 +5,7 @@ import {
     Archive,
     ArrowRightLeft,
     Check,
+    Heart,
     Laptop,
     Layers,
     Moon,
@@ -17,6 +18,7 @@ import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import SelectMenu from '@/components/select-menu';
+import SponsorButton from '@/components/sponsor-button';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
 import { cn } from '@/lib/utils';
@@ -611,6 +613,36 @@ export default function SettingsIndex({
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* Support LaraKube Card */}
+                    <Card label="Support LaraKube">
+                        <div className="space-y-3">
+                            <p className="text-xs leading-relaxed text-soft">
+                                LaraKube is open source software built and
+                                maintained by{' '}
+                                <span className="font-semibold text-ink">
+                                    LuchTech
+                                </span>
+                                . Your sponsorship directly funds new cloud
+                                drivers, security audits, and continuous
+                                features.
+                            </p>
+                            <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper px-3 py-2.5">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
+                                        <span className="truncate text-xs font-medium text-ink">
+                                            GitHub Sponsors
+                                        </span>
+                                    </div>
+                                    <p className="mt-0.5 truncate text-[10px] text-soft">
+                                        Support luchavez-technologies
+                                    </p>
+                                </div>
+                                <SponsorButton />
                             </div>
                         </div>
                     </Card>

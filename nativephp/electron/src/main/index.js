@@ -1,5 +1,5 @@
 import NativePHP from '#plugin';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { createSplash } from './splash.js';
@@ -81,6 +81,20 @@ app.whenReady().then(() => {
 });
 
 app.on('browser-window-created', (event, window) => {
+    window.webContents.setWindowOpenHandler(({ url }) => {
+        if (url.startsWith('https:') || url.startsWith('http:')) {
+            shell.openExternal(url);
+        }
+        return { action: 'deny' };
+    });
+
+    window.webContents.on('will-navigate', (evt, url) => {
+        if (!url.startsWith('http://127.0.0.1') && !url.startsWith('http://localhost')) {
+            evt.preventDefault();
+            shell.openExternal(url);
+        }
+    });
+
     if (splashWindow && window !== splashWindow) {
         window.webContents.on('did-navigate', (evt, url) => {
             if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {

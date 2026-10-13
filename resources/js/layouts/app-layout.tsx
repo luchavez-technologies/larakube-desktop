@@ -12,8 +12,10 @@ import {
     Mail,
     Layers,
     HelpCircle,
+    Heart,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
+import { ExternalLinkButton } from '@/lib/open-external';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { cn } from '@/lib/utils';
 import type { Untested } from '@/types/larakube';
@@ -260,6 +262,20 @@ export default function AppLayout({
                         );
                     })}
                 </nav>
+                <div className="mt-auto border-t border-line/60 pt-3">
+                    <ExternalLinkButton
+                        url="https://github.com/sponsors/luchavez-technologies"
+                        className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
+                    >
+                        <span className="flex items-center gap-2">
+                            <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
+                            <span>Sponsor</span>
+                        </span>
+                        <span className="text-[10px] font-medium text-faint">
+                            GitHub
+                        </span>
+                    </ExternalLinkButton>
+                </div>
             </aside>
             <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
             <RunDrawer />
