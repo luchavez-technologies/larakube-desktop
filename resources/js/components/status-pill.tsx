@@ -14,9 +14,11 @@ export type Tone = keyof typeof tones;
 export default function StatusPill({
     tone,
     children,
+    className,
 }: {
     tone: Tone;
     children: ReactNode;
+    className?: string;
 }) {
     const dot = tone === 'ok' || tone === 'bad' || tone === 'busy';
 
@@ -25,6 +27,7 @@ export default function StatusPill({
             className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap',
                 tones[tone],
+                className,
             )}
         >
             {dot && (

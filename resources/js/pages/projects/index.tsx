@@ -2,15 +2,20 @@ import { useState, useEffect } from 'react';
 import { Deferred, Link, router, usePage, usePoll } from '@inertiajs/react';
 import {
     ArrowRight,
+    Folder,
     FolderPlus,
     GitBranch,
+    Globe,
     Laptop,
     Plus,
     Server,
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import CloneModal from '@/components/clone-modal';
-import FrameworkBadge from '@/components/framework-badge';
+import FrameworkLogo, {
+    FrameworkBadge,
+    resolveFrameworkLabel,
+} from '@/components/framework-logo';
 import PageHeader from '@/components/page-header';
 import ProjectActions from '@/components/project-actions';
 import SelectMenu from '@/components/select-menu';
@@ -140,40 +145,92 @@ export default function ProjectsIndex({
                 </div>
             ) : viewMode === 'cards' ? (
                 /* Card Grid View */
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-                    {projects.map((project) => (
-                        <div
-                            key={project.id}
-                            className="rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
-                        >
-                            <Link href={show(project.id).url} className="block">
-                                <div className="flex items-center justify-between gap-3">
-                                    <span className="truncate text-sm font-semibold">
-                                        {project.name}
-                                    </span>
-                                    <StatusPill
-                                        tone={projectStatus(project)[1]}
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
+                    {projects.map((project) => {
+                        const [statusLabel, statusTone] =
+                            projectStatus(project);
+                        const frameworkSlug =
+                            project.framework ??
+                            project.detectedFramework ??
+                            'code';
+
+                        return (
+                            <div
+                                key={project.id}
+                                className="group flex flex-col justify-between rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:shadow-2xs hover:ring-faint"
+                            >
+                                <Link
+                                    href={show(project.id).url}
+                                    className="block"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <FrameworkLogo
+                                                slug={frameworkSlug}
+                                                size="md"
+                                            />
+                                            <div className="min-w-0">
+                                                <span className="block truncate text-sm font-semibold text-ink transition-colors group-hover:text-brand">
+                                                    {project.name}
+                                                </span>
+                                                <span className="block truncate text-xs text-soft">
+                                                    {resolveFrameworkLabel(
+                                                        frameworkSlug,
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <StatusPill
+                                            tone={statusTone}
+                                            className="shrink-0"
+                                        >
+                                            {statusLabel}
+                                        </StatusPill>
+                                    </div>
+
+                                    <div className="mt-3.5 space-y-1">
+                                        {project.webHost ? (
+                                            <div className="flex items-center gap-1.5 font-mono text-xs font-medium text-ink">
+                                                <Globe className="size-3.5 shrink-0 text-brand" />
+                                                <span className="truncate">
+                                                    https://{project.webHost}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-faint">
+                                            <Folder className="size-3.5 shrink-0 text-faint" />
+                                            <span
+                                                className="truncate"
+                                                title={project.path}
+                                            >
+                                                {project.path}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Link>
+
+                                <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
+                                    {project.exists && project.initialized ? (
+                                        <ProjectActions project={project} />
+                                    ) : (
+                                        <span className="text-[11px] text-soft">
+                                            {!project.exists
+                                                ? 'Folder missing'
+                                                : 'Setup needed'}
+                                        </span>
+                                    )}
+                                    <Link
+                                        href={show(project.id).url}
+                                        className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
+                                        aria-label={`Manage ${project.name}`}
                                     >
-                                        {projectStatus(project)[0]}
-                                    </StatusPill>
+                                        <span>Manage</span>
+                                        <ArrowRight className="size-3" />
+                                    </Link>
                                 </div>
-                                <div className="mt-2">
-                                    <FrameworkBadge
-                                        slug={
-                                            project.framework ??
-                                            project.detectedFramework
-                                        }
-                                    />
-                                </div>
-                                <p className="mt-2 truncate font-mono text-[11px] text-faint">
-                                    {project.path}
-                                </p>
-                            </Link>
-                            <div className="mt-3 border-t border-line pt-3">
-                                <ProjectActions project={project} />
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : (
                 /* Table View */
@@ -377,33 +434,89 @@ function BoxProjectList({
 
     if (viewMode === 'cards') {
         return (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-                {projects.map((project) => (
-                    <div
-                        key={project.path}
-                        className="rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
-                    >
-                        <Link href={showDevBox({ box }).url} className="block">
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="truncate text-sm font-semibold">
-                                    {project.name}
-                                </span>
-                                <StatusPill tone={status(project)[1]}>
-                                    {status(project)[0]}
-                                </StatusPill>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
+                {projects.map((project) => {
+                    const [statusLabel, statusTone] = status(project);
+                    const frameworkSlug = project.framework ?? 'code';
+
+                    return (
+                        <div
+                            key={project.path}
+                            className="group flex flex-col justify-between rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:shadow-2xs hover:ring-faint"
+                        >
+                            <Link
+                                href={showDevBox({ box }).url}
+                                className="block"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <FrameworkLogo
+                                            slug={frameworkSlug}
+                                            size="md"
+                                        />
+                                        <div className="min-w-0">
+                                            <span className="block truncate text-sm font-semibold text-ink transition-colors group-hover:text-brand">
+                                                {project.name}
+                                            </span>
+                                            <span className="block truncate text-xs text-soft">
+                                                {resolveFrameworkLabel(
+                                                    frameworkSlug,
+                                                )}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <StatusPill
+                                        tone={statusTone}
+                                        className="shrink-0"
+                                    >
+                                        {statusLabel}
+                                    </StatusPill>
+                                </div>
+
+                                <div className="mt-3.5 space-y-1">
+                                    {project.environments?.[0]?.host ? (
+                                        <div className="flex items-center gap-1.5 font-mono text-xs font-medium text-ink">
+                                            <Globe className="size-3.5 shrink-0 text-brand" />
+                                            <span className="truncate">
+                                                https://
+                                                {project.environments[0].host}
+                                            </span>
+                                        </div>
+                                    ) : null}
+                                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-faint">
+                                        <Folder className="size-3.5 shrink-0 text-faint" />
+                                        <span
+                                            className="truncate"
+                                            title={project.path}
+                                        >
+                                            {project.path}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Link>
+
+                            <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
+                                <BoxProjectActions
+                                    box={box}
+                                    project={project}
+                                />
+                                <Link
+                                    href={
+                                        showBoxProject({
+                                            box,
+                                            project: project.name,
+                                        }).url
+                                    }
+                                    className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
+                                    aria-label={`Manage ${project.name}`}
+                                >
+                                    <span>Manage</span>
+                                    <ArrowRight className="size-3" />
+                                </Link>
                             </div>
-                            <div className="mt-2">
-                                <FrameworkBadge slug={project.framework} />
-                            </div>
-                            <p className="mt-2 truncate font-mono text-[11px] text-faint">
-                                {project.path}
-                            </p>
-                        </Link>
-                        <div className="mt-3 border-t border-line pt-3">
-                            <BoxProjectActions box={box} project={project} />
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         );
     }

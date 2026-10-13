@@ -8,9 +8,11 @@ import type { DevBoxProject } from '@/types/larakube';
 export default function BoxProjectActions({
     box,
     project,
+    className,
 }: {
     box: string;
     project: DevBoxProject;
+    className?: string;
 }) {
     const running = project.local === 'running';
     const actions = [
@@ -22,7 +24,7 @@ export default function BoxProjectActions({
 
     return (
         <div
-            className="flex items-center gap-1"
+            className={cn('flex items-center gap-1', className)}
             role="group"
             aria-label={`Quick actions for ${project.name}`}
         >

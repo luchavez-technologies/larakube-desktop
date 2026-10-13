@@ -9,7 +9,13 @@ import type { Project } from '@/types/larakube';
  * list: Up builds and starts it, Start resumes a stopped one, Stop pauses it,
  * Down takes it down (its data is kept). Each is what the project page runs.
  */
-export default function ProjectActions({ project }: { project: Project }) {
+export default function ProjectActions({
+    project,
+    className,
+}: {
+    project: Project;
+    className?: string;
+}) {
     if (!project.exists || !project.initialized) {
         return null;
     }
@@ -57,7 +63,7 @@ export default function ProjectActions({ project }: { project: Project }) {
 
     return (
         <div
-            className="flex items-center gap-1"
+            className={cn('flex items-center gap-1', className)}
             role="group"
             aria-label={`Quick actions for ${project.name}`}
         >
