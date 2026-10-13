@@ -27,6 +27,7 @@ import { index as serversIndex } from '@/routes/servers';
 import { show as settingsShow } from '@/routes/settings';
 import { index as devBoxesIndex } from '@/routes/devboxes';
 import RunDrawer from '@/components/run-drawer';
+import NotificationBell from '@/components/notification-bell';
 
 type NavItem = {
     label: string;
@@ -195,15 +196,18 @@ export default function AppLayout({
         <div className="flex min-h-screen">
             <Head title={title} />
             <aside className="sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
-                <div className="mb-5 flex items-center gap-2.5 px-2.5">
-                    <img
-                        src="/logo.png"
-                        alt="LaraKube"
-                        className="size-8 rounded-lg shadow-2xs"
-                    />
-                    <span className="text-[15px] font-semibold tracking-tight">
-                        LaraKube
-                    </span>
+                <div className="mb-5 flex items-center justify-between px-2.5">
+                    <div className="flex items-center gap-2.5">
+                        <img
+                            src="/logo.png"
+                            alt="LaraKube"
+                            className="size-8 rounded-lg shadow-2xs"
+                        />
+                        <span className="text-[15px] font-semibold tracking-tight">
+                            LaraKube
+                        </span>
+                    </div>
+                    <NotificationBell />
                 </div>
                 <nav className="flex flex-col gap-1">
                     {visibleNavigation.map((item) => {

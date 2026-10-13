@@ -49,6 +49,10 @@ class HandleInertiaRequests extends Middleware
                 ->latest('id')
                 ->limit(10)
                 ->get(['id', 'label', 'status', 'created_at']),
+            'recentRuns' => fn () => Run::query()
+                ->latest('id')
+                ->limit(5)
+                ->get(['id', 'label', 'status', 'kind', 'created_at', 'finished_at']),
             'auth' => [
                 'user' => $request->user(),
             ],

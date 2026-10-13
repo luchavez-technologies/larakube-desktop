@@ -49,6 +49,22 @@ export type Provider = {
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 
+export type ActiveRunSummary = {
+    id: number;
+    label: string;
+    status: RunStatus;
+    created_at?: string;
+};
+
+export type RecentRunSummary = {
+    id: number;
+    label: string;
+    status: RunStatus;
+    kind: string | null;
+    created_at: string | null;
+    finished_at: string | null;
+};
+
 export type RunKind =
     | 'create-server'
     | 'create-dev-box'
