@@ -94,6 +94,33 @@ test('where a provider\'s prices come from is passed through, so the form can sa
     File::deleteDirectory($bin);
 });
 
+test('providers are cached so subsequent calls do not rerun the CLI command', function () {
+    $bin = readinessFakeBinDirectory(['larakube']);
+    Cache::flush();
+    Process::fake([
+        '*cloud:providers*' => Process::result(output: json_encode(['success' => true, 'providers' => [
+            ['slug' => 'do', 'label' => 'DigitalOcean'],
+        ]])),
+        '*' => Process::result(output: 'v1'),
+    ]);
+
+    $check = app(ReadinessCheck::class);
+    $first = $check->providers();
+    $second = $check->providers();
+
+    expect($first)->toHaveCount(1)
+        ->and($second)->toHaveCount(1);
+
+    Process::assertRanTimes(fn ($process) => in_array('cloud:providers', (array) $process->command, true), 1);
+
+    $check->forget();
+    $third = $check->providers();
+    expect($third)->toHaveCount(1);
+    Process::assertRanTimes(fn ($process) => in_array('cloud:providers', (array) $process->command, true), 2);
+
+    File::deleteDirectory($bin);
+});
+
 test('the usage choice is saved and offered back to the Setup page', function () {
     readinessFakeBinDirectory(['larakube']);
     $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));

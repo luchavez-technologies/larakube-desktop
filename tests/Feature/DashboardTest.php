@@ -81,14 +81,20 @@ test('dashboard page renders with stats and workspace overview', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('dashboard/index')
-            ->has('stats')
-            ->where('stats.projectsCount', 1)
-            ->where('stats.serversCount', 1)
-            ->where('stats.readyServersCount', 1)
-            ->where('toolsReady', true)
-            ->has('projects', 1)
-            ->has('servers', 1)
-            ->has('localCluster')
+            ->has('runs')
+            ->missing('stats')
+            ->missing('projects')
+            ->missing('servers')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->has('stats')
+                ->where('stats.projectsCount', 1)
+                ->where('stats.serversCount', 1)
+                ->where('stats.readyServersCount', 1)
+                ->where('toolsReady', true)
+                ->has('projects', 1)
+                ->has('servers', 1)
+                ->has('localCluster')
+            )
         );
 
     $this->get(route('home'))
@@ -128,8 +134,11 @@ test('every dashboard server carries hasExternalDns, computed up front for all o
     $this->get(route('dashboard'))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('servers.0.hasExternalDns', true)
-            ->where('servers.1.hasExternalDns', false)
+            ->missing('servers')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('servers.0.hasExternalDns', true)
+                ->where('servers.1.hasExternalDns', false)
+            )
         );
 });
 
@@ -165,7 +174,44 @@ test('the dashboard warns about ready servers that have no backups', function ()
 
     $this->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page
         ->missing('unprotectedServers')
-        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('unprotectedServers', ['bare-vps'])));
+        ->missing('backups')
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+            ->where('unprotectedServers', ['bare-vps'])
+            ->where('backups.total', 2)
+            ->where('backups.protected', 1)
+            ->where('backups.unprotected', ['bare-vps'])
+        ));
+
+    File::deleteDirectory($bin);
+});
+
+test('local clusters like orbstack or docker are excluded from backup protection checks', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([
+        ['name' => 'orbstack', 'provider' => 'orbstack', 'kind' => 'discovered', 'region' => 'local', 'ip' => '127.0.0.1', 'context' => 'orbstack', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ['name' => 'bare-vps', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '34.27.253.31', 'context' => 'ctx-bare', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $backups = mock(ClusterStatus::class);
+    // OrbStack should never even have backup() queried because it is local
+    $backups->shouldReceive('backup')->with('ctx-bare')->andReturn(['success' => true, 'configured' => false]);
+    app()->instance(ClusterStatus::class, $backups);
+
+    $this->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+            ->where('backups.total', 1)
+            ->where('backups.protected', 0)
+            ->where('backups.unprotected', ['bare-vps'])
+            ->where('unprotectedServers', ['bare-vps'])
+        ));
 
     File::deleteDirectory($bin);
 });

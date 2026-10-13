@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FleetMetrics;
@@ -44,64 +45,113 @@ class DashboardController extends Controller
             return redirect()->route('readiness');
         }
 
-        $allProjects = Project::query()->latest('id')->get();
-        $projectsCount = $allProjects->count();
-        $recentProjects = $allProjects->take(4)->map(fn (Project $p): array => [
-            'id' => $p->id,
-            'name' => basename($p->path),
-            'path' => $p->path,
-        ] + $inspector->inspect($p->path))->all();
-
-        $allServers = $stacks->all() ?? [];
-        $readyServersCount = count(array_filter($allServers, fn (array $s): bool => $s['status'] === 'ready'));
-
-        // An instant DB read (DomainCatalog), not a live DNS/TLS/kubectl
-        // check — safe to compute for every server up front so Quick
-        // Launch's cluster picker can show this consistently for all of
-        // them, not just whichever one happens to be selected.
-        $allServers = array_map(function (array $s) use ($domains): array {
-            $s['hasExternalDns'] = is_string($s['context'] ?? null)
-                && collect($domains->forContext($s['context']) ?? [])->contains('externalDns', true);
-
-            return $s;
-        }, $allServers);
-
+        // Fast SQLite queries: execute instantly for initial shell render
         $recentRuns = Run::query()->latest('id')->take(5)->get(['id', 'label', 'kind', 'status', 'created_at', 'target_type', 'target_name', 'environment']);
 
-        $tools = $readiness->tools();
-        $missingRequired = array_filter($tools, fn (array $t): bool => $t['required'] && ! $t['installed']);
-
-        $cluster = $localCluster->detect();
-
         return Inertia::render('dashboard/index', [
-            'stats' => [
-                'projectsCount' => $projectsCount,
-                'serversCount' => count($allServers),
-                'readyServersCount' => $readyServersCount,
-                'missingToolsCount' => count($missingRequired),
-            ],
-            'projects' => $recentProjects,
-            'servers' => array_slice($allServers, 0, 4),
             'runs' => $recentRuns,
-            'toolsReady' => $missingRequired === [],
-            'localCluster' => $cluster,
-            'fleetMetrics' => Inertia::defer(fn (): array => $fleetMetrics->summary($allServers, array_values($recentProjects)), 'fleetMetrics'),
-            'unprotectedServers' => Inertia::defer(fn (): array => collect($allServers)
-                ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context']))
-                ->filter(fn (array $server): bool => ($clusterStatus->backup($server['context'])['configured'] ?? true) === false)
-                ->pluck('name')
-                ->values()
-                ->all(), 'backups'),
+            'defaultProjectParent' => ToolLocator::home(),
+
+            'stats' => Inertia::defer(function () use ($stacks, $readiness): array {
+                $projectsCount = Project::query()->count();
+                $allServers = $stacks->all() ?? [];
+                $readyServersCount = count(array_filter($allServers, fn (array $s): bool => $s['status'] === 'ready'));
+                $tools = $readiness->tools();
+                $missingRequired = array_filter($tools, fn (array $t): bool => $t['required'] && ! $t['installed']);
+
+                return [
+                    'projectsCount' => $projectsCount,
+                    'serversCount' => count($allServers),
+                    'readyServersCount' => $readyServersCount,
+                    'missingToolsCount' => count($missingRequired),
+                ];
+            }),
+
+            'localCluster' => Inertia::defer(fn (): array => $localCluster->detect()),
+
+            'toolsReady' => Inertia::defer(function () use ($readiness): bool {
+                $tools = $readiness->tools();
+                $missingRequired = array_filter($tools, fn (array $t): bool => $t['required'] && ! $t['installed']);
+
+                return $missingRequired === [];
+            }),
+
+            'projects' => Inertia::defer(function () use ($inspector): array {
+                return Project::query()->latest('id')->take(4)->get()->map(fn (Project $p): array => [
+                    'id' => $p->id,
+                    'name' => basename($p->path),
+                    'path' => $p->path,
+                ] + $inspector->inspect($p->path))->all();
+            }),
+
+            'servers' => Inertia::defer(function () use ($stacks, $domains): array {
+                $allServers = $stacks->all() ?? [];
+                $allServers = array_map(function (array $s) use ($domains): array {
+                    $s['hasExternalDns'] = is_string($s['context'] ?? null)
+                        && collect($domains->forContext($s['context']) ?? [])->contains('externalDns', true);
+
+                    return $s;
+                }, $allServers);
+
+                return array_slice($allServers, 0, 4);
+            }),
+
+            'fleetMetrics' => Inertia::defer(function () use ($stacks, $inspector, $fleetMetrics): array {
+                $allServers = $stacks->all() ?? [];
+                $recentProjects = Project::query()->latest('id')->take(4)->get()->map(fn (Project $p): array => [
+                    'id' => $p->id,
+                    'name' => basename($p->path),
+                    'path' => $p->path,
+                ] + $inspector->inspect($p->path))->all();
+
+                return $fleetMetrics->summary($allServers, array_values($recentProjects));
+            }, 'fleetMetrics'),
+
+            'backups' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
+                $allServers = $stacks->all() ?? [];
+                $cloudServers = collect($allServers)
+                    ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context'] ?? null))
+                    ->reject(fn (array $server): bool => Server::isStackLocal($server))
+                    ->values();
+
+                $unprotected = $cloudServers
+                    ->filter(fn (array $server): bool => ($clusterStatus->backup((string) $server['context'])['configured'] ?? true) === false)
+                    ->pluck('name')
+                    ->values()
+                    ->all();
+
+                $total = $cloudServers->count();
+                $protected = max(0, $total - count($unprotected));
+
+                return [
+                    'total' => $total,
+                    'protected' => $protected,
+                    'unprotected' => $unprotected,
+                ];
+            }, 'backups'),
+
+            'unprotectedServers' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
+                $allServers = $stacks->all() ?? [];
+
+                return collect($allServers)
+                    ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context'] ?? null))
+                    ->reject(fn (array $server): bool => Server::isStackLocal($server))
+                    ->filter(fn (array $server): bool => ($clusterStatus->backup((string) $server['context'])['configured'] ?? true) === false)
+                    ->pluck('name')
+                    ->values()
+                    ->all();
+            }, 'backups'),
+
             // For the dev-only Quick Launch Projects toggle (welcome-onboarding.tsx) — the
             // same catalog/devBoxes/parent shape projects/create.tsx already uses.
             'projectCatalog' => Inertia::defer(fn (): ?array => $frameworks->catalog() === null ? null : [
                 'categories' => $frameworks->catalog()['categories'],
                 'frameworks' => $frameworks->visible(),
             ], 'projectCatalog'),
+
             'projectDevBoxes' => Inertia::defer(fn (): array => $settings->experimental()
                 ? array_map(fn (array $box): array => ['name' => $box['name'], 'ip' => $box['ip'] ?? null], array_values(array_filter($stacks->devBoxes() ?? [], fn (array $box): bool => $box['status'] === 'ready')))
                 : [], 'projectDevBoxes'),
-            'defaultProjectParent' => ToolLocator::home(),
         ]);
     }
 }

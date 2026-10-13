@@ -54,7 +54,7 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 import {
     ci as configureCiRoute,
     deploy,
@@ -699,11 +699,8 @@ function EnvironmentSwitchBar({
             {/* Contextual Action on the Right */}
             <div className="flex items-center gap-2 pr-1">
                 {isLocalActive ? (
-                    <Link
-                        href={open().url}
-                        method="post"
-                        data={{ url: `https://${localDomain}` }}
-                        as="button"
+                    <ExternalLinkButton
+                        url={`https://${localDomain}`}
                         className={cn(
                             buttonClass('secondary', 'sm'),
                             'gap-1.5',
@@ -712,7 +709,7 @@ function EnvironmentSwitchBar({
                     >
                         <span>Open local site</span>
                         <ExternalLink className="size-3" />
-                    </Link>
+                    </ExternalLinkButton>
                 ) : (
                     <div className="flex items-center gap-2">
                         {activeDeploy && (
@@ -918,18 +915,13 @@ function CloudEnvironmentOverviewCard({
                                         <span className="truncate font-mono text-xs font-semibold text-ink">
                                             https://{activeHost}
                                         </span>
-                                        <Link
-                                            href={open().url}
-                                            method="post"
-                                            data={{
-                                                url: `https://${activeHost}`,
-                                            }}
-                                            as="button"
-                                            className="shrink-0 text-brand hover:underline"
+                                        <ExternalLinkButton
+                                            url={`https://${activeHost}`}
+                                            className="shrink-0 cursor-pointer text-brand hover:underline"
                                             title="Visit public URL"
                                         >
                                             <ExternalLink className="size-3" />
-                                        </Link>
+                                        </ExternalLinkButton>
                                     </div>
                                     <p className="mt-0.5 text-[11px] text-soft">
                                         Traefik Ingress SSL
@@ -2846,15 +2838,13 @@ function LocalClusterCard({
                             <span className="font-mono text-sm font-medium">
                                 https://{domain}
                             </span>
-                            <Link
-                                href={open().url}
-                                method="post"
-                                data={{ url: `https://${domain}` }}
-                                as="button"
-                                className="text-xs text-brand hover:underline"
+                            <ExternalLinkButton
+                                url={`https://${domain}`}
+                                className="inline-flex cursor-pointer items-center gap-1 text-xs text-brand hover:underline"
                             >
-                                Open ↗
-                            </Link>
+                                <span>Open</span>
+                                <ExternalLink className="size-3" />
+                            </ExternalLinkButton>
                         </div>
                         <p className="text-xs text-soft">
                             Local cluster address (Traefik SSL)

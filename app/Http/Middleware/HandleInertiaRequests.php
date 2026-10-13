@@ -41,12 +41,6 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
-            'name' => config('app.name'),
-            'theme' => fn () => rescue(fn () => app(GlobalSettings::class)->getTheme(), 'system', report: false),
-            'hideProjects' => app(GlobalSettings::class)->hideProjects(),
-            'experimental' => app(GlobalSettings::class)->experimental(),
-            'demoMode' => app(GlobalSettings::class)->demoMode(),
-            'untested' => app(ToolMaturity::class)->untested(),
             // Every run still going, not just the latest — the floating HUD
             // stacks one card per run, so a long EKS create doesn't crowd out
             // something started after it (ADR: multiple concurrent runs).
@@ -58,6 +52,23 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+        ];
+    }
+
+    /**
+     * Define props shared once and remembered across navigations.
+     *
+     * @return array<string, callable>
+     */
+    public function shareOnce(Request $request): array
+    {
+        return [
+            'name' => fn () => config('app.name'),
+            'theme' => fn () => rescue(fn () => app(GlobalSettings::class)->getTheme(), 'system', report: false),
+            'hideProjects' => fn () => app(GlobalSettings::class)->hideProjects(),
+            'experimental' => fn () => app(GlobalSettings::class)->experimental(),
+            'demoMode' => fn () => app(GlobalSettings::class)->demoMode(),
+            'untested' => fn () => app(ToolMaturity::class)->untested(),
         ];
     }
 }

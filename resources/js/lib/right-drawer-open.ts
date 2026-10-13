@@ -47,5 +47,5 @@ export function useRightDrawerOpen(open: boolean): void {
 
 /** Call from RunDrawer to know whether to move out of the way. */
 export function useIsAnyRightDrawerOpen(): boolean {
-    return useSyncExternalStore(subscribe, getSnapshot);
+    return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }

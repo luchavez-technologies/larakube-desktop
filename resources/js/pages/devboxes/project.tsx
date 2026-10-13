@@ -35,7 +35,7 @@ import StatusPill from '@/components/status-pill';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 import { show as showBox, shareDomainPage } from '@/routes/devboxes';
 import { index } from '@/routes/projects';
 import { providerLabels } from '@/types/larakube';
@@ -508,15 +508,9 @@ function Header({
                         {editorMenuOpen && (
                             <div className="absolute right-0 z-20 mt-1.5 w-88 rounded-xl border border-line bg-surface p-2 shadow-2xl">
                                 <div className="space-y-1">
-                                    <Link
-                                        href={open().url}
-                                        method="post"
-                                        data={{
-                                            url: `vscode://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`,
-                                        }}
-                                        as="button"
-                                        onClick={() => setEditorMenuOpen(false)}
-                                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
+                                    <ExternalLinkButton
+                                        url={`vscode://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`}
+                                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
                                     >
                                         <EditorLogo slug="vscode" size="xs" />
                                         <div className="min-w-0 flex-1">
@@ -527,17 +521,11 @@ function Header({
                                                 Open via Remote - SSH extension
                                             </p>
                                         </div>
-                                    </Link>
+                                    </ExternalLinkButton>
 
-                                    <Link
-                                        href={open().url}
-                                        method="post"
-                                        data={{
-                                            url: `cursor://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`,
-                                        }}
-                                        as="button"
-                                        onClick={() => setEditorMenuOpen(false)}
-                                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
+                                    <ExternalLinkButton
+                                        url={`cursor://vscode-remote/ssh-remote+larakube@${devBox.ip}/home/larakube/projects/${name}`}
+                                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
                                     >
                                         <EditorLogo slug="cursor" size="xs" />
                                         <div className="min-w-0 flex-1">
@@ -548,17 +536,11 @@ function Header({
                                                 Open via Remote SSH in Cursor
                                             </p>
                                         </div>
-                                    </Link>
+                                    </ExternalLinkButton>
 
-                                    <Link
-                                        href={open().url}
-                                        method="post"
-                                        data={{
-                                            url: `jetbrains-gateway://connect?type=ssh&host=${devBox.ip}&user=larakube&port=22&deployDir=/home/larakube/projects/${name}`,
-                                        }}
-                                        as="button"
-                                        onClick={() => setEditorMenuOpen(false)}
-                                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
+                                    <ExternalLinkButton
+                                        url={`jetbrains-gateway://connect?type=ssh&host=${devBox.ip}&user=larakube&port=22&deployDir=/home/larakube/projects/${name}`}
+                                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:bg-paper"
                                     >
                                         <EditorLogo slug={ide.slug} size="xs" />
                                         <div className="min-w-0 flex-1">
@@ -570,7 +552,7 @@ function Header({
                                                 Gateway
                                             </p>
                                         </div>
-                                    </Link>
+                                    </ExternalLinkButton>
                                 </div>
 
                                 <div className="mt-2 border-t border-line pt-2">
@@ -802,11 +784,8 @@ function SharingCard({
                             <div className="flex shrink-0 items-center gap-2">
                                 <CopyButton value={url} />
                                 {key === 'web' && (
-                                    <Link
-                                        href={open().url}
-                                        method="post"
-                                        data={{ url }}
-                                        as="button"
+                                    <ExternalLinkButton
+                                        url={url}
                                         className={cn(
                                             buttonClass('secondary', 'sm'),
                                             'gap-1.5',
@@ -814,7 +793,7 @@ function SharingCard({
                                     >
                                         <ExternalLink className="size-3.5" />
                                         <span>Open</span>
-                                    </Link>
+                                    </ExternalLinkButton>
                                 )}
                             </div>
                         </div>

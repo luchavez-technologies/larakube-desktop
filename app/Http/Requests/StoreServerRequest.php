@@ -48,6 +48,14 @@ class StoreServerRequest extends FormRequest
             'k8s_version_prefix' => ['nullable', 'string', 'max:20', 'regex:/^[0-9.]+$/'],
             'api_token' => ['nullable', 'string', 'max:200'],
             'cloudflare_token' => ['nullable', 'string', 'max:200'],
+            'dns_provider' => ['nullable', Rule::in(['cloudflare', 'route53', 'google'])],
+            'enable_dns' => ['nullable', 'boolean'],
+            'enable_tls' => ['nullable', 'boolean'],
+            'dns_aws_access_key_id' => ['nullable', 'string', 'max:100'],
+            'dns_aws_secret_access_key' => ['nullable', 'string', 'max:200'],
+            'dns_aws_region' => ['nullable', 'string', 'max:50'],
+            'dns_gcp_project_id' => ['nullable', 'string', 'max:100'],
+            'dns_gcp_credentials' => ['nullable', 'string'],
             'aws_access_key_id' => ['nullable', 'string', 'max:100'],
             'aws_secret_access_key' => ['nullable', 'string', 'max:200'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
@@ -82,14 +90,60 @@ class StoreServerRequest extends FormRequest
         return trim((string) $this->input('cloudflare_token')) !== '';
     }
 
+    public function dnsProvider(): ?string
+    {
+        if ($this->filled('dns_provider')) {
+            return $this->string('dns_provider')->toString();
+        }
+
+        if ($this->connectsCloudflare()) {
+            return 'cloudflare';
+        }
+
+        return null;
+    }
+
     /**
      * @return array<string, string>
      */
     public function secretEnvironment(): array
     {
-        $cloudflare = $this->connectsCloudflare() ? ['LARAKUBE_CLOUDFLARE_TOKEN' => trim((string) $this->input('cloudflare_token'))] : [];
+        $dnsEnv = [];
+        $provider = $this->dnsProvider();
 
-        return $cloudflare + $this->providerEnvironment();
+        if ($provider === 'cloudflare' && $this->connectsCloudflare()) {
+            $dnsEnv['LARAKUBE_CLOUDFLARE_TOKEN'] = trim((string) $this->input('cloudflare_token'));
+        } elseif ($provider === 'route53') {
+            $key = trim((string) ($this->input('dns_aws_access_key_id') ?: $this->input('aws_access_key_id')));
+            $secret = trim((string) ($this->input('dns_aws_secret_access_key') ?: $this->input('aws_secret_access_key')));
+            $region = trim((string) ($this->input('dns_aws_region') ?: $this->input('region') ?: 'us-east-1'));
+
+            if ($key !== '') {
+                $dnsEnv['AWS_ACCESS_KEY_ID'] = $key;
+            }
+            if ($secret !== '') {
+                $dnsEnv['AWS_SECRET_ACCESS_KEY'] = $secret;
+            }
+            if ($region !== '') {
+                $dnsEnv['AWS_DEFAULT_REGION'] = $region;
+            }
+        } elseif ($provider === 'google') {
+            $project = trim((string) ($this->input('dns_gcp_project_id') ?: $this->input('gcp_project')));
+            $creds = trim((string) ($this->input('dns_gcp_credentials') ?: $this->input('gcp_credentials')));
+
+            if ($project !== '') {
+                $dnsEnv['GCP_PROJECT_ID'] = $project;
+            }
+            if ($creds !== '') {
+                if (str_starts_with($creds, '{')) {
+                    $dnsEnv['GCP_SERVICE_ACCOUNT_JSON'] = $creds;
+                } else {
+                    $dnsEnv['GOOGLE_APPLICATION_CREDENTIALS'] = $creds;
+                }
+            }
+        }
+
+        return $dnsEnv + $this->providerEnvironment();
     }
 
     /**

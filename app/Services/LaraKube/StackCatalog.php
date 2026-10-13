@@ -3,15 +3,25 @@
 namespace App\Services\LaraKube;
 
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
 /**
  * The servers this machine created, read from `larakube cloud:stacks --json`:
  * registered stacks plus unfinished setups an interrupted create left behind,
  * plus automatically discovered clusters from ~/.kube/config.
+ *
+ * @phpstan-type StackItem array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}
  */
 class StackCatalog
 {
+    public const CACHE_KEY = 'stack_catalog.everything';
+
+    public const TTL_SECONDS = 30;
+
+    /** @var list<StackItem>|null */
+    private ?array $memoized = null;
+
     public function __construct(
         private ToolLocator $locator,
         private ?KubeconfigDiscovery $discovery = null,
@@ -19,14 +29,21 @@ class StackCatalog
         $this->discovery ??= new KubeconfigDiscovery($this->locator);
     }
 
+    /** Forget cached stacks, e.g. after creating, deleting, or updating a server. */
+    public function forget(): void
+    {
+        $this->memoized = null;
+        Cache::forget(self::CACHE_KEY);
+    }
+
     /**
      * The servers apps and tools run on. Dev boxes, which are machines to work on, are listed by devBoxes().
      *
      * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
-    public function all(): ?array
+    public function all(bool $fresh = false): ?array
     {
-        $everything = $this->everything();
+        $everything = $this->everything($fresh);
 
         return $everything === null ? null : array_values(array_filter($everything, fn (array $stack): bool => ($stack['role'] ?? 'deploy') !== 'dev'));
     }
@@ -36,9 +53,9 @@ class StackCatalog
      *
      * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
-    public function devBoxes(): ?array
+    public function devBoxes(bool $fresh = false): ?array
     {
-        $everything = $this->everything();
+        $everything = $this->everything($fresh);
 
         return $everything === null ? null : array_values(array_filter($everything, fn (array $stack): bool => ($stack['role'] ?? 'deploy') === 'dev'));
     }
@@ -48,8 +65,22 @@ class StackCatalog
      *
      * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
-    public function everything(): ?array
+    public function everything(bool $fresh = false): ?array
     {
+        if ($fresh) {
+            $this->forget();
+        }
+
+        if ($this->memoized !== null) {
+            return $this->memoized;
+        }
+
+        $cached = Cache::get(self::CACHE_KEY);
+        if (is_array($cached) && array_is_list($cached)) {
+            /** @var list<StackItem> $cached */
+            return $this->memoized = $cached;
+        }
+
         $cli = $this->locator->find('larakube');
 
         if ($cli === null) {
@@ -76,7 +107,10 @@ class StackCatalog
         $registeredContexts = array_values(array_filter(array_column($stacks, 'context')));
         $discovered = $this->discovery->discover($registeredContexts);
 
-        return [...$stacks, ...$discovered];
+        $merged = [...$stacks, ...$discovered];
+        Cache::put(self::CACHE_KEY, $merged, self::TTL_SECONDS);
+
+        return $this->memoized = $merged;
     }
 
     /**

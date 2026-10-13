@@ -10,7 +10,8 @@ import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import AppLayout from '@/layouts/app-layout';
-import { open } from '@/routes';
+import { ExternalLink } from 'lucide-react';
+import { ExternalLinkButton } from '@/lib/open-external';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
 import {
     toolName,
@@ -101,15 +102,13 @@ export default function ShowTool({
                 actions={
                     tool.installed &&
                     url && (
-                        <Link
-                            href={open().url}
-                            method="post"
-                            data={{ url }}
-                            as="button"
-                            className={buttonClass('dark')}
+                        <ExternalLinkButton
+                            url={url}
+                            className={buttonClass('dark', 'md', 'gap-1.5')}
                         >
-                            Open {name}
-                        </Link>
+                            <ExternalLink className="size-3.5" />
+                            <span>Open {name}</span>
+                        </ExternalLinkButton>
                     )
                 }
             />

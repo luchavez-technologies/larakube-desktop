@@ -394,6 +394,10 @@ class ClusterStatus
         $cached = Cache::get($key);
 
         if (is_array($cached)) {
+            if (isset($cached['__empty'])) {
+                return null;
+            }
+
             /** @var T $cached */
             return $cached;
         }
@@ -402,12 +406,12 @@ class ClusterStatus
         try {
             $value = $resolve();
         } catch (ProcessTimedOutException) {
+            Cache::put($key, ['__empty' => true], 60);
+
             return null;
         }
 
-        if ($value !== null) {
-            Cache::put($key, $value, self::TTL_SECONDS);
-        }
+        Cache::put($key, $value ?? ['__empty' => true], $value !== null ? self::TTL_SECONDS : 60);
 
         return $value;
     }

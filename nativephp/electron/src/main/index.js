@@ -7,6 +7,8 @@ import { createSplash } from './splash.js';
 import fixPath from 'fix-path';
 fixPath();
 
+app.name = 'LaraKube';
+
 // A packaged app has no visible console, and this is where NativePHP reports a process that would not start or exited.
 // Mirror it into <user data>/logs/main.log (kept to about 1 MB, one older copy) so a problem can be read afterwards.
 (function mirrorConsoleToFile() {
@@ -56,6 +58,19 @@ const appPath = path.join(buildPath, 'app');
 let splashWindow;
 
 app.whenReady().then(() => {
+    if (process.platform === 'darwin') {
+        const customIcon = path.resolve(import.meta.dirname, '../../build/icon.png');
+        const resolvedIcon = fs.existsSync(customIcon) ? customIcon : defaultIcon;
+        app.setAboutPanelOptions({
+            applicationName: 'LaraKube Desktop',
+            applicationVersion: '1.0.0',
+            version: '1.0.0',
+            copyright: 'Copyright © 2026 LaraKube. All rights reserved.',
+            credits: 'Provision cloud servers and install Cluster Tools with LaraKube.',
+            iconPath: resolvedIcon,
+        });
+    }
+
     try {
         splashWindow = createSplash(appPath, import.meta.dirname);
     } catch (error) {

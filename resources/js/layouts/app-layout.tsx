@@ -241,6 +241,8 @@ export default function AppLayout({
                             <Link
                                 key={item.label}
                                 href={item.href}
+                                prefetch
+                                cacheFor={['30s', '1m']}
                                 className={cn(
                                     'flex items-center gap-3 rounded-[10px] px-2.5 py-2 transition',
                                     active ? 'bg-badge' : 'hover:bg-paper',

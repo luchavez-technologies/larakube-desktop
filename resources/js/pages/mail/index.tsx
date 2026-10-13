@@ -1,9 +1,9 @@
-import { Head, Link, usePoll } from '@inertiajs/react';
+import { Head, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import { Globe, Send, Settings, ExternalLink, Inbox } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 import { index as mailIndex } from '@/routes/servers/mail';
 import AppLayout from '@/layouts/app-layout';
 import SyncStatusBadge, {
@@ -247,31 +247,25 @@ export default function MailIndex({
                         />
 
                         {isInstalled && serverInfo?.webmailUrl && (
-                            <Link
-                                href={open().url}
-                                method="post"
-                                data={{ url: serverInfo.webmailUrl }}
-                                as="button"
+                            <ExternalLinkButton
+                                url={serverInfo.webmailUrl}
                                 className={buttonClass('secondary', 'md')}
                                 title="Open Bulwark Webmail in default browser"
                             >
                                 <ExternalLink className="h-4 w-4" />
-                                Webmail
-                            </Link>
+                                <span>Webmail</span>
+                            </ExternalLinkButton>
                         )}
 
                         {isInstalled && serverInfo?.adminUrl && (
-                            <Link
-                                href={open().url}
-                                method="post"
-                                data={{ url: serverInfo.adminUrl }}
-                                as="button"
+                            <ExternalLinkButton
+                                url={serverInfo.adminUrl}
                                 className={buttonClass('secondary', 'md')}
                                 title="Open Stalwart Admin Console in default browser"
                             >
                                 <ExternalLink className="h-4 w-4" />
-                                Admin Console
-                            </Link>
+                                <span>Admin Console</span>
+                            </ExternalLinkButton>
                         )}
                     </div>
                 </div>

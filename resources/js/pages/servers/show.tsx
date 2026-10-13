@@ -33,7 +33,7 @@ import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 import {
     create as projectsCreate,
     index as projectsIndex,
@@ -462,11 +462,8 @@ export default function ShowServer({
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
                                                 {url && (
-                                                    <Link
-                                                        href={open().url}
-                                                        method="post"
-                                                        data={{ url }}
-                                                        as="button"
+                                                    <ExternalLinkButton
+                                                        url={url}
                                                         className={buttonClass(
                                                             'secondary',
                                                             'sm',
@@ -474,7 +471,7 @@ export default function ShowServer({
                                                     >
                                                         <span>Open</span>
                                                         <ExternalLink className="size-3" />
-                                                    </Link>
+                                                    </ExternalLinkButton>
                                                 )}
                                                 <Link
                                                     href={href}

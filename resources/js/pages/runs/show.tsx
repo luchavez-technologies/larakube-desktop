@@ -12,7 +12,8 @@ import AppLayout from '@/layouts/app-layout';
 import { celebratesOnSuccess } from '@/lib/run-kinds';
 import { runStatus } from '@/lib/servers';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
-import { open, readiness } from '@/routes';
+import { readiness } from '@/routes';
+import { ExternalLinkButton, openExternalUrl } from '@/lib/open-external';
 import { show as showProject } from '@/routes/projects';
 import { cancel, index as runsIndex } from '@/routes/runs';
 import { index as devBoxesIndex, show as showDevBox } from '@/routes/devboxes';
@@ -385,15 +386,13 @@ function SharedLinkCard({ run }: { run: Run }) {
                         {web}
                     </span>
                     <CopyButton value={web} />
-                    <Link
-                        href={open().url}
-                        method="post"
-                        data={{ url: web }}
-                        as="button"
+                    <ExternalLinkButton
+                        url={web}
+                        showIcon
                         className={buttonClass('dark', 'sm')}
                     >
-                        Open it
-                    </Link>
+                        <span>Open it</span>
+                    </ExternalLinkButton>
                 </div>
             ) : (
                 <p className="mt-3 text-sm text-soft">
@@ -744,7 +743,7 @@ function AppReadyCard({ run }: { run: Run }) {
 
     const openInBrowser = () => {
         if (!url) return;
-        router.post('/open', { url });
+        void openExternalUrl(url);
     };
 
     return (

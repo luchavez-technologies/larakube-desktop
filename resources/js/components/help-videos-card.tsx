@@ -1,9 +1,8 @@
-import { Link } from '@inertiajs/react';
 import { ExternalLink, PlayCircle } from 'lucide-react';
 import { SiYoutube } from '@icons-pack/react-simple-icons';
 import Card from '@/components/card';
 import { buttonClass } from '@/components/button';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 
 export type HowToVideo = {
     title: string;
@@ -32,12 +31,9 @@ function youtubeThumbnailUrl(youtubeId: string): string {
 
 function HowToVideoThumbnail({ video }: { video: HowToVideo }) {
     return (
-        <Link
-            href={open().url}
-            method="post"
-            data={{ url: youtubeWatchUrl(video.youtubeId) }}
-            as="button"
-            className="group block w-full text-left"
+        <ExternalLinkButton
+            url={youtubeWatchUrl(video.youtubeId)}
+            className="group block w-full cursor-pointer text-left"
         >
             <span className="relative block aspect-video w-full overflow-hidden rounded-xl bg-paper ring-1 ring-line">
                 <img
@@ -58,7 +54,7 @@ function HowToVideoThumbnail({ video }: { video: HowToVideo }) {
                     {video.description}
                 </span>
             ) : null}
-        </Link>
+        </ExternalLinkButton>
     );
 }
 
@@ -83,16 +79,13 @@ export default function HelpVideosCard() {
             label="How-To Videos"
             action={
                 HOW_TO_PLAYLIST_URL ? (
-                    <Link
-                        href={open().url}
-                        method="post"
-                        data={{ url: HOW_TO_PLAYLIST_URL }}
-                        as="button"
+                    <ExternalLinkButton
+                        url={HOW_TO_PLAYLIST_URL}
                         className={buttonClass('secondary', 'sm')}
                     >
                         <ExternalLink className="size-3.5" />
                         <span>Watch full playlist</span>
-                    </Link>
+                    </ExternalLinkButton>
                 ) : undefined
             }
         >

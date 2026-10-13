@@ -107,13 +107,25 @@ export default function WelcomeOnboarding({
     const [mode, setMode] = useState<'tools' | 'projects'>('tools');
 
     const [dismissed, setDismissed] = useState(() => {
-        if (serversCount > 0 || projectsCount > 0) {
-            return (
-                localStorage.getItem('larakube_onboarding_force_show') !==
-                'true'
-            );
+        if (typeof window === 'undefined') {
+            return false;
         }
-        return localStorage.getItem('larakube_onboarding_dismissed') === 'true';
+        try {
+            if (serversCount > 0 || projectsCount > 0) {
+                return (
+                    window.localStorage?.getItem(
+                        'larakube_onboarding_force_show',
+                    ) !== 'true'
+                );
+            }
+            return (
+                window.localStorage?.getItem(
+                    'larakube_onboarding_dismissed',
+                ) === 'true'
+            );
+        } catch {
+            return false;
+        }
     });
 
     const [modalOpen, setModalOpen] = useState(false);

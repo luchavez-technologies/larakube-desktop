@@ -23,6 +23,7 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
+import { ExternalLinkButton } from '@/lib/open-external';
 import ToolLogo from '@/components/tool-logo';
 import Redactable from '@/components/redactable';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
@@ -1295,17 +1296,14 @@ function InstalledCard({
                             : 'No public ingress address'}
                     </span>
                     {url && (
-                        <Link
-                            href={open().url}
-                            method="post"
-                            data={{ url }}
-                            as="button"
-                            className="ml-2 inline-flex shrink-0 items-center gap-1 font-medium text-brand hover:underline"
+                        <ExternalLinkButton
+                            url={url}
+                            className="ml-2 inline-flex shrink-0 cursor-pointer items-center gap-1 font-medium text-brand hover:underline"
                             title="Open in default browser"
                         >
                             <span>Visit</span>
                             <ExternalLink className="size-3" />
-                        </Link>
+                        </ExternalLinkButton>
                     )}
                 </div>
 
@@ -1543,11 +1541,8 @@ function CompanionCard({ companion }: { companion: CompanionApp }) {
                     {companion.installed ? (
                         <>
                             {companion.url && companion.running && (
-                                <Link
-                                    href={open().url}
-                                    method="post"
-                                    data={{ url: companion.url }}
-                                    as="button"
+                                <ExternalLinkButton
+                                    url={companion.url}
                                     className={buttonClass(
                                         'secondary',
                                         'sm',
@@ -1556,7 +1551,7 @@ function CompanionCard({ companion }: { companion: CompanionApp }) {
                                 >
                                     <span>Open</span>
                                     <ExternalLink className="size-3" />
-                                </Link>
+                                </ExternalLinkButton>
                             )}
                             {companion.running ? (
                                 <Link
@@ -1653,11 +1648,8 @@ function CompanionTableRow({ companion }: { companion: CompanionApp }) {
                     {companion.installed ? (
                         <>
                             {companion.url && companion.running && (
-                                <Link
-                                    href={open().url}
-                                    method="post"
-                                    data={{ url: companion.url }}
-                                    as="button"
+                                <ExternalLinkButton
+                                    url={companion.url}
                                     className={buttonClass(
                                         'secondary',
                                         'sm',
@@ -1666,7 +1658,7 @@ function CompanionTableRow({ companion }: { companion: CompanionApp }) {
                                 >
                                     <span>Open</span>
                                     <ExternalLink className="size-3" />
-                                </Link>
+                                </ExternalLinkButton>
                             )}
                             {companion.running ? (
                                 <Link

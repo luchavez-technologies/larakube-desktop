@@ -95,6 +95,20 @@ class ServerController extends Controller
             ]
             : ['--vps'];
 
+        $dnsArgs = [];
+        if ($request->filled('dns_provider')) {
+            $dnsProvider = $request->string('dns_provider')->toString();
+            $dnsArgs[] = "--dns-provider={$dnsProvider}";
+            if ($request->has('enable_dns') && ! $request->boolean('enable_dns')) {
+                $dnsArgs[] = '--without-dns';
+            }
+            if ($request->has('enable_tls') && ! $request->boolean('enable_tls')) {
+                $dnsArgs[] = '--without-tls';
+            }
+        } elseif ($request->connectsCloudflare()) {
+            $dnsArgs[] = '--cloudflare';
+        }
+
         $run = $runner->start(
             label: $targetKind === 'managed' ? "Create managed cluster {$stackName}" : "Create server {$stackName}",
             arguments: [
@@ -106,10 +120,7 @@ class ServerController extends Controller
                 '--size='.$request->string('size'),
                 '--json',
                 ...$accountArg,
-                // Cloudflare auto-setup only applies to the VPS's own
-                // cloud:init flow — meaningless (and never requested) on a
-                // managed cluster's create path.
-                ...($targetKind === 'vps' && $request->connectsCloudflare() ? ['--cloudflare'] : []),
+                ...$dnsArgs,
                 // Inside a project, the environment argument binds it to the new server.
                 ...($project !== null ? [ProjectController::ENVIRONMENT] : []),
             ],

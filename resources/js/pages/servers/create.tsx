@@ -1,6 +1,6 @@
-import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, Key, Users, Plus } from 'lucide-react';
+import { ChevronDown, Globe, Key, Plus, Users } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
@@ -13,7 +13,8 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { open, readiness } from '@/routes';
+import { readiness } from '@/routes';
+import { ExternalLinkButton, openExternalUrl } from '@/lib/open-external';
 import {
     index as devBoxesIndex,
     store as storeDevBox,
@@ -58,7 +59,7 @@ export default function CreateServer({
                     <div className="h-72 max-w-3xl animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
                 }
             >
-                {providers ? (
+                {providers && providers.length > 0 ? (
                     <ServerForm
                         providers={providers}
                         projectId={project?.id ?? null}
@@ -100,7 +101,7 @@ function ServerForm({
         ) ??
         providers.find((provider) => provider.credentials.ready) ??
         providers[0];
-    const form = useForm({
+    const form = useForm('servers.create', {
         provider: initial.slug,
         stack_name: '',
         region: initial.defaultRegion,
@@ -111,6 +112,14 @@ function ServerForm({
         k8s_version_prefix: '',
         api_token: '',
         cloudflare_token: '',
+        dns_provider: '',
+        enable_dns: true,
+        enable_tls: true,
+        dns_aws_access_key_id: '',
+        dns_aws_secret_access_key: '',
+        dns_aws_region: 'us-east-1',
+        dns_gcp_project_id: '',
+        dns_gcp_credentials: '',
         aws_access_key_id: '',
         aws_secret_access_key: '',
         project_id: projectId,
@@ -135,7 +144,8 @@ function ServerForm({
 
     const canBeManaged = !devBox && (provider.managedSizes?.length ?? 0) > 0;
     const isManaged = form.data.target_kind === 'managed' && canBeManaged;
-    const sizeOptions = isManaged ? provider.managedSizes! : provider.vpsSizes;
+    const sizeOptions =
+        (isManaged ? provider.managedSizes : provider.vpsSizes) ?? [];
     const size = sizeOptions.find((option) => option.value === form.data.size);
     const price = size?.label.match(/\(([^)]*\/mo[^)]*)\)/)?.[1];
     const nodeCount = Math.max(1, parseInt(form.data.node_count, 10) || 1);
@@ -552,7 +562,12 @@ function ServerForm({
 
                     {needsAwsKeys && (
                         <div className="space-y-4 border-t border-line/60 pt-3">
-                            <AwsPolicyHelper includeEks={isManaged} />
+                            <AwsPolicyHelper
+                                includeEks={isManaged}
+                                includeRoute53={
+                                    form.data.dns_provider === 'route53'
+                                }
+                            />
                             <Field
                                 label="AWS Access Key ID"
                                 error={form.errors.aws_access_key_id}
@@ -590,14 +605,8 @@ function ServerForm({
                         </div>
                     )}
 
-                    {!devBox && !isManaged && (
-                        <CloudflareOption
-                            value={form.data.cloudflare_token}
-                            error={form.errors.cloudflare_token}
-                            onChange={(value) =>
-                                form.setData('cloudflare_token', value)
-                            }
-                        />
+                    {!devBox && (
+                        <DnsAutomationOption form={form} provider={provider} />
                     )}
                 </div>
 
@@ -692,11 +701,9 @@ function pricingNote(provider: Provider): ReactNode {
                     <button
                         type="button"
                         className="underline hover:text-ink"
-                        onClick={() =>
-                            router.post('/open', {
-                                url: pricing.officialPricingUrl,
-                            })
-                        }
+                        onClick={() => {
+                            void openExternalUrl(pricing.officialPricingUrl);
+                        }}
                     >
                         see {provider.label}&rsquo;s current pricing
                     </button>
@@ -731,76 +738,297 @@ function ago(iso: string | null): string {
     return `${Math.round(minutes / 1440)} days ago`;
 }
 
-function CloudflareOption({
-    value,
-    error,
-    onChange,
+function DnsAutomationOption({
+    form,
+    provider,
 }: {
-    value: string;
-    error?: string;
-    onChange: (value: string) => void;
+    form: ReturnType<typeof useForm<any>>;
+    provider: Provider;
 }) {
+    const hasDns = form.data.dns_provider !== '';
+
     return (
         <details
             className="group rounded-xl bg-paper/60 ring-1 ring-line"
-            open={value !== ''}
+            open={hasDns || form.data.cloudflare_token !== ''}
         >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-                <span>
-                    <span className="block text-[13px] font-medium text-ink">
-                        Connect Cloudflare now (optional)
-                    </span>
-                    <span className="block text-xs text-soft">
-                        Domains and HTTPS set up for you. You can skip this and
-                        do it later.
+                <span className="flex items-center gap-2.5">
+                    <Globe className="size-4 shrink-0 text-servers" />
+                    <span>
+                        <span className="block text-[13px] font-medium text-ink">
+                            Automate DNS & SSL (optional)
+                        </span>
+                        <span className="block text-xs text-soft">
+                            ExternalDNS and Let's Encrypt DNS-01 wildcard SSL
+                            via Cloudflare, Route 53, or Google Cloud DNS.
+                        </span>
                     </span>
                 </span>
                 <ChevronDown className="size-4 shrink-0 text-soft transition group-open:rotate-180" />
             </summary>
-            <div className="space-y-3 border-t border-line/60 px-4 py-3 text-xs leading-relaxed text-soft">
+            <div className="space-y-4 border-t border-line/60 px-4 py-3 text-xs leading-relaxed text-soft">
                 <p>
-                    With a Cloudflare token, every tool you install gets its
-                    address (DNS record) created automatically, and certificates
-                    keep renewing even when Cloudflare proxies your site.
-                    Without one, the server still works: you point your
-                    domain&apos;s DNS at it yourself, and HTTPS uses Let&apos;s
-                    Encrypt over plain HTTP.
+                    Automate DNS records for every tool and application deployed
+                    to this cluster, and issue Let's Encrypt SSL certificates
+                    via DNS-01 challenge (even for proxied or wildcard domains).
                 </p>
-                <ol className="list-decimal space-y-1 pl-4">
-                    <li>
-                        Open{' '}
-                        <Link
-                            href={open().url}
-                            method="post"
-                            data={{
-                                url: 'https://dash.cloudflare.com/profile/api-tokens',
-                            }}
-                            as="button"
-                            className="font-medium text-servers hover:underline"
-                        >
-                            Cloudflare &rarr; My Profile &rarr; API Tokens
-                        </Link>{' '}
-                        and choose <strong>Create Token</strong>.
-                    </li>
-                    <li>
-                        Use the <strong>Edit zone DNS</strong> template, and
-                        under Zone Resources pick your domain (or all zones).
-                    </li>
-                    <li>Create it, copy the token, and paste it below.</li>
-                </ol>
-                <Field
-                    label="Cloudflare API token"
-                    hint="Used once and never saved in this app. If you don't have one yet, leave it empty: Connect a domain on the server's page does the same later."
-                    error={error}
-                >
-                    <input
-                        type="password"
-                        value={value}
-                        onChange={(event) => onChange(event.target.value)}
-                        autoComplete="off"
-                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+
+                <Field label="DNS & TLS Provider">
+                    <Select
+                        value={
+                            form.data.dns_provider ||
+                            (form.data.cloudflare_token ? 'cloudflare' : '')
+                        }
+                        onChange={(value) => {
+                            form.setData('dns_provider', value);
+                        }}
+                        options={[
+                            {
+                                value: '',
+                                label: 'None (Configure later or manually)',
+                            },
+                            { value: 'cloudflare', label: 'Cloudflare' },
+                            { value: 'route53', label: 'AWS Route 53' },
+                            { value: 'google', label: 'Google Cloud DNS' },
+                        ]}
                     />
                 </Field>
+
+                {(form.data.dns_provider !== '' ||
+                    form.data.cloudflare_token !== '') && (
+                    <>
+                        <div className="flex flex-col gap-2 rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
+                            <label className="flex cursor-pointer items-center gap-2 text-ink">
+                                <input
+                                    type="checkbox"
+                                    checked={form.data.enable_dns}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'enable_dns',
+                                            e.target.checked,
+                                        )
+                                    }
+                                    className="rounded border-line text-servers focus:ring-servers"
+                                />
+                                <span>
+                                    Automate app and tool DNS records
+                                    (ExternalDNS)
+                                </span>
+                            </label>
+                            <label className="flex cursor-pointer items-center gap-2 text-ink">
+                                <input
+                                    type="checkbox"
+                                    checked={form.data.enable_tls}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'enable_tls',
+                                            e.target.checked,
+                                        )
+                                    }
+                                    className="rounded border-line text-servers focus:ring-servers"
+                                />
+                                <span>
+                                    Enable Let's Encrypt DNS-01 challenge for
+                                    SSL (wildcard/proxied hosts)
+                                </span>
+                            </label>
+                        </div>
+
+                        {(form.data.dns_provider === 'cloudflare' ||
+                            (!form.data.dns_provider &&
+                                form.data.cloudflare_token !== '')) && (
+                            <div className="space-y-3">
+                                <p className="text-xs text-soft">
+                                    Create a token with the{' '}
+                                    <strong>Edit zone DNS</strong> template
+                                    covering your domains at{' '}
+                                    <ExternalLinkButton
+                                        url="https://dash.cloudflare.com/profile/api-tokens"
+                                        showIcon
+                                        className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
+                                    >
+                                        Cloudflare API Tokens
+                                    </ExternalLinkButton>
+                                    .
+                                </p>
+                                <Field
+                                    label="Cloudflare API token"
+                                    hint="Used for this run only. Never saved in plaintext."
+                                    error={form.errors.cloudflare_token}
+                                >
+                                    <input
+                                        type="password"
+                                        value={form.data.cloudflare_token}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'cloudflare_token',
+                                                e.target.value,
+                                            )
+                                        }
+                                        autoComplete="off"
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                            </div>
+                        )}
+
+                        {form.data.dns_provider === 'route53' && (
+                            <div className="space-y-3">
+                                {provider.slug === 'aws' && (
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                form.setData(
+                                                    'dns_aws_access_key_id',
+                                                    form.data.aws_access_key_id,
+                                                );
+                                                form.setData(
+                                                    'dns_aws_secret_access_key',
+                                                    form.data
+                                                        .aws_secret_access_key,
+                                                );
+                                                form.setData(
+                                                    'dns_aws_region',
+                                                    form.data.region ||
+                                                        'us-east-1',
+                                                );
+                                            }}
+                                            className="flex items-center gap-1 text-xs font-medium text-servers hover:underline"
+                                        >
+                                            <Key className="size-3" />
+                                            <span>Copy server AWS keys</span>
+                                        </button>
+                                    </div>
+                                )}
+                                <AwsPolicyHelper
+                                    includeEks={false}
+                                    includeRoute53={true}
+                                />
+                                <Field
+                                    label="AWS Access Key ID"
+                                    error={form.errors.dns_aws_access_key_id}
+                                >
+                                    <input
+                                        type="text"
+                                        placeholder="AKIAIOSFODNN7EXAMPLE"
+                                        value={form.data.dns_aws_access_key_id}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'dns_aws_access_key_id',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                                <Field
+                                    label="AWS Secret Access Key"
+                                    error={
+                                        form.errors.dns_aws_secret_access_key
+                                    }
+                                >
+                                    <input
+                                        type="password"
+                                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                        value={
+                                            form.data.dns_aws_secret_access_key
+                                        }
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'dns_aws_secret_access_key',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                                <Field
+                                    label="AWS Region"
+                                    error={form.errors.dns_aws_region}
+                                >
+                                    <input
+                                        type="text"
+                                        placeholder="us-east-1"
+                                        value={form.data.dns_aws_region}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'dns_aws_region',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                            </div>
+                        )}
+
+                        {form.data.dns_provider === 'google' && (
+                            <div className="space-y-3">
+                                {provider.slug === 'gcp' && (
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (form.data.project_id) {
+                                                    form.setData(
+                                                        'dns_gcp_project_id',
+                                                        String(
+                                                            form.data
+                                                                .project_id,
+                                                        ),
+                                                    );
+                                                }
+                                            }}
+                                            className="flex items-center gap-1 text-xs font-medium text-servers hover:underline"
+                                        >
+                                            <Key className="size-3" />
+                                            <span>
+                                                Use server GCP project ID
+                                            </span>
+                                        </button>
+                                    </div>
+                                )}
+                                <Field
+                                    label="Google Cloud Project ID"
+                                    error={form.errors.dns_gcp_project_id}
+                                >
+                                    <input
+                                        type="text"
+                                        placeholder="my-gcp-project"
+                                        value={form.data.dns_gcp_project_id}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'dns_gcp_project_id',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                                <Field
+                                    label="Service Account Credentials (JSON or path)"
+                                    hint="A Service Account key JSON string, or absolute path to a JSON file on this machine with roles/dns.admin."
+                                    error={form.errors.dns_gcp_credentials}
+                                >
+                                    <textarea
+                                        rows={3}
+                                        placeholder='{"type": "service_account", ...} or /path/to/key.json'
+                                        value={form.data.dns_gcp_credentials}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'dns_gcp_credentials',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
         </details>
     );

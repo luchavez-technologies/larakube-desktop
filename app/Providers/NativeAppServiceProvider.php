@@ -32,6 +32,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->syncTheme();
         $this->warmSync();
 
+        Menu::default();
+
         Window::open()
             ->title(config('app.name'))
             ->width(1180)

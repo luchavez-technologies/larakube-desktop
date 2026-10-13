@@ -11,7 +11,7 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 import { create as createServer } from '@/routes/servers';
 import {
     destroy,
@@ -398,16 +398,13 @@ function WorkspaceRow({
                 <div className="flex shrink-0 items-center gap-2">
                     {workspace.status === 'running' &&
                         (editorUrl ? (
-                            <Link
-                                href={open().url}
-                                method="post"
-                                data={{ url: editorUrl }}
-                                as="button"
+                            <ExternalLinkButton
+                                url={editorUrl}
+                                showIcon
                                 className={buttonClass('dark', 'sm')}
                             >
-                                <ExternalLink className="size-3.5" />
                                 <span>Open the editor</span>
-                            </Link>
+                            </ExternalLinkButton>
                         ) : (
                             <Link
                                 href={openEditor(workspace.name).url}
@@ -477,16 +474,15 @@ function WorkspaceRow({
                         const local = editor.apps[String(dev.port)];
 
                         return local ? (
-                            <Link
+                            <ExternalLinkButton
                                 key={dev.port}
-                                href={open().url}
-                                method="post"
-                                data={{ url: `http://127.0.0.1:${local}/` }}
-                                as="button"
+                                url={`http://127.0.0.1:${local}/`}
                                 className={buttonClass('secondary', 'sm')}
                             >
-                                {dev.name} ({local})
-                            </Link>
+                                <span>
+                                    {dev.name} ({local})
+                                </span>
+                            </ExternalLinkButton>
                         ) : null;
                     })}
                 </div>

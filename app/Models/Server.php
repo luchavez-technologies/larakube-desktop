@@ -127,6 +127,39 @@ class Server extends Model
         return $this->sync_status === 'fresh';
     }
 
+    public function isLocal(): bool
+    {
+        return self::isStackLocal([
+            'provider' => $this->provider,
+            'region' => $this->region,
+            'ip' => $this->ip,
+        ]);
+    }
+
+    /**
+     * @param  array{provider?: ?string, region?: ?string, ip?: ?string}  $stack
+     */
+    public static function isStackLocal(array $stack): bool
+    {
+        $provider = strtolower((string) ($stack['provider'] ?? ''));
+        $localProviders = ['local', 'k3d', 'kind', 'orbstack', 'minikube', 'docker'];
+
+        if (in_array($provider, $localProviders, true)) {
+            return true;
+        }
+
+        if (($stack['region'] ?? '') === 'local') {
+            return true;
+        }
+
+        $ip = $stack['ip'] ?? null;
+        if ($ip && in_array($ip, ['127.0.0.1', 'localhost', 'local'], true)) {
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Keeps this server's identity fields in step with a live StackCatalog
      * row a controller already fetched — not a full sync (no Activity, no

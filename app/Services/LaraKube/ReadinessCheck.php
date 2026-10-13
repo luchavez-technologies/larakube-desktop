@@ -94,6 +94,10 @@ class ReadinessCheck
     /** Forget what is remembered about one tool, or all of them, after something installed. */
     public function forget(?string $slug = null): void
     {
+        if ($slug === null) {
+            Cache::forget('readiness.providers');
+        }
+
         foreach ($slug !== null ? [$slug] : array_keys(self::TOOLS) as $tool) {
             Cache::forget("readiness.tool.{$tool}");
         }
@@ -113,7 +117,7 @@ class ReadinessCheck
      *
      * @return list<array<string, mixed>>|null
      */
-    public function providers(): ?array
+    public function providers(bool $fresh = false): ?array
     {
         $cli = $this->locator->find('larakube');
 
@@ -121,23 +125,31 @@ class ReadinessCheck
             return null;
         }
 
-        $isolated = $this->locator->isolate([$cli, 'cloud:providers', '--json', '--no-interaction']);
+        $key = 'readiness.providers';
 
-        try {
-            $result = Process::env($isolated['environment'])
-                ->timeout(60)
-                ->run($isolated['command']);
-        } catch (ProcessTimedOutException) {
-            return null;
+        if ($fresh) {
+            Cache::forget($key);
         }
 
-        $decoded = json_decode($this->lastLine($result->output()), true);
+        return Cache::remember($key, now()->addMinutes(5), function () use ($cli): ?array {
+            $isolated = $this->locator->isolate([$cli, 'cloud:providers', '--json', '--no-interaction']);
 
-        if (! $result->successful() || ! is_array($decoded) || ! is_array($decoded['providers'] ?? null)) {
-            return null;
-        }
+            try {
+                $result = Process::env($isolated['environment'])
+                    ->timeout(20)
+                    ->run($isolated['command']);
+            } catch (ProcessTimedOutException) {
+                return null;
+            }
 
-        return array_values($decoded['providers']);
+            $decoded = json_decode($this->lastLine($result->output()), true);
+
+            if (! $result->successful() || ! is_array($decoded) || ! is_array($decoded['providers'] ?? null)) {
+                return null;
+            }
+
+            return array_values($decoded['providers']);
+        });
     }
 
     /**

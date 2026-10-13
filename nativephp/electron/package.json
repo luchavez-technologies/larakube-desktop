@@ -1,10 +1,11 @@
 {
-    "name": "nativephp",
-    "version": "2.0.0",
-    "description": "A NativePHP Electron application",
+    "name": "larakube",
+    "productName": "LaraKube Desktop",
+    "version": "1.0.0",
+    "description": "LaraKube Desktop",
     "main": "./out/main/index.js",
-    "author": "NativePHP",
-    "homepage": "https://nativephp.com",
+    "author": "LaraKube",
+    "homepage": "https://cli.larakube.app",
     "type": "module",
     "engines": {
         "node": ">=22.0.0"

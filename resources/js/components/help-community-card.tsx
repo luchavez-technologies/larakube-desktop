@@ -1,4 +1,3 @@
-import { Link } from '@inertiajs/react';
 import { Mail } from 'lucide-react';
 import {
     SiDiscord,
@@ -8,7 +7,7 @@ import {
 } from '@icons-pack/react-simple-icons';
 import type { ReactNode } from 'react';
 import Card from '@/components/card';
-import { open } from '@/routes';
+import { ExternalLinkButton } from '@/lib/open-external';
 
 function LinkedInIcon({ className }: { className?: string }) {
     return (
@@ -78,12 +77,9 @@ const FOLLOW: HelpLink[] = [
 
 function HelpLinkRow({ link }: { link: HelpLink }) {
     return (
-        <Link
-            href={open().url}
-            method="post"
-            data={{ url: link.href }}
-            as="button"
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-paper"
+        <ExternalLinkButton
+            url={link.href}
+            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-paper"
         >
             <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-badge">
                 {link.icon}
@@ -96,7 +92,7 @@ function HelpLinkRow({ link }: { link: HelpLink }) {
                     {link.detail}
                 </span>
             </span>
-        </Link>
+        </ExternalLinkButton>
     );
 }
 

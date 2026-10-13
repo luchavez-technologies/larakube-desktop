@@ -2,18 +2,66 @@
 
 namespace App\Services\LaraKube;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 use Throwable;
 
 /** What Kubernetes cluster, if any, this computer is already running for local development. */
 class LocalCluster
 {
+    public const CACHE_KEY = 'local_cluster.detect';
+
+    public const TTL_SECONDS = 30;
+
+    /** @var array{engine: string, context: ?string, status: string, tone: string}|null */
+    private ?array $memoized = null;
+
     public function __construct(private ToolLocator $locator) {}
+
+    public function forget(): void
+    {
+        $this->memoized = null;
+        Cache::forget(self::CACHE_KEY);
+    }
 
     /**
      * @return array{engine: string, context: ?string, status: string, tone: string}
      */
-    public function detect(): array
+    public function detect(bool $fresh = false): array
+    {
+        if ($fresh) {
+            $this->forget();
+        }
+
+        if ($this->memoized !== null) {
+            return $this->memoized;
+        }
+
+        $cached = Cache::get(self::CACHE_KEY);
+        if (is_array($cached)
+            && isset($cached['engine'], $cached['status'], $cached['tone'])
+            && is_string($cached['engine'])
+            && is_string($cached['status'])
+            && is_string($cached['tone'])
+        ) {
+            return $this->memoized = [
+                'engine' => $cached['engine'],
+                'context' => isset($cached['context']) && is_string($cached['context']) ? $cached['context'] : null,
+                'status' => $cached['status'],
+                'tone' => $cached['tone'],
+            ];
+        }
+
+        $result = $this->resolve();
+        Cache::put(self::CACHE_KEY, $result, self::TTL_SECONDS);
+
+        return $this->memoized = $result;
+    }
+
+    /**
+     * @return array{engine: string, context: ?string, status: string, tone: string}
+     */
+    private function resolve(): array
     {
         $kubectl = $this->locator->find('kubectl');
         if ($kubectl === null) {

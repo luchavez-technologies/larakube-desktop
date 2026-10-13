@@ -105,7 +105,7 @@ test('server fields are validated before anything runs', function () {
     File::deleteDirectory($bin);
 });
 
-test('creating a managed cluster passes --managed, --node-count, --ha, and skips --cloudflare', function () {
+test('creating a managed cluster passes --managed, --node-count, --ha, and supports --cloudflare', function () {
     $bin = createServerFakeCli();
     $fake = ChildProcess::fake();
 
@@ -126,8 +126,60 @@ test('creating a managed cluster passes --managed, --node-count, --ha, and skips
 
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => array_slice($cmd, 4) === [
         "{$bin}/larakube", 'cloud:create', '--provider=gcp', '--managed', '--node-count=3', '--ha',
-        '--stack-name=my-cluster', '--region=us-central1', '--size=e2-medium', '--json', '--no-interaction',
-    ]);
+        '--stack-name=my-cluster', '--region=us-central1', '--size=e2-medium', '--json', '--cloudflare', '--no-interaction',
+    ] && ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'cf_secret');
+
+    File::deleteDirectory($bin);
+});
+
+test('creating a server with Route53 DNS passes --dns-provider=route53 and credentials in environment only', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'aws',
+        'stack_name' => 'my-aws-server',
+        'region' => 'us-east-1',
+        'size' => 't3.small',
+        'dns_provider' => 'route53',
+        'dns_aws_access_key_id' => 'AKIA123',
+        'dns_aws_secret_access_key' => 'aws_secret',
+        'enable_dns' => '1',
+        'enable_tls' => '0',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => in_array('--dns-provider=route53', (array) $cmd, true)
+        && in_array('--without-tls', (array) $cmd, true)
+        && ! in_array('--without-dns', (array) $cmd, true)
+        && ! str_contains(implode(' ', (array) $cmd), 'aws_secret')
+        && ($env['AWS_ACCESS_KEY_ID'] ?? null) === 'AKIA123'
+        && ($env['AWS_SECRET_ACCESS_KEY'] ?? null) === 'aws_secret');
+
+    File::deleteDirectory($bin);
+});
+
+test('creating a server with Google Cloud DNS passes --dns-provider=google and credentials in environment only', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'gcp',
+        'stack_name' => 'my-gcp-server',
+        'region' => 'us-central1',
+        'size' => 'e2-small',
+        'dns_provider' => 'google',
+        'dns_gcp_project_id' => 'my-project-123',
+        'dns_gcp_credentials' => '{"type": "service_account"}',
+        'enable_dns' => '0',
+        'enable_tls' => '1',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => in_array('--dns-provider=google', (array) $cmd, true)
+        && in_array('--without-dns', (array) $cmd, true)
+        && ! in_array('--without-tls', (array) $cmd, true)
+        && ! str_contains(implode(' ', (array) $cmd), 'service_account')
+        && ($env['GCP_PROJECT_ID'] ?? null) === 'my-project-123'
+        && ($env['GCP_SERVICE_ACCOUNT_JSON'] ?? null) === '{"type": "service_account"}');
 
     File::deleteDirectory($bin);
 });

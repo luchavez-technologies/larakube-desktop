@@ -23,6 +23,7 @@ import {
     Shield,
     XCircle,
 } from 'lucide-react';
+import { ExternalLinkButton } from '@/lib/open-external';
 import Button, { buttonClass } from '@/components/button';
 import CopyButton from '@/components/copy-button';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
@@ -37,7 +38,6 @@ import { sendJson } from '@/lib/http';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { runStatus } from '@/lib/servers';
-import { open } from '@/routes';
 import { create as createServer } from '@/routes/servers';
 import { show as showRunRoute } from '@/routes/runs';
 import { cn } from '@/lib/utils';
@@ -2328,11 +2328,8 @@ function LaunchedRunPanel({
                                             {adminUrl}
                                         </span>
                                     </div>
-                                    <Link
-                                        href={open().url}
-                                        method="post"
-                                        data={{ url: adminUrl }}
-                                        as="button"
+                                    <ExternalLinkButton
+                                        url={adminUrl}
                                         title="Open in default browser"
                                         className={buttonClass(
                                             'secondary',
@@ -2341,7 +2338,7 @@ function LaunchedRunPanel({
                                     >
                                         <ExternalLink className="size-3.5" />
                                         <span>Open</span>
-                                    </Link>
+                                    </ExternalLinkButton>
                                 </div>
                             );
                         })()}

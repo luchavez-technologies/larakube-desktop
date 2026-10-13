@@ -139,26 +139,68 @@ const EKS_STATEMENTS = [
     },
 ];
 
-export const MINIMAL_AWS_IAM_POLICY = JSON.stringify(
-    { Version: '2012-10-17', Statement: [EC2_STATEMENT] },
-    null,
-    2,
-);
+const ROUTE53_STATEMENT = {
+    Sid: 'LaraKubeRoute53LeastPrivilege',
+    Effect: 'Allow',
+    Action: [
+        'route53:ListHostedZones',
+        'route53:ListResourceRecordSets',
+        'route53:ChangeResourceRecordSets',
+        'route53:GetChange',
+    ],
+    Resource: [
+        'arn:aws:route53:::hostedzone/*',
+        'arn:aws:route53:::change/*',
+        '*',
+    ],
+};
 
-export const MINIMAL_AWS_IAM_POLICY_WITH_EKS = JSON.stringify(
-    { Version: '2012-10-17', Statement: [EC2_STATEMENT, ...EKS_STATEMENTS] },
-    null,
-    2,
+export const getMinimalAwsIamPolicy = (
+    includeEks = false,
+    includeRoute53 = false,
+) => {
+    const statements: any[] = [EC2_STATEMENT];
+    if (includeEks) {
+        statements.push(...EKS_STATEMENTS);
+    }
+    if (includeRoute53) {
+        statements.push(ROUTE53_STATEMENT);
+    }
+
+    return JSON.stringify(
+        { Version: '2012-10-17', Statement: statements },
+        null,
+        2,
+    );
+};
+
+export const MINIMAL_AWS_IAM_POLICY = getMinimalAwsIamPolicy(false, false);
+
+export const MINIMAL_AWS_IAM_POLICY_WITH_EKS = getMinimalAwsIamPolicy(
+    true,
+    false,
 );
 
 export default function AwsPolicyHelper({
     className,
     includeEks = false,
+    includeRoute53 = false,
 }: {
     className?: string;
     /** Managed Kubernetes (EKS) is selected — the policy needs IAM role + EKS actions on top of EC2, not EC2 alone. */
     includeEks?: boolean;
+    /** Route 53 DNS automation is selected — the policy needs Route 53 actions. */
+    includeRoute53?: boolean;
 }) {
+    const badgeLabel = () => {
+        const parts = [includeEks ? 'EC2 + EKS' : 'EC2 Only'];
+        if (includeRoute53) {
+            parts.push('Route 53');
+        }
+
+        return parts.join(' + ');
+    };
+
     return (
         <div
             className={`space-y-2.5 rounded-xl border border-line bg-paper/60 p-3.5 text-xs text-soft ${
@@ -170,15 +212,11 @@ export default function AwsPolicyHelper({
                     <ShieldCheck className="size-4 text-emerald-500" />
                     <span>AWS IAM Permissions</span>
                     <span className="rounded-full bg-badge px-2 py-0.5 text-[10px] text-soft">
-                        {includeEks ? 'EC2 + EKS' : 'EC2 Only'}
+                        {badgeLabel()}
                     </span>
                 </div>
                 <CopyButton
-                    value={
-                        includeEks
-                            ? MINIMAL_AWS_IAM_POLICY_WITH_EKS
-                            : MINIMAL_AWS_IAM_POLICY
-                    }
+                    value={getMinimalAwsIamPolicy(includeEks, includeRoute53)}
                     label="Copy Minimal Policy JSON"
                     variant="secondary"
                     size="sm"
