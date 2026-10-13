@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Services\Runtime\WslDistro;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * The Windows side of LaraKube Desktop's own WSL distro, `larakube-ubuntu`: whether WSL and the distro are there,
@@ -104,6 +105,17 @@ class Wsl
         }
 
         $path = $this->imagePath();
+
+        // Check if bundled in NativePHP extras directory first
+        if (! is_file($path)) {
+            try {
+                if (Storage::disk('extras')->exists('larakube-ubuntu.tar.gz')) {
+                    copy(Storage::disk('extras')->path('larakube-ubuntu.tar.gz'), $path);
+                }
+            } catch (\Throwable) {
+                // Extras disk not configured or file not found
+            }
+        }
 
         if (! is_file($path) || hash_file('sha256', $path) !== $expected) {
             set_time_limit(0);

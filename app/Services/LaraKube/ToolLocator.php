@@ -6,6 +6,7 @@ use App\Services\Runtime\WslDistro;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Storage;
 use Native\Desktop\Facades\ChildProcess;
 
 /**
@@ -305,6 +306,15 @@ class ToolLocator
      */
     public static function hostDownloadsDirectory(?bool $windows = null): string
     {
+        try {
+            $nativeDownloads = Storage::disk('downloads')->path('');
+            if ($nativeDownloads !== '' && is_dir($nativeDownloads)) {
+                return rtrim($nativeDownloads, '\\/');
+            }
+        } catch (\Throwable) {
+            // NativePHP downloads disk not available (e.g. running outside Electron runtime); fallback below
+        }
+
         $isWindows = $windows ?? (PHP_OS_FAMILY === 'Windows');
 
         if ($isWindows) {

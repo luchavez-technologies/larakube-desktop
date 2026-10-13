@@ -26,17 +26,17 @@ return [
      * This would allow you to open your application using a URL like:
      * nativephp://some/path
      */
-    'deeplink_scheme' => env('NATIVEPHP_DEEPLINK_SCHEME'),
+    'deeplink_scheme' => env('NATIVEPHP_DEEPLINK_SCHEME', 'larakube'),
 
     /**
      * The author of your application.
      */
-    'author' => env('NATIVEPHP_APP_AUTHOR'),
+    'author' => env('NATIVEPHP_APP_AUTHOR', 'LaraKube'),
 
     /**
      * The copyright notice for your application.
      */
-    'copyright' => env('NATIVEPHP_APP_COPYRIGHT'),
+    'copyright' => env('NATIVEPHP_APP_COPYRIGHT', 'Copyright © 2026 LaraKube'),
 
     /**
      * The description of your application.
@@ -65,7 +65,17 @@ return [
         'AZURE_*',
         'GITHUB_*',
         'DO_SPACES_*',
+        'CLOUDFLARE_*',
+        'HETZNER_*',
+        'DIGITALOCEAN_*',
+        'GCP_*',
+        'GOOGLE_*',
+        'TAILSCALE_*',
+        'OPENBAO_*',
+        'VAULT_*',
         '*_SECRET',
+        '*_TOKEN',
+        '*_KEY',
         'BIFROST_*',
         'NATIVEPHP_UPDATER_PATH',
         'NATIVEPHP_APPLE_ID',
@@ -155,9 +165,9 @@ return [
     'queue_workers' => [
         'default' => [
             'queues' => ['default'],
-            'memory_limit' => 128,
-            'timeout' => 60,
-            'sleep' => 3,
+            'memory_limit' => 256,
+            'timeout' => 120,
+            'sleep' => 2,
         ],
     ],
 

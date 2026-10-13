@@ -25,3 +25,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0011](0011-external-links-never-trigger-inertia-visits.md)              | External links use background `/open` dispatch; never trigger Inertia visits                    | Accepted |
 | [0012](0012-desktop-navigation-performance-and-caching.md)               | Subprocess caching, sentinel timeout guards, and Inertia v3 navigation primitives               | Accepted |
 | [0013](0013-always-paginate-large-data-lists.md)                         | Always paginate high-cardinality data lists (Mail, Activity, Projects, Servers)                 | Accepted |
+| [0014](0014-nativephp-runtime-security-and-os-integration.md)            | NativePHP runtime configuration, security scrubbing, OS disks, and child processes              | Accepted |
