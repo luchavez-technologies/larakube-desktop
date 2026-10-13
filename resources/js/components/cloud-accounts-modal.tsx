@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import {
+    AlertCircle,
     Check,
     CheckCircle2,
     ExternalLink,
@@ -10,7 +11,6 @@ import {
     Upload,
     Users,
     X,
-    AlertCircle,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
@@ -20,6 +20,7 @@ import GcpPolicyHelper from '@/components/gcp-policy-helper';
 import GcpSignIn from '@/components/gcp-sign-in';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
+import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import type { Provider, ProviderAccount } from '@/types/larakube';
 
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export default function CloudAccountsModal({ provider, onClose }: Props) {
+    const [slidIn, setSlidIn] = useState(false);
     const [activeTab, setActiveTab] = useState<'accounts' | 'add'>('accounts');
     const [gcpAuthMethod, setGcpAuthMethod] = useState<
         'service_account' | 'oauth'
@@ -38,6 +40,28 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
     );
     const [isDeleting, setIsDeleting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    useRightDrawerOpen(true);
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => setSlidIn(true));
+        return () => cancelAnimationFrame(frame);
+    }, []);
+
+    function handleClose() {
+        setSlidIn(false);
+        setTimeout(onClose, 250);
+    }
+
+    useEffect(() => {
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') {
+                handleClose();
+            }
+        }
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
 
     // Form for DO and Hetzner
     const tokenForm = useForm({
@@ -190,10 +214,24 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-            <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-surface shadow-2xl ring-1 ring-line">
+        <div
+            className={cn(
+                'fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-300',
+                slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={handleClose}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                className={cn(
+                    'flex h-full w-full max-w-xl flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-300 ease-out md:max-w-2xl',
+                    slidIn ? 'translate-x-0' : 'translate-x-full',
+                )}
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-line px-6 py-4">
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
                     <div className="flex items-center gap-3">
                         <ProviderLogo provider={provider.slug} size="sm" />
                         <div>
@@ -208,7 +246,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="hover:text-foreground rounded-lg p-1.5 text-soft transition hover:bg-badge"
                     >
                         <X className="size-4" />
@@ -216,7 +254,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                 </div>
 
                 {/* Navigation Tabs */}
-                <div className="flex border-b border-line px-6">
+                <div className="flex shrink-0 border-b border-line px-6">
                     <button
                         type="button"
                         onClick={() => {
@@ -256,19 +294,17 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                     </button>
                 </div>
 
-                {/* Content Area with Slim Scrollbar */}
-                <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] overflow-y-auto p-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-line hover:[&::-webkit-scrollbar-thumb]:bg-soft [&::-webkit-scrollbar-track]:bg-transparent">
-                    {/* Error Notice */}
-                    {errorMessage && (
-                        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent-line bg-accent-tint p-3 text-xs text-accent">
-                            <AlertCircle className="size-4 shrink-0" />
-                            <span>{errorMessage}</span>
-                        </div>
-                    )}
+                {/* Tab: Registered Accounts */}
+                {activeTab === 'accounts' && (
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                        <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] space-y-4 overflow-y-auto p-6">
+                            {errorMessage && (
+                                <div className="flex items-center gap-2.5 rounded-xl border border-accent-line bg-accent-tint p-3 text-xs text-accent">
+                                    <AlertCircle className="size-4 shrink-0" />
+                                    <span>{errorMessage}</span>
+                                </div>
+                            )}
 
-                    {/* Tab: Accounts List */}
-                    {activeTab === 'accounts' && (
-                        <div className="space-y-4">
                             {accounts.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-line p-8 text-center">
                                     <Users className="mx-auto size-8 text-soft opacity-40" />
@@ -286,7 +322,12 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             onClick={() => setActiveTab('add')}
                                         >
                                             <Plus className="size-3.5" />
-                                            <span>Add Account</span>
+                                            <span>
+                                                Add{' '}
+                                                {provider.slug === 'aws'
+                                                    ? 'Profile'
+                                                    : 'Account'}
+                                            </span>
                                         </Button>
                                     </div>
                                 </div>
@@ -421,13 +462,50 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                 </div>
                             )}
                         </div>
-                    )}
 
-                    {/* Tab: Add Account (DO & Hetzner) */}
-                    {activeTab === 'add' &&
-                        (provider.slug === 'do' ||
-                            provider.slug === 'hetzner') && (
-                            <form onSubmit={submitToken} className="space-y-4">
+                        {/* Sticky Footer for Accounts List */}
+                        <div className="flex shrink-0 items-center justify-between gap-2.5 border-t border-line bg-surface/95 px-6 py-3.5 backdrop-blur-xs">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleClose}
+                            >
+                                <X className="size-3.5" />
+                                <span>Close</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => setActiveTab('add')}
+                            >
+                                <Plus className="size-3.5" />
+                                <span>
+                                    Add{' '}
+                                    {provider.slug === 'aws'
+                                        ? 'Profile'
+                                        : 'Account'}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Tab: Add Account (DO & Hetzner) */}
+                {activeTab === 'add' &&
+                    (provider.slug === 'do' || provider.slug === 'hetzner') && (
+                        <form
+                            onSubmit={submitToken}
+                            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                        >
+                            <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] space-y-4 overflow-y-auto p-6">
+                                {errorMessage && (
+                                    <div className="flex items-center gap-2.5 rounded-xl border border-accent-line bg-accent-tint p-3 text-xs text-accent">
+                                        <AlertCircle className="size-4 shrink-0" />
+                                        <span>{errorMessage}</span>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="text-foreground mb-1 block text-xs font-medium">
                                         Account Label / Client Name
@@ -479,32 +557,45 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                         </p>
                                     )}
                                 </div>
+                            </div>
 
-                                <div className="flex justify-end gap-2 pt-2">
-                                    <Button
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => setActiveTab('accounts')}
-                                    >
-                                        <X className="size-3.5" />
-                                        <span>Cancel</span>
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        size="sm"
-                                        disabled={tokenForm.processing}
-                                    >
-                                        <Plus className="size-3.5" />
-                                        <span>Save Account</span>
-                                    </Button>
+                            {/* Sticky Footer */}
+                            <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-surface/95 px-6 py-3.5 backdrop-blur-xs">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setActiveTab('accounts')}
+                                >
+                                    <X className="size-3.5" />
+                                    <span>Cancel</span>
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={tokenForm.processing}
+                                >
+                                    <Plus className="size-3.5" />
+                                    <span>Save Account</span>
+                                </Button>
+                            </div>
+                        </form>
+                    )}
+
+                {/* Tab: Add Profile (AWS) */}
+                {activeTab === 'add' && provider.slug === 'aws' && (
+                    <form
+                        onSubmit={submitAws}
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                    >
+                        <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] space-y-4 overflow-y-auto p-6">
+                            {errorMessage && (
+                                <div className="flex items-center gap-2.5 rounded-xl border border-accent-line bg-accent-tint p-3 text-xs text-accent">
+                                    <AlertCircle className="size-4 shrink-0" />
+                                    <span>{errorMessage}</span>
                                 </div>
-                            </form>
-                        )}
+                            )}
 
-                    {/* Tab: Add Profile (AWS) */}
-                    {activeTab === 'add' && provider.slug === 'aws' && (
-                        <form onSubmit={submitAws} className="space-y-4">
                             <AwsPolicyHelper />
 
                             <div>
@@ -529,13 +620,14 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                     <code className="text-foreground">
                                         ~/.aws/credentials
                                     </code>{' '}
-                                    as{' '}
-                                    <code className="text-foreground">
-                                        [
-                                        {awsForm.data.profile || 'profile-name'}
-                                        ]
-                                    </code>
+                                    as [{awsForm.data.profile || 'profile-name'}
+                                    ]
                                 </p>
+                                {awsForm.errors.profile && (
+                                    <p className="mt-1 text-xs text-accent">
+                                        {awsForm.errors.profile}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -592,33 +684,36 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                     }))}
                                 />
                             </div>
+                        </div>
 
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setActiveTab('accounts')}
-                                >
-                                    <X className="size-3.5" />
-                                    <span>Cancel</span>
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={awsForm.processing}
-                                >
-                                    <Plus className="size-3.5" />
-                                    <span>Save Profile</span>
-                                </Button>
-                            </div>
-                        </form>
-                    )}
+                        {/* Sticky Footer */}
+                        <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-surface/95 px-6 py-3.5 backdrop-blur-xs">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setActiveTab('accounts')}
+                            >
+                                <X className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={awsForm.processing}
+                            >
+                                <Plus className="size-3.5" />
+                                <span>Save Profile</span>
+                            </Button>
+                        </div>
+                    </form>
+                )}
 
-                    {/* Tab: Add Account (GCP) */}
-                    {activeTab === 'add' && provider.slug === 'gcp' && (
-                        <div className="space-y-4">
-                            {/* Method Switcher */}
+                {/* Tab: Add Account (GCP) */}
+                {activeTab === 'add' && provider.slug === 'gcp' && (
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                        {/* Method Switcher Header */}
+                        <div className="shrink-0 border-b border-line bg-surface/50 px-6 py-3">
                             <div className="flex rounded-lg bg-surface/80 p-1 ring-1 ring-line">
                                 <button
                                     type="button"
@@ -649,13 +744,21 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                     <span>Google Account (OAuth)</span>
                                 </button>
                             </div>
+                        </div>
 
-                            {/* Service Account JSON Mode */}
-                            {gcpAuthMethod === 'service_account' && (
-                                <form
-                                    onSubmit={submitGcp}
-                                    className="space-y-4"
-                                >
+                        {gcpAuthMethod === 'service_account' ? (
+                            <form
+                                onSubmit={submitGcp}
+                                className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                            >
+                                <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] space-y-4 overflow-y-auto p-6">
+                                    {errorMessage && (
+                                        <div className="flex items-center gap-2.5 rounded-xl border border-accent-line bg-accent-tint p-3 text-xs text-accent">
+                                            <AlertCircle className="size-4 shrink-0" />
+                                            <span>{errorMessage}</span>
+                                        </div>
+                                    )}
+
                                     <GcpPolicyHelper
                                         interactive={true}
                                         projectId={parsedGcp?.projectId}
@@ -741,37 +844,35 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             </div>
                                         </div>
                                     )}
+                                </div>
 
-                                    <div className="flex justify-end gap-2 pt-2">
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() =>
-                                                setActiveTab('accounts')
-                                            }
-                                        >
-                                            <X className="size-3.5" />
-                                            <span>Cancel</span>
-                                        </Button>
-                                        <Button
-                                            type="submit"
-                                            size="sm"
-                                            disabled={
-                                                gcpForm.processing ||
-                                                !gcpForm.data.credentials
-                                            }
-                                        >
-                                            <Plus className="size-3.5" />
-                                            <span>Save Service Account</span>
-                                        </Button>
-                                    </div>
-                                </form>
-                            )}
-
-                            {/* Google OAuth Mode */}
-                            {gcpAuthMethod === 'oauth' && (
-                                <div className="space-y-4">
+                                {/* Sticky Footer */}
+                                <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-surface/95 px-6 py-3.5 backdrop-blur-xs">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setActiveTab('accounts')}
+                                    >
+                                        <X className="size-3.5" />
+                                        <span>Cancel</span>
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={
+                                            gcpForm.processing ||
+                                            !gcpForm.data.credentials
+                                        }
+                                    >
+                                        <Plus className="size-3.5" />
+                                        <span>Save Service Account</span>
+                                    </Button>
+                                </div>
+                            </form>
+                        ) : (
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] space-y-4 overflow-y-auto p-6">
                                     <div className="rounded-xl border border-line bg-surface/50 p-4">
                                         <p className="text-xs leading-relaxed text-soft">
                                             Authenticate directly with your
@@ -784,33 +885,24 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             <GcpSignIn label="Sign in with Google Account" />
                                         </div>
                                     </div>
-
-                                    <div className="flex justify-end gap-2 pt-2">
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() =>
-                                                setActiveTab('accounts')
-                                            }
-                                        >
-                                            <X className="size-3.5" />
-                                            <span>Cancel</span>
-                                        </Button>
-                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    )}
-                </div>
 
-                {/* Footer */}
-                <div className="flex justify-end border-t border-line px-6 py-3.5">
-                    <Button variant="secondary" onClick={onClose}>
-                        <X className="size-4" />
-                        <span>Close</span>
-                    </Button>
-                </div>
+                                {/* Sticky Footer */}
+                                <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-surface/95 px-6 py-3.5 backdrop-blur-xs">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setActiveTab('accounts')}
+                                    >
+                                        <X className="size-3.5" />
+                                        <span>Cancel</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
