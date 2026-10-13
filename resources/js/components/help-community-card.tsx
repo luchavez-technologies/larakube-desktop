@@ -33,6 +33,12 @@ const GET_HELP: HelpLink[] = [
         icon: <SiDiscord className="size-4" color="#5865F2" />,
     },
     {
+        label: 'Facebook Group',
+        detail: 'Ask for help, showcase, or give feedback',
+        href: 'https://www.facebook.com/groups/luchtech',
+        icon: <SiFacebook className="size-4" color="#0866FF" />,
+    },
+    {
         label: 'help@luchtech.dev',
         detail: 'General / company inquiries',
         href: 'mailto:help@luchtech.dev',
