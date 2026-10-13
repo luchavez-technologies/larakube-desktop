@@ -4,8 +4,8 @@
     "version": "1.0.0",
     "description": "LaraKube Desktop",
     "main": "./out/main/index.js",
-    "author": "LaraKube",
-    "homepage": "https://cli.larakube.app",
+    "author": "LuchTech",
+    "homepage": "https://www.larakube.app",
     "type": "module",
     "engines": {
         "node": ">=22.0.0"

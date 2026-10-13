@@ -65,8 +65,8 @@ app.whenReady().then(() => {
             applicationName: 'LaraKube Desktop',
             applicationVersion: '1.0.0',
             version: '1.0.0',
-            copyright: 'Copyright © 2026 LaraKube. All rights reserved.',
-            credits: 'Provision cloud servers and install Cluster Tools with LaraKube.',
+            copyright: 'Copyright © 2026 LuchTech. All rights reserved.',
+            credits: 'Developed by LuchTech (https://www.luchtech.dev).\nWebsite: https://www.larakube.app',
             iconPath: resolvedIcon,
         });
     }

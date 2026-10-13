@@ -31,12 +31,12 @@ return [
     /**
      * The author of your application.
      */
-    'author' => env('NATIVEPHP_APP_AUTHOR', 'LaraKube'),
+    'author' => env('NATIVEPHP_APP_AUTHOR', 'LuchTech'),
 
     /**
      * The copyright notice for your application.
      */
-    'copyright' => env('NATIVEPHP_APP_COPYRIGHT', 'Copyright © 2026 LaraKube'),
+    'copyright' => env('NATIVEPHP_APP_COPYRIGHT', 'Copyright © 2026 LuchTech'),
 
     /**
      * The description of your application.
@@ -46,7 +46,7 @@ return [
     /**
      * The Website of your application.
      */
-    'website' => env('NATIVEPHP_APP_WEBSITE', 'https://cli.larakube.app'),
+    'website' => env('NATIVEPHP_APP_WEBSITE', 'https://www.larakube.app'),
 
     /**
      * The default service provider for your application. This provider
