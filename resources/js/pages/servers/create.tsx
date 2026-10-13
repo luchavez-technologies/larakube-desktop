@@ -989,8 +989,10 @@ function DnsAutomationOption({
                                     </div>
                                 )}
                                 <AwsPolicyHelper
+                                    includeEc2={false}
                                     includeEks={false}
                                     includeRoute53={true}
+                                    interactive={false}
                                 />
                                 <Field
                                     label="AWS Access Key ID"

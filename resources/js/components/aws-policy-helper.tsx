@@ -1,5 +1,7 @@
-import { ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Globe, Layers, Server, ShieldCheck } from 'lucide-react';
 import CopyButton from '@/components/copy-button';
+import { cn } from '@/lib/utils';
 
 const EC2_STATEMENT = {
     Sid: 'LaraKubeEC2LeastPrivilege',
@@ -144,6 +146,7 @@ const ROUTE53_STATEMENT = {
     Effect: 'Allow',
     Action: [
         'route53:ListHostedZones',
+        'route53:ListHostedZonesByName',
         'route53:ListResourceRecordSets',
         'route53:ChangeResourceRecordSets',
         'route53:GetChange',
@@ -155,11 +158,37 @@ const ROUTE53_STATEMENT = {
     ],
 };
 
+export type AwsPolicyOptions = {
+    includeEc2?: boolean;
+    includeEks?: boolean;
+    includeRoute53?: boolean;
+};
+
 export const getMinimalAwsIamPolicy = (
-    includeEks = false,
-    includeRoute53 = false,
+    optionsOrIncludeEks: boolean | AwsPolicyOptions = true,
+    legacyIncludeRoute53 = false,
 ) => {
-    const statements: any[] = [EC2_STATEMENT];
+    let includeEc2 = true;
+    let includeEks = false;
+    let includeRoute53 = false;
+
+    if (
+        typeof optionsOrIncludeEks === 'object' &&
+        optionsOrIncludeEks !== null
+    ) {
+        includeEc2 = optionsOrIncludeEks.includeEc2 ?? true;
+        includeEks = optionsOrIncludeEks.includeEks ?? false;
+        includeRoute53 = optionsOrIncludeEks.includeRoute53 ?? false;
+    } else {
+        includeEks = optionsOrIncludeEks;
+        includeRoute53 = legacyIncludeRoute53;
+        includeEc2 = true;
+    }
+
+    const statements: any[] = [];
+    if (includeEc2) {
+        statements.push(EC2_STATEMENT);
+    }
     if (includeEks) {
         statements.push(...EKS_STATEMENTS);
     }
@@ -174,36 +203,89 @@ export const getMinimalAwsIamPolicy = (
     );
 };
 
-export const MINIMAL_AWS_IAM_POLICY = getMinimalAwsIamPolicy(false, false);
+export const MINIMAL_AWS_IAM_POLICY = getMinimalAwsIamPolicy({
+    includeEc2: true,
+    includeEks: false,
+    includeRoute53: false,
+});
 
-export const MINIMAL_AWS_IAM_POLICY_WITH_EKS = getMinimalAwsIamPolicy(
-    true,
-    false,
-);
+export const MINIMAL_AWS_IAM_POLICY_WITH_EKS = getMinimalAwsIamPolicy({
+    includeEc2: true,
+    includeEks: true,
+    includeRoute53: false,
+});
+
+export const MINIMAL_AWS_IAM_POLICY_ROUTE53_ONLY = getMinimalAwsIamPolicy({
+    includeEc2: false,
+    includeEks: false,
+    includeRoute53: true,
+});
+
+export interface AwsPolicyHelperProps {
+    className?: string;
+    /** Whether EC2 compute actions are included (default: true) */
+    includeEc2?: boolean;
+    /** Managed Kubernetes (EKS) is selected (default: false) */
+    includeEks?: boolean;
+    /** Route 53 DNS automation is selected (default: false) */
+    includeRoute53?: boolean;
+    /** Allow the operator to interactively toggle services (default: true) */
+    interactive?: boolean;
+}
 
 export default function AwsPolicyHelper({
     className,
+    includeEc2 = true,
     includeEks = false,
     includeRoute53 = false,
-}: {
-    className?: string;
-    /** Managed Kubernetes (EKS) is selected — the policy needs IAM role + EKS actions on top of EC2, not EC2 alone. */
-    includeEks?: boolean;
-    /** Route 53 DNS automation is selected — the policy needs Route 53 actions. */
-    includeRoute53?: boolean;
-}) {
-    const badgeLabel = () => {
-        const parts = [includeEks ? 'EC2 + EKS' : 'EC2 Only'];
-        if (includeRoute53) {
-            parts.push('Route 53');
-        }
+    interactive = true,
+}: AwsPolicyHelperProps) {
+    const [ec2, setEc2] = useState(includeEc2);
+    const [eks, setEks] = useState(includeEks);
+    const [route53, setRoute53] = useState(includeRoute53);
 
+    useEffect(() => {
+        setEc2(includeEc2);
+        setEks(includeEks);
+        setRoute53(includeRoute53);
+    }, [includeEc2, includeEks, includeRoute53]);
+
+    const toggleEc2 = () => {
+        if (ec2 && !eks && !route53) return; // Prevent deselecting everything
+        if (ec2 && eks) {
+            setEks(false);
+        }
+        setEc2(!ec2);
+    };
+
+    const toggleEks = () => {
+        if (eks && !ec2 && !route53) return; // Prevent deselecting everything
+        const next = !eks;
+        setEks(next);
+        if (next && !ec2) {
+            setEc2(true); // EKS depends on EC2 instance lifecycle
+        }
+    };
+
+    const toggleRoute53 = () => {
+        if (route53 && !ec2 && !eks) return; // Prevent deselecting everything
+        setRoute53(!route53);
+    };
+
+    const badgeLabel = () => {
+        const parts: string[] = [];
+        if (ec2 && !eks) parts.push('EC2');
+        if (eks) parts.push(ec2 ? 'EC2 + EKS' : 'EKS');
+        if (route53) parts.push('Route 53');
+
+        if (parts.length === 0) return 'Custom';
+        if (parts.length === 1) return `${parts[0]} Only`;
         return parts.join(' + ');
     };
 
     return (
         <div
-            className={`space-y-2.5 rounded-xl border border-line bg-paper/60 p-3.5 text-xs text-soft ${
+            className={`space-y-3 rounded-xl border border-line bg-paper/60 p-3.5 text-xs text-soft ${
                 className ?? ''
             }`}
         >
@@ -216,13 +298,83 @@ export default function AwsPolicyHelper({
                     </span>
                 </div>
                 <CopyButton
-                    value={getMinimalAwsIamPolicy(includeEks, includeRoute53)}
+                    value={getMinimalAwsIamPolicy({
+                        includeEc2: ec2,
+                        includeEks: eks,
+                        includeRoute53: route53,
+                    })}
                     label="Copy Minimal Policy JSON"
                     variant="secondary"
                     size="sm"
                 />
             </div>
-            {includeEks ? (
+
+            {interactive && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface/60 p-2 ring-1 ring-line/50">
+                    <span className="text-foreground mr-0.5 text-[11px] font-medium">
+                        Target Services:
+                    </span>
+
+                    {/* EC2 Checkbox */}
+                    <label
+                        className={cn(
+                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            ec2
+                                ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
+                                : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
+                        )}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={ec2}
+                            onChange={toggleEc2}
+                            className="size-3.5 rounded border-line text-servers focus:ring-servers"
+                        />
+                        <Server className="size-3.5 text-soft" />
+                        <span>EC2 (Compute)</span>
+                    </label>
+
+                    {/* EKS Checkbox */}
+                    <label
+                        className={cn(
+                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            eks
+                                ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
+                                : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
+                        )}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={eks}
+                            onChange={toggleEks}
+                            className="size-3.5 rounded border-line text-servers focus:ring-servers"
+                        />
+                        <Layers className="size-3.5 text-soft" />
+                        <span>EKS (Kubernetes)</span>
+                    </label>
+
+                    {/* Route 53 Checkbox */}
+                    <label
+                        className={cn(
+                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            route53
+                                ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
+                                : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
+                        )}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={route53}
+                            onChange={toggleRoute53}
+                            className="size-3.5 rounded border-line text-servers focus:ring-servers"
+                        />
+                        <Globe className="size-3.5 text-soft" />
+                        <span>Route 53 (DNS)</span>
+                    </label>
+                </div>
+            )}
+
+            {eks ? (
                 <>
                     <p className="leading-relaxed">
                         <strong className="text-foreground">
@@ -235,7 +387,8 @@ export default function AwsPolicyHelper({
                         ) are for the cluster's own internal role once it's
                         running — not for the account creating it. There's no
                         AWS-managed policy for that; copy the JSON above and
-                        create a custom policy with it.
+                        create a custom policy with it
+                        {route53 ? ' (includes Route 53 DNS actions)' : ''}.
                     </p>
                     <p className="text-[11px] leading-relaxed text-soft">
                         In a hurry on a disposable/workshop account and not
@@ -245,6 +398,56 @@ export default function AwsPolicyHelper({
                         </code>{' '}
                         works too — just never do that on an account you
                         actually care about securing.
+                    </p>
+                </>
+            ) : !ec2 && route53 ? (
+                <>
+                    <p className="leading-relaxed">
+                        <strong className="text-foreground">
+                            Quick Setup:
+                        </strong>{' '}
+                        Under{' '}
+                        <em className="text-foreground font-medium not-italic">
+                            Attach policies directly
+                        </em>
+                        , search and attach{' '}
+                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                            AmazonRoute53FullAccess
+                        </code>
+                        .
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-soft">
+                        For strict least privilege, copy our minimal policy JSON
+                        above with only the required Route 53 hosted zone and
+                        record change permissions — ideal when your compute runs
+                        on DigitalOcean, Hetzner, or bare metal, while DNS &amp;
+                        SSL remain managed by AWS Route 53.
+                    </p>
+                </>
+            ) : ec2 && route53 ? (
+                <>
+                    <p className="leading-relaxed">
+                        <strong className="text-foreground">
+                            Quick Setup:
+                        </strong>{' '}
+                        Under{' '}
+                        <em className="text-foreground font-medium not-italic">
+                            Attach policies directly
+                        </em>
+                        , search and attach{' '}
+                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                            AmazonEC2FullAccess
+                        </code>{' '}
+                        and{' '}
+                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                            AmazonRoute53FullAccess
+                        </code>
+                        .
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-soft">
+                        For strict least privilege, copy our minimal policy JSON
+                        above combining EC2 instance management with automated
+                        Route 53 DNS record handling.
                     </p>
                 </>
             ) : (

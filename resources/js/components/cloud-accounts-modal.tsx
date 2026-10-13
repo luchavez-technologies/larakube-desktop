@@ -3,6 +3,8 @@ import { router, useForm } from '@inertiajs/react';
 import {
     Check,
     CheckCircle2,
+    ExternalLink,
+    Key,
     Plus,
     Trash2,
     Upload,
@@ -27,6 +29,9 @@ type Props = {
 
 export default function CloudAccountsModal({ provider, onClose }: Props) {
     const [activeTab, setActiveTab] = useState<'accounts' | 'add'>('accounts');
+    const [gcpAuthMethod, setGcpAuthMethod] = useState<
+        'service_account' | 'oauth'
+    >('service_account');
     const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(
         null,
     );
@@ -609,40 +614,81 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                         </form>
                     )}
 
-                    {/* Tab: Add Service Account / User (GCP) */}
+                    {/* Tab: Add Account (GCP) */}
                     {activeTab === 'add' && provider.slug === 'gcp' && (
-                        <div className="space-y-6">
-                            <form onSubmit={submitGcp} className="space-y-4">
-                                <div className="rounded-xl border border-line bg-surface/40 p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-foreground block text-xs font-semibold">
+                        <div className="space-y-4">
+                            {/* Method Switcher */}
+                            <div className="flex rounded-lg bg-surface/80 p-1 ring-1 ring-line">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setGcpAuthMethod('service_account')
+                                    }
+                                    className={cn(
+                                        'flex flex-1 items-center justify-center gap-2 rounded-md py-1.5 text-xs font-medium transition',
+                                        gcpAuthMethod === 'service_account'
+                                            ? 'bg-ink text-surface shadow-xs'
+                                            : 'hover:text-foreground text-soft',
+                                    )}
+                                >
+                                    <Key className="size-3.5" />
+                                    <span>Service Account Key (JSON)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setGcpAuthMethod('oauth')}
+                                    className={cn(
+                                        'flex flex-1 items-center justify-center gap-2 rounded-md py-1.5 text-xs font-medium transition',
+                                        gcpAuthMethod === 'oauth'
+                                            ? 'bg-ink text-surface shadow-xs'
+                                            : 'hover:text-foreground text-soft',
+                                    )}
+                                >
+                                    <ExternalLink className="size-3.5" />
+                                    <span>Google Account (OAuth)</span>
+                                </button>
+                            </div>
+
+                            {/* Service Account JSON Mode */}
+                            {gcpAuthMethod === 'service_account' && (
+                                <form
+                                    onSubmit={submitGcp}
+                                    className="space-y-4"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-foreground block text-xs font-medium">
                                                 Service Account Key JSON
                                             </label>
-                                            <p className="mt-0.5 text-[11px] text-soft">
-                                                The standard credentials file
-                                                from Google Cloud Console or
-                                                Firebase.
-                                            </p>
+                                            <label
+                                                className={cn(
+                                                    buttonClass(
+                                                        'secondary',
+                                                        'sm',
+                                                    ),
+                                                    'cursor-pointer text-xs',
+                                                )}
+                                            >
+                                                <Upload className="size-3.5" />
+                                                <span>Browse JSON File…</span>
+                                                <input
+                                                    type="file"
+                                                    accept=".json,application/json"
+                                                    onChange={
+                                                        handleGcpFileSelect
+                                                    }
+                                                    className="sr-only"
+                                                />
+                                            </label>
                                         </div>
-                                        <label
-                                            className={cn(
-                                                buttonClass('secondary', 'sm'),
-                                                'cursor-pointer text-xs',
-                                            )}
-                                        >
-                                            <Upload className="size-3.5" />
-                                            <span>Browse JSON File…</span>
-                                            <input
-                                                type="file"
-                                                accept=".json,application/json"
-                                                onChange={handleGcpFileSelect}
-                                                className="sr-only"
-                                            />
-                                        </label>
+                                        <p className="mt-1 text-[11px] text-soft">
+                                            The standard credentials file
+                                            downloaded from Google Cloud IAM or
+                                            Firebase Console.
+                                        </p>
                                     </div>
 
-                                    <div className="mt-3">
+                                    <div>
                                         <textarea
                                             rows={5}
                                             value={gcpForm.data.credentials}
@@ -664,7 +710,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                     </div>
 
                                     {parsedGcp && (
-                                        <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                        <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
                                             <CheckCircle2 className="size-4 shrink-0" />
                                             <div>
                                                 <span className="font-semibold">
@@ -689,7 +735,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                         </div>
                                     )}
 
-                                    <div className="mt-4 flex justify-end gap-2">
+                                    <div className="flex justify-end gap-2 pt-2">
                                         <Button
                                             type="button"
                                             variant="secondary"
@@ -713,25 +759,40 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             <span>Save Service Account</span>
                                         </Button>
                                     </div>
+                                </form>
+                            )}
+
+                            {/* Google OAuth Mode */}
+                            {gcpAuthMethod === 'oauth' && (
+                                <div className="space-y-4">
+                                    <div className="rounded-xl border border-line bg-surface/50 p-4">
+                                        <p className="text-xs leading-relaxed text-soft">
+                                            Authenticate directly with your
+                                            human Google account via browser
+                                            OAuth. Once approved, the Google
+                                            Cloud CLI registers your account
+                                            credentials locally.
+                                        </p>
+                                        <div className="mt-4">
+                                            <GcpSignIn label="Sign in with Google Account" />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                setActiveTab('accounts')
+                                            }
+                                        >
+                                            <X className="size-3.5" />
+                                            <span>Cancel</span>
+                                        </Button>
+                                    </div>
                                 </div>
-                            </form>
-
-                            <div className="flex items-center gap-3">
-                                <div className="h-px flex-1 bg-line" />
-                                <span className="text-[11px] font-medium tracking-wide text-soft uppercase">
-                                    Or Sign In With Google Account (OAuth)
-                                </span>
-                                <div className="h-px flex-1 bg-line" />
-                            </div>
-
-                            <div className="rounded-xl border border-line bg-surface/50 p-4">
-                                <p className="mb-3 text-xs text-soft">
-                                    Alternatively, authenticate interactively
-                                    with your personal or team Google account
-                                    via browser OAuth:
-                                </p>
-                                <GcpSignIn label="Sign in with Google Account" />
-                            </div>
+                            )}
                         </div>
                     )}
                 </div>
