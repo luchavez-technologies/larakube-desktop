@@ -173,15 +173,11 @@ export default function GcpPolicyHelper({
             </div>
 
             {interactive && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface/60 p-2 ring-1 ring-line/50">
-                    <span className="text-foreground mr-0.5 text-[11px] font-medium">
-                        Target Services:
-                    </span>
-
+                <div className="grid grid-cols-3 gap-2">
                     {/* GCE Checkbox */}
                     <label
                         className={cn(
-                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            'flex cursor-pointer items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium ring-1 transition select-none',
                             compute
                                 ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
                                 : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
@@ -193,14 +189,14 @@ export default function GcpPolicyHelper({
                             onChange={toggleCompute}
                             className="size-3.5 rounded border-line text-servers focus:ring-servers"
                         />
-                        <Server className="size-3.5 text-soft" />
-                        <span>Compute Engine (GCE)</span>
+                        <Server className="size-3.5 shrink-0 text-soft" />
+                        <span className="truncate">Compute Engine (GCE)</span>
                     </label>
 
                     {/* GKE Checkbox */}
                     <label
                         className={cn(
-                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            'flex cursor-pointer items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium ring-1 transition select-none',
                             gke
                                 ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
                                 : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
@@ -212,14 +208,16 @@ export default function GcpPolicyHelper({
                             onChange={toggleGke}
                             className="size-3.5 rounded border-line text-servers focus:ring-servers"
                         />
-                        <Layers className="size-3.5 text-soft" />
-                        <span>Kubernetes Engine (GKE)</span>
+                        <Layers className="size-3.5 shrink-0 text-soft" />
+                        <span className="truncate">
+                            Kubernetes Engine (GKE)
+                        </span>
                     </label>
 
                     {/* Cloud DNS Checkbox */}
                     <label
                         className={cn(
-                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            'flex cursor-pointer items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium ring-1 transition select-none',
                             dns
                                 ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
                                 : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
@@ -231,74 +229,53 @@ export default function GcpPolicyHelper({
                             onChange={toggleDns}
                             className="size-3.5 rounded border-line text-servers focus:ring-servers"
                         />
-                        <Globe className="size-3.5 text-soft" />
-                        <span>Cloud DNS</span>
+                        <Globe className="size-3.5 shrink-0 text-soft" />
+                        <span className="truncate">Cloud DNS</span>
                     </label>
                 </div>
             )}
 
-            {/* Quick Setup and Predefined Roles */}
-            <div>
-                <p className="leading-relaxed">
-                    <strong className="text-foreground">
-                        Recommended IAM Roles:
-                    </strong>{' '}
-                    In Google Cloud Console under{' '}
-                    <em className="text-foreground font-medium not-italic">
-                        IAM &amp; Admin &gt; Service Accounts
-                    </em>
-                    , grant your Service Account:
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {activeRoles.map((r) => (
-                        <span
-                            key={r.id}
-                            className="text-foreground inline-flex items-center gap-1 rounded bg-badge px-2 py-0.5 font-mono text-[11px] ring-1 ring-line"
-                        >
-                            <span className="font-sans font-semibold text-soft">
-                                {r.name}:
-                            </span>
-                            <span>{r.id}</span>
-                        </span>
-                    ))}
-                </div>
+            {/* Compact Predefined Roles */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] leading-normal">
+                <span className="text-foreground font-medium">
+                    Grant IAM roles:
+                </span>
+                {activeRoles.map((r) => (
+                    <code
+                        key={r.id}
+                        className="text-foreground rounded bg-badge px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-line"
+                        title={r.name}
+                    >
+                        {r.id}
+                    </code>
+                ))}
             </div>
 
             {/* Specific scenarios */}
             {!compute && dns ? (
                 <p className="text-[11px] leading-relaxed text-soft">
-                    For strict least privilege,{' '}
-                    <code className="text-foreground font-mono">
-                        roles/dns.admin
-                    </code>{' '}
-                    grants only hosted zone and record set management
-                    permissions — ideal when compute workloads run on
-                    DigitalOcean, Hetzner, or on-prem while domains &amp; SSL
-                    certificates remain on Google Cloud DNS. Ensure the{' '}
-                    <strong>Cloud DNS API</strong> is enabled in your GCP
-                    project.
+                    Grants hosted zone and record set management permissions for
+                    external-dns and cert-manager — ideal when compute runs on
+                    DigitalOcean, Hetzner, or bare metal while domains &amp; SSL
+                    remain on Google Cloud DNS.
                 </p>
             ) : compute && dns ? (
                 <p className="text-[11px] leading-relaxed text-soft">
-                    Combines GCE virtual machine and firewall provisioning with
-                    automated Cloud DNS record handling. Ensure both the{' '}
-                    <strong>Compute Engine API</strong> and{' '}
-                    <strong>Cloud DNS API</strong> are enabled in your GCP
-                    project.
+                    Combines GCE VM and firewall provisioning with automated
+                    Cloud DNS record management. Ensure both Compute Engine and
+                    Cloud DNS APIs are enabled in your project.
                 </p>
             ) : gke ? (
                 <p className="text-[11px] leading-relaxed text-soft">
                     Grants cluster and nodegroup lifecycle administration on
-                    Google Kubernetes Engine. Ensure the{' '}
-                    <strong>Kubernetes Engine API</strong> is enabled in your
-                    GCP project.
+                    Google Kubernetes Engine. Ensure the Kubernetes Engine API
+                    is enabled in your project.
                 </p>
             ) : (
                 <p className="text-[11px] leading-relaxed text-soft">
-                    Grants instance, disk, and firewall rule lifecycle
-                    management on Compute Engine without broad project owner
-                    rights. Ensure the <strong>Compute Engine API</strong> is
-                    enabled in your GCP project.
+                    Grants virtual machine and firewall provisioning permissions
+                    on Compute Engine. Ensure the Compute Engine API is enabled
+                    in your project.
                 </p>
             )}
         </div>

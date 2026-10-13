@@ -310,15 +310,11 @@ export default function AwsPolicyHelper({
             </div>
 
             {interactive && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface/60 p-2 ring-1 ring-line/50">
-                    <span className="text-foreground mr-0.5 text-[11px] font-medium">
-                        Target Services:
-                    </span>
-
+                <div className="grid grid-cols-3 gap-2">
                     {/* EC2 Checkbox */}
                     <label
                         className={cn(
-                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            'flex cursor-pointer items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium ring-1 transition select-none',
                             ec2
                                 ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
                                 : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
@@ -330,14 +326,14 @@ export default function AwsPolicyHelper({
                             onChange={toggleEc2}
                             className="size-3.5 rounded border-line text-servers focus:ring-servers"
                         />
-                        <Server className="size-3.5 text-soft" />
-                        <span>EC2 (Compute)</span>
+                        <Server className="size-3.5 shrink-0 text-soft" />
+                        <span className="truncate">EC2 (Compute)</span>
                     </label>
 
                     {/* EKS Checkbox */}
                     <label
                         className={cn(
-                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            'flex cursor-pointer items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium ring-1 transition select-none',
                             eks
                                 ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
                                 : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
@@ -349,14 +345,14 @@ export default function AwsPolicyHelper({
                             onChange={toggleEks}
                             className="size-3.5 rounded border-line text-servers focus:ring-servers"
                         />
-                        <Layers className="size-3.5 text-soft" />
-                        <span>EKS (Kubernetes)</span>
+                        <Layers className="size-3.5 shrink-0 text-soft" />
+                        <span className="truncate">EKS (Kubernetes)</span>
                     </label>
 
                     {/* Route 53 Checkbox */}
                     <label
                         className={cn(
-                            'flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition select-none',
+                            'flex cursor-pointer items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium ring-1 transition select-none',
                             route53
                                 ? 'text-foreground bg-surface shadow-xs ring-servers dark:bg-badge'
                                 : 'hover:text-foreground bg-surface/30 text-soft ring-line hover:bg-surface',
@@ -368,111 +364,67 @@ export default function AwsPolicyHelper({
                             onChange={toggleRoute53}
                             className="size-3.5 rounded border-line text-servers focus:ring-servers"
                         />
-                        <Globe className="size-3.5 text-soft" />
-                        <span>Route 53 (DNS)</span>
+                        <Globe className="size-3.5 shrink-0 text-soft" />
+                        <span className="truncate">Route 53 (DNS)</span>
                     </label>
                 </div>
             )}
 
             {eks ? (
-                <>
-                    <p className="leading-relaxed">
-                        <strong className="text-foreground">
-                            No one-click shortcut here:
-                        </strong>{' '}
-                        AWS's EKS-named managed policies (like{' '}
-                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                            AmazonEKSClusterPolicy
-                        </code>
-                        ) are for the cluster's own internal role once it's
-                        running — not for the account creating it. There's no
-                        AWS-managed policy for that; copy the JSON above and
-                        create a custom policy with it
-                        {route53 ? ' (includes Route 53 DNS actions)' : ''}.
-                    </p>
-                    <p className="text-[11px] leading-relaxed text-soft">
-                        In a hurry on a disposable/workshop account and not
-                        worried about least privilege? Attaching{' '}
-                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                            AdministratorAccess
-                        </code>{' '}
-                        works too — just never do that on an account you
-                        actually care about securing.
-                    </p>
-                </>
+                <p className="leading-relaxed">
+                    <strong className="text-foreground">
+                        EKS Cluster Setup:
+                    </strong>{' '}
+                    EKS requires custom cluster and node-role lifecycle
+                    permissions. Copy our tailored policy JSON above and attach
+                    it as a custom IAM policy
+                    {route53 ? ' (includes Route 53 DNS actions)' : ''}.
+                </p>
             ) : !ec2 && route53 ? (
-                <>
-                    <p className="leading-relaxed">
-                        <strong className="text-foreground">
-                            Quick Setup:
-                        </strong>{' '}
-                        Under{' '}
-                        <em className="text-foreground font-medium not-italic">
-                            Attach policies directly
-                        </em>
-                        , search and attach{' '}
-                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                            AmazonRoute53FullAccess
-                        </code>
-                        .
-                    </p>
-                    <p className="text-[11px] leading-relaxed text-soft">
-                        For strict least privilege, copy our minimal policy JSON
-                        above with only the required Route 53 hosted zone and
-                        record change permissions — ideal when your compute runs
-                        on DigitalOcean, Hetzner, or bare metal, while DNS &amp;
-                        SSL remain managed by AWS Route 53.
-                    </p>
-                </>
+                <p className="leading-relaxed">
+                    <strong className="text-foreground">Quick Setup:</strong>{' '}
+                    Under{' '}
+                    <em className="text-foreground font-medium not-italic">
+                        Attach policies directly
+                    </em>
+                    , search and attach{' '}
+                    <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                        AmazonRoute53FullAccess
+                    </code>{' '}
+                    — or copy our minimal policy JSON above for least-privilege
+                    DNS-01 SSL and domain management.
+                </p>
             ) : ec2 && route53 ? (
-                <>
-                    <p className="leading-relaxed">
-                        <strong className="text-foreground">
-                            Quick Setup:
-                        </strong>{' '}
-                        Under{' '}
-                        <em className="text-foreground font-medium not-italic">
-                            Attach policies directly
-                        </em>
-                        , search and attach{' '}
-                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                            AmazonEC2FullAccess
-                        </code>{' '}
-                        and{' '}
-                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                            AmazonRoute53FullAccess
-                        </code>
-                        .
-                    </p>
-                    <p className="text-[11px] leading-relaxed text-soft">
-                        For strict least privilege, copy our minimal policy JSON
-                        above combining EC2 instance management with automated
-                        Route 53 DNS record handling.
-                    </p>
-                </>
+                <p className="leading-relaxed">
+                    <strong className="text-foreground">Quick Setup:</strong>{' '}
+                    Under{' '}
+                    <em className="text-foreground font-medium not-italic">
+                        Attach policies directly
+                    </em>
+                    , attach{' '}
+                    <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                        AmazonEC2FullAccess
+                    </code>{' '}
+                    and{' '}
+                    <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                        AmazonRoute53FullAccess
+                    </code>
+                    , or copy our combined minimal policy JSON above.
+                </p>
             ) : (
-                <>
-                    <p className="leading-relaxed">
-                        <strong className="text-foreground">
-                            Quick Setup:
-                        </strong>{' '}
-                        Under{' '}
-                        <em className="text-foreground font-medium not-italic">
-                            Attach policies directly
-                        </em>
-                        , search and attach{' '}
-                        <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
-                            AmazonEC2FullAccess
-                        </code>
-                        .
-                    </p>
-                    <p className="text-[11px] leading-relaxed text-soft">
-                        For strict least privilege, copy our minimal policy JSON
-                        above and create a custom IAM policy in AWS with only
-                        the required EC2 instance, security group, and volume
-                        actions.
-                    </p>
-                </>
+                <p className="leading-relaxed">
+                    <strong className="text-foreground">Quick Setup:</strong>{' '}
+                    Under{' '}
+                    <em className="text-foreground font-medium not-italic">
+                        Attach policies directly
+                    </em>
+                    , attach{' '}
+                    <code className="text-foreground rounded bg-badge px-1 py-0.5 font-mono text-[11px]">
+                        AmazonEC2FullAccess
+                    </code>{' '}
+                    — or copy our minimal policy JSON above for strict
+                    least-privilege EC2 instance management.
+                </p>
             )}
         </div>
     );

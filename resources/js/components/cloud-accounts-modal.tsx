@@ -191,7 +191,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-            <div className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-2xl bg-surface shadow-2xl ring-1 ring-line">
+            <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-surface shadow-2xl ring-1 ring-line">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-line px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -697,7 +697,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
 
                                     <div>
                                         <textarea
-                                            rows={5}
+                                            rows={3.5}
                                             value={gcpForm.data.credentials}
                                             onChange={(e) =>
                                                 gcpForm.setData(
@@ -707,7 +707,7 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             }
                                             placeholder='{"type": "service_account", "project_id": "my-gcp-project", "client_email": "sa@...", ...}'
                                             required
-                                            className="bg-background w-full rounded-lg p-3 font-mono text-xs ring-1 ring-line focus:ring-2 focus:ring-servers"
+                                            className="bg-background h-24 w-full rounded-lg p-2.5 font-mono text-xs ring-1 ring-line focus:ring-2 focus:ring-servers"
                                         />
                                         {gcpForm.errors.credentials && (
                                             <p className="mt-1 text-xs text-accent">
