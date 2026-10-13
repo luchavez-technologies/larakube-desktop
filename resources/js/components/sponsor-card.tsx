@@ -62,19 +62,7 @@ export default function SponsorCard({ className }: SponsorCardProps) {
     const [avatarError, setAvatarError] = useState(false);
 
     return (
-        <Card
-            label="Support LaraKube Development"
-            className={className}
-            action={
-                <ExternalLinkButton
-                    url="https://github.com/sponsors/luchavez-technologies"
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-paper px-2.5 py-1 text-xs font-medium text-ink transition hover:bg-surface"
-                >
-                    <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
-                    <span>GitHub Sponsors</span>
-                </ExternalLinkButton>
-            }
-        >
+        <Card label="Support LaraKube Development" className={className}>
             <div className="space-y-5">
                 {/* Header Banner */}
                 <div className="flex flex-col gap-4 rounded-xl border border-line/80 bg-paper/60 p-4 sm:flex-row sm:items-center sm:justify-between">

@@ -1,4 +1,4 @@
-import { Heart, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import {
     SiDiscord,
     SiFacebook,
@@ -7,7 +7,6 @@ import {
 } from '@icons-pack/react-simple-icons';
 import type { ReactNode } from 'react';
 import Card from '@/components/card';
-import SponsorButton from '@/components/sponsor-button';
 import { ExternalLinkButton } from '@/lib/open-external';
 
 function LinkedInIcon({ className }: { className?: string }) {
@@ -130,24 +129,6 @@ export default function HelpCommunityCard() {
                     {FOLLOW.map((link) => (
                         <HelpLinkRow key={link.label} link={link} />
                     ))}
-                </div>
-                <div className="border-t border-line/60 pt-2">
-                    <div className="mb-1 flex items-center justify-between px-2.5">
-                        <p className="text-[10px] font-semibold tracking-wider text-faint uppercase">
-                            Sponsor us
-                        </p>
-                        <SponsorButton />
-                    </div>
-                    <HelpLinkRow
-                        link={{
-                            label: 'GitHub Sponsors',
-                            detail: 'Support LuchTech development',
-                            href: 'https://github.com/sponsors/luchavez-technologies',
-                            icon: (
-                                <Heart className="size-4 fill-pink-500/20 text-pink-500" />
-                            ),
-                        }}
-                    />
                 </div>
             </div>
         </Card>
