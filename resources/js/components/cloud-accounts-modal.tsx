@@ -414,28 +414,6 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                     })}
                                 </div>
                             )}
-
-                            {/* GCP Google Auth info */}
-                            {provider.slug === 'gcp' && (
-                                <div className="rounded-xl border border-line bg-surface p-4">
-                                    <div className="mb-3 flex items-center justify-between gap-3">
-                                        <p className="text-xs text-soft">
-                                            Google Cloud CLI manages accounts
-                                            and projects natively. Switch or add
-                                            Google accounts below:
-                                        </p>
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => setActiveTab('add')}
-                                        >
-                                            <Plus className="size-3.5" />
-                                            <span>Add Service Account</span>
-                                        </Button>
-                                    </div>
-                                    <GcpSignIn label="Sign in with another Google Account" />
-                                </div>
-                            )}
                         </div>
                     )}
 
