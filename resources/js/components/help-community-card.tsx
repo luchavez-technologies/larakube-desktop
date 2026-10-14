@@ -7,6 +7,7 @@ import {
 } from '@icons-pack/react-simple-icons';
 import type { ReactNode } from 'react';
 import Card from '@/components/card';
+import QrCodePopover from '@/components/qr-code-popover';
 import { ExternalLinkButton } from '@/lib/open-external';
 
 function LinkedInIcon({ className }: { className?: string }) {
@@ -82,23 +83,38 @@ const FOLLOW: HelpLink[] = [
 ];
 
 function HelpLinkRow({ link }: { link: HelpLink }) {
+    const isHttp =
+        link.href.startsWith('http://') || link.href.startsWith('https://');
+
     return (
-        <ExternalLinkButton
-            url={link.href}
-            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-paper"
-        >
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-badge">
-                {link.icon}
-            </span>
-            <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium text-ink">
-                    {link.label}
+        <div className="group flex w-full items-center justify-between rounded-lg transition hover:bg-paper">
+            <ExternalLinkButton
+                url={link.href}
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 px-2.5 py-2 text-left"
+            >
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-badge">
+                    {link.icon}
                 </span>
-                <span className="block truncate text-[10px] text-soft">
-                    {link.detail}
+                <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium text-ink">
+                        {link.label}
+                    </span>
+                    <span className="block truncate text-[10px] text-soft">
+                        {link.detail}
+                    </span>
                 </span>
-            </span>
-        </ExternalLinkButton>
+            </ExternalLinkButton>
+
+            {isHttp && (
+                <div className="pr-2 opacity-0 transition group-hover:opacity-100">
+                    <QrCodePopover
+                        url={link.href}
+                        title={link.label}
+                        description={`Scan to open ${link.label} on your mobile device`}
+                    />
+                </div>
+            )}
+        </div>
     );
 }
 

@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "chillerlan/php-qrcode": "^5.0",
         "inertiajs/inertia-laravel": "^3.0",
         "intervention/image": "^4.0",
         "laravel/framework": "^13.17",
@@ -55,6 +56,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
+            "@php -r \"PHP_OS_FAMILY === 'Darwin' && file_exists('nativephp/electron/node_modules/electron/dist/Electron.app') && shell_exec('codesign --force --deep --sign - nativephp/electron/node_modules/electron/dist/Electron.app 2>/dev/null');\"",
             "@php artisan native:migrate --ansi",
             "@php artisan dev"
         ],
@@ -86,7 +88,8 @@
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
             "@php artisan boost:update --ansi",
-            "@php artisan native:install --force --quiet --publish"
+            "@php artisan native:install --force --quiet --publish",
+            "@php -r \"PHP_OS_FAMILY === 'Darwin' && file_exists('nativephp/electron/node_modules/electron/dist/Electron.app') && shell_exec('codesign --force --deep --sign - nativephp/electron/node_modules/electron/dist/Electron.app 2>/dev/null');\""
         ],
         "post-root-package-install": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""

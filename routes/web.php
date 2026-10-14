@@ -20,6 +20,7 @@ use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDotenvController;
 use App\Http\Controllers\ProjectScalingController;
+use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\QuickActionController;
 use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\RunController;
@@ -216,6 +217,7 @@ Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('s
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');
 
 Route::post('/open', OpenExternalController::class)->name('open');
+Route::get('/api/qr', [QrCodeController::class, 'show'])->name('api.qr');
 
 Route::get('/runs', [RunController::class, 'index'])->name('runs.index');
 Route::get('/runs/{run}', [RunController::class, 'show'])->name('runs.show');

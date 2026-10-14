@@ -24,6 +24,7 @@ import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import { ExternalLinkButton } from '@/lib/open-external';
+import QrCodePopover from '@/components/qr-code-popover';
 import ToolLogo from '@/components/tool-logo';
 import Redactable from '@/components/redactable';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
@@ -1296,14 +1297,21 @@ function InstalledCard({
                             : 'No public ingress address'}
                     </span>
                     {url && (
-                        <ExternalLinkButton
-                            url={url}
-                            className="ml-2 inline-flex shrink-0 cursor-pointer items-center gap-1 font-medium text-brand hover:underline"
-                            title="Open in default browser"
-                        >
-                            <span>Visit</span>
-                            <ExternalLink className="size-3" />
-                        </ExternalLinkButton>
+                        <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                            <QrCodePopover
+                                url={url}
+                                title={name}
+                                description={`Scan to open ${name} on your phone`}
+                            />
+                            <ExternalLinkButton
+                                url={url}
+                                className="inline-flex cursor-pointer items-center gap-1 font-medium text-brand hover:underline"
+                                title="Open in default browser"
+                            >
+                                <span>Visit</span>
+                                <ExternalLink className="size-3" />
+                            </ExternalLinkButton>
+                        </div>
                     )}
                 </div>
 
@@ -1541,17 +1549,24 @@ function CompanionCard({ companion }: { companion: CompanionApp }) {
                     {companion.installed ? (
                         <>
                             {companion.url && companion.running && (
-                                <ExternalLinkButton
-                                    url={companion.url}
-                                    className={buttonClass(
-                                        'secondary',
-                                        'sm',
-                                        'gap-1',
-                                    )}
-                                >
-                                    <span>Open</span>
-                                    <ExternalLink className="size-3" />
-                                </ExternalLinkButton>
+                                <div className="flex items-center gap-1">
+                                    <QrCodePopover
+                                        url={companion.url}
+                                        title={companion.name}
+                                        description={`Scan to open ${companion.name} on your phone`}
+                                    />
+                                    <ExternalLinkButton
+                                        url={companion.url}
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                            'gap-1',
+                                        )}
+                                    >
+                                        <span>Open</span>
+                                        <ExternalLink className="size-3" />
+                                    </ExternalLinkButton>
+                                </div>
                             )}
                             {companion.running ? (
                                 <Link
@@ -1648,17 +1663,24 @@ function CompanionTableRow({ companion }: { companion: CompanionApp }) {
                     {companion.installed ? (
                         <>
                             {companion.url && companion.running && (
-                                <ExternalLinkButton
-                                    url={companion.url}
-                                    className={buttonClass(
-                                        'secondary',
-                                        'sm',
-                                        'gap-1',
-                                    )}
-                                >
-                                    <span>Open</span>
-                                    <ExternalLink className="size-3" />
-                                </ExternalLinkButton>
+                                <div className="flex items-center gap-1">
+                                    <QrCodePopover
+                                        url={companion.url}
+                                        title={companion.name}
+                                        description={`Scan to open ${companion.name} on your phone`}
+                                    />
+                                    <ExternalLinkButton
+                                        url={companion.url}
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                            'gap-1',
+                                        )}
+                                    >
+                                        <span>Open</span>
+                                        <ExternalLink className="size-3" />
+                                    </ExternalLinkButton>
+                                </div>
                             )}
                             {companion.running ? (
                                 <Link

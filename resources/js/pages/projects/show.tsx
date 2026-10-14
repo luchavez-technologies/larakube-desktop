@@ -54,6 +54,7 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
+import QrCodePopover from '@/components/qr-code-popover';
 import { ExternalLinkButton } from '@/lib/open-external';
 import {
     ci as configureCiRoute,
@@ -915,6 +916,11 @@ function CloudEnvironmentOverviewCard({
                                         <span className="truncate font-mono text-xs font-semibold text-ink">
                                             https://{activeHost}
                                         </span>
+                                        <QrCodePopover
+                                            url={`https://${activeHost}`}
+                                            title={project.name}
+                                            description="Scan with your phone to preview your app"
+                                        />
                                         <ExternalLinkButton
                                             url={`https://${activeHost}`}
                                             className="shrink-0 cursor-pointer text-brand hover:underline"

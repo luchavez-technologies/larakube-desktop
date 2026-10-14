@@ -21,6 +21,7 @@ import ProjectActions from '@/components/project-actions';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
+import QrCodePopover from '@/components/qr-code-popover';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -190,11 +191,19 @@ export default function ProjectsIndex({
 
                                     <div className="mt-3.5 space-y-1">
                                         {project.webHost ? (
-                                            <div className="flex items-center gap-1.5 font-mono text-xs font-medium text-ink">
-                                                <Globe className="size-3.5 shrink-0 text-brand" />
-                                                <span className="truncate">
-                                                    https://{project.webHost}
-                                                </span>
+                                            <div className="flex items-center justify-between gap-1.5 font-mono text-xs font-medium text-ink">
+                                                <div className="flex min-w-0 items-center gap-1.5 truncate">
+                                                    <Globe className="size-3.5 shrink-0 text-brand" />
+                                                    <span className="truncate">
+                                                        https://
+                                                        {project.webHost}
+                                                    </span>
+                                                </div>
+                                                <QrCodePopover
+                                                    url={`https://${project.webHost}`}
+                                                    title={project.name}
+                                                    description="Scan with your phone to preview your project"
+                                                />
                                             </div>
                                         ) : null}
                                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-faint">
@@ -284,10 +293,24 @@ export default function ProjectsIndex({
                                         <td>
                                             <FrameworkBadge slug={framework} />
                                         </td>
-                                        <td className="max-w-[220px] truncate font-mono text-[12px] text-soft">
-                                            {project.webHost
-                                                ? `https://${project.webHost}`
-                                                : project.path}
+                                        <td className="max-w-[240px] font-mono text-[12px] text-soft">
+                                            {project.webHost ? (
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                    <span className="truncate">
+                                                        https://
+                                                        {project.webHost}
+                                                    </span>
+                                                    <QrCodePopover
+                                                        url={`https://${project.webHost}`}
+                                                        title={project.name}
+                                                        description="Scan with your phone to preview your project"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <span className="truncate">
+                                                    {project.path}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="font-mono text-[12px] text-soft">
                                             {project.serverIp ?? '—'}
