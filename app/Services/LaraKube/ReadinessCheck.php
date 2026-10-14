@@ -131,25 +131,31 @@ class ReadinessCheck
             Cache::forget($key);
         }
 
-        return Cache::remember($key, now()->addMinutes(5), function () use ($cli): ?array {
-            $isolated = $this->locator->isolate([$cli, 'cloud:providers', '--json', '--no-interaction']);
+        $cached = Cache::get($key);
+        if ($cached !== null) {
+            return $cached;
+        }
 
-            try {
-                $result = Process::env($isolated['environment'])
-                    ->timeout(20)
-                    ->run($isolated['command']);
-            } catch (ProcessTimedOutException) {
-                return null;
-            }
+        $isolated = $this->locator->isolate([$cli, 'cloud:providers', '--json', '--no-interaction']);
 
-            $decoded = json_decode($this->lastLine($result->output()), true);
+        try {
+            $result = Process::env($isolated['environment'])
+                ->timeout(60)
+                ->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
 
-            if (! $result->successful() || ! is_array($decoded) || ! is_array($decoded['providers'] ?? null)) {
-                return null;
-            }
+        $decoded = json_decode($this->lastLine($result->output()), true);
 
-            return array_values($decoded['providers']);
-        });
+        if (! $result->successful() || ! is_array($decoded) || ! is_array($decoded['providers'] ?? null)) {
+            return null;
+        }
+
+        $providers = array_values($decoded['providers']);
+        Cache::put($key, $providers, now()->addMinutes(5));
+
+        return $providers;
     }
 
     /**
