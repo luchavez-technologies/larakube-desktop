@@ -13,8 +13,8 @@ import {
     Layers,
     HelpCircle,
     Heart,
-    PanelLeft,
-    PanelLeftClose,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -154,6 +154,10 @@ export default function AppLayout({
         experimental?: boolean;
         theme?: string;
         untested?: Untested;
+        versions?: {
+            desktop: string;
+            cli: string | null;
+        };
     }>();
     useEffect(listenForNotificationClicks, []);
 
@@ -253,33 +257,54 @@ export default function AppLayout({
             >
                 {collapsed ? (
                     <div className="mb-4 flex flex-col items-center gap-2">
-                        <img
-                            src="/logo.png"
-                            alt="LaraKube"
-                            className="size-7.5 rounded-lg shadow-2xs"
-                        />
                         <button
                             type="button"
                             onClick={toggleSidebar}
-                            className="cursor-pointer rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
-                            title="Expand sidebar (⌘B)"
+                            className="cursor-pointer rounded-lg p-0.5 transition-transform hover:scale-105 active:scale-95"
+                            title={`LaraKube Desktop v${props.versions?.desktop ?? '1.0.0'}${props.versions?.cli ? ` · CLI ${props.versions.cli}` : ''} (Click to expand · ⌘B)`}
                             aria-label="Expand sidebar"
                         >
-                            <PanelLeft className="size-4" />
+                            <img
+                                src="/logo.png"
+                                alt="LaraKube"
+                                className="size-8 rounded-lg shadow-2xs"
+                            />
                         </button>
                         <NotificationBell />
                     </div>
                 ) : (
-                    <div className="mb-5 flex items-center justify-between px-2.5">
+                    <div className="mb-5 flex items-center justify-between px-2">
                         <div className="flex min-w-0 items-center gap-2.5">
                             <img
                                 src="/logo.png"
                                 alt="LaraKube"
                                 className="size-8 shrink-0 rounded-lg shadow-2xs"
                             />
-                            <span className="truncate text-[15px] font-semibold tracking-tight">
-                                LaraKube
-                            </span>
+                            <div className="min-w-0 leading-tight">
+                                <span className="block truncate text-[14px] font-semibold tracking-tight text-ink">
+                                    LaraKube
+                                </span>
+                                <span
+                                    className="block truncate font-mono text-[10px] text-faint"
+                                    title={`Desktop v${props.versions?.desktop ?? '1.0.0'} · CLI ${props.versions?.cli ? `v${props.versions.cli}` : 'not detected'}`}
+                                >
+                                    v{props.versions?.desktop ?? '1.0.0'}
+                                    {props.versions?.cli ? (
+                                        <span className="text-soft">
+                                            {' '}
+                                            · cli{' '}
+                                            {props.versions.cli.startsWith('v')
+                                                ? props.versions.cli.slice(1)
+                                                : props.versions.cli}
+                                        </span>
+                                    ) : (
+                                        <span className="text-amber-500">
+                                            {' '}
+                                            · cli —
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-0.5">
                             <NotificationBell />
@@ -290,7 +315,7 @@ export default function AppLayout({
                                 title="Collapse sidebar (⌘B)"
                                 aria-label="Collapse sidebar"
                             >
-                                <PanelLeftClose className="size-4" />
+                                <ChevronsLeft className="size-4" />
                             </button>
                         </div>
                     </div>
@@ -385,29 +410,57 @@ export default function AppLayout({
                         );
                     })}
                 </nav>
-                <div className="mt-auto border-t border-line/60 pt-3">
+                <div className="mt-auto space-y-1 border-t border-line/60 pt-3">
                     {collapsed ? (
-                        <ExternalLinkButton
-                            url="https://github.com/sponsors/luchavez-technologies"
-                            className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
-                            title="Sponsor on GitHub"
-                            aria-label="Sponsor on GitHub"
-                        >
-                            <Heart className="size-4 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
-                        </ExternalLinkButton>
+                        <>
+                            <ExternalLinkButton
+                                url="https://github.com/sponsors/luchavez-technologies"
+                                className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
+                                title="Sponsor on GitHub"
+                                aria-label="Sponsor on GitHub"
+                            >
+                                <Heart className="size-4 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
+                            </ExternalLinkButton>
+                            <button
+                                type="button"
+                                onClick={toggleSidebar}
+                                className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
+                                title="Expand sidebar (⌘B)"
+                                aria-label="Expand sidebar"
+                            >
+                                <ChevronsRight className="size-4" />
+                            </button>
+                        </>
                     ) : (
-                        <ExternalLinkButton
-                            url="https://github.com/sponsors/luchavez-technologies"
-                            className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
-                        >
-                            <span className="flex items-center gap-2">
-                                <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
-                                <span>Sponsor</span>
-                            </span>
-                            <span className="text-[10px] font-medium text-faint">
-                                GitHub
-                            </span>
-                        </ExternalLinkButton>
+                        <>
+                            <ExternalLinkButton
+                                url="https://github.com/sponsors/luchavez-technologies"
+                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
+                                    <span>Sponsor</span>
+                                </span>
+                                <span className="text-[10px] font-medium text-faint">
+                                    GitHub
+                                </span>
+                            </ExternalLinkButton>
+                            <button
+                                type="button"
+                                onClick={toggleSidebar}
+                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
+                                title="Collapse sidebar (⌘B)"
+                                aria-label="Collapse sidebar"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <ChevronsLeft className="size-3.5" />
+                                    <span>Collapse</span>
+                                </span>
+                                <kbd className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-faint ring-1 ring-line/50">
+                                    ⌘B
+                                </kbd>
+                            </button>
+                        </>
                     )}
                 </div>
             </aside>

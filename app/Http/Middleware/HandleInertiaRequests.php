@@ -7,6 +7,7 @@ use App\Models\Run;
 use App\Models\User;
 use App\Notifications\RunFinishedNotification;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolMaturity;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -109,6 +110,24 @@ class HandleInertiaRequests extends Middleware
             'experimental' => fn () => app(GlobalSettings::class)->experimental(),
             'demoMode' => fn () => app(GlobalSettings::class)->demoMode(),
             'untested' => fn () => app(ToolMaturity::class)->untested(),
+            'versions' => fn () => rescue(function () {
+                $cliRaw = app(ReadinessCheck::class)->status('larakube')['version'] ?? null;
+                $cliClean = null;
+                if ($cliRaw) {
+                    $cliClean = trim((string) preg_replace('/^LaraKube\s+/i', '', $cliRaw));
+                    if (preg_match('/^[a-f0-9]{40}$/i', $cliClean)) {
+                        $cliClean = substr($cliClean, 0, 7);
+                    }
+                }
+
+                return [
+                    'desktop' => (string) config('nativephp.version', '1.0.0'),
+                    'cli' => $cliClean,
+                ];
+            }, [
+                'desktop' => (string) config('nativephp.version', '1.0.0'),
+                'cli' => null,
+            ], report: false),
         ];
     }
 }
