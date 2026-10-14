@@ -1,452 +1,129 @@
-import { Deferred, Form, Link, usePoll } from '@inertiajs/react';
+import { Link, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import {
+    Code2,
     ExternalLink,
-    RotateCw,
-    Activity,
-    Shield,
-    Database,
     KeyRound,
-    Trash2,
+    Plus,
+    RotateCw,
+    Server as ServerIcon,
+    Shield,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
-import { cn } from '@/lib/utils';
 import ServerSwitcher from '@/components/server-switcher';
-import PlexCommonsServicesCard from '@/components/plex-commons-services-card';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
-import ToolLogo from '@/components/tool-logo';
 import AppLayout from '@/layouts/app-layout';
 import { show as showServer } from '@/routes/servers';
-import { index as plexIndex, refresh, provision } from '@/routes/servers/plex';
-import {
-    evict as evictTenant,
-    rotate as rotateTenant,
-} from '@/routes/servers/plex/tenants';
+import { index as plexIndex, refresh } from '@/routes/servers/plex';
 import type {
     PlexCommonsServicesReport,
+    PlexServiceCategoryDetail,
+    PlexServiceOptionDetail,
     PlexStatus,
     PlexTenant,
     PodMetrics,
     Server,
 } from '@/types/larakube';
+import PlexAddEngineModal from './components/plex-add-engine-modal';
+import PlexHeroKpiBar from './components/plex-hero-kpi-bar';
+import PlexProvisionModal from './components/plex-provision-modal';
+import PlexQuickConnectModal from './components/plex-quick-connect-modal';
+import PlexServiceEngineCard from './components/plex-service-engine-card';
+import PlexTenantHub from './components/plex-tenant-hub';
 import PlexEmptyState from './plex-empty-state';
 
-const ROTATION_LABEL: Record<string, { label: string; tone: string }> = {
-    manual: { label: 'Manual (.env)', tone: 'text-soft' },
-    unreachable: { label: 'Unreachable', tone: 'text-amber-500' },
-    managed: { label: 'OpenBao-managed', tone: 'text-emerald-500' },
-};
-
-function EvictConfirmDialog({
-    server,
-    tenant,
-    onCancel,
-}: {
-    server: Server;
-    tenant: PlexTenant;
-    onCancel: () => void;
-}) {
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
-            onClick={onCancel}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                className="w-full max-w-[440px] rounded-2xl bg-surface p-7 shadow-2xl"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                    Evict {tenant.name}?
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-soft">
-                    Frees its database, S3 bucket, and Redis index on this
-                    Commons. A safety backup is taken first. For the orphaned-
-                    tenant case — if the project still exists, use plex:leave
-                    from it instead.
-                </p>
-                <div className="mt-5 flex justify-end gap-2.5">
-                    <Button variant="secondary" onClick={onCancel}>
-                        Cancel
-                    </Button>
-                    <Form
-                        action={
-                            evictTenant({
-                                server: server.name,
-                                tenant: tenant.name,
-                            }).url
-                        }
-                        method="post"
-                    >
-                        <Button type="submit" variant="danger">
-                            <Trash2 className="h-4 w-4" />
-                            Evict
-                        </Button>
-                    </Form>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function TenantRow({ server, tenant }: { server: Server; tenant: PlexTenant }) {
-    const [confirmingEvict, setConfirmingEvict] = useState(false);
-    const rotation = tenant.rotation
-        ? (ROTATION_LABEL[tenant.rotation.state] ?? {
-              label: tenant.rotation.state,
-              tone: 'text-soft',
-          })
-        : null;
-
-    return (
-        <>
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper/60 p-3 text-xs">
-                <div className="min-w-0">
-                    <div className="font-mono font-semibold text-ink">
-                        {tenant.name}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-soft">
-                        {tenant.database && (
-                            <span className="inline-flex items-center gap-1">
-                                <Database className="size-3" />
-                                {tenant.database}
-                                {tenant.databaseService
-                                    ? ` (${tenant.databaseService})`
-                                    : ''}
-                            </span>
-                        )}
-                        {tenant.redisIndex !== null && (
-                            <span>Redis DB {tenant.redisIndex}</span>
-                        )}
-                        {tenant.s3Bucket && <span>S3 {tenant.s3Bucket}</span>}
-                    </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                    {rotation && (
-                        <span
-                            className={`font-mono text-[10px] ${rotation.tone}`}
-                        >
-                            {rotation.label}
-                        </span>
-                    )}
-                    {tenant.database && (
-                        <Link
-                            href={
-                                rotateTenant({
-                                    server: server.name,
-                                    tenant: tenant.name,
-                                }).url
-                            }
-                            method="post"
-                            as="button"
-                            className={buttonClass('ghost', 'sm', 'text-soft')}
-                            title="Rotate this tenant's database credential"
-                        >
-                            <RotateCw className="size-3" />
-                        </Link>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => setConfirmingEvict(true)}
-                        className={buttonClass('ghost', 'sm', 'text-accent')}
-                        title="Evict this tenant from the Commons"
-                    >
-                        <Trash2 className="size-3" />
-                    </button>
-                </div>
-            </div>
-            {confirmingEvict && (
-                <EvictConfirmDialog
-                    server={server}
-                    tenant={tenant}
-                    onCancel={() => setConfirmingEvict(false)}
-                />
-            )}
-        </>
-    );
-}
-
-function ResourceUsageCard({ metrics }: { metrics?: PodMetrics | null }) {
-    if (metrics === undefined) {
-        return (
-            <Card label="Resource Usage">
-                <div className="flex items-center gap-3 py-2 text-soft">
-                    <Activity className="size-5 shrink-0 animate-pulse text-faint" />
-                    <p className="text-xs">Checking…</p>
-                </div>
-            </Card>
-        );
-    }
-
-    const components = metrics?.components
-        ? Object.entries(metrics.components)
-        : [];
-
-    return (
-        <Card
-            label="Resource Usage"
-            action={
-                <span className="text-[10px] text-faint">
-                    CPU/memory snapshot, not request traffic
-                </span>
-            }
-        >
-            {!metrics?.available ? (
-                <div className="py-2 text-xs text-soft">
-                    <p>Hardware telemetry unavailable.</p>
-                    <p className="mt-0.5 text-[11px] text-faint">
-                        metrics-server may not be installed on this cluster.
-                    </p>
-                </div>
-            ) : components.length === 0 ? (
-                <p className="py-2 text-xs text-soft">
-                    No Commons pods are running yet.
-                </p>
-            ) : (
-                <div className="space-y-2">
-                    {components.map(([name, stat]) => (
-                        <div
-                            key={name}
-                            className="flex items-center justify-between text-xs"
-                        >
-                            <div className="flex items-center gap-1.5">
-                                <ToolLogo slug={name} size="sm" />
-                                <span className="font-medium text-ink capitalize">
-                                    {name}
-                                </span>
-                                {stat.podCount > 1 && (
-                                    <span className="font-mono text-[10px] text-faint">
-                                        (×{stat.podCount})
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 font-mono text-[11px] text-soft">
-                                <span>{stat.cpu}</span>
-                                <span className="text-line">/</span>
-                                <span>{stat.memory}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </Card>
-    );
-}
-
-// Mirrors PlexProvisionCommand::enabledCommonsDatabaseDriver()/
-// enabledCommonsStorageDriver() in the CLI exactly (cli/app/Commands/Plex/
-// PlexProvisionCommand.php): when more than one engine in a category is
-// active, `--service=db`/`--service=s3` silently resolves to the FIRST one
-// enabled in this order (DatabaseDriver/StorageDriver's own enum
-// declaration order), not a choice the operator makes here. Shown explicitly
-// so "Database" never hides which engine a tenant actually gets.
-const DATABASE_DRIVER_PRIORITY = [
-    'mysql',
-    'mariadb',
-    'postgres',
-    'mongodb',
-    'sqlite',
-];
-const STORAGE_DRIVER_PRIORITY = ['seaweedfs', 'minio', 'garage'];
-
-function firstActiveOption(
-    services: PlexCommonsServicesReport | null | undefined,
-    categoryKey: string,
-    priority: string[],
-): { driver: string; label: string } | null {
-    const options =
-        services?.categories.find((c) => c.key === categoryKey)?.options ?? [];
-    const enabled = new Map(
-        options.filter((o) => o.enabled).map((o) => [o.driver, o.label]),
-    );
-
-    for (const driver of priority) {
-        const label = enabled.get(driver);
-        if (label) {
-            return { driver, label };
-        }
-    }
-
-    return null;
-}
-
-function ProvisionForm({
-    server,
-    services,
-}: {
-    server: Server;
-    services?: PlexCommonsServicesReport | null;
-}) {
-    const activeDb = firstActiveOption(
-        services,
-        'database',
-        DATABASE_DRIVER_PRIORITY,
-    );
-    const activeStorage = firstActiveOption(
-        services,
-        'storage',
-        STORAGE_DRIVER_PRIORITY,
-    );
-    const redisActive = Boolean(
-        services?.categories
-            .find((c) => c.key === 'cache')
-            ?.options.some((o) => o.enabled && o.driver === 'redis'),
-    );
-
-    const [selected, setSelected] = useState<string[]>(['db', 'redis', 's3']);
-
-    const toggle = (service: string) => {
-        setSelected((current) =>
-            current.includes(service)
-                ? current.filter((s) => s !== service)
-                : [...current, service],
-        );
-    };
-
-    const rows: {
-        service: string;
-        label: string;
-        available: boolean;
-    }[] = [
-        {
-            service: 'db',
-            label: activeDb ? `Database (${activeDb.label})` : 'Database',
-            available: activeDb !== null,
-        },
-        { service: 'redis', label: 'Redis', available: redisActive },
-        {
-            service: 's3',
-            label: activeStorage ? `S3 (${activeStorage.label})` : 'S3',
-            available: activeStorage !== null,
-        },
-    ];
-
-    return (
-        <Card label="Provision custom credentials">
-            <p className="text-xs text-soft">
-                For an app that isn&apos;t a recognized LaraKube project —
-                credentials are shown once, never stored.
-            </p>
-            <p className="mt-1.5 text-xs text-soft">
-                These only work for apps reachable from inside this cluster — a
-                pod on this server, not a client over the public internet.
-            </p>
-            <Form
-                action={provision(server.name).url}
-                method="post"
-                className="mt-3 space-y-3"
-            >
-                <div>
-                    <label className="block text-xs font-medium text-soft">
-                        Tenant identifier
-                    </label>
-                    <input
-                        type="text"
-                        name="tenant"
-                        placeholder="e.g. my-side-project"
-                        required
-                        className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-xs font-medium text-soft">
-                        Services
-                    </label>
-                    <div className="mt-1.5 flex flex-wrap gap-3">
-                        {rows.map(({ service, label, available }) => (
-                            <label
-                                key={service}
-                                className={cn(
-                                    'flex items-center gap-1.5 text-xs',
-                                    available
-                                        ? 'text-ink'
-                                        : 'cursor-not-allowed text-faint',
-                                )}
-                                title={
-                                    available
-                                        ? undefined
-                                        : `No ${service === 'db' ? 'database' : service === 's3' ? 'object storage' : 'Redis'} engine is active on this Commons yet.`
-                                }
-                            >
-                                <input
-                                    type="checkbox"
-                                    name="services[]"
-                                    value={service}
-                                    checked={
-                                        available && selected.includes(service)
-                                    }
-                                    disabled={!available}
-                                    onChange={() => toggle(service)}
-                                    className="rounded border-line"
-                                />
-                                {label}
-                            </label>
-                        ))}
-                    </div>
-                </div>
-
-                <Button type="submit" variant="secondary">
-                    <KeyRound className="h-4 w-4" />
-                    Provision credentials
-                </Button>
-            </Form>
-        </Card>
-    );
-}
-
-// Shared across the loading, error, and loaded states so the server picker
-// and Refresh action are never only reachable from one of them (a prior
-// version dropped these while loading or erroring, stranding anyone who
-// landed there with no way to switch servers or retry).
 function PlexPageHeader({
     server,
     servers,
     badge,
+    onOpenProvision,
+    onOpenQuickConnect,
+    onOpenAddEngine,
 }: {
     server: Server;
     servers: Server[];
     badge?: ReactNode;
+    onOpenProvision?: () => void;
+    onOpenQuickConnect?: () => void;
+    onOpenAddEngine?: () => void;
 }) {
     return (
-        <header className="mb-6 flex items-center justify-between gap-6">
+        <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
                 <div className="flex items-center gap-2.5">
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
+                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em] text-ink">
                         Plex Commons
                     </h1>
                     {badge}
                 </div>
-                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                    Shared infrastructure for tenant apps and Cluster Tools —
-                    resource usage, connected tenants, and on-demand
-                    credentials.
+                <p className="mt-1 max-w-xl text-sm leading-relaxed text-soft">
+                    Shared backing infrastructure backbone — powering tenant
+                    apps, cluster tools, and devboxes.
                 </p>
             </div>
-            <div className="flex items-center gap-2.5">
+
+            <div className="flex flex-wrap items-center gap-2">
                 <ServerSwitcher
                     servers={servers}
                     value={server.name}
                     buildHref={(name) => plexIndex(name).url}
                 />
+
                 <Link
                     href={showServer(server.name).url}
-                    className={buttonClass('secondary')}
+                    className={buttonClass('secondary', 'md')}
                     title={`Open ${server.name} in Servers`}
                 >
                     <ExternalLink className="size-3.5" />
                     <span>Open server</span>
                 </Link>
+
+                {onOpenQuickConnect && (
+                    <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={onOpenQuickConnect}
+                        title="View cluster connection snippets and .env blocks"
+                    >
+                        <Code2 className="size-3.5" />
+                        <span>Quick Connect</span>
+                    </Button>
+                )}
+
+                {onOpenAddEngine && (
+                    <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={onOpenAddEngine}
+                        title="Add companion engines like Meilisearch, MySQL, or MinIO"
+                    >
+                        <Plus className="size-3.5" />
+                        <span>Add Engine</span>
+                    </Button>
+                )}
+
+                {onOpenProvision && (
+                    <Button
+                        variant="primary"
+                        size="md"
+                        onClick={onOpenProvision}
+                        title="Provision custom credentials for an external workload"
+                    >
+                        <KeyRound className="size-3.5" />
+                        <span>Provision Tenant</span>
+                    </Button>
+                )}
+
                 <Link
                     href={refresh(server.name).url}
                     method="post"
                     as="button"
-                    className={buttonClass('secondary')}
+                    className={buttonClass('secondary', 'md')}
+                    title="Refresh status from cluster"
                 >
                     <RotateCw className="size-3.5" />
                     <span>Refresh</span>
@@ -475,54 +152,113 @@ export default function PlexIndex({
     services?: PlexCommonsServicesReport | null;
     podMetrics?: PodMetrics | null;
 }) {
-    // No persisted report yet (a never-synced server, right after a reset)
-    // only ever means "still checking" — plex_data is null until a sync has
-    // actually completed at least once, it is never null for a genuine
-    // "Commons isn't initialized" answer (that still comes back as a full
-    // report with initialized: false). Keep showing the loading state while
-    // that first background sync is in flight, and poll for it to land —
-    // the sync_status column itself may still read "stale" for a moment
-    // after dispatch, before the queue worker has actually claimed it.
     const awaitingFirstSync = plex === null && plexSync.status !== 'error';
 
     usePoll(
         2000,
-        { only: ['plex', 'services', 'plexSync'] },
+        { only: ['plex', 'services', 'plexSync', 'podMetrics'] },
         { autoStart: plexSync.status === 'syncing' || awaitingFirstSync },
     );
 
+    // Modal and filter states
+    const [activeEngineFilter, setActiveEngineFilter] = useState<string | null>(
+        null,
+    );
+    const [isProvisionOpen, setIsProvisionOpen] = useState(false);
+    const [isAddEngineOpen, setIsAddEngineOpen] = useState(false);
+    const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
+    const [quickConnectTenant, setQuickConnectTenant] =
+        useState<PlexTenant | null>(null);
+    const [quickConnectDriver, setQuickConnectDriver] = useState<string | null>(
+        null,
+    );
+
+    // Handle Quick Connect modal triggers
+    const handleOpenQuickConnectForTenant = (tenant: PlexTenant) => {
+        setQuickConnectTenant(tenant);
+        setQuickConnectDriver(null);
+        setIsQuickConnectOpen(true);
+    };
+
+    const handleOpenQuickConnectForDriver = (driver: string) => {
+        setQuickConnectDriver(driver);
+        setQuickConnectTenant(null);
+        setIsQuickConnectOpen(true);
+    };
+
+    const handleFilterByEngine = (driver: string) => {
+        setActiveEngineFilter((current) =>
+            current === driver ? null : driver,
+        );
+        const el = document.getElementById('tenant-hub');
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
+
+    // 1. Loading Skeleton State (ADR 0009)
     if (plex === undefined || awaitingFirstSync) {
         return (
             <AppLayout title="Plex Commons">
                 <PlexPageHeader server={server} servers={servers} />
-                {/* Shaped like the real page (ADR 0009) so this reads as
-                    "still loading", not as an empty or broken page. */}
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-                    <div className="space-y-5 lg:col-span-2">
-                        <Card label="Commons Services">
-                            <div className="h-32 animate-pulse rounded-xl bg-paper" />
-                        </Card>
-                        <Card label="Cluster Tools">
-                            <div className="h-48 animate-pulse rounded-xl bg-paper" />
-                        </Card>
+                {/* Responsive skeleton shaped like the new Command Center */}
+                <div className="space-y-6">
+                    {/* Top KPI skeleton */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        {[1, 2, 3, 4].map((i) => (
+                            <Card
+                                key={i}
+                                className="h-28 animate-pulse bg-paper/60 p-4.5"
+                            >
+                                <div className="h-4 w-24 rounded bg-line" />
+                                <div className="mt-3 h-7 w-16 rounded bg-line" />
+                            </Card>
+                        ))}
                     </div>
-                    <div className="space-y-5">
-                        <Card label="Resource Usage">
-                            <div className="h-40 animate-pulse rounded-xl bg-paper" />
-                        </Card>
+
+                    {/* Engines Deck skeleton */}
+                    <div>
+                        <div className="mb-3 h-5 w-44 animate-pulse rounded bg-line" />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {[1, 2, 3].map((i) => (
+                                <Card
+                                    key={i}
+                                    className="h-44 animate-pulse bg-paper/60 p-5"
+                                >
+                                    <div className="h-10 w-10 rounded-xl bg-line" />
+                                    <div className="mt-4 h-5 w-32 rounded bg-line" />
+                                    <div className="mt-2 h-4 w-48 rounded bg-line" />
+                                </Card>
+                            ))}
+                        </div>
                     </div>
+
+                    {/* Tenant Matrix skeleton */}
+                    <Card className="h-72 animate-pulse bg-paper/60 p-6">
+                        <div className="h-6 w-56 rounded bg-line" />
+                        <div className="mt-4 h-10 w-full rounded bg-line" />
+                        <div className="mt-4 space-y-2">
+                            {[1, 2, 3].map((i) => (
+                                <div
+                                    key={i}
+                                    className="h-14 rounded-xl bg-line"
+                                />
+                            ))}
+                        </div>
+                    </Card>
                 </div>
             </AppLayout>
         );
     }
 
+    // 2. Unreachable Error State
     if (plex === null) {
         return (
             <AppLayout title="Plex Commons">
                 <PlexPageHeader server={server} servers={servers} />
-                <Card label="Plex Commons">
-                    <div className="flex items-center gap-3 py-2 text-warn">
-                        <Shield className="size-5 shrink-0 text-warn" />
+                <Card label="Plex Commons" tone="error">
+                    <div className="flex items-center gap-3 py-2 text-accent">
+                        <Shield className="size-5 shrink-0 text-accent" />
                         <p className="text-xs">
                             Couldn&apos;t reach {server.name} to check Plex
                             Commons
@@ -535,27 +271,24 @@ export default function PlexIndex({
     }
 
     const initialized = Boolean(plex.initialized);
-    const toolTenants = plex?.tenants.tool ?? [];
-    const projectTenants = plex?.tenants.project ?? [];
-    const customTenants = plex?.tenants.custom ?? [];
+    const toolTenants = plex.tenants?.tool ?? [];
+    const projectTenants = plex.tenants?.project ?? [];
+    const customTenants = plex.tenants?.custom ?? [];
+    const allTenants = [...toolTenants, ...projectTenants, ...customTenants];
 
-    // Several Commons resources (e.g. Forgejo's 3 separate S3 buckets) can
-    // belong to the same tool — grouped under one labeled, icon-bearing
-    // header instead of flat, unidentified rows.
-    const toolGroups = new Map<
-        string,
-        { tool: PlexTenant['clusterTool']; tenants: PlexTenant[] }
-    >();
-    for (const tenant of toolTenants) {
-        const key = tenant.clusterTool?.tool ?? tenant.name;
-        const group = toolGroups.get(key);
-        if (group) {
-            group.tenants.push(tenant);
-        } else {
-            toolGroups.set(key, {
-                tool: tenant.clusterTool,
-                tenants: [tenant],
-            });
+    // Collect all active service engines across categories
+    const activeServiceEntries: {
+        category: PlexServiceCategoryDetail;
+        option: PlexServiceOptionDetail;
+    }[] = [];
+
+    if (services?.categories) {
+        for (const cat of services.categories) {
+            for (const opt of cat.options) {
+                if (opt.enabled) {
+                    activeServiceEntries.push({ category: cat, option: opt });
+                }
+            }
         }
     }
 
@@ -574,140 +307,120 @@ export default function PlexIndex({
                         />
                     )
                 }
+                onOpenProvision={
+                    initialized ? () => setIsProvisionOpen(true) : undefined
+                }
+                onOpenQuickConnect={
+                    initialized
+                        ? () => handleOpenQuickConnectForDriver('')
+                        : undefined
+                }
+                onOpenAddEngine={
+                    initialized ? () => setIsAddEngineOpen(true) : undefined
+                }
             />
 
             {!initialized ? (
                 <PlexEmptyState server={server} />
             ) : (
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-                    <div className="space-y-5 lg:col-span-2">
-                        <Deferred
-                            data="services"
-                            fallback={
-                                <Card label="Commons Services">
-                                    <div className="h-24 animate-pulse rounded-xl bg-paper" />
-                                </Card>
-                            }
-                        >
-                            <PlexCommonsServicesCard
-                                server={server.name}
-                                services={services}
-                            />
-                        </Deferred>
+                <div className="space-y-7">
+                    {/* 1. Hero KPI Bar ("Backbone Vital Signs") */}
+                    <PlexHeroKpiBar
+                        plex={plex}
+                        services={services}
+                        podMetrics={podMetrics}
+                    />
 
-                        <Card
-                            label={`Project Tenants${projectTenants.length > 0 ? ` · ${projectTenants.length}` : ''}`}
-                        >
-                            {projectTenants.length === 0 ? (
-                                <p className="py-2 text-xs text-soft">
-                                    No recognized LaraKube projects have joined
-                                    this server&apos;s Commons yet — they join
-                                    from their own dashboard.
-                                </p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {projectTenants.map((tenant) => (
-                                        <TenantRow
-                                            key={tenant.name}
-                                            server={server}
-                                            tenant={tenant}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-
-                        <Card
-                            label={`Custom Tenants${customTenants.length > 0 ? ` · ${customTenants.length}` : ''}`}
-                        >
-                            {customTenants.length === 0 ? (
-                                <p className="py-2 text-xs text-soft">
-                                    For an app that isn&apos;t a recognized
-                                    LaraKube project — provision credentials for
-                                    one below.
-                                </p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {customTenants.map((tenant) => (
-                                        <TenantRow
-                                            key={tenant.name}
-                                            server={server}
-                                            tenant={tenant}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-
-                        {toolTenants.length > 0 && (
-                            <Card
-                                label={`Cluster Tools on this Commons · ${toolTenants.length}`}
+                    {/* 2. Backing Service Engine Deck (Dedicated Cards Grid) */}
+                    <div>
+                        <div className="mb-3.5 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-xs font-semibold tracking-wider text-soft uppercase">
+                                    Active Backing Engines (
+                                    {activeServiceEntries.length})
+                                </h2>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsAddEngineOpen(true)}
+                                className="text-xs text-soft hover:text-ink"
                             >
-                                <div className="divide-y divide-line">
-                                    {[...toolGroups.entries()].map(
-                                        ([key, group]) => (
-                                            <div
-                                                key={key}
-                                                className="py-3 first:pt-0 last:pb-0"
-                                            >
-                                                <div className="mb-2 flex items-center gap-3">
-                                                    <ToolLogo
-                                                        tool={
-                                                            group.tool ?? {
-                                                                tool: key,
-                                                            }
-                                                        }
-                                                        size="md"
-                                                    />
-                                                    <div className="flex min-w-0 items-center gap-2">
-                                                        <span className="truncate text-sm font-semibold text-ink">
-                                                            {group.tool?.name ??
-                                                                key}
-                                                        </span>
-                                                        {group.tool
-                                                            ?.tagline && (
-                                                            <span className="max-w-[220px] truncate rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-soft">
-                                                                {
-                                                                    group.tool
-                                                                        .tagline
-                                                                }
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-2 pl-[52px]">
-                                                    {group.tenants.map(
-                                                        (tenant) => (
-                                                            <TenantRow
-                                                                key={
-                                                                    tenant.name
-                                                                }
-                                                                server={server}
-                                                                tenant={tenant}
-                                                            />
-                                                        ),
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ),
-                                    )}
-                                </div>
+                                <Plus className="size-3.5" />
+                                <span>Add Engine</span>
+                            </Button>
+                        </div>
+
+                        {activeServiceEntries.length === 0 ? (
+                            <Card className="p-8 text-center text-xs text-soft">
+                                <ServerIcon className="mx-auto mb-2 size-8 text-faint" />
+                                No shared service engines are active on this
+                                Commons yet.
                             </Card>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {activeServiceEntries.map(
+                                    ({ category, option }) => (
+                                        <PlexServiceEngineCard
+                                            key={option.driver}
+                                            category={category}
+                                            option={option}
+                                            podMetrics={podMetrics}
+                                            tenants={allTenants}
+                                            onFilterByEngine={
+                                                handleFilterByEngine
+                                            }
+                                            onQuickConnect={
+                                                handleOpenQuickConnectForDriver
+                                            }
+                                        />
+                                    ),
+                                )}
+                            </div>
                         )}
                     </div>
 
-                    <div className="space-y-5">
-                        <Deferred
-                            data="podMetrics"
-                            fallback={<ResourceUsageCard metrics={undefined} />}
-                        >
-                            <ResourceUsageCard metrics={podMetrics} />
-                        </Deferred>
-
-                        <ProvisionForm server={server} services={services} />
+                    {/* 3. Unified Tenant Ecosystem Hub */}
+                    <div id="tenant-hub">
+                        <PlexTenantHub
+                            server={server}
+                            toolTenants={toolTenants}
+                            projectTenants={projectTenants}
+                            customTenants={customTenants}
+                            services={services}
+                            activeEngineFilter={activeEngineFilter}
+                            onSelectEngineFilter={setActiveEngineFilter}
+                            onOpenProvisionModal={() =>
+                                setIsProvisionOpen(true)
+                            }
+                            onQuickConnect={handleOpenQuickConnectForTenant}
+                        />
                     </div>
                 </div>
             )}
+
+            {/* Modals & Dialogs */}
+            <PlexProvisionModal
+                isOpen={isProvisionOpen}
+                onClose={() => setIsProvisionOpen(false)}
+                server={server}
+                services={services}
+            />
+
+            <PlexAddEngineModal
+                isOpen={isAddEngineOpen}
+                onClose={() => setIsAddEngineOpen(false)}
+                server={server}
+                services={services}
+            />
+
+            <PlexQuickConnectModal
+                isOpen={isQuickConnectOpen}
+                onClose={() => setIsQuickConnectOpen(false)}
+                tenant={quickConnectTenant}
+                driver={quickConnectDriver}
+                services={services}
+            />
         </AppLayout>
     );
 }
