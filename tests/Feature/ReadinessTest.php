@@ -121,6 +121,27 @@ test('providers are cached so subsequent calls do not rerun the CLI command', fu
     File::deleteDirectory($bin);
 });
 
+test('providers can be requested with statusOnly flag', function () {
+    $bin = readinessFakeBinDirectory(['larakube']);
+    Cache::flush();
+    Process::fake([
+        '*cloud:providers*' => Process::result(output: json_encode(['success' => true, 'providers' => [
+            ['slug' => 'do', 'label' => 'DigitalOcean', 'credentials' => ['ready' => true, 'hint' => null]],
+        ]])),
+        '*' => Process::result(output: 'v1'),
+    ]);
+
+    $check = app(ReadinessCheck::class);
+    $providers = $check->providers(statusOnly: true);
+
+    expect($providers)->toHaveCount(1)
+        ->and($providers[0]['slug'])->toBe('do');
+
+    Process::assertRan(fn ($process) => in_array('--status-only', (array) $process->command, true));
+
+    File::deleteDirectory($bin);
+});
+
 test('the usage choice is saved and offered back to the Setup page', function () {
     readinessFakeBinDirectory(['larakube']);
     $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));

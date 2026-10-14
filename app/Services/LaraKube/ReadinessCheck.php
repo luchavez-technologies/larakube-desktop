@@ -96,6 +96,8 @@ class ReadinessCheck
     {
         if ($slug === null) {
             Cache::forget('readiness.providers');
+            Cache::forget('readiness.providers.status');
+            Cache::forget('readiness.providers.full');
         }
 
         foreach ($slug !== null ? [$slug] : array_keys(self::TOOLS) as $tool) {
@@ -117,7 +119,7 @@ class ReadinessCheck
      *
      * @return list<array<string, mixed>>|null
      */
-    public function providers(bool $fresh = false): ?array
+    public function providers(bool $fresh = false, bool $statusOnly = false): ?array
     {
         $cli = $this->locator->find('larakube');
 
@@ -125,7 +127,7 @@ class ReadinessCheck
             return null;
         }
 
-        $key = 'readiness.providers';
+        $key = 'readiness.providers.'.($statusOnly ? 'status' : 'full');
 
         if ($fresh) {
             Cache::forget($key);
@@ -136,7 +138,14 @@ class ReadinessCheck
             return $cached;
         }
 
-        $isolated = $this->locator->isolate([$cli, 'cloud:providers', '--json', '--no-interaction']);
+        $commandArgs = [$cli, 'cloud:providers'];
+        if ($statusOnly) {
+            $commandArgs[] = '--status-only';
+        }
+        $commandArgs[] = '--json';
+        $commandArgs[] = '--no-interaction';
+
+        $isolated = $this->locator->isolate($commandArgs);
 
         try {
             $result = Process::env($isolated['environment'])
@@ -144,6 +153,11 @@ class ReadinessCheck
                 ->run($isolated['command']);
         } catch (ProcessTimedOutException) {
             return null;
+        }
+
+        // Graceful fallback for older CLIs that don't recognize --status-only
+        if ($statusOnly && ! $result->successful() && str_contains($result->errorOutput().$result->output(), '--status-only')) {
+            return $this->providers($fresh, statusOnly: false);
         }
 
         $decoded = json_decode($this->lastLine($result->output()), true);

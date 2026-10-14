@@ -22,7 +22,7 @@ class ReadinessController extends Controller
             'windows' => $wsl->isWindows(),
             'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
             'catalog' => $readiness->catalog(),
-            'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
+            'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
             'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,
             'cliChannel' => $installer->channel(),
             'usage' => $settings->get()['usage'],
