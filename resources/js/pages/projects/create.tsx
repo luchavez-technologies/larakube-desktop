@@ -1,4 +1,4 @@
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Link, router, useForm, usePage } from '@inertiajs/react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -23,7 +23,6 @@ import FrameworkFields, {
 import PageHeader from '@/components/page-header';
 import ExperimentalBadge from '@/components/experimental-badge';
 import AppLayout from '@/layouts/app-layout';
-import { sendJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import {
     chooseFolder,
@@ -199,34 +198,32 @@ export default function CreateProject({
         form.post((onBox ? scaffoldDevBox() : scaffold()).url);
     }
 
-    async function pickFolder() {
+    function pickFolder() {
         if (isPickingFolder) return;
         setIsPickingFolder(true);
-        try {
-            const res = await sendJson<{ path: string | null; error?: string }>(
-                chooseFolder().url,
-                'POST',
-                {
-                    name: chosenName,
-                    framework: form.data.framework,
-                    parent: form.data.parent,
-                },
-            );
 
-            if (res.ok && res.data.path) {
-                form.setData('parent', res.data.path);
-                form.clearErrors('parent');
-            } else if (!res.ok && (res.data.error || res.data.message)) {
-                form.setError(
-                    'parent',
-                    res.data.error ||
-                        res.data.message ||
-                        'Choose a valid folder.',
-                );
-            }
-        } finally {
-            setIsPickingFolder(false);
-        }
+        router.post(
+            chooseFolder().url,
+            {
+                name: chosenName,
+                framework: form.data.framework,
+                parent: form.data.parent,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['parent', 'errors'],
+                onSuccess: (page) => {
+                    if (typeof page.props.parent === 'string') {
+                        form.setData('parent', page.props.parent);
+                        form.clearErrors('parent');
+                    }
+                },
+                onFinish: () => {
+                    setIsPickingFolder(false);
+                },
+            },
+        );
     }
 
     return (

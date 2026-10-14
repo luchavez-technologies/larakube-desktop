@@ -24,7 +24,6 @@ import type { Tone } from '@/components/status-pill';
 import QrCodePopover from '@/components/qr-code-popover';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
-import { sendJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import { show as showDevBox } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
@@ -58,31 +57,20 @@ export default function ProjectsIndex({
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
     const [isCloneOpen, setIsCloneOpen] = useState(false);
     const [isAddingFolder, setIsAddingFolder] = useState(false);
-    const [pathError, setPathError] = useState<string | null>(null);
 
-    const handleAddFolder = async () => {
+    const handleAddFolder = () => {
         if (isAddingFolder) return;
         setIsAddingFolder(true);
-        setPathError(null);
-        try {
-            const res = await sendJson<{
-                path: string | null;
-                redirect?: string;
-                error?: string;
-            }>(store().url, 'POST');
-
-            if (res.ok && res.data.redirect) {
-                router.visit(res.data.redirect);
-            } else if (!res.ok && (res.data.error || res.data.message)) {
-                setPathError(
-                    res.data.error ||
-                        res.data.message ||
-                        'Choose a folder inside your home folder.',
-                );
-            }
-        } finally {
-            setIsAddingFolder(false);
-        }
+        router.post(
+            store().url,
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['errors', 'flash'],
+                onFinish: () => setIsAddingFolder(false),
+            },
+        );
     };
 
     useEffect(() => {
@@ -143,9 +131,9 @@ export default function ProjectsIndex({
                     </div>
                 }
             />
-            {(pathError || errors.path) && (
+            {errors.path && (
                 <p className="mb-4 rounded-lg bg-accent-tint px-3 py-2 text-sm text-accent">
-                    {pathError || errors.path}
+                    {errors.path}
                 </p>
             )}
             <Deferred data="devBoxes" fallback={<></>}>

@@ -148,11 +148,11 @@ class ProjectController extends Controller
         }
 
         if ($path === null) {
-            return to_route('projects.index');
+            return back();
         }
 
         if (! $this->insideHome($path)) {
-            return to_route('projects.index')->withErrors(['path' => 'Choose a folder inside your home folder.']);
+            return back()->withErrors(['path' => 'Choose a folder inside your home folder.']);
         }
 
         $canonical = $this->canonicalPath($path);
@@ -242,13 +242,17 @@ class ProjectController extends Controller
             'framework' => (string) $request->input('framework', ''),
         ]);
 
-        if ($path !== null && ! $this->insideHome($path, allowHome: true)) {
-            return to_route('projects.create', $query)->withErrors(['parent' => 'Choose a folder inside your home folder.']);
+        if ($path === null) {
+            return back();
         }
 
-        $canonical = $path !== null ? $this->canonicalPath($path) : null;
+        if (! $this->insideHome($path, allowHome: true)) {
+            return back()->withErrors(['parent' => 'Choose a folder inside your home folder.']);
+        }
 
-        return to_route('projects.create', $query + array_filter(['parent' => $canonical]));
+        $canonical = $this->canonicalPath($path);
+
+        return to_route('projects.create', $query + ['parent' => $canonical]);
     }
 
     public function scaffold(Request $request, CliRunner $runner, FrameworkCatalog $frameworks, FrameworkForm $form): RedirectResponse

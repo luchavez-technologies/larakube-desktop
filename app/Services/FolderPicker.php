@@ -15,12 +15,6 @@ class FolderPicker
             $dialog->defaultPath($defaultPath);
         }
 
-        try {
-            $dialog->asSheet();
-        } catch (\Throwable) {
-            // Window::current() or sheet attachment requires an active Electron window
-        }
-
         $path = $dialog->open();
 
         return is_string($path) && $path !== '' ? $path : null;
