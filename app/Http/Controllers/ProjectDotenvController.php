@@ -53,7 +53,7 @@ class ProjectDotenvController extends Controller
      */
     private function run(Project $project, RunKind $kind, string $label, array $arguments, string $environment): RedirectResponse
     {
-        abort_unless(is_dir($project->path), 404);
+        abort_unless($project->existsOnHost(), 404);
 
         $projectName = $this->inspector->inspect($project->path)['name'];
 

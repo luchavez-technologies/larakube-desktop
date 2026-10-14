@@ -299,6 +299,33 @@ class ToolLocator
         return rtrim((string) ($_SERVER['HOME'] ?? getenv('HOME') ?: ''), '/');
     }
 
+    public static function hostProfile(?bool $windows = null): string
+    {
+        $isWindows = $windows ?? (PHP_OS_FAMILY === 'Windows');
+
+        if ($isWindows) {
+            return (string) ($_SERVER['USERPROFILE'] ?? getenv('USERPROFILE') ?: (getenv('HOMEDRIVE') && getenv('HOMEPATH') ? getenv('HOMEDRIVE').getenv('HOMEPATH') : ''));
+        }
+
+        return self::home();
+    }
+
+    public static function defaultProjectsPath(?bool $windows = null): string
+    {
+        $isWindows = $windows ?? (PHP_OS_FAMILY === 'Windows');
+
+        if ($isWindows) {
+            return WslDistro::HOME.'/projects';
+        }
+
+        return self::home();
+    }
+
+    public function defaultProjectsDirectory(): string
+    {
+        return self::defaultProjectsPath($this->isWindows());
+    }
+
     /**
      * The host system Downloads directory for user-facing artifacts (kubeconfigs, exports).
      * On Windows, this resolves the Windows host profile Downloads directory (e.g. C:\Users\<user>\Downloads)
@@ -318,7 +345,7 @@ class ToolLocator
         $isWindows = $windows ?? (PHP_OS_FAMILY === 'Windows');
 
         if ($isWindows) {
-            $profile = (string) ($_SERVER['USERPROFILE'] ?? getenv('USERPROFILE') ?: (getenv('HOMEDRIVE') && getenv('HOMEPATH') ? getenv('HOMEDRIVE').getenv('HOMEPATH') : ''));
+            $profile = self::hostProfile(true);
             if ($profile !== '') {
                 return rtrim($profile, '\\/').'\\Downloads';
             }

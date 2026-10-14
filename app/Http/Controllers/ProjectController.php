@@ -45,7 +45,26 @@ class ProjectController extends Controller
     /** The Let's Encrypt email last used for a new Laravel app, prefilled next time. */
     private const EMAIL_CACHE_KEY = 'desktop.new-app.email';
 
-    public function __construct(private ProjectInspector $inspector) {}
+    private ToolLocator $locator;
+
+    public function __construct(private ProjectInspector $inspector, ?ToolLocator $locator = null)
+    {
+        $this->locator = $locator ?? app(ToolLocator::class);
+    }
+
+    private function hostPath(string $path): string
+    {
+        return $this->locator->isWindows() ? WslDistro::toWindows($path) : $path;
+    }
+
+    private function canonicalPath(string $path): string
+    {
+        if ($this->locator->isWindows()) {
+            return WslDistro::toLinux($path);
+        }
+
+        return realpath($path) ?: $path;
+    }
 
     public function index(Request $request, ToolLocator $locator): Response
     {
@@ -101,7 +120,7 @@ class ProjectController extends Controller
                 return is_array($result['projects'] ?? null) ? array_values($result['projects']) : null;
             }, 'boxProjects'),
             'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => $p['localStatus']['state'] === 'running'),
-            'defaultParent' => ToolLocator::home(),
+            'defaultParent' => $this->locator->defaultProjectsDirectory(),
         ]);
     }
 
@@ -117,7 +136,8 @@ class ProjectController extends Controller
             return to_route('projects.index')->withErrors(['path' => 'Choose a folder inside your home folder.']);
         }
 
-        $project = Project::firstOrCreate(['path' => realpath($path) ?: $path]);
+        $canonical = $this->canonicalPath($path);
+        $project = Project::firstOrCreate(['path' => $canonical]);
 
         return to_route('projects.show', $project);
     }
@@ -145,7 +165,12 @@ class ProjectController extends Controller
 
     public function create(Request $request, FrameworkCatalog $frameworks, LocalCluster $local, ClusterStatus $status): Response
     {
+        $defaultParent = $this->locator->defaultProjectsDirectory();
         $parent = (string) $request->query('parent', '');
+        $canonicalParent = $parent !== '' ? $this->canonicalPath($parent) : '';
+        $resolvedParent = $canonicalParent !== '' && $this->insideHome($canonicalParent, allowHome: true) && is_dir($this->hostPath($canonicalParent))
+            ? $canonicalParent
+            : $defaultParent;
         $requestedFramework = (string) $request->query('framework', '');
         $offered = array_column($frameworks->visible(), 'slug');
         $defaultFramework = in_array($requestedFramework, $offered, true) ? $requestedFramework : 'laravel';
@@ -168,7 +193,7 @@ class ProjectController extends Controller
                 : []),
             'initialBox' => $this->chosenDevBox($request) ?? '',
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
-            'parent' => $this->insideHome($parent, allowHome: true) && is_dir($parent) ? $parent : ToolLocator::home(),
+            'parent' => $resolvedParent,
             'name' => (string) $request->query('name', ''),
             'framework' => $defaultFramework,
         ]);
@@ -187,7 +212,9 @@ class ProjectController extends Controller
             return to_route('projects.create', $query)->withErrors(['parent' => 'Choose a folder inside your home folder.']);
         }
 
-        return to_route('projects.create', $query + array_filter(['parent' => $path === null ? null : (realpath($path) ?: $path)]));
+        $canonical = $path !== null ? $this->canonicalPath($path) : null;
+
+        return to_route('projects.create', $query + array_filter(['parent' => $canonical]));
     }
 
     public function scaffold(Request $request, CliRunner $runner, FrameworkCatalog $frameworks, FrameworkForm $form): RedirectResponse
@@ -216,15 +243,15 @@ class ProjectController extends Controller
 
         $name = (string) $resolved['positional'];
 
-        $parent = realpath($input['parent']) ?: $input['parent'];
+        $parent = $this->canonicalPath($input['parent']);
 
-        if (! is_dir($parent) || ! $this->insideHome($parent, allowHome: true)) {
+        if (! is_dir($this->hostPath($parent)) || ! $this->insideHome($parent, allowHome: true)) {
             return back()->withErrors(['parent' => 'Choose a folder inside your home folder.']);
         }
 
         $path = "{$parent}/{$name}";
 
-        if (file_exists($path)) {
+        if (file_exists($this->hostPath($path))) {
             return back()->withErrors(['answers.name' => "{$name} already exists in this folder."]);
         }
 
@@ -317,12 +344,14 @@ class ProjectController extends Controller
 
         $repo = trim($input['repo']);
         $directory = ! empty($input['directory']) ? trim($input['directory']) : $this->deriveDirectoryName($repo);
-        $parent = ! empty($input['parent']) && $this->insideHome($input['parent'], allowHome: true) && is_dir($input['parent'])
-            ? (realpath($input['parent']) ?: $input['parent'])
-            : ToolLocator::home();
+        $rawParent = ! empty($input['parent']) ? (string) $input['parent'] : '';
+        $canonicalParent = $rawParent !== '' ? $this->canonicalPath($rawParent) : '';
+        $parent = $canonicalParent !== '' && $this->insideHome($canonicalParent, allowHome: true) && is_dir($this->hostPath($canonicalParent))
+            ? $canonicalParent
+            : $this->locator->defaultProjectsDirectory();
 
         $path = "{$parent}/{$directory}";
-        if (file_exists($path)) {
+        if (file_exists($this->hostPath($path))) {
             return back()->withErrors(['directory' => "Directory '{$directory}' already exists in {$parent}."]);
         }
 
@@ -413,7 +442,7 @@ class ProjectController extends Controller
             return response()->json(['path' => null, 'error' => 'Choose a folder inside your home folder.'], 422);
         }
 
-        return response()->json(['path' => realpath($path) ?: $path]);
+        return response()->json(['path' => $this->canonicalPath($path)]);
     }
 
     private function deriveDirectoryName(string $repo): string
@@ -602,7 +631,7 @@ class ProjectController extends Controller
     /** Shows the project's folder in Finder or File Explorer. On Windows a project inside the distro is reached through its network share. */
     public function showFolder(Project $project, ToolLocator $locator): RedirectResponse
     {
-        $path = $locator->isWindows() && str_starts_with($project->path, '/') ? WslDistro::unc($project->path) : $project->path;
+        $path = $locator->isWindows() ? WslDistro::toWindows($project->path) : $project->path;
 
         Shell::showInFolder($path);
 
@@ -890,7 +919,7 @@ class ProjectController extends Controller
             'tld' => ['nullable', 'string', 'in:kube,localhost,test,local,internal'],
         ]);
 
-        $blueprintPath = "{$project->path}/.larakube.json";
+        $blueprintPath = "{$this->hostPath($project->path)}/.larakube.json";
         if (is_file($blueprintPath)) {
             $data = json_decode((string) file_get_contents($blueprintPath), true);
             if (is_array($data)) {
@@ -904,15 +933,56 @@ class ProjectController extends Controller
     }
 
     /**
-     * Whether $path is under the home folder. $allowHome also accepts the home
-     * folder itself: fine to create an app in, not to add as a project.
+     * Whether $path is under the user's home folder or valid user workspace directory.
+     * $allowHome also accepts the home folder itself: fine to create an app in, not to add as a project.
      */
     private function insideHome(string $path, bool $allowHome = false): bool
     {
+        if (trim($path) === '') {
+            return false;
+        }
+
+        if ($this->locator->isWindows()) {
+            $linux = WslDistro::toLinux($path);
+            $clean = rtrim($linux, '/');
+
+            if (WslDistro::isSystemDirectory($clean)) {
+                return false;
+            }
+
+            // 1. Inside WSL distro home: /home/larakube or /home/larakube/*
+            $wslHome = WslDistro::HOME;
+            if ($clean === $wslHome) {
+                return $allowHome;
+            }
+            if (str_starts_with($clean, $wslHome.'/')) {
+                return true;
+            }
+
+            // 2. Inside Windows user profile (%USERPROFILE% / C:\Users\<user> -> /mnt/c/Users/<user>)
+            $hostProfile = ToolLocator::hostProfile(true);
+            if ($hostProfile !== '') {
+                $profileLinux = rtrim(WslDistro::toLinux($hostProfile), '/');
+                if ($clean === $profileLinux) {
+                    return $allowHome;
+                }
+                if (str_starts_with($clean, $profileLinux.'/')) {
+                    return true;
+                }
+            }
+
+            // 3. Any non-system folder on a mounted Windows drive (/mnt/c/..., /mnt/d/...)
+            if (preg_match('#^/mnt/[a-z]/.+#i', $clean) === 1) {
+                return true;
+            }
+
+            return false;
+        }
+
         $home = ToolLocator::home();
         $resolved = realpath($path) ?: $path;
 
-        return $home !== '' && $path !== '' && (str_starts_with($resolved, $home.'/') || ($allowHome && $resolved === $home));
+        return $home !== '' && (str_starts_with($resolved, $home.'/') || ($allowHome && $resolved === $home));
     }
 
     /**
@@ -974,8 +1044,8 @@ class ProjectController extends Controller
     {
         return in_array($run->status, [RunStatus::Failed, RunStatus::Cancelled], true)
             && $this->recordedArguments($run) !== []
-            && is_dir($run->meta['cwd'] ?? '')
-            && ! file_exists($project->path);
+            && is_dir($this->hostPath($run->meta['cwd'] ?? ''))
+            && ! file_exists($this->hostPath($project->path));
     }
 
     /**
@@ -1026,7 +1096,7 @@ class ProjectController extends Controller
      */
     private function run(CliRunner $runner, Project $project, RunKind $kind, string $label, array $arguments, ?string $environment = null): RedirectResponse
     {
-        abort_unless(is_dir($project->path), 404);
+        abort_unless($project->existsOnHost(), 404);
 
         $projectName = $this->name($project);
         $env = $environment !== null && $environment !== '' ? $environment : 'local';

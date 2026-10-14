@@ -21,6 +21,8 @@ class WslSetupController extends Controller
                     : ['ok' => false, 'message' => 'WSL was not turned on. The administrator prompt may have been declined.'],
                 'download' => $wsl->download(),
                 'import' => $wsl->import(),
+                'update' => $wsl->update(),
+                'backup' => $wsl->backupUserHome(),
                 'reset' => $wsl->reset(),
                 default => abort(404),
             };
@@ -30,7 +32,7 @@ class WslSetupController extends Controller
             return response()->json(['ok' => false, 'message' => "{$step} failed: {$e->getMessage()}"]);
         }
 
-        if (in_array($step, ['import', 'reset'], true) && $result['ok']) {
+        if (in_array($step, ['import', 'update', 'reset'], true) && $result['ok']) {
             $readiness->forget();
         }
 

@@ -917,3 +917,51 @@ test('project dotenv endpoints trigger push, pull, and return drift status', fun
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('folder picker and project paths adapt seamlessly on Windows WSL', function () {
+    $windowsLocator = new ToolLocator(windows: true);
+    app()->instance(ToolLocator::class, $windowsLocator);
+    projectsFrameworks();
+
+    // 1. Host path resolution on Windows
+    $wslProject = new Project(['path' => '/home/larakube/projects/blog']);
+    expect($wslProject->hostPath())->toBe('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\blog');
+
+    $mountProject = new Project(['path' => '/mnt/c/Users/student/projects/blog']);
+    expect($mountProject->hostPath())->toBe('C:\\Users\\student\\projects\\blog');
+
+    // 2. Folder picker converts Windows paths and UNC paths to Linux paths inside WSL
+    projectsPicker('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog', 'framework' => 'laravel'])
+        ->assertRedirect(route('projects.create', [
+            'name' => 'blog',
+            'framework' => 'laravel',
+            'parent' => '/home/larakube/projects',
+        ]));
+
+    projectsPicker('C:\\Users\\Student\\Projects');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog', 'framework' => 'laravel'])
+        ->assertRedirect(route('projects.create', [
+            'name' => 'blog',
+            'framework' => 'laravel',
+            'parent' => '/mnt/c/Users/Student/Projects',
+        ]));
+
+    // 3. System directories on Windows are rejected
+    projectsPicker('C:\\Windows');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog'])
+        ->assertSessionHasErrors('parent');
+
+    projectsPicker('C:\\');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog'])
+        ->assertSessionHasErrors('parent');
+
+    projectsPicker('C:\\Program Files');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog'])
+        ->assertSessionHasErrors('parent');
+
+    // Linux system paths inside WSL are also rejected
+    projectsPicker('/etc');
+    $this->post(route('projects.choose-folder'), ['name' => 'blog'])
+        ->assertSessionHasErrors('parent');
+});

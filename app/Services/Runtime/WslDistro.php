@@ -31,10 +31,40 @@ final class WslDistro
         }
 
         if (preg_match('#^([A-Za-z]):[\\\\/]?(.*)$#', $path, $drive) === 1) {
-            return '/mnt/'.strtolower($drive[1]).'/'.str_replace('\\', '/', $drive[2]);
+            $rest = str_replace('\\', '/', $drive[2]);
+            $rest = trim($rest, '/');
+
+            return '/mnt/'.strtolower($drive[1]).($rest !== '' ? '/'.$rest : '');
         }
 
         return $path;
+    }
+
+    /**
+     * Whether a given path (Windows or Linux format) points to an operating system system directory
+     * where user project creation or registration must be disallowed.
+     */
+    public static function isSystemDirectory(string $path): bool
+    {
+        $linux = self::toLinux($path);
+        $clean = strtolower(rtrim($linux, '/'));
+
+        // Windows system directories (under /mnt/<drive>/...)
+        if (preg_match('#^/mnt/[a-z]/(?:windows|program files|program files \(x86\)|programdata|system volume information|\$recycle\.bin)(?:/.*)?$#i', $clean) === 1) {
+            return true;
+        }
+
+        // Bare drive roots e.g. /mnt/c or /mnt/c/
+        if (preg_match('#^/mnt/[a-z]$#i', $clean) === 1) {
+            return true;
+        }
+
+        // Linux OS system directories
+        if (preg_match('#^/(?:bin|boot|dev|etc|lib|lib64|lost\+found|proc|root|run|sbin|sys|tmp|usr|var)(?:/.*)?$#', $clean) === 1) {
+            return true;
+        }
+
+        return false;
     }
 
     public static function toWindows(string $path, string $distro = self::NAME): string

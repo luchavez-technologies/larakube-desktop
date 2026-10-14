@@ -2,6 +2,8 @@
 
 namespace App\Services\LaraKube;
 
+use App\Services\Runtime\WslDistro;
+
 /**
  * Reads a project's LaraKube state from its own files, read-only:
  * .larakube.json (framework, name, hosts) and the gitignored
@@ -9,7 +11,22 @@ namespace App\Services\LaraKube;
  */
 class ProjectInspector
 {
-    public function __construct(private FrameworkCatalog $catalog, private ?GlobalSettings $globalSettings = null) {}
+    public function __construct(
+        private FrameworkCatalog $catalog,
+        private ?GlobalSettings $globalSettings = null,
+        private ?ToolLocator $locator = null,
+    ) {}
+
+    private function hostPath(string $path): string
+    {
+        if ($path === '') {
+            return '';
+        }
+
+        $locator = $this->locator ?? app(ToolLocator::class);
+
+        return $locator->isWindows() ? WslDistro::toWindows($path) : $path;
+    }
 
     /**
      * The frameworks `cloud:deploy` can ship, as the CLI says (slug => label).
@@ -35,8 +52,9 @@ class ProjectInspector
      */
     public function inspect(string $path, string $environment = 'production'): array
     {
-        $blueprint = $this->readJson("{$path}/.larakube.json");
-        $local = $this->readJson("{$path}/.larakube.local.json");
+        $hostPath = $this->hostPath($path);
+        $blueprint = $this->readJson("{$hostPath}/.larakube.json");
+        $local = $this->readJson("{$hostPath}/.larakube.local.json");
         $git = $this->detectGit($path);
 
         return $this->inspectBlueprint($blueprint, $local, $environment, $path, $git);
@@ -154,13 +172,15 @@ class ProjectInspector
         $globalTld = $this->globalSettings?->getLocalTld() ?? 'test';
         $effectiveTld = ($projectLocalTld !== null && $projectLocalTld !== '') ? $projectLocalTld : $globalTld;
 
+        $hostPath = $this->hostPath($path);
+
         return [
             'path' => $path,
-            'exists' => $path !== '' ? is_dir($path) : true,
+            'exists' => $path !== '' ? is_dir($hostPath) : true,
             'initialized' => $blueprint !== null,
             'name' => $projectName,
             'framework' => $framework,
-            'detectedFramework' => ($blueprint === null && $path !== '' && is_dir($path)) ? $this->detect($path) : null,
+            'detectedFramework' => ($blueprint === null && $path !== '' && is_dir($hostPath)) ? $this->detect($path) : null,
             'webHost' => is_string($host) && $host !== '' ? $host : null,
             'serverIp' => is_string($ip) && $ip !== '' ? $ip : null,
             'serverContext' => is_string($context) && $context !== '' ? $context : null,
@@ -181,8 +201,9 @@ class ProjectInspector
      */
     public function detectGit(string $path): array
     {
+        $hostPath = $this->hostPath($path);
         $remote = null;
-        $configFile = "{$path}/.git/config";
+        $configFile = "{$hostPath}/.git/config";
         if (is_file($configFile)) {
             $content = (string) file_get_contents($configFile);
             if (preg_match('/\[remote\s+"origin"\][^\[]*?url\s*=\s*(.+)/i', $content, $m)) {
@@ -203,10 +224,10 @@ class ProjectInspector
             };
         }
 
-        $hasWorkflow = file_exists("{$path}/.github/workflows/deploy.yml")
-            || file_exists("{$path}/.gitlab-ci.yml")
-            || file_exists("{$path}/.forgejo/workflows/deploy.yml")
-            || file_exists("{$path}/.gitea/workflows/deploy.yml");
+        $hasWorkflow = file_exists("{$hostPath}/.github/workflows/deploy.yml")
+            || file_exists("{$hostPath}/.gitlab-ci.yml")
+            || file_exists("{$hostPath}/.forgejo/workflows/deploy.yml")
+            || file_exists("{$hostPath}/.gitea/workflows/deploy.yml");
 
         return [
             'remote' => $remote,
@@ -222,15 +243,16 @@ class ProjectInspector
      */
     public function detect(string $path): ?string
     {
-        $composer = $this->readJson("{$path}/composer.json") ?? [];
-        $package = $this->readJson("{$path}/package.json") ?? [];
+        $hostPath = $this->hostPath($path);
+        $composer = $this->readJson("{$hostPath}/composer.json") ?? [];
+        $package = $this->readJson("{$hostPath}/package.json") ?? [];
         $requires = array_keys(($composer['require'] ?? []) + ($composer['require-dev'] ?? []));
         $packages = array_keys(($package['dependencies'] ?? []) + ($package['devDependencies'] ?? []));
 
         return match (true) {
             in_array('statamic/cms', $requires, true) => 'statamic',
-            file_exists("{$path}/wp-config.php") || file_exists("{$path}/wp-config-sample.php") || in_array('roots/wordpress', $requires, true) => 'wordpress',
-            file_exists("{$path}/artisan") => 'laravel',
+            file_exists("{$hostPath}/wp-config.php") || file_exists("{$hostPath}/wp-config-sample.php") || in_array('roots/wordpress', $requires, true) => 'wordpress',
+            file_exists("{$hostPath}/artisan") => 'laravel',
             in_array('next', $packages, true) => 'nextjs',
             in_array('@docusaurus/core', $packages, true) => 'docusaurus',
             in_array('astro', $packages, true) => 'astro',

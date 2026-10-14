@@ -2,9 +2,12 @@ import { Deferred, Form, router, useForm } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
+    AlertTriangle,
     Archive,
     ArrowRightLeft,
     Check,
+    ChevronDown,
+    ChevronRight,
     Heart,
     Laptop,
     Layers,
@@ -13,6 +16,7 @@ import {
     Save,
     Sun,
     Trash2,
+    XCircle,
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
@@ -878,11 +882,48 @@ function UpdatesCard() {
 function LinuxCard() {
     const [confirming, setConfirming] = useState(false);
     const [working, setWorking] = useState(false);
+    const [updating, setUpdating] = useState(false);
+    const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [dangerOpen, setDangerOpen] = useState(false);
+
+    const update = async () => {
+        setUpdating(true);
+        setError(null);
+        setUpdateSuccess(null);
+
+        const result = await fetch('/setup/wsl/update', {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+        })
+            .then(
+                (response) =>
+                    response.json() as Promise<{
+                        ok: boolean;
+                        message: string;
+                    }>,
+            )
+            .catch(() => ({
+                ok: false,
+                message: 'LaraKube Desktop could not reach itself. Try again.',
+            }));
+
+        setUpdating(false);
+
+        if (!result.ok) {
+            setError(result.message);
+
+            return;
+        }
+
+        setUpdateSuccess(result.message);
+        forgetToolStatus();
+    };
 
     const reset = async () => {
         setWorking(true);
         setError(null);
+        setUpdateSuccess(null);
 
         const result = await fetch('/setup/wsl/reset', {
             method: 'POST',
@@ -913,53 +954,157 @@ function LinuxCard() {
     };
 
     return (
-        <div className="mb-5">
-            <Card
-                label="LaraKube Linux"
-                tone={confirming ? 'danger' : 'default'}
-            >
-                {confirming ? (
-                    <div className="space-y-3 text-sm">
-                        <p>
-                            This deletes LaraKube Linux and everything inside
-                            it, including projects and data you made there. Your
-                            Windows files and any other WSL distributions are
-                            not touched. Setup will offer to install it again.
-                        </p>
-                        <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                disabled={working}
-                                onClick={() => void reset()}
-                            >
-                                {working ? 'Deleting…' : 'Delete and reset'}
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                disabled={working}
-                                onClick={() => setConfirming(false)}
-                            >
-                                Cancel
-                            </Button>
-                        </div>
-                        {error && <p className="text-accent">{error}</p>}
-                    </div>
-                ) : (
+        <div className="mb-5 space-y-3">
+            <Card label="LaraKube Linux">
+                <div className="space-y-4">
                     <div className="flex items-center justify-between gap-4 text-sm">
-                        <p className="text-soft">
-                            The small Linux LaraKube Desktop runs its tools in.
-                            Reset it to start over with a fresh copy.
-                        </p>
+                        <div>
+                            <p className="font-medium text-ink">
+                                Distro & Toolchain Update
+                            </p>
+                            <p className="mt-0.5 text-xs text-soft">
+                                Updates the LaraKube CLI and cloud tools inside
+                                your WSL distro. Preserves all your projects and
+                                dotfiles in{' '}
+                                <code className="font-mono text-ink">
+                                    /home/larakube
+                                </code>
+                                .
+                            </p>
+                        </div>
                         <Button
                             type="button"
                             variant="secondary"
-                            onClick={() => setConfirming(true)}
+                            disabled={updating || working}
+                            onClick={() => void update()}
                         >
-                            Reset LaraKube Linux…
+                            <RotateCw
+                                className={cn(
+                                    'size-3.5',
+                                    updating && 'animate-spin',
+                                )}
+                            />
+                            <span>
+                                {updating
+                                    ? 'Updating…'
+                                    : 'Update LaraKube Linux'}
+                            </span>
                         </Button>
                     </div>
-                )}
+
+                    {updateSuccess && (
+                        <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                            <Check className="size-3.5" />
+                            <span>{updateSuccess}</span>
+                        </div>
+                    )}
+
+                    {error && !confirming && (
+                        <p className="text-xs text-accent">{error}</p>
+                    )}
+
+                    {/* Collapsible Danger Zone */}
+                    <div className="border-t border-line/70 pt-3.5">
+                        <button
+                            type="button"
+                            onClick={() => setDangerOpen(!dangerOpen)}
+                            className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-soft transition-colors hover:text-ink"
+                        >
+                            {dangerOpen ? (
+                                <ChevronDown className="size-3.5" />
+                            ) : (
+                                <ChevronRight className="size-3.5" />
+                            )}
+                            <span>Danger Zone (Factory Reset)</span>
+                        </button>
+
+                        {dangerOpen && (
+                            <div className="mt-3 rounded-xl border border-accent/20 bg-accent/[0.03] p-4 text-sm">
+                                {confirming ? (
+                                    <div className="space-y-3">
+                                        <div className="flex items-start gap-2 text-accent">
+                                            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                                            <div>
+                                                <p className="text-xs font-semibold">
+                                                    Factory Reset Confirmation
+                                                </p>
+                                                <p className="mt-1 text-xs text-soft">
+                                                    This deletes the{' '}
+                                                    <code className="font-mono text-ink">
+                                                        larakube-ubuntu
+                                                    </code>{' '}
+                                                    WSL distro. As a safety
+                                                    guarantee, your projects
+                                                    will automatically be backed
+                                                    up to your Windows{' '}
+                                                    <code className="font-mono text-ink">
+                                                        %LOCALAPPDATA%\LaraKube\backups\
+                                                    </code>{' '}
+                                                    directory before
+                                                    unregistering.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 pt-1">
+                                            <Button
+                                                type="button"
+                                                variant="danger"
+                                                disabled={working}
+                                                onClick={() => void reset()}
+                                            >
+                                                <Trash2 className="size-3.5" />
+                                                <span>
+                                                    {working
+                                                        ? 'Resetting…'
+                                                        : 'Delete and reset'}
+                                                </span>
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                disabled={working}
+                                                onClick={() => {
+                                                    setConfirming(false);
+                                                    setError(null);
+                                                }}
+                                            >
+                                                <XCircle className="size-3.5" />
+                                                <span>Cancel</span>
+                                            </Button>
+                                        </div>
+                                        {error && (
+                                            <p className="text-xs text-accent">
+                                                {error}
+                                            </p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-xs font-semibold text-ink">
+                                                Reset LaraKube Linux
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-soft">
+                                                Completely unregisters the
+                                                distro to start over fresh.
+                                                Automatically backs up existing
+                                                projects first.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={() => setConfirming(true)}
+                                        >
+                                            <Trash2 className="size-3.5 text-accent" />
+                                            <span>Reset LaraKube Linux…</span>
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </Card>
         </div>
     );

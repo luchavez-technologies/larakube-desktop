@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Services\Runtime\WslDistro;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 
 /**
@@ -19,8 +20,9 @@ class ProjectServices
     public function get(string $projectPath, string $environment, bool $reveal = false): ?array
     {
         $cli = $this->locator->find('larakube');
+        $hostPath = $this->locator->isWindows() ? WslDistro::toWindows($projectPath) : $projectPath;
 
-        if ($cli === null || ! is_dir($projectPath)) {
+        if ($cli === null || ! is_dir($hostPath)) {
             return null;
         }
 

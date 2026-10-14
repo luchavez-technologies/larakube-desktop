@@ -132,3 +132,23 @@ test('a run whose process never started ends as failed, with the reason on its l
     expect($run->status)->toBe(RunStatus::Failed)
         ->and($run->output)->toContain('The command could not be started: Startup timeout exceeded');
 });
+
+test('WslDistro correctly identifies system directories that must be blocked', function (): void {
+    expect(WslDistro::isSystemDirectory('C:\\Windows\\System32'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('C:\\Program Files'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('C:\\Program Files (x86)'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('C:\\'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('/etc'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('/tmp'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('/var/log'))->toBeTrue()
+        ->and(WslDistro::isSystemDirectory('C:\\Users\\John\\Projects'))->toBeFalse()
+        ->and(WslDistro::isSystemDirectory('/home/larakube/projects'))->toBeFalse()
+        ->and(WslDistro::isSystemDirectory('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects'))->toBeFalse()
+        ->and(WslDistro::isSystemDirectory('D:\\Development\\app'))->toBeFalse();
+});
+
+test('ToolLocator resolves default projects path and host profile', function (): void {
+    expect(ToolLocator::defaultProjectsPath(true))->toBe('/home/larakube/projects')
+        ->and(ToolLocator::defaultProjectsPath(false))->toBe(ToolLocator::home())
+        ->and(windowsLocator()->defaultProjectsDirectory())->toBe('/home/larakube/projects');
+});

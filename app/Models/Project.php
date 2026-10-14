@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\LaraKube\ToolLocator;
+use App\Services\Runtime\WslDistro;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -15,4 +17,22 @@ use Illuminate\Database\Eloquent\Model;
 class Project extends Model
 {
     protected $fillable = ['path'];
+
+    /**
+     * Resolves the project's folder on the host operating system.
+     * On Windows, transforms internal WSL Linux paths (/home/larakube/...) to accessible UNC paths (\\wsl.localhost\...).
+     */
+    public function hostPath(): string
+    {
+        if (app(ToolLocator::class)->isWindows()) {
+            return WslDistro::toWindows($this->path);
+        }
+
+        return $this->path;
+    }
+
+    public function existsOnHost(): bool
+    {
+        return is_dir($this->hostPath());
+    }
 }

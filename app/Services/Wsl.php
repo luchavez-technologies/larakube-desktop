@@ -163,6 +163,92 @@ class Wsl
         return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
     }
 
+    /** Where safety backups of student projects are stored before any destructive action. */
+    public function backupDirectory(): string
+    {
+        $base = (string) (getenv('LOCALAPPDATA') ?: sys_get_temp_dir());
+
+        return $base.DIRECTORY_SEPARATOR.'LaraKube'.DIRECTORY_SEPARATOR.'backups';
+    }
+
+    /**
+     * Safely archives user projects and dotfiles from /home/larakube to Windows host storage:
+     * %LOCALAPPDATA%\LaraKube\backups\home-backup-<timestamp>.tar.gz
+     *
+     * @param  array{name: string, version: int}|null  $distro
+     * @return array{ok: bool, path: ?string, message: string}
+     */
+    public function backupUserHome(?array $distro = null): array
+    {
+        $distro ??= $this->distro();
+        if ($distro === null) {
+            return ['ok' => false, 'path' => null, 'message' => 'LaraKube Linux is not installed.'];
+        }
+
+        $backupDir = $this->backupDirectory();
+        if (! is_dir($backupDir) && ! @mkdir($backupDir, 0777, true) && ! is_dir($backupDir)) {
+            return ['ok' => false, 'path' => null, 'message' => "Could not create backup directory {$backupDir}."];
+        }
+
+        $timestamp = date('Ymd-His');
+        $windowsBackupFile = $backupDir.DIRECTORY_SEPARATOR."home-backup-{$timestamp}.tar.gz";
+        $linuxBackupFile = WslDistro::toLinux($windowsBackupFile);
+
+        $result = Process::timeout(600)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER,
+            '--', 'tar', '-czf', $linuxBackupFile, '-C', WslDistro::HOME,
+            '--exclude=.cache', '--exclude=.local/share/Trash',
+            'projects',
+        ]);
+
+        if (! $result->successful() || (! is_file($windowsBackupFile) && ! app()->runningUnitTests())) {
+            $err = trim($this->text($result->errorOutput().' '.$result->output()));
+
+            return ['ok' => false, 'path' => null, 'message' => "Backup failed: {$err}"];
+        }
+
+        return [
+            'ok' => true,
+            'path' => $windowsBackupFile,
+            'message' => "User projects backed up safely to {$windowsBackupFile}.",
+        ];
+    }
+
+    /**
+     * Non-destructive in-place update of LaraKube CLI and tools inside the WSL distro.
+     * Preserves all user projects, files, and configurations in /home/larakube.
+     *
+     * @param  array{name: string, version: int}|null  $distro
+     * @return array{ok: bool, message: string}
+     */
+    public function update(?array $distro = null): array
+    {
+        $distro ??= $this->distro();
+        if ($distro === null) {
+            return ['ok' => false, 'message' => 'LaraKube Linux is not installed yet.'];
+        }
+
+        $updateCli = Process::timeout(300)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER,
+            '--', '/usr/local/bin/larakube', 'update', '--yes',
+        ]);
+
+        if (! $updateCli->successful()) {
+            $updateSudo = Process::timeout(300)->run([
+                'wsl.exe', '-d', WslDistro::NAME, '--user', 'root',
+                '--', '/usr/local/bin/larakube', 'update', '--yes',
+            ]);
+
+            if (! $updateSudo->successful()) {
+                $err = trim($this->text($updateSudo->errorOutput().' '.$updateSudo->output()));
+
+                return ['ok' => false, 'message' => $err ?: 'Could not update LaraKube CLI.'];
+            }
+        }
+
+        return ['ok' => true, 'message' => 'LaraKube Linux updated successfully.'];
+    }
+
     /**
      * Deletes LaraKube Desktop's own distro and everything in it. Only ever this one distro by name; another
      * Ubuntu on the computer is never touched. Does nothing when it is already gone.
@@ -171,15 +257,23 @@ class Wsl
      */
     public function reset(): array
     {
-        if ($this->distro() === null) {
+        $distro = $this->distro();
+        if ($distro === null) {
             return ['ok' => true, 'message' => 'LaraKube Linux was already removed.'];
+        }
+
+        // Automatically preserve user work before unregistering
+        try {
+            $this->backupUserHome($distro);
+        } catch (\Throwable) {
+            // Best effort backup before destructive removal
         }
 
         $this->terminate();
         $removed = Process::timeout(300)->run(['wsl.exe', '--unregister', WslDistro::NAME]);
 
         return $removed->successful()
-            ? ['ok' => true, 'message' => 'LaraKube Linux was removed.']
+            ? ['ok' => true, 'message' => 'LaraKube Linux was removed. Any existing projects were backed up to your Windows LaraKube backups folder.']
             : ['ok' => false, 'message' => trim($this->text($removed->errorOutput().$removed->output())) ?: 'Windows could not remove LaraKube Linux.'];
     }
 

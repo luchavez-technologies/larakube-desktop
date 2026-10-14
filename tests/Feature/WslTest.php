@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Wsl;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 
@@ -167,4 +168,79 @@ test('terminate and shutdown do nothing on non-windows computers', function () {
     expect($wsl->shutdown())->toBeFalse();
 
     Process::assertNothingRan();
+});
+
+test('updating runs larakube update --yes inside the distro without touching projects', function () {
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*update*' => Process::result(output: "✅ LaraKube updated successfully!\n"),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    $result = $wsl->update();
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['message'])->toContain('updated successfully');
+
+    Process::assertRan(fn ($process) => in_array('larakube-ubuntu', (array) $process->command, true)
+        && in_array('update', (array) $process->command, true)
+        && in_array('--yes', (array) $process->command, true));
+});
+
+test('updating falls back to root if larakube user update fails', function () {
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*' => Process::sequence()
+            ->push(Process::result(errorOutput: 'permission denied', exitCode: 1))
+            ->push(Process::result(output: "✅ LaraKube updated successfully!\n")),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    $result = $wsl->update();
+
+    expect($result['ok'])->toBeTrue();
+    Process::assertRan(fn ($process) => in_array('--user', (array) $process->command, true) && in_array('root', (array) $process->command, true));
+});
+
+test('backupUserHome archives student projects to the local backups directory', function () {
+    $home = wslHome();
+
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*tar*' => Process::result(),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    $result = $wsl->backupUserHome();
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['path'])->not->toBeNull();
+    Process::assertRan(fn ($process) => in_array('tar', (array) $process->command, true)
+        && in_array('projects', (array) $process->command, true));
+
+    File::deleteDirectory($home);
+});
+
+test('resetting automatically creates a safety backup before unregistering the distro', function () {
+    $home = wslHome();
+
+    Process::fake([
+        '*--list*' => Process::sequence()
+            ->push(Process::result(output: wslListing('* larakube-ubuntu Stopped   2')))
+            ->push(Process::result(output: wslListing())),
+        '*tar*' => Process::result(),
+        '*--unregister*' => Process::result(),
+        '*' => Process::result(),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    $result = $wsl->reset();
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['message'])->toContain('backed up');
+
+    Process::assertRan(fn ($process) => in_array('tar', (array) $process->command, true));
+    Process::assertRan(fn ($process) => in_array('--unregister', (array) $process->command, true));
+
+    File::deleteDirectory($home);
 });

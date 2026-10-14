@@ -1,7 +1,18 @@
 import { Link, router, useForm, usePage } from '@inertiajs/react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Laptop, Search, Server, X } from 'lucide-react';
+import {
+    Check,
+    ChevronDown,
+    FolderOpen,
+    Laptop,
+    Plus,
+    Search,
+    Server,
+    Sparkles,
+    X,
+    XCircle,
+} from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import CommonsNotice from '@/components/commons-notice';
 import FrameworkLogo from '@/components/framework-logo';
@@ -677,9 +688,39 @@ export default function CreateProject({
                                                                     'sm',
                                                                 )}
                                                             >
-                                                                Change…
+                                                                <FolderOpen className="size-3.5" />
+                                                                <span>
+                                                                    Change…
+                                                                </span>
                                                             </button>
                                                         </div>
+                                                        {form.data.parent.startsWith(
+                                                            '/mnt/',
+                                                        ) && (
+                                                            <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                                                                <Sparkles className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                                                                <p>
+                                                                    <span className="font-semibold">
+                                                                        Performance
+                                                                        tip:
+                                                                    </span>{' '}
+                                                                    Projects
+                                                                    stored in
+                                                                    LaraKube
+                                                                    Linux (
+                                                                    <code className="rounded bg-black/5 px-1 py-0.5 font-mono dark:bg-white/10">
+                                                                        /home/larakube/projects
+                                                                    </code>
+                                                                    ) run file
+                                                                    watchers and
+                                                                    npm/composer
+                                                                    5x faster
+                                                                    than Windows
+                                                                    C:\ drive
+                                                                    folders.
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </Field>
                                                 )}
                                             </>
@@ -699,7 +740,8 @@ export default function CreateProject({
                                     href={index().url}
                                     className={buttonClass('ghost', 'sm')}
                                 >
-                                    Cancel
+                                    <XCircle className="size-3.5" />
+                                    <span>Cancel</span>
                                 </Link>
                                 <Button
                                     type="submit"
@@ -710,9 +752,12 @@ export default function CreateProject({
                                         chosenName.trim() === ''
                                     }
                                 >
-                                    {form.processing
-                                        ? 'Starting…'
-                                        : 'Create project'}
+                                    <Plus className="size-3.5" />
+                                    <span>
+                                        {form.processing
+                                            ? 'Starting…'
+                                            : 'Create project'}
+                                    </span>
                                 </Button>
                             </div>
                         </div>

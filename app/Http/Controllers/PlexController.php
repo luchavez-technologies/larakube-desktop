@@ -250,7 +250,7 @@ class PlexController extends Controller
 
     public function joinProject(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
-        abort_unless(is_dir($project->path), 404);
+        abort_unless($project->existsOnHost(), 404);
 
         $projectName = basename($project->path);
         $env = $request->input('environment');
@@ -276,7 +276,7 @@ class PlexController extends Controller
 
     public function leaveProject(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
-        abort_unless(is_dir($project->path), 404);
+        abort_unless($project->existsOnHost(), 404);
 
         $projectName = basename($project->path);
         $env = $request->input('environment');

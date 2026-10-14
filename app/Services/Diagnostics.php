@@ -25,6 +25,28 @@ class Diagnostics
         if ($this->wsl->isWindows()) {
             $check = $this->safely(fn (): array => $this->wsl->check());
             $sections[] = 'LaraKube Linux (WSL): '.(is_array($check) ? "{$check['state']} - {$check['message']}" : "check failed: {$check}");
+
+            $wslconfig = (string) (getenv('USERPROFILE') ? getenv('USERPROFILE').'\\.wslconfig' : '');
+            $networking = 'default (NAT)';
+            if ($wslconfig !== '' && is_file($wslconfig)) {
+                $content = (string) file_get_contents($wslconfig);
+                if (preg_match('/networkingMode\s*=\s*([a-zA-Z0-9]+)/i', $content, $m)) {
+                    $networking = $m[1];
+                }
+            }
+            $sections[] = "WSL Networking Mode: {$networking}".($networking === 'mirrored' ? ' (optimal for *.dev.test)' : ' (mirrored recommended)');
+
+            $hostsFile = (string) (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\drivers\\etc\\hosts';
+            $hostsEntries = 0;
+            if (is_file($hostsFile)) {
+                $hostsContent = (string) file_get_contents($hostsFile);
+                $hostsEntries = preg_match_all('/\.test\b/i', $hostsContent);
+            }
+            $sections[] = 'Windows hosts file: '.(is_file($hostsFile) ? "accessible ({$hostsEntries} .test entries)" : 'not found');
+
+            $backupDir = $this->wsl->backupDirectory();
+            $backupCount = is_dir($backupDir) ? count(glob($backupDir.DIRECTORY_SEPARATOR.'*.tar.gz') ?: []) : 0;
+            $sections[] = "LaraKube Safety Backups: {$backupCount} in {$backupDir}";
         }
 
         $cli = $this->safely(fn (): array => $this->readiness->status('larakube', true));

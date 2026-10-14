@@ -34,3 +34,33 @@ test('a finished import clears what Setup remembered about the tools', function 
 
     expect(Cache::has('readiness.tool.larakube'))->toBeFalse();
 });
+
+test('the update step runs wsl update and clears tool status cache on success', function () {
+    Cache::put('readiness.tool.larakube', ['installed' => true, 'path' => '/usr/local/bin/larakube', 'version' => '0.34.0']);
+
+    $wsl = Mockery::mock(Wsl::class)->makePartial();
+    $wsl->shouldReceive('isWindows')->andReturn(true);
+    $wsl->shouldReceive('update')->andReturn(['ok' => true, 'message' => 'LaraKube Linux updated successfully.']);
+    app()->instance(Wsl::class, $wsl);
+
+    $this->post('/setup/wsl/update')
+        ->assertOk()
+        ->assertJson(['ok' => true, 'message' => 'LaraKube Linux updated successfully.']);
+
+    expect(Cache::has('readiness.tool.larakube'))->toBeFalse();
+});
+
+test('the backup step runs user home backup without clearing tool cache', function () {
+    Cache::put('readiness.tool.larakube', ['installed' => true, 'path' => '/usr/local/bin/larakube', 'version' => '0.34.0']);
+
+    $wsl = Mockery::mock(Wsl::class)->makePartial();
+    $wsl->shouldReceive('isWindows')->andReturn(true);
+    $wsl->shouldReceive('backupUserHome')->andReturn(['ok' => true, 'path' => 'C:\\backup.tar.gz', 'message' => 'Backed up']);
+    app()->instance(Wsl::class, $wsl);
+
+    $this->post('/setup/wsl/backup')
+        ->assertOk()
+        ->assertJson(['ok' => true, 'path' => 'C:\\backup.tar.gz']);
+
+    expect(Cache::has('readiness.tool.larakube'))->toBeTrue();
+});
