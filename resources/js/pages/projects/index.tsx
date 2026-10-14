@@ -24,6 +24,7 @@ import type { Tone } from '@/components/status-pill';
 import QrCodePopover from '@/components/qr-code-popover';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
+import { sendJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import { show as showDevBox } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
@@ -56,6 +57,33 @@ export default function ProjectsIndex({
     );
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
     const [isCloneOpen, setIsCloneOpen] = useState(false);
+    const [isAddingFolder, setIsAddingFolder] = useState(false);
+    const [pathError, setPathError] = useState<string | null>(null);
+
+    const handleAddFolder = async () => {
+        if (isAddingFolder) return;
+        setIsAddingFolder(true);
+        setPathError(null);
+        try {
+            const res = await sendJson<{
+                path: string | null;
+                redirect?: string;
+                error?: string;
+            }>(store().url, 'POST');
+
+            if (res.ok && res.data.redirect) {
+                router.visit(res.data.redirect);
+            } else if (!res.ok && (res.data.error || res.data.message)) {
+                setPathError(
+                    res.data.error ||
+                        res.data.message ||
+                        'Choose a folder inside your home folder.',
+                );
+            }
+        } finally {
+            setIsAddingFolder(false);
+        }
+    };
 
     useEffect(() => {
         const saved = localStorage.getItem('larakube_view_mode_projects');
@@ -81,15 +109,19 @@ export default function ProjectsIndex({
                             onChange={handleViewModeChange}
                         />
                         {!box && (
-                            <Link
-                                href={store().url}
-                                method="post"
-                                as="button"
+                            <button
+                                type="button"
+                                onClick={handleAddFolder}
+                                disabled={isAddingFolder}
                                 className={buttonClass('secondary')}
                             >
                                 <FolderPlus className="size-4" />
-                                <span>Add existing folder</span>
-                            </Link>
+                                <span>
+                                    {isAddingFolder
+                                        ? 'Adding…'
+                                        : 'Add existing folder'}
+                                </span>
+                            </button>
                         )}
                         <button
                             type="button"
@@ -111,9 +143,9 @@ export default function ProjectsIndex({
                     </div>
                 }
             />
-            {errors.path && (
+            {(pathError || errors.path) && (
                 <p className="mb-4 rounded-lg bg-accent-tint px-3 py-2 text-sm text-accent">
-                    {errors.path}
+                    {pathError || errors.path}
                 </p>
             )}
             <Deferred data="devBoxes" fallback={<></>}>

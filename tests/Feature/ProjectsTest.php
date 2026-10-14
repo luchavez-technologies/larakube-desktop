@@ -40,7 +40,7 @@ function projectsPicker(?string $path): void
     {
         public function __construct(private ?string $path) {}
 
-        public function pick(string $title): ?string
+        public function pick(string $title, ?string $defaultPath = null): ?string
         {
             return $this->path;
         }
@@ -64,6 +64,37 @@ test('adding a project takes a folder inside the home folder only', function () 
     projectsPicker($sandbox['app']);
     $this->post(route('projects.store'))->assertRedirect(route('projects.show', Project::sole()));
     expect(Project::sole()->path)->toBe($sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('adding a project via json returns path and redirect without page reload', function () {
+    $sandbox = projectsSandbox();
+
+    // Cancelled
+    projectsPicker(null);
+    $this->postJson(route('projects.store'))
+        ->assertOk()
+        ->assertExactJson(['path' => null]);
+    expect(Project::count())->toBe(0);
+
+    // Outside home / system folder
+    projectsPicker('/etc');
+    $this->postJson(route('projects.store'))
+        ->assertStatus(422)
+        ->assertJson(['path' => null, 'error' => 'Choose a folder inside your home folder.']);
+    expect(Project::count())->toBe(0);
+
+    // Valid folder inside home
+    projectsPicker($sandbox['app']);
+    $response = $this->postJson(route('projects.store'));
+    $project = Project::sole();
+    $response->assertOk()
+        ->assertExactJson([
+            'path' => $sandbox['app'],
+            'redirect' => route('projects.show', $project),
+        ]);
+    expect($project->path)->toBe($sandbox['app']);
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -242,6 +273,37 @@ test('choosing where to create a project keeps what was typed', function () {
             ->where('parent', $parent)
             ->where('name', 'blog')
             ->where('framework', 'astro'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('choosing where to create a project via json returns path without redirect', function () {
+    $sandbox = projectsSandbox();
+    $parent = dirname($sandbox['app']);
+
+    projectsPicker($parent);
+    $response = $this->postJson(route('projects.choose-folder'), [
+        'name' => 'blog',
+        'framework' => 'astro',
+        'parent' => $parent,
+    ]);
+
+    $response->assertOk()
+        ->assertExactJson(['path' => $parent]);
+
+    // When cancelled
+    projectsPicker(null);
+    $this->postJson(route('projects.choose-folder'), [
+        'name' => 'blog',
+        'framework' => 'astro',
+    ])->assertOk()->assertExactJson(['path' => null]);
+
+    // When choosing a system folder outside home
+    projectsPicker('/etc');
+    $this->postJson(route('projects.choose-folder'), [
+        'name' => 'blog',
+        'framework' => 'astro',
+    ])->assertStatus(422)->assertJson(['path' => null, 'error' => 'Choose a folder inside your home folder.']);
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -964,4 +1026,27 @@ test('folder picker and project paths adapt seamlessly on Windows WSL', function
     projectsPicker('/etc');
     $this->post(route('projects.choose-folder'), ['name' => 'blog'])
         ->assertSessionHasErrors('parent');
+
+    // 4. JSON endpoint translates Windows UNC and drive paths to WSL Linux paths
+    projectsPicker('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects');
+    $this->postJson(route('projects.choose-folder'), ['name' => 'blog', 'framework' => 'laravel'])
+        ->assertOk()
+        ->assertExactJson(['path' => '/home/larakube/projects']);
+
+    projectsPicker('C:\\Users\\Student\\Projects');
+    $this->postJson(route('projects.choose-folder'), ['name' => 'blog', 'framework' => 'laravel'])
+        ->assertOk()
+        ->assertExactJson(['path' => '/mnt/c/Users/Student/Projects']);
+
+    // System directories on Windows return 422 JSON error
+    projectsPicker('C:\\Windows');
+    $this->postJson(route('projects.choose-folder'), ['name' => 'blog'])
+        ->assertStatus(422)
+        ->assertJson(['path' => null, 'error' => 'Choose a folder inside your home folder.']);
+
+    // 5. Store endpoint translates Windows UNC paths to WSL Linux paths
+    projectsPicker('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\shop');
+    $res = $this->postJson(route('projects.store'));
+    $res->assertOk()
+        ->assertJsonPath('path', '/home/larakube/projects/shop');
 });

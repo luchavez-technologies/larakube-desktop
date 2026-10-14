@@ -71,14 +71,23 @@ export default function CloneModal({
     const handlePickFolder = async () => {
         setIsPickingFolder(true);
         try {
-            const res = await sendJson<{ path: string | null }>(
+            const res = await sendJson<{ path: string | null; error?: string }>(
                 '/projects/pick-folder',
                 'POST',
+                { parent },
             );
             if (res.ok && res.data.path) {
                 setParent(res.data.path);
-            } else if (res.data.message) {
-                setErrors((prev) => ({ ...prev, parent: res.data.message! }));
+                setErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.parent;
+                    return next;
+                });
+            } else if (!res.ok && (res.data.error || res.data.message)) {
+                setErrors((prev) => ({
+                    ...prev,
+                    parent: (res.data.error || res.data.message)!,
+                }));
             }
         } finally {
             setIsPickingFolder(false);

@@ -163,3 +163,44 @@ test('pickParentFolder returns JSON path when folder is picked', function () {
 
     File::deleteDirectory($folder);
 });
+
+test('pickParentFolder returns null path when cancelled', function () {
+    $picker = mock(FolderPicker::class);
+    $picker->shouldReceive('pick')->once()->andReturn(null);
+    app()->instance(FolderPicker::class, $picker);
+
+    $response = $this->postJson(route('projects.pick-folder'));
+
+    $response->assertOk()
+        ->assertExactJson(['path' => null]);
+});
+
+test('pickParentFolder rejects system directory with 422', function () {
+    $picker = mock(FolderPicker::class);
+    $picker->shouldReceive('pick')->once()->andReturn('/etc');
+    app()->instance(FolderPicker::class, $picker);
+
+    $response = $this->postJson(route('projects.pick-folder'));
+
+    $response->assertStatus(422)
+        ->assertJson(['path' => null, 'error' => 'Choose a folder inside your home folder.']);
+});
+
+test('pickParentFolder passes defaultPath and adapts Windows WSL paths', function () {
+    $windowsLocator = new ToolLocator(windows: true);
+    app()->instance(ToolLocator::class, $windowsLocator);
+
+    $picker = mock(FolderPicker::class);
+    $picker->shouldReceive('pick')
+        ->with('Choose where to clone your app', '\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects')
+        ->once()
+        ->andReturn('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\cloned-app');
+    app()->instance(FolderPicker::class, $picker);
+
+    $response = $this->postJson(route('projects.pick-folder'), [
+        'parent' => '/home/larakube/projects',
+    ]);
+
+    $response->assertOk()
+        ->assertExactJson(['path' => '/home/larakube/projects/cloned-app']);
+});

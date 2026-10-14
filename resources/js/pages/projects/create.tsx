@@ -1,4 +1,4 @@
-import { Link, router, useForm, usePage } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -23,6 +23,7 @@ import FrameworkFields, {
 import PageHeader from '@/components/page-header';
 import ExperimentalBadge from '@/components/experimental-badge';
 import AppLayout from '@/layouts/app-layout';
+import { sendJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import {
     chooseFolder,
@@ -75,6 +76,7 @@ export default function CreateProject({
         categories.find((category) => category.id === id)?.label ?? id;
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isPickingFolder, setIsPickingFolder] = useState<boolean>(false);
 
     const { setData } = form;
 
@@ -197,17 +199,34 @@ export default function CreateProject({
         form.post((onBox ? scaffoldDevBox() : scaffold()).url);
     }
 
-    function pickFolder() {
-        // Posts keep this page's state, so take the chosen folder from the
-        // response rather than relying on a remount.
-        router.post(
-            chooseFolder().url,
-            { name: chosenName, framework: form.data.framework },
-            {
-                onSuccess: (page) =>
-                    form.setData('parent', String(page.props.parent)),
-            },
-        );
+    async function pickFolder() {
+        if (isPickingFolder) return;
+        setIsPickingFolder(true);
+        try {
+            const res = await sendJson<{ path: string | null; error?: string }>(
+                chooseFolder().url,
+                'POST',
+                {
+                    name: chosenName,
+                    framework: form.data.framework,
+                    parent: form.data.parent,
+                },
+            );
+
+            if (res.ok && res.data.path) {
+                form.setData('parent', res.data.path);
+                form.clearErrors('parent');
+            } else if (!res.ok && (res.data.error || res.data.message)) {
+                form.setError(
+                    'parent',
+                    res.data.error ||
+                        res.data.message ||
+                        'Choose a valid folder.',
+                );
+            }
+        } finally {
+            setIsPickingFolder(false);
+        }
     }
 
     return (
@@ -683,6 +702,9 @@ export default function CreateProject({
                                                                 onClick={
                                                                     pickFolder
                                                                 }
+                                                                disabled={
+                                                                    isPickingFolder
+                                                                }
                                                                 className={buttonClass(
                                                                     'secondary',
                                                                     'sm',
@@ -690,7 +712,9 @@ export default function CreateProject({
                                                             >
                                                                 <FolderOpen className="size-3.5" />
                                                                 <span>
-                                                                    Change…
+                                                                    {isPickingFolder
+                                                                        ? 'Choosing…'
+                                                                        : 'Change…'}
                                                                 </span>
                                                             </button>
                                                         </div>

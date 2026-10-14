@@ -124,9 +124,28 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function store(FolderPicker $picker): RedirectResponse
+    public function store(Request $request, FolderPicker $picker): RedirectResponse|JsonResponse
     {
-        $path = $picker->pick('Choose your app folder');
+        $defaultPath = $this->hostPath($this->locator->defaultProjectsDirectory());
+        $path = $picker->pick('Choose your app folder', $defaultPath);
+
+        if ($request->wantsJson()) {
+            if ($path === null) {
+                return response()->json(['path' => null]);
+            }
+
+            if (! $this->insideHome($path)) {
+                return response()->json(['path' => null, 'error' => 'Choose a folder inside your home folder.'], 422);
+            }
+
+            $canonical = $this->canonicalPath($path);
+            $project = Project::firstOrCreate(['path' => $canonical]);
+
+            return response()->json([
+                'path' => $canonical,
+                'redirect' => route('projects.show', $project),
+            ]);
+        }
 
         if ($path === null) {
             return to_route('projects.index');
@@ -200,9 +219,24 @@ class ProjectController extends Controller
     }
 
     /** Opens the native folder dialog, then returns to the form with the choice. */
-    public function chooseFolder(Request $request, FolderPicker $picker): RedirectResponse
+    public function chooseFolder(Request $request, FolderPicker $picker): RedirectResponse|JsonResponse
     {
-        $path = $picker->pick('Choose where to create your app');
+        $currentParent = (string) $request->input('parent', '');
+        $defaultPath = $this->hostPath($currentParent !== '' ? $currentParent : $this->locator->defaultProjectsDirectory());
+        $path = $picker->pick('Choose where to create your app', $defaultPath);
+
+        if ($request->wantsJson()) {
+            if ($path === null) {
+                return response()->json(['path' => null]);
+            }
+
+            if (! $this->insideHome($path, allowHome: true)) {
+                return response()->json(['path' => null, 'error' => 'Choose a folder inside your home folder.'], 422);
+            }
+
+            return response()->json(['path' => $this->canonicalPath($path)]);
+        }
+
         $query = array_filter([
             'name' => (string) $request->input('name', ''),
             'framework' => (string) $request->input('framework', ''),
@@ -430,9 +464,11 @@ class ProjectController extends Controller
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
-    public function pickParentFolder(FolderPicker $picker): JsonResponse
+    public function pickParentFolder(Request $request, FolderPicker $picker): JsonResponse
     {
-        $path = $picker->pick('Choose where to clone your app');
+        $currentParent = (string) $request->input('parent', '');
+        $defaultPath = $this->hostPath($currentParent !== '' ? $currentParent : $this->locator->defaultProjectsDirectory());
+        $path = $picker->pick('Choose where to clone your app', $defaultPath);
 
         if ($path === null) {
             return response()->json(['path' => null]);
