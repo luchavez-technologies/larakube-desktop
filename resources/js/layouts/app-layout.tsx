@@ -13,8 +13,8 @@ import {
     Layers,
     HelpCircle,
     Heart,
-    ChevronsLeft,
-    ChevronsRight,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -261,7 +261,7 @@ export default function AppLayout({
                             type="button"
                             onClick={toggleSidebar}
                             className="cursor-pointer rounded-lg p-0.5 transition-transform hover:scale-105 active:scale-95"
-                            title={`LaraKube Desktop v${props.versions?.desktop ?? '1.0.0'}${props.versions?.cli ? ` · CLI ${props.versions.cli}` : ''} (Click to expand · ⌘B)`}
+                            title={`LaraKube\nDesktop v${props.versions?.desktop ?? '1.0.0'}\nCLI ${props.versions?.cli ? (props.versions.cli.startsWith('v') ? props.versions.cli : `v${props.versions.cli}`) : '—'}\n\n(Click to expand · ⌘B)`}
                             aria-label="Expand sidebar"
                         >
                             <img
@@ -273,40 +273,32 @@ export default function AppLayout({
                         <NotificationBell />
                     </div>
                 ) : (
-                    <div className="mb-5 flex items-center justify-between px-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="mb-5 flex items-start justify-between px-2">
+                        <div className="flex min-w-0 items-start gap-2.5">
                             <img
                                 src="/logo.png"
                                 alt="LaraKube"
-                                className="size-8 shrink-0 rounded-lg shadow-2xs"
+                                className="mt-0.5 size-8.5 shrink-0 rounded-lg shadow-2xs"
                             />
                             <div className="min-w-0 leading-tight">
                                 <span className="block truncate text-[14px] font-semibold tracking-tight text-ink">
                                     LaraKube
                                 </span>
-                                <span
-                                    className="block truncate font-mono text-[10px] text-faint"
-                                    title={`Desktop v${props.versions?.desktop ?? '1.0.0'} · CLI ${props.versions?.cli ? `v${props.versions.cli}` : 'not detected'}`}
-                                >
-                                    v{props.versions?.desktop ?? '1.0.0'}
-                                    {props.versions?.cli ? (
-                                        <span className="text-soft">
-                                            {' '}
-                                            · cli{' '}
-                                            {props.versions.cli.startsWith('v')
-                                                ? props.versions.cli.slice(1)
-                                                : props.versions.cli}
-                                        </span>
-                                    ) : (
-                                        <span className="text-amber-500">
-                                            {' '}
-                                            · cli —
-                                        </span>
-                                    )}
+                                <span className="mt-0.5 block truncate font-mono text-[10px] text-faint">
+                                    Desktop v
+                                    {props.versions?.desktop ?? '1.0.0'}
+                                </span>
+                                <span className="block truncate font-mono text-[10px] text-faint">
+                                    CLI{' '}
+                                    {props.versions?.cli
+                                        ? props.versions.cli.startsWith('v')
+                                            ? props.versions.cli
+                                            : `v${props.versions.cli}`
+                                        : '—'}
                                 </span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
                             <NotificationBell />
                             <button
                                 type="button"
@@ -315,7 +307,7 @@ export default function AppLayout({
                                 title="Collapse sidebar (⌘B)"
                                 aria-label="Collapse sidebar"
                             >
-                                <ChevronsLeft className="size-4" />
+                                <PanelLeftClose className="size-4" />
                             </button>
                         </div>
                     </div>
@@ -428,7 +420,7 @@ export default function AppLayout({
                                 title="Expand sidebar (⌘B)"
                                 aria-label="Expand sidebar"
                             >
-                                <ChevronsRight className="size-4" />
+                                <PanelLeftOpen className="size-4" />
                             </button>
                         </>
                     ) : (
@@ -453,7 +445,7 @@ export default function AppLayout({
                                 aria-label="Collapse sidebar"
                             >
                                 <span className="flex items-center gap-2">
-                                    <ChevronsLeft className="size-3.5" />
+                                    <PanelLeftClose className="size-3.5" />
                                     <span>Collapse</span>
                                 </span>
                                 <kbd className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-faint ring-1 ring-line/50">
