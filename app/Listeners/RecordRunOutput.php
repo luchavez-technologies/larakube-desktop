@@ -12,6 +12,7 @@ use App\Models\Activity;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
+use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ContextHealth;
 use App\Services\LaraKube\ReadinessCheck;
@@ -123,6 +124,26 @@ class RecordRunOutput
 
             if ($server !== null) {
                 SyncServerDomainsJob::dispatch($server->id);
+            }
+
+            if (($run->meta['also_enable_tls'] ?? '0') === '1' && $status === RunStatus::Succeeded) {
+                $runner = app(CliRunner::class);
+                $serverName = $run->meta['server'] ?? ($server !== null ? $server->name : 'server');
+                $provider = $run->meta['provider'] ?? 'cloudflare';
+                $group = $run->meta['group'] ?? null;
+                $groupArg = $group !== null && $group !== '' ? ["--group={$group}"] : [];
+
+                $runner->start(
+                    label: "Automatic SSL certificates on {$serverName}",
+                    arguments: ['tls:init', 'production', "--context={$context}", "--provider={$provider}", ...$groupArg, '--force'],
+                    kind: RunKind::EnableSsl,
+                    subject: $serverName,
+                    meta: ['server' => $serverName, 'context' => $context, 'provider' => $provider],
+                    targetType: 'server',
+                    targetName: $serverName,
+                    serverName: $serverName,
+                    context: $context,
+                );
             }
         }
 

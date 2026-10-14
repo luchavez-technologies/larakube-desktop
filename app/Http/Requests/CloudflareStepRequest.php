@@ -25,6 +25,8 @@ class CloudflareStepRequest extends FormRequest
 
         return [
             'dns_provider' => ['nullable', 'string', Rule::in(['cloudflare', 'route53', 'google'])],
+            'enable_dns' => ['nullable', 'boolean'],
+            'enable_tls' => ['nullable', 'boolean'],
             'cloudflare_token' => [
                 $provider === 'cloudflare' && $isDns && ! $reusingStored ? 'required' : 'nullable',
                 'string',
@@ -32,25 +34,30 @@ class CloudflareStepRequest extends FormRequest
             ],
             'group' => ['nullable', 'string', 'max:63', 'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/'],
             'aws_access_key_id' => [
-                $provider === 'route53' && ! $reusingStored ? 'required' : 'nullable',
+                $provider === 'route53' && ! $reusingStored && ! $this->filled('dns_aws_access_key_id') ? 'required' : 'nullable',
                 'string',
                 'max:100',
             ],
             'aws_secret_access_key' => [
-                $provider === 'route53' && ! $reusingStored ? 'required' : 'nullable',
+                $provider === 'route53' && ! $reusingStored && ! $this->filled('dns_aws_secret_access_key') ? 'required' : 'nullable',
                 'string',
                 'max:200',
             ],
             'aws_region' => ['nullable', 'string', 'max:50'],
+            'dns_aws_access_key_id' => ['nullable', 'string', 'max:100'],
+            'dns_aws_secret_access_key' => ['nullable', 'string', 'max:200'],
+            'dns_aws_region' => ['nullable', 'string', 'max:50'],
             'gcp_project_id' => [
-                $provider === 'google' && ! $reusingStored ? 'required' : 'nullable',
+                $provider === 'google' && ! $reusingStored && ! $this->filled('dns_gcp_project_id') ? 'required' : 'nullable',
                 'string',
                 'max:100',
             ],
             'gcp_credentials' => [
-                $provider === 'google' && ! $reusingStored ? 'required' : 'nullable',
+                $provider === 'google' && ! $reusingStored && ! $this->filled('dns_gcp_credentials') ? 'required' : 'nullable',
                 'string',
             ],
+            'dns_gcp_project_id' => ['nullable', 'string', 'max:100'],
+            'dns_gcp_credentials' => ['nullable', 'string'],
             'reuse_stored' => ['nullable', 'boolean'],
         ];
     }
@@ -117,9 +124,9 @@ class CloudflareStepRequest extends FormRequest
 
         if ($provider === 'route53') {
             $env = [];
-            $key = trim((string) $this->input('aws_access_key_id'));
-            $secret = trim((string) $this->input('aws_secret_access_key'));
-            $region = trim((string) ($this->input('aws_region') ?: 'us-east-1'));
+            $key = trim((string) ($this->input('aws_access_key_id') ?: $this->input('dns_aws_access_key_id')));
+            $secret = trim((string) ($this->input('aws_secret_access_key') ?: $this->input('dns_aws_secret_access_key')));
+            $region = trim((string) ($this->input('aws_region') ?: $this->input('dns_aws_region') ?: 'us-east-1'));
 
             if ($key !== '') {
                 $env['AWS_ACCESS_KEY_ID'] = $key;
@@ -136,8 +143,8 @@ class CloudflareStepRequest extends FormRequest
 
         if ($provider === 'google') {
             $env = [];
-            $project = trim((string) $this->input('gcp_project_id'));
-            $creds = trim((string) $this->input('gcp_credentials'));
+            $project = trim((string) ($this->input('gcp_project_id') ?: $this->input('dns_gcp_project_id')));
+            $creds = trim((string) ($this->input('gcp_credentials') ?: $this->input('dns_gcp_credentials')));
 
             if ($project !== '') {
                 $env['GCP_PROJECT_ID'] = $project;

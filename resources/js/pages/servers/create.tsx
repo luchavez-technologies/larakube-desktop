@@ -4,21 +4,18 @@ import {
     ArrowLeft,
     ArrowRight,
     Check,
-    CheckCircle2,
     Cloud,
     ExternalLink,
-    FlaskConical,
     Globe,
     Key,
     Layers,
     Plus,
     Server,
-    Upload,
     Users,
     X,
 } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
-import GcpPolicyHelper from '@/components/gcp-policy-helper';
+import DnsTlsFields, { type DnsTlsProvider } from '@/components/dns-tls-fields';
 import Button, { buttonClass } from '@/components/button';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
 import GcpSignIn from '@/components/gcp-sign-in';
@@ -30,7 +27,7 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { readiness } from '@/routes';
-import { ExternalLinkButton, openExternalUrl } from '@/lib/open-external';
+import { openExternalUrl } from '@/lib/open-external';
 import {
     index as devBoxesIndex,
     store as storeDevBox,
@@ -1237,53 +1234,6 @@ function DnsAutomationStep({
     form: ReturnType<typeof useForm<any>>;
     provider: Provider;
 }) {
-    const parsedGcpDns = (() => {
-        if (!form.data.dns_gcp_credentials) return null;
-        try {
-            const parsed = JSON.parse(
-                String(form.data.dns_gcp_credentials).trim(),
-            );
-            if (
-                parsed &&
-                typeof parsed === 'object' &&
-                parsed.type === 'service_account'
-            ) {
-                return {
-                    projectId: parsed.project_id as string | undefined,
-                    clientEmail: parsed.client_email as string | undefined,
-                };
-            }
-        } catch {
-            // not valid JSON yet
-        }
-        return null;
-    })();
-
-    const handleDnsGcpFileSelect = async (
-        e: React.ChangeEvent<HTMLInputElement>,
-    ) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const text = await file.text();
-            form.setData('dns_gcp_credentials', text.trim());
-            try {
-                const parsed = JSON.parse(text.trim());
-                if (
-                    parsed.project_id &&
-                    (!form.data.dns_gcp_project_id ||
-                        form.data.dns_gcp_project_id === '')
-                ) {
-                    form.setData('dns_gcp_project_id', parsed.project_id);
-                }
-            } catch {
-                // ignore
-            }
-        } catch {
-            // ignore
-        }
-    };
-
     return (
         <div className="space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
             <div className="text-foreground rounded-xl border border-servers/30 bg-servers/5 p-4 text-xs leading-relaxed">
@@ -1301,389 +1251,49 @@ function DnsAutomationStep({
                 </p>
             </div>
 
-            <Field label="DNS & TLS Provider">
-                <Select
-                    value={
-                        form.data.dns_provider ||
-                        (form.data.cloudflare_token ? 'cloudflare' : '')
+            <DnsTlsFields
+                values={{
+                    dns_provider: form.data.dns_provider as DnsTlsProvider,
+                    enable_dns: form.data.enable_dns,
+                    enable_tls: form.data.enable_tls,
+                    cloudflare_token: form.data.cloudflare_token,
+                    dns_aws_access_key_id: form.data.dns_aws_access_key_id,
+                    dns_aws_secret_access_key:
+                        form.data.dns_aws_secret_access_key,
+                    dns_aws_region: form.data.dns_aws_region,
+                    dns_gcp_project_id: form.data.dns_gcp_project_id,
+                    dns_gcp_credentials: form.data.dns_gcp_credentials,
+                }}
+                onChange={(field, val) =>
+                    form.setData(field as any, val as any)
+                }
+                errors={form.errors}
+                serverProvider={provider.slug}
+                serverRegion={form.data.region}
+                allowEmptyProvider={true}
+                copyAwsKeys={() => {
+                    form.setData(
+                        'dns_aws_access_key_id',
+                        form.data.aws_access_key_id,
+                    );
+                    form.setData(
+                        'dns_aws_secret_access_key',
+                        form.data.aws_secret_access_key,
+                    );
+                    form.setData(
+                        'dns_aws_region',
+                        form.data.region || 'us-east-1',
+                    );
+                }}
+                copyGcpProjectId={() => {
+                    if (form.data.project_id) {
+                        form.setData(
+                            'dns_gcp_project_id',
+                            String(form.data.project_id),
+                        );
                     }
-                    onChange={(value) => {
-                        form.setData('dns_provider', value);
-                    }}
-                    options={[
-                        {
-                            value: '',
-                            label: 'None (Configure later or manually)',
-                        },
-                        {
-                            value: 'cloudflare',
-                            label: 'Cloudflare (Recommended)',
-                        },
-                        {
-                            value: 'route53',
-                            label: 'AWS Route 53 (Experimental)',
-                        },
-                        {
-                            value: 'google',
-                            label: 'Google Cloud DNS (Experimental)',
-                        },
-                    ]}
-                />
-            </Field>
-
-            {(form.data.dns_provider !== '' ||
-                form.data.cloudflare_token !== '') && (
-                <div className="space-y-4 border-t border-line/60 pt-4">
-                    <div className="flex flex-col gap-2 rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
-                        <label className="flex cursor-pointer items-center gap-2 text-ink">
-                            <input
-                                type="checkbox"
-                                checked={form.data.enable_dns}
-                                onChange={(e) =>
-                                    form.setData('enable_dns', e.target.checked)
-                                }
-                                className="rounded border-line text-servers focus:ring-servers"
-                            />
-                            <span className="text-xs">
-                                Automate app and tool DNS records (ExternalDNS)
-                            </span>
-                        </label>
-                        <label className="flex cursor-pointer items-center gap-2 text-ink">
-                            <input
-                                type="checkbox"
-                                checked={form.data.enable_tls}
-                                onChange={(e) =>
-                                    form.setData('enable_tls', e.target.checked)
-                                }
-                                className="rounded border-line text-servers focus:ring-servers"
-                            />
-                            <span className="text-xs">
-                                Enable Let's Encrypt DNS-01 challenge for SSL
-                                (wildcard/proxied hosts)
-                            </span>
-                        </label>
-                    </div>
-
-                    {(form.data.dns_provider === 'cloudflare' ||
-                        (!form.data.dns_provider &&
-                            form.data.cloudflare_token !== '')) && (
-                        <div className="space-y-3">
-                            <p className="text-xs text-soft">
-                                Create a token with the{' '}
-                                <strong>Edit zone DNS</strong> template covering
-                                your domains at{' '}
-                                <ExternalLinkButton
-                                    url="https://dash.cloudflare.com/profile/api-tokens"
-                                    showIcon
-                                    className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
-                                >
-                                    Cloudflare API Tokens
-                                </ExternalLinkButton>
-                                .
-                            </p>
-                            <Field
-                                label="Cloudflare API token"
-                                hint="Used for this run only. Never saved in plaintext."
-                                error={form.errors.cloudflare_token}
-                            >
-                                <input
-                                    type="password"
-                                    value={form.data.cloudflare_token}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'cloudflare_token',
-                                            e.target.value,
-                                        )
-                                    }
-                                    autoComplete="off"
-                                    placeholder="Paste your Cloudflare API token"
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                        </div>
-                    )}
-
-                    {form.data.dns_provider === 'route53' && (
-                        <div className="space-y-3">
-                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                <div className="flex items-center gap-1.5 font-semibold">
-                                    <FlaskConical className="size-3.5 shrink-0" />
-                                    <span>Experimental Provider</span>
-                                </div>
-                                <p className="mt-1 leading-relaxed text-soft">
-                                    AWS Route 53 integration is supported via
-                                    ExternalDNS &amp; cert-manager, but has not
-                                    yet been live-validated in this environment.
-                                    Ensure your AWS IAM credentials have{' '}
-                                    <code className="text-foreground font-mono">
-                                        route53:ChangeResourceRecordSets
-                                    </code>
-                                    ,{' '}
-                                    <code className="text-foreground font-mono">
-                                        route53:ListResourceRecordSets
-                                    </code>
-                                    , and{' '}
-                                    <code className="text-foreground font-mono">
-                                        route53:ListHostedZonesByName
-                                    </code>{' '}
-                                    permissions.
-                                </p>
-                            </div>
-                            {provider.slug === 'aws' && (
-                                <div className="flex justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            form.setData(
-                                                'dns_aws_access_key_id',
-                                                form.data.aws_access_key_id,
-                                            );
-                                            form.setData(
-                                                'dns_aws_secret_access_key',
-                                                form.data.aws_secret_access_key,
-                                            );
-                                            form.setData(
-                                                'dns_aws_region',
-                                                form.data.region || 'us-east-1',
-                                            );
-                                        }}
-                                        className="flex items-center gap-1 text-xs font-medium text-servers hover:underline"
-                                    >
-                                        <Key className="size-3" />
-                                        <span>Copy server AWS keys</span>
-                                    </button>
-                                </div>
-                            )}
-                            <AwsPolicyHelper
-                                includeEc2={false}
-                                includeEks={false}
-                                includeRoute53={true}
-                                interactive={false}
-                            />
-                            <Field
-                                label="AWS Access Key ID"
-                                error={form.errors.dns_aws_access_key_id}
-                            >
-                                <input
-                                    type="text"
-                                    placeholder="AKIAIOSFODNN7EXAMPLE"
-                                    value={form.data.dns_aws_access_key_id}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'dns_aws_access_key_id',
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                            <Field
-                                label="AWS Secret Access Key"
-                                error={form.errors.dns_aws_secret_access_key}
-                            >
-                                <input
-                                    type="password"
-                                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                    value={form.data.dns_aws_secret_access_key}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'dns_aws_secret_access_key',
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                            <Field
-                                label="AWS Region"
-                                error={form.errors.dns_aws_region}
-                            >
-                                <input
-                                    type="text"
-                                    placeholder="us-east-1"
-                                    value={form.data.dns_aws_region}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'dns_aws_region',
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                        </div>
-                    )}
-
-                    {form.data.dns_provider === 'google' && (
-                        <div className="space-y-3">
-                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                <div className="flex items-center gap-1.5 font-semibold">
-                                    <FlaskConical className="size-3.5 shrink-0" />
-                                    <span>Experimental Provider</span>
-                                </div>
-                                <p className="mt-1 leading-relaxed text-soft">
-                                    Google Cloud DNS automation is supported via
-                                    ExternalDNS &amp; cert-manager, but has not
-                                    yet been live-validated in this environment.
-                                    Ensure your GCP project has the{' '}
-                                    <strong>Cloud DNS API</strong> enabled and
-                                    the Service Account possesses the{' '}
-                                    <code className="text-foreground font-mono">
-                                        roles/dns.admin
-                                    </code>{' '}
-                                    IAM role.
-                                </p>
-                            </div>
-
-                            <GcpPolicyHelper
-                                includeCompute={false}
-                                includeGke={false}
-                                includeDns={true}
-                                interactive={false}
-                                projectId={
-                                    form.data.dns_gcp_project_id || undefined
-                                }
-                            />
-
-                            <div className="flex items-center justify-between">
-                                <p className="text-[11px] text-soft">
-                                    DNS zones can reside in the server's GCP
-                                    project or a separate centralized project.
-                                </p>
-                                {provider.slug === 'gcp' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (form.data.project_id) {
-                                                form.setData(
-                                                    'dns_gcp_project_id',
-                                                    String(
-                                                        form.data.project_id,
-                                                    ),
-                                                );
-                                            }
-                                        }}
-                                        className="flex shrink-0 items-center gap-1 text-xs font-medium text-servers hover:underline"
-                                    >
-                                        <Key className="size-3" />
-                                        <span>Use server GCP project ID</span>
-                                    </button>
-                                )}
-                            </div>
-
-                            <Field
-                                label="Google Cloud Project ID"
-                                error={form.errors.dns_gcp_project_id}
-                            >
-                                <input
-                                    type="text"
-                                    placeholder="my-gcp-project"
-                                    value={form.data.dns_gcp_project_id}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'dns_gcp_project_id',
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-
-                            <div>
-                                <div className="mb-1.5 flex items-center justify-between">
-                                    <div>
-                                        <label className="text-foreground block text-xs font-medium">
-                                            Service Account Credentials (JSON or
-                                            path)
-                                        </label>
-                                        <p className="mt-0.5 text-[11px] text-soft">
-                                            Key JSON string, or absolute path on
-                                            this machine with roles/dns.admin.
-                                        </p>
-                                    </div>
-                                    <label
-                                        className={cn(
-                                            buttonClass('secondary', 'sm'),
-                                            'cursor-pointer text-xs',
-                                        )}
-                                    >
-                                        <Upload className="size-3" />
-                                        <span>Browse JSON File…</span>
-                                        <input
-                                            type="file"
-                                            accept=".json,application/json"
-                                            onChange={handleDnsGcpFileSelect}
-                                            className="sr-only"
-                                        />
-                                    </label>
-                                </div>
-                                <textarea
-                                    rows={3}
-                                    placeholder='{"type": "service_account", ...} or /path/to/key.json'
-                                    value={form.data.dns_gcp_credentials}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        form.setData(
-                                            'dns_gcp_credentials',
-                                            val,
-                                        );
-                                        try {
-                                            const parsed = JSON.parse(
-                                                val.trim(),
-                                            );
-                                            if (
-                                                parsed.project_id &&
-                                                (!form.data
-                                                    .dns_gcp_project_id ||
-                                                    form.data
-                                                        .dns_gcp_project_id ===
-                                                        '')
-                                            ) {
-                                                form.setData(
-                                                    'dns_gcp_project_id',
-                                                    parsed.project_id,
-                                                );
-                                            }
-                                        } catch {
-                                            // not JSON yet
-                                        }
-                                    }}
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                                {form.errors.dns_gcp_credentials && (
-                                    <p className="mt-1 text-xs text-accent">
-                                        {form.errors.dns_gcp_credentials}
-                                    </p>
-                                )}
-                            </div>
-
-                            {parsedGcpDns && (
-                                <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
-                                    <CheckCircle2 className="size-4 shrink-0" />
-                                    <div>
-                                        <span className="font-semibold">
-                                            Detected Service Account:
-                                        </span>{' '}
-                                        <span className="font-mono">
-                                            {parsedGcpDns.clientEmail}
-                                        </span>
-                                        {parsedGcpDns.projectId && (
-                                            <span className="text-soft">
-                                                {' '}
-                                                (Project:{' '}
-                                                <code className="text-foreground font-mono">
-                                                    {parsedGcpDns.projectId}
-                                                </code>
-                                                )
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
+                }}
+            />
         </div>
     );
 }

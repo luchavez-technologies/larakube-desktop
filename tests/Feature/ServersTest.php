@@ -378,6 +378,31 @@ test('a finished Connect a domain run drops the cached DNS status', function () 
     expect(Cache::has('cluster-status:dns:larakube-203.0.113.21'))->toBeFalse();
 });
 
+test('a successful Connect a domain run with also_enable_tls automatically starts tls:init', function () {
+    $bin = serversFakeCli();
+    $fake = ChildProcess::fake();
+
+    $run = Run::create([
+        'label' => 'DNS',
+        'kind' => RunKind::ConnectDomain,
+        'subject' => 'workshop-demo',
+        'meta' => [
+            'server' => 'workshop-demo',
+            'context' => 'larakube-203.0.113.21',
+            'provider' => 'cloudflare',
+            'group' => 'company-domains',
+            'also_enable_tls' => '1',
+        ],
+        'command' => ['larakube'],
+    ]);
+
+    event(new ProcessExited($run->alias(), 0));
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tls:init', 'production', '--context=larakube-203.0.113.21', '--provider=cloudflare', '--group=company-domains', '--force', '--no-interaction']);
+
+    File::deleteDirectory($bin);
+});
+
 function serversDemoModeHiding(array $hidden): string
 {
     $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));

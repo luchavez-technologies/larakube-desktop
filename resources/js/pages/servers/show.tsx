@@ -4,7 +4,6 @@ import {
     Activity,
     ArrowRight,
     ExternalLink,
-    FlaskConical,
     FolderGit2,
     Globe,
     HardDrive,
@@ -13,7 +12,6 @@ import {
     ShieldCheck,
     SquareTerminal,
     Trash2,
-    Upload,
     UserPlus,
     Users,
     Wrench,
@@ -23,6 +21,11 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import DnsTlsFields, {
+    dnsProviderLabel,
+    type DnsTlsProvider,
+    type DnsTlsValues,
+} from '@/components/dns-tls-fields';
 import {
     DestroyServerDialog,
     RepairServerDialog,
@@ -675,16 +678,12 @@ export default function ShowServer({
                     onClose={() => setDialog(null)}
                 />
             )}
-            {dialog === 'domain' && (
-                <ConnectDomainDialog
-                    server={server}
-                    onClose={() => setDialog(null)}
-                />
-            )}
-            {dialog === 'ssl' && (
-                <EnableSslDialog
+            {(dialog === 'domain' || dialog === 'ssl') && (
+                <ConfigureDnsTlsDialog
                     server={server}
                     dnsGroups={dnsGroups}
+                    tlsReport={tlsReport}
+                    initialMode={dialog}
                     onClose={() => setDialog(null)}
                 />
             )}
@@ -825,24 +824,6 @@ function NodeMetricsCard({ metrics }: { metrics?: NodeMetrics | null }) {
         </Card>
     );
 }
-
-function dnsProviderLabel(provider?: string): string {
-    switch (provider) {
-        case 'route53':
-            return 'AWS Route 53';
-        case 'google':
-            return 'Google Cloud DNS';
-        case 'cloudflare':
-        default:
-            return 'Cloudflare';
-    }
-}
-
-const dnsProviderOptions = [
-    { value: 'cloudflare', label: 'Cloudflare (Recommended)' },
-    { value: 'route53', label: 'AWS Route 53 (Experimental)' },
-    { value: 'google', label: 'Google Cloud DNS (Experimental)' },
-];
 
 function DomainRow({
     groups,
@@ -1006,447 +987,95 @@ function SslRow({
     );
 }
 
-function ConnectDomainDialog({
-    server,
-    onClose,
-}: {
-    server: Server;
-    onClose: () => void;
-}) {
-    const defaultProvider =
-        server.provider === 'aws'
-            ? 'route53'
-            : server.provider === 'gcp'
-              ? 'google'
-              : 'cloudflare';
-
-    const [provider, setProvider] = useState<
-        'cloudflare' | 'route53' | 'google'
-    >(defaultProvider);
-    const [token, setToken] = useState('');
-    const [group, setGroup] = useState('');
-    const [awsKeyId, setAwsKeyId] = useState('');
-    const [awsSecretKey, setAwsSecretKey] = useState('');
-    const [awsRegion, setAwsRegion] = useState(server.region || 'us-east-1');
-    const [gcpProjectId, setGcpProjectId] = useState('');
-    const [gcpCredentials, setGcpCredentials] = useState('');
-
-    const handleGcpFileSelect = async (
-        e: React.ChangeEvent<HTMLInputElement>,
-    ) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const text = await file.text();
-            setGcpCredentials(text.trim());
-            try {
-                const parsed = JSON.parse(text.trim());
-                if (parsed.project_id && !gcpProjectId) {
-                    setGcpProjectId(parsed.project_id);
-                }
-            } catch {
-                // ignore
-            }
-        } catch {
-            // ignore
-        }
-    };
-
-    const isSubmittable = (() => {
-        if (provider === 'cloudflare') return token.trim() !== '';
-        if (provider === 'route53')
-            return awsKeyId.trim() !== '' && awsSecretKey.trim() !== '';
-        if (provider === 'google')
-            return gcpProjectId.trim() !== '' && gcpCredentials.trim() !== '';
-        return false;
-    })();
-
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
-            onClick={onClose}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                className="max-h-[90vh] w-full max-w-[540px] overflow-y-auto rounded-2xl bg-surface p-7 shadow-2xl"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                        Connect a domain
-                    </h2>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-lg p-1 text-soft hover:bg-paper hover:text-ink"
-                    >
-                        <X className="size-4" />
-                    </button>
-                </div>
-                <p className="mt-2 text-sm leading-relaxed text-soft">
-                    LaraKube installs ExternalDNS on {server.name}. From then
-                    on, every tool and app you install gets its DNS record
-                    created automatically.
-                </p>
-                <Form action={dns(server.name)} className="mt-5 space-y-4">
-                    {({ errors, processing }) => (
-                        <>
-                            <input
-                                type="hidden"
-                                name="dns_provider"
-                                value={provider}
-                            />
-
-                            <label className="block">
-                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                    DNS Provider
-                                </span>
-                                <SelectMenu
-                                    value={provider}
-                                    onChange={(val) =>
-                                        setProvider(
-                                            val as
-                                                | 'cloudflare'
-                                                | 'route53'
-                                                | 'google',
-                                        )
-                                    }
-                                    accent="servers"
-                                    options={dnsProviderOptions}
-                                />
-                            </label>
-
-                            {provider === 'cloudflare' && (
-                                <div className="space-y-3">
-                                    <p className="text-xs text-soft">
-                                        Create a token with the{' '}
-                                        <strong>Edit zone DNS</strong> template
-                                        covering your domains at{' '}
-                                        <ExternalLinkButton
-                                            url="https://dash.cloudflare.com/profile/api-tokens"
-                                            showIcon
-                                            className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
-                                        >
-                                            Cloudflare API Tokens
-                                        </ExternalLinkButton>
-                                        .
-                                    </p>
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            Cloudflare API token
-                                        </span>
-                                        <input
-                                            type="password"
-                                            name="cloudflare_token"
-                                            value={token}
-                                            onChange={(e) =>
-                                                setToken(e.target.value)
-                                            }
-                                            autoFocus
-                                            autoComplete="off"
-                                            placeholder="Paste your Cloudflare API token"
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {errors.cloudflare_token && (
-                                            <span className="mt-1 block text-xs text-accent">
-                                                {errors.cloudflare_token}
-                                            </span>
-                                        )}
-                                    </label>
-                                </div>
-                            )}
-
-                            {provider === 'route53' && (
-                                <div className="space-y-3">
-                                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                        <div className="flex items-center gap-1.5 font-semibold">
-                                            <FlaskConical className="size-3.5 shrink-0" />
-                                            <span>Experimental Provider</span>
-                                        </div>
-                                        <p className="mt-1 leading-relaxed text-soft">
-                                            AWS Route 53 integration is
-                                            supported via ExternalDNS. Ensure
-                                            your AWS IAM credentials have{' '}
-                                            <code className="text-foreground font-mono">
-                                                route53:ChangeResourceRecordSets
-                                            </code>
-                                            ,{' '}
-                                            <code className="text-foreground font-mono">
-                                                route53:ListResourceRecordSets
-                                            </code>
-                                            , and{' '}
-                                            <code className="text-foreground font-mono">
-                                                route53:ListHostedZonesByName
-                                            </code>{' '}
-                                            permissions.
-                                        </p>
-                                    </div>
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            AWS Access Key ID
-                                        </span>
-                                        <input
-                                            type="text"
-                                            name="aws_access_key_id"
-                                            value={awsKeyId}
-                                            onChange={(e) =>
-                                                setAwsKeyId(e.target.value)
-                                            }
-                                            placeholder="AKIAIOSFODNN7EXAMPLE"
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {errors.aws_access_key_id && (
-                                            <span className="mt-1 block text-xs text-accent">
-                                                {errors.aws_access_key_id}
-                                            </span>
-                                        )}
-                                    </label>
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            AWS Secret Access Key
-                                        </span>
-                                        <input
-                                            type="password"
-                                            name="aws_secret_access_key"
-                                            value={awsSecretKey}
-                                            onChange={(e) =>
-                                                setAwsSecretKey(e.target.value)
-                                            }
-                                            placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {errors.aws_secret_access_key && (
-                                            <span className="mt-1 block text-xs text-accent">
-                                                {errors.aws_secret_access_key}
-                                            </span>
-                                        )}
-                                    </label>
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            AWS Region
-                                        </span>
-                                        <input
-                                            type="text"
-                                            name="aws_region"
-                                            value={awsRegion}
-                                            onChange={(e) =>
-                                                setAwsRegion(e.target.value)
-                                            }
-                                            placeholder="us-east-1"
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {errors.aws_region && (
-                                            <span className="mt-1 block text-xs text-accent">
-                                                {errors.aws_region}
-                                            </span>
-                                        )}
-                                    </label>
-                                </div>
-                            )}
-
-                            {provider === 'google' && (
-                                <div className="space-y-3">
-                                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                        <div className="flex items-center gap-1.5 font-semibold">
-                                            <FlaskConical className="size-3.5 shrink-0" />
-                                            <span>Experimental Provider</span>
-                                        </div>
-                                        <p className="mt-1 leading-relaxed text-soft">
-                                            Google Cloud DNS automation is
-                                            supported via ExternalDNS. Ensure
-                                            your GCP project has the{' '}
-                                            <strong>Cloud DNS API</strong>{' '}
-                                            enabled and the Service Account
-                                            possesses the{' '}
-                                            <code className="text-foreground font-mono">
-                                                roles/dns.admin
-                                            </code>{' '}
-                                            IAM role.
-                                        </p>
-                                    </div>
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            Google Cloud Project ID
-                                        </span>
-                                        <input
-                                            type="text"
-                                            name="gcp_project_id"
-                                            value={gcpProjectId}
-                                            onChange={(e) =>
-                                                setGcpProjectId(e.target.value)
-                                            }
-                                            placeholder="my-gcp-project"
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {errors.gcp_project_id && (
-                                            <span className="mt-1 block text-xs text-accent">
-                                                {errors.gcp_project_id}
-                                            </span>
-                                        )}
-                                    </label>
-                                    <div>
-                                        <div className="mb-1.5 flex items-center justify-between">
-                                            <span className="text-xs font-medium text-soft">
-                                                Service Account Credentials
-                                                (JSON or path)
-                                            </span>
-                                            <label
-                                                className={cn(
-                                                    buttonClass(
-                                                        'secondary',
-                                                        'sm',
-                                                    ),
-                                                    'cursor-pointer text-xs',
-                                                )}
-                                            >
-                                                <Upload className="size-3" />
-                                                <span>Browse JSON File…</span>
-                                                <input
-                                                    type="file"
-                                                    accept=".json,application/json"
-                                                    onChange={
-                                                        handleGcpFileSelect
-                                                    }
-                                                    className="sr-only"
-                                                />
-                                            </label>
-                                        </div>
-                                        <textarea
-                                            name="gcp_credentials"
-                                            rows={3}
-                                            placeholder='{"type": "service_account", ...} or /path/to/key.json'
-                                            value={gcpCredentials}
-                                            onChange={(e) =>
-                                                setGcpCredentials(
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {errors.gcp_credentials && (
-                                            <span className="mt-1 block text-xs text-accent">
-                                                {errors.gcp_credentials}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            <label className="block">
-                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                    Name (optional)
-                                </span>
-                                <input
-                                    name="group"
-                                    value={group}
-                                    onChange={(e) => setGroup(e.target.value)}
-                                    placeholder="e.g. company-domains"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
-                                />
-                                <span
-                                    className={
-                                        errors.group
-                                            ? 'mt-1 block text-xs text-accent'
-                                            : 'mt-1 block text-xs text-soft'
-                                    }
-                                >
-                                    {errors.group ??
-                                        'Only needed when this instance manages a specific group or multiple accounts.'}
-                                </span>
-                            </label>
-
-                            <p className="rounded-lg bg-paper px-3 py-2 text-xs text-soft">
-                                Credentials travel securely over the run
-                                environment and are stored inside your cluster
-                                as Kubernetes secrets. They are never saved in
-                                this app.
-                            </p>
-
-                            <div className="flex justify-end gap-2.5 pt-2">
-                                <Button variant="secondary" onClick={onClose}>
-                                    <X className="size-3.5" />
-                                    <span>Cancel</span>
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={processing || !isSubmittable}
-                                >
-                                    <Globe className="size-3.5" />
-                                    <span>
-                                        {processing ? 'Connecting…' : 'Connect'}
-                                    </span>
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </Form>
-            </div>
-        </div>
-    );
-}
-
-function EnableSslDialog({
+function ConfigureDnsTlsDialog({
     server,
     dnsGroups,
+    tlsReport,
+    initialMode,
     onClose,
 }: {
     server: Server;
     dnsGroups?: DnsGroup[] | null;
+    tlsReport?: TlsReport | null;
+    initialMode: 'domain' | 'ssl';
     onClose: () => void;
 }) {
     const hasDnsGroups = Boolean(dnsGroups && dnsGroups.length > 0);
     const firstGroup = dnsGroups?.[0];
-    const initialProvider = firstGroup?.provider
-        ? (firstGroup.provider as 'cloudflare' | 'route53' | 'google')
-        : server.provider === 'aws'
-          ? 'route53'
-          : server.provider === 'gcp'
-            ? 'google'
-            : 'cloudflare';
+    const activeDnsProvider =
+        (firstGroup?.provider as DnsTlsProvider) || undefined;
+    const isTlsEnabled = tlsReport?.challenge === 'dns';
 
-    const [reuseStored, setReuseStored] = useState(hasDnsGroups);
+    // Lock to existing cluster DNS provider if ExternalDNS is already installed
+    const defaultProvider: DnsTlsProvider =
+        activeDnsProvider ||
+        (server.provider === 'aws'
+            ? 'route53'
+            : server.provider === 'gcp'
+              ? 'google'
+              : 'cloudflare');
+
+    const [mode, setMode] = useState<'domain' | 'ssl'>(initialMode);
+    const [reuseStored, setReuseStored] = useState(
+        hasDnsGroups && initialMode === 'ssl',
+    );
     const [selectedGroup, setSelectedGroup] = useState(firstGroup?.group ?? '');
-    const [provider, setProvider] = useState<
-        'cloudflare' | 'route53' | 'google'
-    >(initialProvider);
-    const [token, setToken] = useState('');
-    const [awsKeyId, setAwsKeyId] = useState('');
-    const [awsSecretKey, setAwsSecretKey] = useState('');
-    const [awsRegion, setAwsRegion] = useState(server.region || 'us-east-1');
-    const [gcpProjectId, setGcpProjectId] = useState('');
-    const [gcpCredentials, setGcpCredentials] = useState('');
 
-    const handleGcpFileSelect = async (
-        e: React.ChangeEvent<HTMLInputElement>,
+    const [values, setValues] = useState<DnsTlsValues>({
+        dns_provider: defaultProvider,
+        enable_dns: !hasDnsGroups || mode === 'domain',
+        enable_tls: true,
+        cloudflare_token: '',
+        dns_aws_access_key_id: '',
+        dns_aws_secret_access_key: '',
+        dns_aws_region: server.region || 'us-east-1',
+        dns_gcp_project_id: '',
+        dns_gcp_credentials: '',
+        group: '',
+    });
+
+    const handleFieldChange = <K extends keyof DnsTlsValues>(
+        field: K,
+        val: DnsTlsValues[K],
     ) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const text = await file.text();
-            setGcpCredentials(text.trim());
-            try {
-                const parsed = JSON.parse(text.trim());
-                if (parsed.project_id && !gcpProjectId) {
-                    setGcpProjectId(parsed.project_id);
-                }
-            } catch {
-                // ignore
-            }
-        } catch {
-            // ignore
-        }
+        setValues((prev) => ({ ...prev, [field]: val }));
     };
 
+    // If reusing stored credentials, or if mode is SSL only (and not enabling DNS), submit to tls(server.name).
+    // Otherwise, submit to dns(server.name), which will chain tls:init if values.enable_tls is true.
+    const isSslOnly =
+        (hasDnsGroups && mode === 'ssl') ||
+        (!hasDnsGroups && !values.enable_dns && values.enable_tls);
+    const formAction = isSslOnly ? tls(server.name) : dns(server.name);
+
     const isSubmittable = (() => {
-        if (reuseStored) return true;
-        if (provider === 'cloudflare') return true;
-        if (provider === 'route53')
-            return awsKeyId.trim() !== '' && awsSecretKey.trim() !== '';
-        if (provider === 'google')
-            return gcpProjectId.trim() !== '' && gcpCredentials.trim() !== '';
+        if (hasDnsGroups && mode === 'ssl' && reuseStored) {
+            return true;
+        }
+        if (!hasDnsGroups && !values.enable_dns && !values.enable_tls) {
+            return false;
+        }
+        const effectiveProvider =
+            hasDnsGroups && activeDnsProvider
+                ? activeDnsProvider
+                : values.dns_provider;
+
+        if (effectiveProvider === 'cloudflare') {
+            if (isSslOnly && hasDnsGroups) return true;
+            return values.cloudflare_token.trim() !== '';
+        }
+        if (effectiveProvider === 'route53') {
+            return (
+                values.dns_aws_access_key_id.trim() !== '' &&
+                values.dns_aws_secret_access_key.trim() !== ''
+            );
+        }
+        if (effectiveProvider === 'google') {
+            return (
+                values.dns_gcp_project_id.trim() !== '' &&
+                values.dns_gcp_credentials.trim() !== ''
+            );
+        }
         return false;
     })();
 
@@ -1462,9 +1091,49 @@ function EnableSslDialog({
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                        Automatic SSL certificates
-                    </h2>
+                    <div>
+                        <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                            {!hasDnsGroups
+                                ? 'Configure Domain & SSL'
+                                : mode === 'ssl'
+                                  ? isTlsEnabled
+                                      ? 'Update SSL certificates'
+                                      : 'Automatic SSL certificates'
+                                  : 'Connect a domain'}
+                        </h2>
+                        {hasDnsGroups && (
+                            <div className="mt-1 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setMode('ssl');
+                                        setReuseStored(true);
+                                    }}
+                                    className={cn(
+                                        'border-b-2 pb-0.5 text-xs font-medium transition-colors',
+                                        mode === 'ssl'
+                                            ? 'border-servers text-servers'
+                                            : 'border-transparent text-soft hover:text-ink',
+                                    )}
+                                >
+                                    SSL Certificates
+                                </button>
+                                <span className="text-xs text-soft">·</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setMode('domain')}
+                                    className={cn(
+                                        'border-b-2 pb-0.5 text-xs font-medium transition-colors',
+                                        mode === 'domain'
+                                            ? 'border-servers text-servers'
+                                            : 'border-transparent text-soft hover:text-ink',
+                                    )}
+                                >
+                                    Add Domain Group
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <button
                         type="button"
                         onClick={onClose}
@@ -1473,15 +1142,19 @@ function EnableSslDialog({
                         <X className="size-4" />
                     </button>
                 </div>
+
                 <p className="mt-2 text-sm leading-relaxed text-soft">
-                    Traefik on {server.name} proves domain ownership through
-                    DNS-01 challenge instead of HTTP, so certificates keep
-                    renewing even for wildcard domains or proxied traffic.
+                    {!hasDnsGroups
+                        ? `LaraKube automates DNS records on ${server.name} and issues Let's Encrypt certificates using DNS-01 challenges against your authoritative DNS provider.`
+                        : mode === 'ssl'
+                          ? `Traefik on ${server.name} proves domain ownership through DNS-01 challenge instead of HTTP, so certificates keep renewing even for wildcard domains or proxied traffic.`
+                          : `LaraKube installs ExternalDNS on ${server.name}. From then on, every tool and app you install gets its DNS record created automatically.`}
                 </p>
-                <Form action={tls(server.name)} className="mt-5 space-y-4">
+
+                <Form action={formAction} className="mt-5 space-y-4">
                     {({ errors, processing }) => (
                         <>
-                            {hasDnsGroups && (
+                            {hasDnsGroups && mode === 'ssl' && (
                                 <div className="space-y-2 rounded-xl bg-paper p-3.5">
                                     <span className="block text-xs font-semibold tracking-wider text-soft uppercase">
                                         Credentials Source
@@ -1504,7 +1177,7 @@ function EnableSslDialog({
                                             <p className="text-soft">
                                                 Uses the{' '}
                                                 {dnsProviderLabel(
-                                                    firstGroup?.provider,
+                                                    activeDnsProvider,
                                                 )}{' '}
                                                 credentials already stored on
                                                 this cluster.
@@ -1523,20 +1196,22 @@ function EnableSslDialog({
                                         />
                                         <div>
                                             <span className="font-medium">
-                                                Provide separate or new DNS
+                                                Provide separate or updated
                                                 credentials
                                             </span>
                                             <p className="text-soft">
-                                                Configure a different provider
-                                                or different API key for
-                                                certificate issuance.
+                                                Provide fresh credentials for{' '}
+                                                {dnsProviderLabel(
+                                                    activeDnsProvider,
+                                                )}
+                                                .
                                             </p>
                                         </div>
                                     </label>
                                 </div>
                             )}
 
-                            {reuseStored && hasDnsGroups ? (
+                            {hasDnsGroups && mode === 'ssl' && reuseStored ? (
                                 <>
                                     <input
                                         type="hidden"
@@ -1588,246 +1263,49 @@ function EnableSslDialog({
                                         name="reuse_stored"
                                         value="0"
                                     />
-                                    <input
-                                        type="hidden"
-                                        name="dns_provider"
-                                        value={provider}
+                                    <DnsTlsFields
+                                        values={values}
+                                        onChange={handleFieldChange}
+                                        errors={errors}
+                                        serverProvider={server.provider}
+                                        serverRegion={server.region}
+                                        lockedProvider={
+                                            hasDnsGroups
+                                                ? activeDnsProvider
+                                                : undefined
+                                        }
+                                        showToggles={!hasDnsGroups}
+                                        showGroupField={true}
                                     />
-
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            DNS Provider
-                                        </span>
-                                        <SelectMenu
-                                            value={provider}
-                                            onChange={(val) =>
-                                                setProvider(
-                                                    val as
-                                                        | 'cloudflare'
-                                                        | 'route53'
-                                                        | 'google',
-                                                )
-                                            }
-                                            accent="servers"
-                                            options={dnsProviderOptions}
-                                        />
-                                    </label>
-
-                                    {provider === 'cloudflare' && (
-                                        <div className="space-y-3">
-                                            <p className="text-xs text-soft">
-                                                Leave empty to reuse any
-                                                existing token, or paste a token
-                                                with the{' '}
-                                                <strong>Edit zone DNS</strong>{' '}
-                                                template.
-                                            </p>
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                                    Cloudflare API token
-                                                    (optional)
-                                                </span>
+                                    {hasDnsGroups && mode === 'domain' && (
+                                        <div className="rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
+                                            <input
+                                                type="hidden"
+                                                name="enable_tls"
+                                                value={
+                                                    values.enable_tls
+                                                        ? '1'
+                                                        : '0'
+                                                }
+                                            />
+                                            <label className="flex cursor-pointer items-center gap-2 text-ink">
                                                 <input
-                                                    type="password"
-                                                    name="cloudflare_token"
-                                                    value={token}
+                                                    type="checkbox"
+                                                    checked={values.enable_tls}
                                                     onChange={(e) =>
-                                                        setToken(e.target.value)
-                                                    }
-                                                    autoFocus
-                                                    autoComplete="off"
-                                                    placeholder="Paste token or leave empty to reuse"
-                                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                                />
-                                                {errors.cloudflare_token && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {
-                                                            errors.cloudflare_token
-                                                        }
-                                                    </span>
-                                                )}
-                                            </label>
-                                        </div>
-                                    )}
-
-                                    {provider === 'route53' && (
-                                        <div className="space-y-3">
-                                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                                <div className="flex items-center gap-1.5 font-semibold">
-                                                    <FlaskConical className="size-3.5 shrink-0" />
-                                                    <span>
-                                                        Experimental Provider
-                                                    </span>
-                                                </div>
-                                                <p className="mt-1 leading-relaxed text-soft">
-                                                    Traefik requires AWS IAM
-                                                    credentials with Route 53
-                                                    permissions to create Let's
-                                                    Encrypt DNS-01 verification
-                                                    TXT records.
-                                                </p>
-                                            </div>
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                                    AWS Access Key ID
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    name="aws_access_key_id"
-                                                    value={awsKeyId}
-                                                    onChange={(e) =>
-                                                        setAwsKeyId(
-                                                            e.target.value,
+                                                        handleFieldChange(
+                                                            'enable_tls',
+                                                            e.target.checked,
                                                         )
                                                     }
-                                                    placeholder="AKIAIOSFODNN7EXAMPLE"
-                                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                                    className="rounded border-line text-servers focus:ring-servers"
                                                 />
-                                                {errors.aws_access_key_id && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {
-                                                            errors.aws_access_key_id
-                                                        }
-                                                    </span>
-                                                )}
-                                            </label>
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                                    AWS Secret Access Key
+                                                <span className="text-xs">
+                                                    Also update automatic SSL
+                                                    certificates with these
+                                                    credentials
                                                 </span>
-                                                <input
-                                                    type="password"
-                                                    name="aws_secret_access_key"
-                                                    value={awsSecretKey}
-                                                    onChange={(e) =>
-                                                        setAwsSecretKey(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                                />
-                                                {errors.aws_secret_access_key && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {
-                                                            errors.aws_secret_access_key
-                                                        }
-                                                    </span>
-                                                )}
                                             </label>
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                                    AWS Region
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    name="aws_region"
-                                                    value={awsRegion}
-                                                    onChange={(e) =>
-                                                        setAwsRegion(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="us-east-1"
-                                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                                />
-                                                {errors.aws_region && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {errors.aws_region}
-                                                    </span>
-                                                )}
-                                            </label>
-                                        </div>
-                                    )}
-
-                                    {provider === 'google' && (
-                                        <div className="space-y-3">
-                                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                                <div className="flex items-center gap-1.5 font-semibold">
-                                                    <FlaskConical className="size-3.5 shrink-0" />
-                                                    <span>
-                                                        Experimental Provider
-                                                    </span>
-                                                </div>
-                                                <p className="mt-1 leading-relaxed text-soft">
-                                                    Google Cloud DNS requires a
-                                                    Service Account JSON with{' '}
-                                                    <code className="text-foreground font-mono">
-                                                        roles/dns.admin
-                                                    </code>{' '}
-                                                    permissions.
-                                                </p>
-                                            </div>
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                                    Google Cloud Project ID
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    name="gcp_project_id"
-                                                    value={gcpProjectId}
-                                                    onChange={(e) =>
-                                                        setGcpProjectId(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="my-gcp-project"
-                                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                                />
-                                                {errors.gcp_project_id && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {errors.gcp_project_id}
-                                                    </span>
-                                                )}
-                                            </label>
-                                            <div>
-                                                <div className="mb-1.5 flex items-center justify-between">
-                                                    <span className="text-xs font-medium text-soft">
-                                                        Service Account
-                                                        Credentials (JSON or
-                                                        path)
-                                                    </span>
-                                                    <label
-                                                        className={cn(
-                                                            buttonClass(
-                                                                'secondary',
-                                                                'sm',
-                                                            ),
-                                                            'cursor-pointer text-xs',
-                                                        )}
-                                                    >
-                                                        <Upload className="size-3" />
-                                                        <span>
-                                                            Browse JSON File…
-                                                        </span>
-                                                        <input
-                                                            type="file"
-                                                            accept=".json,application/json"
-                                                            onChange={
-                                                                handleGcpFileSelect
-                                                            }
-                                                            className="sr-only"
-                                                        />
-                                                    </label>
-                                                </div>
-                                                <textarea
-                                                    name="gcp_credentials"
-                                                    rows={3}
-                                                    placeholder='{"type": "service_account", ...} or /path/to/key.json'
-                                                    value={gcpCredentials}
-                                                    onChange={(e) =>
-                                                        setGcpCredentials(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                                />
-                                                {errors.gcp_credentials && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {errors.gcp_credentials}
-                                                    </span>
-                                                )}
-                                            </div>
                                         </div>
                                     )}
                                 </>
@@ -1849,9 +1327,29 @@ function EnableSslDialog({
                                     type="submit"
                                     disabled={processing || !isSubmittable}
                                 >
-                                    <ShieldCheck className="size-3.5" />
+                                    {mode === 'ssl' ||
+                                    (!hasDnsGroups && values.enable_tls) ? (
+                                        <ShieldCheck className="size-3.5" />
+                                    ) : (
+                                        <Globe className="size-3.5" />
+                                    )}
                                     <span>
-                                        {processing ? 'Enabling…' : 'Enable'}
+                                        {processing
+                                            ? 'Starting…'
+                                            : !hasDnsGroups
+                                              ? values.enable_dns &&
+                                                values.enable_tls
+                                                  ? 'Configure DNS & SSL'
+                                                  : values.enable_dns
+                                                    ? 'Connect Domain'
+                                                    : isTlsEnabled
+                                                      ? 'Update SSL'
+                                                      : 'Enable SSL'
+                                              : mode === 'ssl'
+                                                ? isTlsEnabled
+                                                    ? 'Update SSL'
+                                                    : 'Enable SSL'
+                                                : 'Connect Domain'}
                                     </span>
                                 </Button>
                             </div>
