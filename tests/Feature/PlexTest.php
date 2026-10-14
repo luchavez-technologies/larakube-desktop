@@ -63,6 +63,32 @@ test('server plex lifecycle commands run plex:init, plex:start, and plex:stop', 
     File::deleteDirectory($sandbox['home']);
 });
 
+test('server plex init accepts custom services', function () {
+    $sandbox = plexSandbox();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('demo-vps')->andReturn([
+        'name' => 'demo-vps',
+        'provider' => 'gcp',
+        'context' => 'larakube-34.27.253.31',
+        'status' => 'ready',
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.plex.init', ['server' => 'demo-vps']), [
+        'services' => ['mysql', 'redis', 'seaweedfs'],
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:init', '--context=larakube-34.27.253.31', '--services=mysql,redis,seaweedfs', '--no-interaction',
+    ]);
+    expect(Run::sole()->kind)->toBe(RunKind::PlexInit);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('project plex commands run plex:join and plex:leave', function () {
     $sandbox = plexSandbox();
     $project = Project::create(['path' => $sandbox['app']]);

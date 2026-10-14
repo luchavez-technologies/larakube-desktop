@@ -188,14 +188,25 @@ class PlexController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function initServer(string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
+    public function initServer(Request $request, string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
     {
+        $request->validate([
+            'services' => ['nullable', 'array'],
+            'services.*' => ['string'],
+        ]);
+
         $stack = $stacks->find($server);
         abort_unless($stack !== null && is_string($stack['context']), 404);
 
+        $args = ['plex:init', "--context={$stack['context']}"];
+        $services = array_filter(array_map('trim', (array) $request->input('services', [])));
+        if (! empty($services)) {
+            $args[] = '--services='.implode(',', array_values($services));
+        }
+
         $run = $runner->start(
             label: "Initialize Plex Commons on {$server}",
-            arguments: ['plex:init', "--context={$stack['context']}"],
+            arguments: $args,
             kind: RunKind::PlexInit,
             subject: "server:{$server}",
             meta: ['server' => $server, 'context' => $stack['context']],
