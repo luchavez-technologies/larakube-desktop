@@ -213,7 +213,9 @@ export default function ShowServer({
                     <span key="kind">
                         {server.kind === 'vps'
                             ? 'single-node k3s'
-                            : server.kind}
+                            : server.kind === 'managed'
+                              ? 'managed Kubernetes'
+                              : server.kind}
                     </span>,
                 ].filter(Boolean)}
             />
@@ -637,53 +639,74 @@ export default function ShowServer({
                                     />
                                 </ListRow>
                             )}
-                            <ListRow
-                                stack
-                                action={
-                                    <div className="flex items-center gap-1.5">
-                                        <CopyButton
-                                            value={`ssh ${server.name}`}
+                            {server.kind === 'vps' ? (
+                                <>
+                                    <ListRow
+                                        stack
+                                        action={
+                                            <div className="flex items-center gap-1.5">
+                                                <CopyButton
+                                                    value={`ssh ${server.name}`}
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={
+                                                        openingTerminal !== null
+                                                    }
+                                                    title="Open an SSH session in a terminal"
+                                                    onClick={() =>
+                                                        handleOpenTerminal(
+                                                            'ssh',
+                                                        )
+                                                    }
+                                                >
+                                                    <SquareTerminal
+                                                        className={cn(
+                                                            'size-3.5',
+                                                            openingTerminal ===
+                                                                'ssh' &&
+                                                                'animate-spin',
+                                                        )}
+                                                    />
+                                                    <span>
+                                                        {openingTerminal ===
+                                                        'ssh'
+                                                            ? 'Opening…'
+                                                            : 'Open in Terminal'}
+                                                    </span>
+                                                </Button>
+                                            </div>
+                                        }
+                                    >
+                                        <TwoLine
+                                            title="SSH"
+                                            detail={`ssh ${server.name}`}
+                                            mono
+                                            truncate={false}
                                         />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={openingTerminal !== null}
-                                            title="Open an SSH session in a terminal"
-                                            onClick={() =>
-                                                handleOpenTerminal('ssh')
-                                            }
-                                        >
-                                            <SquareTerminal
-                                                className={cn(
-                                                    'size-3.5',
-                                                    openingTerminal === 'ssh' &&
-                                                        'animate-spin',
-                                                )}
-                                            />
-                                            <span>
-                                                {openingTerminal === 'ssh'
-                                                    ? 'Opening…'
-                                                    : 'Open in Terminal'}
-                                            </span>
-                                        </Button>
-                                    </div>
-                                }
-                            >
-                                <TwoLine
-                                    title="SSH"
-                                    detail={`ssh ${server.name}`}
-                                    mono
-                                    truncate={false}
-                                />
-                            </ListRow>
-                            <ListRow>
-                                <TwoLine
-                                    title="Login user"
-                                    detail="larakube (root login disabled)"
-                                    mono
-                                />
-                            </ListRow>
+                                    </ListRow>
+                                    <ListRow>
+                                        <TwoLine
+                                            title="Login user"
+                                            detail="larakube (root login disabled)"
+                                            mono
+                                        />
+                                    </ListRow>
+                                </>
+                            ) : (
+                                <ListRow>
+                                    <TwoLine
+                                        title="Access mode"
+                                        detail={
+                                            server.kind === 'managed'
+                                                ? 'Managed API (IAM / kubectl)'
+                                                : 'Kubernetes API (kubectl)'
+                                        }
+                                    />
+                                </ListRow>
+                            )}
                         </Card>
                     )}
 

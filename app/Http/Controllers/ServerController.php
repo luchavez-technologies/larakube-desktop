@@ -336,6 +336,7 @@ class ServerController extends Controller
         abort_if($stack === null || $stack['status'] !== 'ready', 404);
 
         if ($request->string('type')->toString() === 'ssh') {
+            abort_if($stack['kind'] !== 'vps', 422);
             $command = "ssh {$stack['name']}";
         } else {
             abort_if($stack['context'] === null, 404);

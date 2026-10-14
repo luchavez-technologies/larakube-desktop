@@ -318,6 +318,22 @@ test('Open in Terminal is a 404 for an unfinished server, and 422 for an unknown
     File::deleteDirectory($bin);
 });
 
+test('Open in Terminal for ssh is rejected with 422 for managed clusters', function () {
+    $bin = serversFakeCli();
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode([
+            'success' => true,
+            'stacks' => [
+                ['name' => 'gke-cluster', 'provider' => 'gcp', 'kind' => 'managed', 'region' => 'asia-southeast1', 'ip' => null, 'context' => 'gke-context', 'account' => null, 'projectId' => 'demo', 'status' => 'ready'],
+            ],
+        ])),
+    ]);
+
+    $this->post(route('servers.terminal', 'gke-cluster'), ['type' => 'ssh'])->assertStatus(422);
+
+    File::deleteDirectory($bin);
+});
+
 test('a terminal that fails to open is reported, not silently swallowed', function () {
     $bin = serversFakeCli();
     Process::fake([

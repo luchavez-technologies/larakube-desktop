@@ -88,8 +88,9 @@ export default function ServersIndex({
                         Servers
                     </h1>
                     <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        Kubernetes servers you created with LaraKube. Each one
-                        runs k3s and can host Cluster Tools and your apps.
+                        Kubernetes clusters and VPS servers you manage with
+                        LaraKube. Host Cluster Tools and deploy your apps across
+                        managed Kubernetes or lightweight k3s nodes.
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -183,6 +184,9 @@ export default function ServersIndex({
                                                                     }
                                                                     kind="ip"
                                                                 />
+                                                            ) : server.kind ===
+                                                              'managed' ? (
+                                                                'Managed Cluster'
                                                             ) : (
                                                                 '—'
                                                             )}
@@ -204,9 +208,21 @@ export default function ServersIndex({
                                                                     server.provider}
                                                             </span>
                                                             {server.kind ===
+                                                                'managed' && (
+                                                                <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                                                                    Managed
+                                                                </span>
+                                                            )}
+                                                            {server.kind ===
                                                                 'discovered' && (
                                                                 <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
                                                                     Discovered
+                                                                </span>
+                                                            )}
+                                                            {server.kind ===
+                                                                'vps' && (
+                                                                <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
+                                                                    VPS
                                                                 </span>
                                                             )}
                                                             {server.isCurrent && (
@@ -311,6 +327,9 @@ export default function ServersIndex({
                                                                     }
                                                                     kind="ip"
                                                                 />
+                                                            ) : server.kind ===
+                                                              'managed' ? (
+                                                                'Managed Cluster'
                                                             ) : (
                                                                 '—'
                                                             )}
@@ -338,9 +357,20 @@ export default function ServersIndex({
                                                         </span>
                                                     )}
                                                     {server.kind ===
+                                                        'managed' && (
+                                                        <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                                                            Managed
+                                                        </span>
+                                                    )}
+                                                    {server.kind ===
                                                         'discovered' && (
                                                         <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
                                                             Discovered
+                                                        </span>
+                                                    )}
+                                                    {server.kind === 'vps' && (
+                                                        <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
+                                                            VPS
                                                         </span>
                                                     )}
                                                     {server.isCurrent && (
