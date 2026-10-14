@@ -132,27 +132,32 @@ export default function ServersIndex({
                     <>
                         {viewMode === 'table' ? (
                             /* Table View */
-                            <div className="overflow-hidden rounded-2xl bg-surface px-5.5 ring-1 ring-line ring-inset">
+                            <div className="overflow-x-auto rounded-2xl bg-surface ring-1 ring-line ring-inset">
                                 <table className="w-full text-left text-sm">
                                     <thead>
                                         <tr className="text-[11px] tracking-[0.06em] text-soft uppercase">
-                                            {[
-                                                'Name',
-                                                'Provider',
-                                                'Domains',
-                                                'Region',
-                                                'IP address',
-                                                'Status',
-                                                'Quick actions',
-                                                '',
-                                            ].map((heading) => (
-                                                <th
-                                                    key={heading}
-                                                    className="py-3 font-medium"
-                                                >
-                                                    {heading}
-                                                </th>
-                                            ))}
+                                            <th className="py-3 pr-4 pl-5 font-medium whitespace-nowrap">
+                                                Name
+                                            </th>
+                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
+                                                Provider
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Domains
+                                            </th>
+                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
+                                                Region
+                                            </th>
+                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
+                                                IP address
+                                            </th>
+                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
+                                                Status
+                                            </th>
+                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
+                                                Quick actions
+                                            </th>
+                                            <th className="w-10 py-3 pr-4 pl-2 font-medium"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -165,7 +170,7 @@ export default function ServersIndex({
                                                     key={server.name}
                                                     className="border-t border-line"
                                                 >
-                                                    <td className="py-3.5 font-medium">
+                                                    <td className="py-3.5 pr-4 pl-5 font-medium whitespace-nowrap">
                                                         <Link
                                                             href={
                                                                 show(
@@ -177,7 +182,7 @@ export default function ServersIndex({
                                                             {server.name}
                                                         </Link>
                                                     </td>
-                                                    <td className="text-soft">
+                                                    <td className="px-4 py-3.5 whitespace-nowrap text-soft">
                                                         <div className="flex items-center gap-1.5">
                                                             <ProviderLogo
                                                                 provider={
@@ -205,11 +210,11 @@ export default function ServersIndex({
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="max-w-xs">
+                                                    <td className="max-w-xs min-w-[160px] px-4 py-3.5">
                                                         {server.domains &&
                                                         server.domains.length >
                                                             0 ? (
-                                                            <div className="flex flex-wrap items-center gap-1.5 py-1">
+                                                            <div className="flex flex-wrap items-center gap-1.5 py-0.5">
                                                                 {server.domains.map(
                                                                     (d) => (
                                                                         <span
@@ -235,10 +240,10 @@ export default function ServersIndex({
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td className="font-mono text-[13px] text-soft">
+                                                    <td className="px-4 py-3.5 font-mono text-[13px] whitespace-nowrap text-soft">
                                                         {server.region ?? '—'}
                                                     </td>
-                                                    <td className="font-mono text-[13px]">
+                                                    <td className="px-4 py-3.5 font-mono text-[13px] whitespace-nowrap">
                                                         {server.ip ? (
                                                             <Redactable
                                                                 value={
@@ -250,12 +255,12 @@ export default function ServersIndex({
                                                             '—'
                                                         )}
                                                     </td>
-                                                    <td>
+                                                    <td className="px-4 py-3.5 whitespace-nowrap">
                                                         <StatusPill tone={tone}>
                                                             {label}
                                                         </StatusPill>
                                                     </td>
-                                                    <td className="py-2">
+                                                    <td className="px-4 py-3.5 whitespace-nowrap">
                                                         <ServerActions
                                                             server={server}
                                                             reachable={reachable(
@@ -263,7 +268,7 @@ export default function ServersIndex({
                                                             )}
                                                         />
                                                     </td>
-                                                    <td className="text-right">
+                                                    <td className="py-3.5 pr-4 pl-2 text-right whitespace-nowrap">
                                                         <Link
                                                             href={
                                                                 show(

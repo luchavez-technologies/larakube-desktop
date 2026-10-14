@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { useEffect, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import {
     LayoutDashboard,
     FolderGit2,
@@ -13,6 +13,8 @@ import {
     Layers,
     HelpCircle,
     Heart,
+    PanelLeft,
+    PanelLeftClose,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -182,6 +184,54 @@ export default function AppLayout({
         }
     }, [props.theme]);
 
+    const [collapsed, setCollapsed] = useState<boolean>(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+        try {
+            return (
+                localStorage.getItem('larakube_sidebar_collapsed') === 'true'
+            );
+        } catch {
+            return false;
+        }
+    });
+
+    const toggleSidebar = () => {
+        setCollapsed((prev) => {
+            const next = !prev;
+            try {
+                localStorage.setItem(
+                    'larakube_sidebar_collapsed',
+                    String(next),
+                );
+            } catch {
+                // ignore
+            }
+            return next;
+        });
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+                const target = e.target as HTMLElement | null;
+                if (
+                    target &&
+                    (target.tagName === 'INPUT' ||
+                        target.tagName === 'TEXTAREA' ||
+                        target.isContentEditable)
+                ) {
+                    return;
+                }
+                e.preventDefault();
+                toggleSidebar();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const hideProjects = Boolean(props.hideProjects);
     const visibleNavigation = navigation.filter(
         (item) =>
@@ -195,34 +245,103 @@ export default function AppLayout({
     return (
         <div className="flex h-screen overflow-hidden">
             <Head title={title} />
-            <aside className="z-30 flex h-full w-58 shrink-0 flex-col border-r border-line bg-surface px-3.5 py-5">
-                <div className="mb-5 flex items-center justify-between px-2.5">
-                    <div className="flex items-center gap-2.5">
+            <aside
+                className={cn(
+                    'z-30 flex h-full shrink-0 flex-col border-r border-line bg-surface py-5 transition-[width,padding] duration-200 ease-in-out',
+                    collapsed ? 'w-16 px-2' : 'w-58 px-3.5',
+                )}
+            >
+                {collapsed ? (
+                    <div className="mb-4 flex flex-col items-center gap-2">
                         <img
                             src="/logo.png"
                             alt="LaraKube"
-                            className="size-8 rounded-lg shadow-2xs"
+                            className="size-7.5 rounded-lg shadow-2xs"
                         />
-                        <span className="text-[15px] font-semibold tracking-tight">
-                            LaraKube
-                        </span>
+                        <button
+                            type="button"
+                            onClick={toggleSidebar}
+                            className="cursor-pointer rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                            title="Expand sidebar (⌘B)"
+                            aria-label="Expand sidebar"
+                        >
+                            <PanelLeft className="size-4" />
+                        </button>
+                        <NotificationBell />
                     </div>
-                    <NotificationBell />
-                </div>
+                ) : (
+                    <div className="mb-5 flex items-center justify-between px-2.5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                            <img
+                                src="/logo.png"
+                                alt="LaraKube"
+                                className="size-8 shrink-0 rounded-lg shadow-2xs"
+                            />
+                            <span className="truncate text-[15px] font-semibold tracking-tight">
+                                LaraKube
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                            <NotificationBell />
+                            <button
+                                type="button"
+                                onClick={toggleSidebar}
+                                className="cursor-pointer rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                                title="Collapse sidebar (⌘B)"
+                                aria-label="Collapse sidebar"
+                            >
+                                <PanelLeftClose className="size-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
                 <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
                     {visibleNavigation.map((item) => {
                         const active = item.active(url);
                         const Icon = item.icon;
+                        const tooltipText = `${item.label}${item.description ? ` · ${item.description}` : ''}`;
+
+                        const iconContent = (
+                            <span
+                                className={cn(
+                                    'flex size-7.5 shrink-0 items-center justify-center rounded-lg text-white shadow-xs',
+                                    item.accent,
+                                )}
+                            >
+                                <Icon className="size-4" />
+                            </span>
+                        );
+
+                        if (collapsed) {
+                            return item.href ? (
+                                <Link
+                                    key={item.label}
+                                    href={item.href}
+                                    prefetch
+                                    cacheFor={['30s', '1m']}
+                                    className={cn(
+                                        'mx-auto flex size-10 items-center justify-center rounded-[10px] transition',
+                                        active ? 'bg-badge' : 'hover:bg-paper',
+                                    )}
+                                    title={tooltipText}
+                                    aria-label={item.label}
+                                >
+                                    {iconContent}
+                                </Link>
+                            ) : (
+                                <div
+                                    key={item.label}
+                                    className="mx-auto flex size-10 cursor-not-allowed items-center justify-center rounded-[10px] opacity-45"
+                                    title={`${item.label} (disabled)`}
+                                >
+                                    {iconContent}
+                                </div>
+                            );
+                        }
+
                         const body = (
                             <>
-                                <span
-                                    className={cn(
-                                        'flex size-7.5 items-center justify-center rounded-lg text-white shadow-xs',
-                                        item.accent,
-                                    )}
-                                >
-                                    <Icon className="size-4" />
-                                </span>
+                                {iconContent}
                                 <span className="min-w-0 leading-tight">
                                     <span className="flex flex-wrap items-center gap-1 text-sm font-medium">
                                         {item.label}
@@ -267,23 +386,34 @@ export default function AppLayout({
                     })}
                 </nav>
                 <div className="mt-auto border-t border-line/60 pt-3">
-                    <ExternalLinkButton
-                        url="https://github.com/sponsors/luchavez-technologies"
-                        className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
-                    >
-                        <span className="flex items-center gap-2">
-                            <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
-                            <span>Sponsor</span>
-                        </span>
-                        <span className="text-[10px] font-medium text-faint">
-                            GitHub
-                        </span>
-                    </ExternalLinkButton>
+                    {collapsed ? (
+                        <ExternalLinkButton
+                            url="https://github.com/sponsors/luchavez-technologies"
+                            className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
+                            title="Sponsor on GitHub"
+                            aria-label="Sponsor on GitHub"
+                        >
+                            <Heart className="size-4 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
+                        </ExternalLinkButton>
+                    ) : (
+                        <ExternalLinkButton
+                            url="https://github.com/sponsors/luchavez-technologies"
+                            className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
+                        >
+                            <span className="flex items-center gap-2">
+                                <Heart className="size-3.5 fill-[#ea4aaa]/20 text-[#ea4aaa]" />
+                                <span>Sponsor</span>
+                            </span>
+                            <span className="text-[10px] font-medium text-faint">
+                                GitHub
+                            </span>
+                        </ExternalLinkButton>
+                    )}
                 </div>
             </aside>
             <main
                 scroll-region="true"
-                className="min-w-0 flex-1 overflow-y-auto px-10 py-8"
+                className="min-w-0 flex-1 overflow-y-auto px-6 py-6 md:px-8 lg:px-10 lg:py-8"
             >
                 {children}
             </main>
