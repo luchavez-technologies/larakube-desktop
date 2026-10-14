@@ -10,6 +10,7 @@ import {
     FlaskConical,
     Globe,
     Key,
+    Layers,
     Plus,
     Server,
     Upload,
@@ -697,40 +698,118 @@ function ServerForm({
 
                             {canBeManaged && (
                                 <Field
-                                    label="Server type"
+                                    label={
+                                        <span className="inline-flex items-center gap-1.5">
+                                            Server architecture
+                                            <InfoTooltip side="right">
+                                                <strong>
+                                                    Single server (VPS)
+                                                </strong>{' '}
+                                                runs both the Kubernetes control
+                                                plane and your apps on a single
+                                                virtual machine — ideal for
+                                                learning, workshops, and
+                                                low-cost staging.
+                                                <br />
+                                                <br />
+                                                <strong>
+                                                    Managed Kubernetes
+                                                </strong>{' '}
+                                                (
+                                                {provider.managedProvider?.toUpperCase()}
+                                                ) offloads the control plane to{' '}
+                                                {provider.label} for high
+                                                availability and multi-node
+                                                scaling, but costs more.
+                                            </InfoTooltip>
+                                        </span>
+                                    }
                                     error={form.errors.target_kind}
                                 >
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-3">
                                         <button
                                             type="button"
                                             onClick={() =>
                                                 selectTargetKind('vps')
                                             }
                                             className={cn(
-                                                'rounded-lg px-3 py-2 text-left text-sm transition',
+                                                'relative flex flex-col justify-between rounded-xl p-3.5 text-left transition',
                                                 !isManaged
                                                     ? 'bg-servers/10 ring-2 ring-servers'
-                                                    : 'ring-1 ring-line hover:ring-faint',
+                                                    : 'bg-surface/50 ring-1 ring-line hover:ring-faint',
                                             )}
                                         >
-                                            <span className="block font-medium">
-                                                Single server (VPS)
-                                            </span>
-                                            <span className="block text-xs text-soft">
-                                                k3s, single-node — cheapest,
-                                                simplest
-                                                {untested.capabilities.includes(
-                                                    'vps-to-managed',
-                                                ) && (
-                                                    <>
-                                                        . Switching to Managed
-                                                        later is possible via
-                                                        the CLI, but that path
-                                                        isn't fully validated
-                                                        yet.
-                                                    </>
-                                                )}
-                                            </span>
+                                            <div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Server
+                                                            className={cn(
+                                                                'size-4',
+                                                                !isManaged
+                                                                    ? 'text-servers'
+                                                                    : 'text-soft',
+                                                            )}
+                                                        />
+                                                        <span className="text-sm font-semibold">
+                                                            Single server (VPS)
+                                                        </span>
+                                                    </div>
+                                                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                                        Recommended for Learning
+                                                    </span>
+                                                </div>
+                                                <p className="mt-2 text-xs leading-relaxed text-soft">
+                                                    Lightweight{' '}
+                                                    <strong>k3s</strong> running
+                                                    on a single virtual server.
+                                                    Control plane and apps share
+                                                    one node.
+                                                </p>
+                                                <ul className="mt-2.5 space-y-1 text-[11px] text-soft">
+                                                    <li className="flex items-center gap-1.5">
+                                                        <Check className="size-3 shrink-0 text-emerald-500" />
+                                                        <span>
+                                                            <strong>
+                                                                Cheapest:
+                                                            </strong>{' '}
+                                                            Pay only for 1 VM
+                                                            (no cloud master
+                                                            fees)
+                                                        </span>
+                                                    </li>
+                                                    <li className="flex items-center gap-1.5">
+                                                        <Check className="size-3 shrink-0 text-emerald-500" />
+                                                        <span>
+                                                            <strong>
+                                                                Self-contained:
+                                                            </strong>{' '}
+                                                            Fast setup,
+                                                            all-in-one
+                                                            Kubernetes
+                                                        </span>
+                                                    </li>
+                                                    <li className="flex items-center gap-1.5">
+                                                        <Check className="size-3 shrink-0 text-emerald-500" />
+                                                        <span>
+                                                            <strong>
+                                                                Best for:
+                                                            </strong>{' '}
+                                                            Workshops, demos,
+                                                            side projects &amp;
+                                                            MVPs
+                                                        </span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            {untested.capabilities.includes(
+                                                'vps-to-managed',
+                                            ) && (
+                                                <span className="mt-3 block border-t border-line/60 pt-2 text-[10px] text-faint">
+                                                    Switching to Managed later
+                                                    is possible via the CLI
+                                                    (experimental).
+                                                </span>
+                                            )}
                                         </button>
                                         <button
                                             type="button"
@@ -738,20 +817,83 @@ function ServerForm({
                                                 selectTargetKind('managed')
                                             }
                                             className={cn(
-                                                'rounded-lg px-3 py-2 text-left text-sm transition',
+                                                'relative flex flex-col justify-between rounded-xl p-3.5 text-left transition',
                                                 isManaged
                                                     ? 'bg-servers/10 ring-2 ring-servers'
-                                                    : 'ring-1 ring-line hover:ring-faint',
+                                                    : 'bg-surface/50 ring-1 ring-line hover:ring-faint',
                                             )}
                                         >
-                                            <span className="block font-medium">
-                                                Managed Kubernetes
-                                            </span>
-                                            <span className="block text-xs text-soft">
-                                                {provider.managedProvider?.toUpperCase()}{' '}
-                                                — multi-node, scales with your
-                                                traffic
-                                            </span>
+                                            <div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Layers
+                                                            className={cn(
+                                                                'size-4',
+                                                                isManaged
+                                                                    ? 'text-servers'
+                                                                    : 'text-soft',
+                                                            )}
+                                                        />
+                                                        <span className="text-sm font-semibold">
+                                                            Managed Kubernetes
+                                                        </span>
+                                                    </div>
+                                                    <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-600 ring-1 ring-indigo-500/20 dark:text-indigo-400">
+                                                        {provider.managedProvider?.toUpperCase()}{' '}
+                                                        · Production
+                                                    </span>
+                                                </div>
+                                                <p className="mt-2 text-xs leading-relaxed text-soft">
+                                                    <strong>
+                                                        {provider.label}
+                                                    </strong>{' '}
+                                                    manages master nodes, etcd,
+                                                    and control plane uptime
+                                                    behind an SLA.
+                                                </p>
+                                                <ul className="mt-2.5 space-y-1 text-[11px] text-soft">
+                                                    <li className="flex items-center gap-1.5">
+                                                        <Check className="size-3 shrink-0 text-indigo-500" />
+                                                        <span>
+                                                            <strong>
+                                                                Cloud-managed:
+                                                            </strong>{' '}
+                                                            Provider manages
+                                                            Kubernetes control
+                                                            plane
+                                                        </span>
+                                                    </li>
+                                                    <li className="flex items-center gap-1.5">
+                                                        <Check className="size-3 shrink-0 text-indigo-500" />
+                                                        <span>
+                                                            <strong>
+                                                                Multi-node:
+                                                            </strong>{' '}
+                                                            Worker nodes scale
+                                                            across multiple
+                                                            instances
+                                                        </span>
+                                                    </li>
+                                                    <li className="flex items-center gap-1.5">
+                                                        <Check className="size-3 shrink-0 text-indigo-500" />
+                                                        <span>
+                                                            <strong>
+                                                                Best for:
+                                                            </strong>{' '}
+                                                            Production workloads
+                                                            requiring high
+                                                            availability
+                                                        </span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            {provider.slug === 'aws' && (
+                                                <span className="mt-3 block border-t border-line/60 pt-2 text-[10px] text-amber-600 dark:text-amber-400">
+                                                    Note: AWS charges a flat
+                                                    ~$73/mo for the EKS control
+                                                    plane.
+                                                </span>
+                                            )}
                                         </button>
                                     </div>
                                 </Field>
