@@ -1,5 +1,5 @@
 import { Deferred, Form, Link, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Activity,
     ArrowRight,
@@ -43,6 +43,7 @@ import RadialGauge from '@/components/metrics/radial-gauge';
 import AppLayout from '@/layouts/app-layout';
 import { serverStatus } from '@/lib/servers';
 import { ExternalLinkButton } from '@/lib/open-external';
+import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import {
     create as projectsCreate,
@@ -1066,6 +1067,30 @@ function ConfigureDnsTlsDialog({
               ? 'google'
               : 'cloudflare');
 
+    const [slidIn, setSlidIn] = useState(false);
+
+    useRightDrawerOpen(true);
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => setSlidIn(true));
+        return () => cancelAnimationFrame(frame);
+    }, []);
+
+    function handleClose() {
+        setSlidIn(false);
+        setTimeout(onClose, 250);
+    }
+
+    useEffect(() => {
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') {
+                handleClose();
+            }
+        }
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
+
     const [mode, setMode] = useState<'domain' | 'ssl'>(initialMode);
     const [reuseStored, setReuseStored] = useState(
         hasDnsGroups && initialMode === 'ssl',
@@ -1132,245 +1157,289 @@ function ConfigureDnsTlsDialog({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
-            onClick={onClose}
+            className={cn(
+                'fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-300',
+                slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={handleClose}
         >
             <div
                 role="dialog"
                 aria-modal="true"
-                className="max-h-[90vh] w-full max-w-[540px] overflow-y-auto rounded-2xl bg-surface p-7 shadow-2xl"
+                className={cn(
+                    'flex h-full w-full max-w-xl flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-300 ease-out md:max-w-2xl',
+                    slidIn ? 'translate-x-0' : 'translate-x-full',
+                )}
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                            {!hasDnsGroups
-                                ? 'Configure Domain & SSL'
-                                : mode === 'ssl'
-                                  ? isTlsEnabled
-                                      ? 'Update SSL certificates'
-                                      : 'Automatic SSL certificates'
-                                  : 'Connect a domain'}
-                        </h2>
-                        {hasDnsGroups && (
-                            <div className="mt-1 flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setMode('ssl');
-                                        setReuseStored(true);
-                                    }}
-                                    className={cn(
-                                        'border-b-2 pb-0.5 text-xs font-medium transition-colors',
-                                        mode === 'ssl'
-                                            ? 'border-servers text-servers'
-                                            : 'border-transparent text-soft hover:text-ink',
-                                    )}
-                                >
-                                    SSL Certificates
-                                </button>
-                                <span className="text-xs text-soft">·</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setMode('domain')}
-                                    className={cn(
-                                        'border-b-2 pb-0.5 text-xs font-medium transition-colors',
-                                        mode === 'domain'
-                                            ? 'border-servers text-servers'
-                                            : 'border-transparent text-soft hover:text-ink',
-                                    )}
-                                >
-                                    Add Domain Group
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-lg p-1 text-soft hover:bg-paper hover:text-ink"
-                    >
-                        <X className="size-4" />
-                    </button>
-                </div>
-
-                <p className="mt-2 text-sm leading-relaxed text-soft">
-                    {!hasDnsGroups
-                        ? `LaraKube automates DNS records on ${server.name} and issues Let's Encrypt certificates using DNS-01 challenges against your authoritative DNS provider.`
-                        : mode === 'ssl'
-                          ? `Traefik on ${server.name} proves domain ownership through DNS-01 challenge instead of HTTP, so certificates keep renewing even for wildcard domains or proxied traffic.`
-                          : `LaraKube installs ExternalDNS on ${server.name}. From then on, every tool and app you install gets its DNS record created automatically.`}
-                </p>
-
-                <Form action={formAction} className="mt-5 space-y-4">
+                <Form
+                    action={formAction}
+                    className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                >
                     {({ errors, processing }) => (
                         <>
-                            {hasDnsGroups && mode === 'ssl' && (
-                                <div className="space-y-2 rounded-xl bg-paper p-3.5">
-                                    <span className="block text-xs font-semibold tracking-wider text-soft uppercase">
-                                        Credentials Source
-                                    </span>
-                                    <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink">
-                                        <input
-                                            type="radio"
-                                            name="reuse_option"
-                                            checked={reuseStored}
-                                            onChange={() =>
-                                                setReuseStored(true)
-                                            }
-                                            className="mt-0.5 text-servers focus:ring-servers"
-                                        />
-                                        <div>
-                                            <span className="font-medium">
-                                                Reuse stored credentials from
-                                                ExternalDNS
-                                            </span>
-                                            <p className="text-soft">
-                                                Uses the{' '}
-                                                {dnsProviderLabel(
-                                                    activeDnsProvider,
-                                                )}{' '}
-                                                credentials already stored on
-                                                this cluster.
-                                            </p>
-                                        </div>
-                                    </label>
-                                    <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink">
-                                        <input
-                                            type="radio"
-                                            name="reuse_option"
-                                            checked={!reuseStored}
-                                            onChange={() =>
-                                                setReuseStored(false)
-                                            }
-                                            className="mt-0.5 text-servers focus:ring-servers"
-                                        />
-                                        <div>
-                                            <span className="font-medium">
-                                                Provide separate or updated
-                                                credentials
-                                            </span>
-                                            <p className="text-soft">
-                                                Provide fresh credentials for{' '}
-                                                {dnsProviderLabel(
-                                                    activeDnsProvider,
-                                                )}
-                                                .
-                                            </p>
-                                        </div>
-                                    </label>
+                            {/* Header */}
+                            <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-servers/10 text-servers">
+                                        {mode === 'ssl' ||
+                                        (!hasDnsGroups && values.enable_tls) ? (
+                                            <ShieldCheck className="size-5" />
+                                        ) : (
+                                            <Globe className="size-5" />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-semibold text-ink">
+                                            {!hasDnsGroups
+                                                ? 'Configure Domain & SSL'
+                                                : mode === 'ssl'
+                                                  ? isTlsEnabled
+                                                      ? 'Update SSL certificates'
+                                                      : 'Automatic SSL certificates'
+                                                  : 'Connect a domain'}
+                                        </h3>
+                                        <p className="text-xs text-soft">
+                                            {server.name} ({server.ip})
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleClose}
+                                    className="rounded-lg p-1.5 text-soft transition hover:bg-badge hover:text-ink"
+                                    aria-label="Close"
+                                >
+                                    <X className="size-4" />
+                                </button>
+                            </div>
+
+                            {/* Mode Sub-Tabs (if DNS groups already configured) */}
+                            {hasDnsGroups && (
+                                <div className="flex shrink-0 border-b border-line px-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMode('ssl');
+                                            setReuseStored(true);
+                                        }}
+                                        className={cn(
+                                            'border-b-2 px-3 py-2.5 text-xs font-medium transition',
+                                            mode === 'ssl'
+                                                ? 'border-servers text-servers'
+                                                : 'border-transparent text-soft hover:text-ink',
+                                        )}
+                                    >
+                                        SSL Certificates
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMode('domain')}
+                                        className={cn(
+                                            'border-b-2 px-3 py-2.5 text-xs font-medium transition',
+                                            mode === 'domain'
+                                                ? 'border-servers text-servers'
+                                                : 'border-transparent text-soft hover:text-ink',
+                                        )}
+                                    >
+                                        Add Domain Group
+                                    </button>
                                 </div>
                             )}
 
-                            {hasDnsGroups && mode === 'ssl' && reuseStored ? (
-                                <>
-                                    <input
-                                        type="hidden"
-                                        name="reuse_stored"
-                                        value="1"
-                                    />
-                                    <input
-                                        type="hidden"
-                                        name="dns_provider"
-                                        value={
-                                            firstGroup?.provider || 'cloudflare'
-                                        }
-                                    />
-                                    {dnsGroups && dnsGroups.length > 1 && (
-                                        <label className="block">
-                                            <span className="mb-1.5 block text-xs font-medium text-soft">
-                                                Select ExternalDNS Group
-                                            </span>
-                                            <SelectMenu
-                                                value={selectedGroup}
-                                                onChange={(val) =>
-                                                    setSelectedGroup(val)
-                                                }
-                                                accent="servers"
-                                                options={dnsGroups.map((g) => ({
-                                                    value: g.group,
-                                                    label: `${g.group} (${g.zones.join(', ')})`,
-                                                }))}
-                                            />
+                            {/* Scrollable Body */}
+                            <div className="flex-1 [scrollbar-width:thin] space-y-4 overflow-y-auto p-6">
+                                <p className="text-sm leading-relaxed text-soft">
+                                    {!hasDnsGroups
+                                        ? `LaraKube automates DNS records on ${server.name} and issues Let's Encrypt certificates using DNS-01 challenges against your authoritative DNS provider.`
+                                        : mode === 'ssl'
+                                          ? `Traefik on ${server.name} proves domain ownership through DNS-01 challenge instead of HTTP, so certificates keep renewing even for wildcard domains or proxied traffic.`
+                                          : `LaraKube installs ExternalDNS on ${server.name}. From then on, every tool and app you install gets its DNS record created automatically.`}
+                                </p>
+
+                                {hasDnsGroups && mode === 'ssl' && (
+                                    <div className="space-y-2 rounded-xl bg-paper p-3.5">
+                                        <span className="block text-xs font-semibold tracking-wider text-soft uppercase">
+                                            Credentials Source
+                                        </span>
+                                        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink">
                                             <input
-                                                type="hidden"
-                                                name="group"
-                                                value={selectedGroup}
+                                                type="radio"
+                                                name="reuse_option"
+                                                checked={reuseStored}
+                                                onChange={() =>
+                                                    setReuseStored(true)
+                                                }
+                                                className="mt-0.5 text-servers focus:ring-servers"
                                             />
+                                            <div>
+                                                <span className="font-medium">
+                                                    Reuse stored credentials
+                                                    from ExternalDNS
+                                                </span>
+                                                <p className="text-soft">
+                                                    Uses the{' '}
+                                                    {dnsProviderLabel(
+                                                        activeDnsProvider,
+                                                    )}{' '}
+                                                    credentials already stored
+                                                    on this cluster.
+                                                </p>
+                                            </div>
                                         </label>
-                                    )}
-                                    {dnsGroups && dnsGroups.length === 1 && (
-                                        <input
-                                            type="hidden"
-                                            name="group"
-                                            value={firstGroup?.group ?? ''}
-                                        />
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <input
-                                        type="hidden"
-                                        name="reuse_stored"
-                                        value="0"
-                                    />
-                                    <DnsTlsFields
-                                        values={values}
-                                        onChange={handleFieldChange}
-                                        errors={errors}
-                                        serverProvider={server.provider}
-                                        serverRegion={server.region}
-                                        lockedProvider={
-                                            hasDnsGroups
-                                                ? activeDnsProvider
-                                                : undefined
-                                        }
-                                        showToggles={!hasDnsGroups}
-                                        showGroupField={true}
-                                    />
-                                    {hasDnsGroups && mode === 'domain' && (
-                                        <div className="rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
+                                        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink">
                                             <input
-                                                type="hidden"
-                                                name="enable_tls"
-                                                value={
-                                                    values.enable_tls
-                                                        ? '1'
-                                                        : '0'
+                                                type="radio"
+                                                name="reuse_option"
+                                                checked={!reuseStored}
+                                                onChange={() =>
+                                                    setReuseStored(false)
                                                 }
+                                                className="mt-0.5 text-servers focus:ring-servers"
                                             />
-                                            <label className="flex cursor-pointer items-center gap-2 text-ink">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={values.enable_tls}
-                                                    onChange={(e) =>
-                                                        handleFieldChange(
-                                                            'enable_tls',
-                                                            e.target.checked,
-                                                        )
-                                                    }
-                                                    className="rounded border-line text-servers focus:ring-servers"
-                                                />
-                                                <span className="text-xs">
-                                                    Also update automatic SSL
-                                                    certificates with these
+                                            <div>
+                                                <span className="font-medium">
+                                                    Provide separate or updated
                                                     credentials
                                                 </span>
+                                                <p className="text-soft">
+                                                    Provide fresh credentials
+                                                    for{' '}
+                                                    {dnsProviderLabel(
+                                                        activeDnsProvider,
+                                                    )}
+                                                    .
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                )}
+
+                                {hasDnsGroups &&
+                                mode === 'ssl' &&
+                                reuseStored ? (
+                                    <>
+                                        <input
+                                            type="hidden"
+                                            name="reuse_stored"
+                                            value="1"
+                                        />
+                                        <input
+                                            type="hidden"
+                                            name="dns_provider"
+                                            value={
+                                                firstGroup?.provider ||
+                                                'cloudflare'
+                                            }
+                                        />
+                                        {dnsGroups && dnsGroups.length > 1 && (
+                                            <label className="block">
+                                                <span className="mb-1.5 block text-xs font-medium text-soft">
+                                                    Select ExternalDNS Group
+                                                </span>
+                                                <SelectMenu
+                                                    value={selectedGroup}
+                                                    onChange={(val) =>
+                                                        setSelectedGroup(val)
+                                                    }
+                                                    accent="servers"
+                                                    options={dnsGroups.map(
+                                                        (g) => ({
+                                                            value: g.group,
+                                                            label: `${g.group} (${g.zones.join(', ')})`,
+                                                        }),
+                                                    )}
+                                                />
+                                                <input
+                                                    type="hidden"
+                                                    name="group"
+                                                    value={selectedGroup}
+                                                />
                                             </label>
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                                        )}
+                                        {dnsGroups &&
+                                            dnsGroups.length === 1 && (
+                                                <input
+                                                    type="hidden"
+                                                    name="group"
+                                                    value={
+                                                        firstGroup?.group ?? ''
+                                                    }
+                                                />
+                                            )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <input
+                                            type="hidden"
+                                            name="reuse_stored"
+                                            value="0"
+                                        />
+                                        <DnsTlsFields
+                                            values={values}
+                                            onChange={handleFieldChange}
+                                            errors={errors}
+                                            serverProvider={server.provider}
+                                            serverRegion={server.region}
+                                            lockedProvider={
+                                                hasDnsGroups
+                                                    ? activeDnsProvider
+                                                    : undefined
+                                            }
+                                            showToggles={!hasDnsGroups}
+                                            showGroupField={true}
+                                        />
+                                        {hasDnsGroups && mode === 'domain' && (
+                                            <div className="rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
+                                                <input
+                                                    type="hidden"
+                                                    name="enable_tls"
+                                                    value={
+                                                        values.enable_tls
+                                                            ? '1'
+                                                            : '0'
+                                                    }
+                                                />
+                                                <label className="flex cursor-pointer items-center gap-2 text-ink">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={
+                                                            values.enable_tls
+                                                        }
+                                                        onChange={(e) =>
+                                                            handleFieldChange(
+                                                                'enable_tls',
+                                                                e.target
+                                                                    .checked,
+                                                            )
+                                                        }
+                                                        className="rounded border-line text-servers focus:ring-servers"
+                                                    />
+                                                    <span className="text-xs">
+                                                        Also update automatic
+                                                        SSL certificates with
+                                                        these credentials
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
 
-                            <p className="rounded-lg bg-paper px-3 py-2 text-xs text-soft">
-                                Credentials travel securely over the run
-                                environment and are stored inside your cluster
-                                as Kubernetes secrets. They are never saved in
-                                this app.
-                            </p>
+                                <p className="rounded-lg bg-paper px-3 py-2 text-xs text-soft">
+                                    Credentials travel securely over the run
+                                    environment and are stored inside your
+                                    cluster as Kubernetes secrets. They are
+                                    never saved in this app.
+                                </p>
+                            </div>
 
-                            <div className="flex justify-end gap-2.5 pt-2">
-                                <Button variant="secondary" onClick={onClose}>
+                            {/* Footer */}
+                            <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-line bg-surface px-6 py-4">
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleClose}
+                                >
                                     <X className="size-3.5" />
                                     <span>Cancel</span>
                                 </Button>
