@@ -35,6 +35,12 @@ class SyncAppIconCommand extends Command
      */
     public function handle(AppIconGenerator $generator, CloudBrandingClient $cloudClient): int
     {
+        if (! $generator->isSupported()) {
+            $this->warn('Image manipulation requires either the GD or Imagick PHP extension. Skipping icon sync.');
+
+            return self::SUCCESS;
+        }
+
         $filePath = (string) $this->option('file');
         $urlPath = (string) $this->option('url');
         $theme = (string) ($this->option('theme') ?: 'custom');

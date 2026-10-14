@@ -8,12 +8,24 @@ use Illuminate\Support\Facades\Image;
 class AppIconGenerator
 {
     /**
+     * Check if the runtime PHP environment has GD or Imagick installed.
+     */
+    public function isSupported(): bool
+    {
+        return extension_loaded('gd') || extension_loaded('imagick');
+    }
+
+    /**
      * Generate all platform icons from a source image file.
      *
      * @return array<string, string> Map of icon type to absolute destination path
      */
     public function generateAll(string $sourcePath, ?string $outputDir = null): array
     {
+        if (! $this->isSupported()) {
+            return [];
+        }
+
         $dir = $outputDir ?? public_path();
         File::ensureDirectoryExists($dir);
 

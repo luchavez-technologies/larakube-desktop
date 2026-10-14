@@ -63,3 +63,8 @@ test('AppIconGenerator generates all required icon assets from a source image', 
     $icoData = file_get_contents($generated['ico']);
     expect(substr($icoData, 0, 4))->toBe("\x00\x00\x01\x00");
 });
+
+test('AppIconGenerator reports whether image manipulation is supported', function () {
+    $generator = new AppIconGenerator;
+    expect($generator->isSupported())->toBe(extension_loaded('gd') || extension_loaded('imagick'));
+});

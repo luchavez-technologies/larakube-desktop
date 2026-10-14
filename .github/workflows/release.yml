@@ -101,7 +101,7 @@ jobs:
           php-version: '8.4'
           tools: composer:v2
           coverage: none
-          extensions: fileinfo, zip, mbstring, openssl, curl, pdo_sqlite, sqlite3
+          extensions: fileinfo, zip, mbstring, openssl, curl, pdo_sqlite, sqlite3, gd
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
