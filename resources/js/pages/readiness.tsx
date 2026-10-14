@@ -8,7 +8,7 @@ import {
     Plus,
     RotateCw,
     XCircle,
-    Users,
+    Settings2,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -175,16 +175,10 @@ export default function Readiness({
                                                                     provider.slug,
                                                                 )
                                                             }
-                                                            className="w-33 justify-center gap-1.5"
+                                                            className="gap-1.5"
                                                         >
-                                                            <Users className="size-3.5" />
-                                                            <span>
-                                                                {provider
-                                                                    .credentials
-                                                                    .ready
-                                                                    ? 'Accounts / Keys'
-                                                                    : 'Connect'}
-                                                            </span>
+                                                            <Settings2 className="size-3.5" />
+                                                            <span>Manage</span>
                                                         </Button>
                                                         <StatusPill
                                                             tone={

@@ -38,9 +38,13 @@ function load(slug: string, fresh: boolean): Promise<ToolStatus> {
     return request;
 }
 
+type Listener = () => void;
+const listeners = new Set<Listener>();
+
 /** Drops every remembered result, for when something changed what the checks would find. */
 export function forgetToolStatus() {
     known.clear();
+    listeners.forEach((listener) => listener());
 }
 
 /**
@@ -78,6 +82,18 @@ export function useToolStatus(slug: string, refresh = 0) {
 
         check(refresh > 0);
     }, [slug, refresh, check]);
+
+    useEffect(() => {
+        const onForget = () => {
+            check(true);
+        };
+
+        listeners.add(onForget);
+
+        return () => {
+            listeners.delete(onForget);
+        };
+    }, [check]);
 
     return { status, checking };
 }

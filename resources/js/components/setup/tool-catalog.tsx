@@ -1,11 +1,13 @@
-import { Link } from '@inertiajs/react';
-import { Download, RefreshCw, ArrowUpCircle } from 'lucide-react';
-import { buttonClass } from '@/components/button';
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
+import { ArrowUpCircle, Download, RefreshCw } from 'lucide-react';
+import Button from '@/components/button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import ProviderLogo from '@/components/provider-logo';
 import StatusPill from '@/components/status-pill';
+import { forgetToolStatus, useToolStatus } from '@/lib/tool-status';
+import { cn } from '@/lib/utils';
 import { install, update } from '@/routes/setup/tools';
-import { useToolStatus } from '@/lib/tool-status';
 import type { Tool } from '@/types/larakube';
 
 export type CatalogEntry = Omit<Tool, 'installed' | 'path' | 'version'>;
@@ -55,31 +57,61 @@ export function ToolRow({
 }
 
 function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleAction = (url: string, data?: Record<string, string>) => {
+        setSubmitting(true);
+        router.post(url, data ?? {}, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['activeRuns'],
+            onSuccess: () => {
+                forgetToolStatus();
+            },
+            onFinish: () => {
+                setSubmitting(false);
+            },
+        });
+    };
+
     if (tool.installed) {
         return (
             <div className="flex items-center gap-2">
                 {tool.slug === 'larakube' ? (
-                    <Link
-                        href="/setup/cli/update"
-                        data={{ channel }}
-                        method="post"
-                        as="button"
-                        className={buttonClass('secondary', 'sm')}
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={() =>
+                            handleAction('/setup/cli/update', { channel })
+                        }
                     >
-                        <ArrowUpCircle className="size-3.5" />
+                        <ArrowUpCircle
+                            className={cn(
+                                'size-3.5',
+                                submitting && 'animate-spin',
+                            )}
+                        />
                         <span>Update</span>
-                    </Link>
+                    </Button>
                 ) : (
                     tool.installable && (
-                        <Link
-                            href={update(tool.slug).url}
-                            method="post"
-                            as="button"
-                            className={buttonClass('secondary', 'sm')}
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={submitting}
+                            onClick={() => handleAction(update(tool.slug).url)}
                         >
-                            <ArrowUpCircle className="size-3.5" />
+                            <ArrowUpCircle
+                                className={cn(
+                                    'size-3.5',
+                                    submitting && 'animate-spin',
+                                )}
+                            />
                             <span>Update</span>
-                        </Link>
+                        </Button>
                     )
                 )}
                 <StatusPill tone="ok">Installed</StatusPill>
@@ -90,16 +122,20 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     return (
         <div className="flex items-center gap-2">
             {tool.installable && (
-                <Link
-                    href={install(tool.slug).url}
-                    data={{ channel }}
-                    method="post"
-                    as="button"
-                    className={buttonClass('secondary', 'sm')}
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={submitting}
+                    onClick={() =>
+                        handleAction(install(tool.slug).url, { channel })
+                    }
                 >
-                    <Download className="size-3.5" />
+                    <Download
+                        className={cn('size-3.5', submitting && 'animate-spin')}
+                    />
                     <span>Install</span>
-                </Link>
+                </Button>
             )}
             <StatusPill tone={tool.required ? 'bad' : 'muted'}>
                 Missing

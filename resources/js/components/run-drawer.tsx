@@ -20,6 +20,7 @@ import { sendJson } from '@/lib/http';
 import { useIsAnyRightDrawerOpen } from '@/lib/right-drawer-open';
 import { celebratesOnSuccess } from '@/lib/run-kinds';
 import { runStatus } from '@/lib/servers';
+import { forgetToolStatus } from '@/lib/tool-status';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { cn } from '@/lib/utils';
 import { show as showDevBox } from '@/routes/devboxes';
@@ -149,6 +150,12 @@ function TrackedRun({
     useEffect(() => {
         if (wasRunning.current && stream.status !== 'running') {
             onFinished(seed.id);
+            if (
+                stream.kind === 'install-tool' ||
+                stream.kind === 'setup-local'
+            ) {
+                forgetToolStatus();
+            }
         }
         wasRunning.current = stream.status === 'running';
         // eslint-disable-next-line react-hooks/exhaustive-deps
