@@ -45,7 +45,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->rememberState();
 
         MenuBar::create()
-            ->icon(public_path('icon.png'))
+            ->icon(public_path('IconTemplate.png'))
             ->tooltip(config('app.name', 'LaraKube'))
             ->showDockIcon(true)
             ->onlyShowContextMenu()

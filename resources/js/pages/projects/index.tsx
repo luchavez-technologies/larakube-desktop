@@ -211,7 +211,10 @@ export default function ProjectsIndex({
 
                                 <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
                                     {project.exists && project.initialized ? (
-                                        <ProjectActions project={project} />
+                                        <ProjectActions
+                                            project={project}
+                                            compact
+                                        />
                                     ) : (
                                         <span className="text-[11px] text-soft">
                                             {!project.exists
@@ -499,6 +502,7 @@ function BoxProjectList({
                                 <BoxProjectActions
                                     box={box}
                                     project={project}
+                                    compact
                                 />
                                 <Link
                                     href={

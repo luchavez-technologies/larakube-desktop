@@ -12,9 +12,11 @@ import type { Project } from '@/types/larakube';
 export default function ProjectActions({
     project,
     className,
+    compact = false,
 }: {
     project: Project;
     className?: string;
+    compact?: boolean;
 }) {
     if (!project.exists || !project.initialized) {
         return null;
@@ -86,12 +88,13 @@ export default function ProjectActions({
                         )
                     }
                     className={cn(
-                        'inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-soft ring-1 ring-line transition ring-inset',
+                        'inline-flex h-7 items-center rounded-md text-[11px] font-medium text-soft ring-1 ring-line transition ring-inset',
                         'hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-40',
+                        compact ? 'size-7 justify-center p-0' : 'gap-1 px-2',
                     )}
                 >
                     <Icon className="size-3.5" />
-                    <span>{label}</span>
+                    {!compact && <span>{label}</span>}
                 </button>
             ))}
         </div>

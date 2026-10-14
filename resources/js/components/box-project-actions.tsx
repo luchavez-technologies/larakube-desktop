@@ -9,10 +9,12 @@ export default function BoxProjectActions({
     box,
     project,
     className,
+    compact = false,
 }: {
     box: string;
     project: DevBoxProject;
     className?: string;
+    compact?: boolean;
 }) {
     const running = project.local === 'running';
     const actions = [
@@ -41,12 +43,13 @@ export default function BoxProjectActions({
                         )
                     }
                     className={cn(
-                        'inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-soft ring-1 ring-line transition ring-inset',
+                        'inline-flex h-7 items-center rounded-md text-[11px] font-medium text-soft ring-1 ring-line transition ring-inset',
                         'hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-40',
+                        compact ? 'size-7 justify-center p-0' : 'gap-1 px-2',
                     )}
                 >
                     <Icon className="size-3.5" />
-                    <span>{label}</span>
+                    {!compact && <span>{label}</span>}
                 </button>
             ))}
         </div>
