@@ -185,3 +185,24 @@ test('catalog includes gh and tea tools as local-only developer tools', function
         ->and($catalog['gh']['localOnly'])->toBeTrue()
         ->and($catalog['tea']['localOnly'])->toBeTrue();
 });
+
+test('ToolLocator prefers the newer larakube binary when multiple directories contain it', function () {
+    $dirOld = storage_path('framework/testing/bin-old-'.bin2hex(random_bytes(4)));
+    $dirNew = storage_path('framework/testing/bin-new-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($dirOld);
+    File::ensureDirectoryExists($dirNew);
+
+    File::put("{$dirOld}/larakube", "#!/bin/sh\n");
+    chmod("{$dirOld}/larakube", 0755);
+    touch("{$dirOld}/larakube", time() - 3600);
+
+    File::put("{$dirNew}/larakube", "#!/bin/sh\n");
+    chmod("{$dirNew}/larakube", 0755);
+    touch("{$dirNew}/larakube", time());
+
+    $locator = new ToolLocator([$dirOld, $dirNew], windows: false);
+    expect($locator->find('larakube'))->toBe("{$dirNew}/larakube");
+
+    File::deleteDirectory($dirOld);
+    File::deleteDirectory($dirNew);
+});

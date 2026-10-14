@@ -88,6 +88,8 @@ class ToolLocator
             return $this->inDistro[$binary] ??= $this->findInDistro($binary);
         }
 
+        $candidates = [];
+
         foreach ($this->directories() as $directory) {
             $candidate = "{$directory}/{$binary}";
 
@@ -98,11 +100,21 @@ class ToolLocator
                     }
                 }
 
-                return $candidate;
+                $candidates[] = $candidate;
             }
         }
 
-        return null;
+        if ($candidates === []) {
+            return null;
+        }
+
+        if ($binary === 'larakube' && count($candidates) > 1) {
+            // When multiple larakube binaries exist (e.g. locally built in /usr/local/bin vs installed in ~/.larakube/bin),
+            // prefer the one modified most recently so local builds and fresh updates are immediately picked up.
+            usort($candidates, fn (string $a, string $b): int => (filemtime($b) ?: 0) <=> (filemtime($a) ?: 0));
+        }
+
+        return $candidates[0];
     }
 
     /**
