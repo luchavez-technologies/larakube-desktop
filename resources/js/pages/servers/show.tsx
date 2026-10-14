@@ -1,4 +1,4 @@
-import { Deferred, Form, Link, usePage } from '@inertiajs/react';
+import { Deferred, Form, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     Activity,
@@ -119,10 +119,32 @@ export default function ShowServer({
     providers?: Provider[] | null;
     k9sInstalled: boolean;
 }) {
-    const { url } = usePage();
+    const { url, errors } = usePage().props;
+    const [openingTerminal, setOpeningTerminal] = useState<
+        'kubectl' | 'ssh' | null
+    >(null);
+
+    const handleOpenTerminal = (type: 'kubectl' | 'ssh') => {
+        setOpeningTerminal(type);
+        router.post(
+            terminal(server.name).url,
+            { type },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                only: ['errors'],
+                onFinish: () => {
+                    setOpeningTerminal(null);
+                },
+            },
+        );
+    };
+
     const [dialog, setDialog] = useState<Dialog>(() => {
         // "?step=domain|ssl" opens that dialog, e.g. from a finished create run.
-        const step = new URLSearchParams(url.split('?')[1] ?? '').get('step');
+        const step = new URLSearchParams(
+            typeof url === 'string' ? (url.split('?')[1] ?? '') : '',
+        ).get('step');
         return server.status === 'ready' &&
             (step === 'domain' || step === 'ssl')
             ? step
@@ -540,6 +562,11 @@ export default function ShowServer({
                 <div className="flex flex-col gap-4.5">
                     {ready && (
                         <Card label="Connection">
+                            {errors?.terminal && (
+                                <p className="border-b border-line px-4 py-2 text-xs text-accent">
+                                    {errors.terminal}
+                                </p>
+                            )}
                             {server.context && (
                                 <ListRow
                                     stack
@@ -548,25 +575,40 @@ export default function ShowServer({
                                             <CopyButton
                                                 value={server.context}
                                             />
-                                            <Link
-                                                href={terminal(server.name).url}
-                                                method="post"
-                                                data={{ type: 'kubectl' }}
-                                                as="button"
-                                                disabled={!k9sInstalled}
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={
+                                                    !k9sInstalled ||
+                                                    openingTerminal !== null
+                                                }
                                                 title={
                                                     k9sInstalled
                                                         ? 'Open k9s for this context in a terminal'
                                                         : 'Install k9s from Setup to use this'
                                                 }
-                                                className={buttonClass(
-                                                    'ghost',
-                                                    'sm',
-                                                )}
+                                                onClick={() =>
+                                                    handleOpenTerminal(
+                                                        'kubectl',
+                                                    )
+                                                }
                                             >
-                                                <SquareTerminal className="size-3.5" />
-                                                <span>Open in Terminal</span>
-                                            </Link>
+                                                <SquareTerminal
+                                                    className={cn(
+                                                        'size-3.5',
+                                                        openingTerminal ===
+                                                            'kubectl' &&
+                                                            'animate-spin',
+                                                    )}
+                                                />
+                                                <span>
+                                                    {openingTerminal ===
+                                                    'kubectl'
+                                                        ? 'Opening…'
+                                                        : 'Open in Terminal'}
+                                                </span>
+                                            </Button>
                                         </div>
                                     }
                                 >
@@ -590,20 +632,29 @@ export default function ShowServer({
                                         <CopyButton
                                             value={`ssh ${server.name}`}
                                         />
-                                        <Link
-                                            href={terminal(server.name).url}
-                                            method="post"
-                                            data={{ type: 'ssh' }}
-                                            as="button"
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={openingTerminal !== null}
                                             title="Open an SSH session in a terminal"
-                                            className={buttonClass(
-                                                'ghost',
-                                                'sm',
-                                            )}
+                                            onClick={() =>
+                                                handleOpenTerminal('ssh')
+                                            }
                                         >
-                                            <SquareTerminal className="size-3.5" />
-                                            <span>Open in Terminal</span>
-                                        </Link>
+                                            <SquareTerminal
+                                                className={cn(
+                                                    'size-3.5',
+                                                    openingTerminal === 'ssh' &&
+                                                        'animate-spin',
+                                                )}
+                                            />
+                                            <span>
+                                                {openingTerminal === 'ssh'
+                                                    ? 'Opening…'
+                                                    : 'Open in Terminal'}
+                                            </span>
+                                        </Button>
                                     </div>
                                 }
                             >
