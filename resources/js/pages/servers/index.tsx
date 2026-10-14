@@ -146,9 +146,6 @@ export default function ServersIndex({
                                                 Domains
                                             </th>
                                             <th className="px-4 py-3 font-medium whitespace-nowrap">
-                                                IP address
-                                            </th>
-                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
                                                 Status
                                             </th>
                                             <th className="px-4 py-3 font-medium whitespace-nowrap">
@@ -178,6 +175,18 @@ export default function ServersIndex({
                                                         >
                                                             {server.name}
                                                         </Link>
+                                                        <div className="mt-0.5 font-mono text-[11px] text-faint">
+                                                            {server.ip ? (
+                                                                <Redactable
+                                                                    value={
+                                                                        server.ip
+                                                                    }
+                                                                    kind="ip"
+                                                                />
+                                                            ) : (
+                                                                '—'
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3.5 whitespace-nowrap text-soft">
                                                         <div className="flex items-center gap-1.5">
@@ -242,18 +251,6 @@ export default function ServersIndex({
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td className="px-4 py-3.5 font-mono text-[13px] whitespace-nowrap">
-                                                        {server.ip ? (
-                                                            <Redactable
-                                                                value={
-                                                                    server.ip
-                                                                }
-                                                                kind="ip"
-                                                            />
-                                                        ) : (
-                                                            '—'
-                                                        )}
-                                                    </td>
                                                     <td className="px-4 py-3.5 whitespace-nowrap">
                                                         <StatusPill tone={tone}>
                                                             {label}
@@ -295,21 +292,35 @@ export default function ServersIndex({
                                     return (
                                         <div
                                             key={server.name}
-                                            className="rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
+                                            className="group flex flex-col justify-between rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
                                         >
                                             <Link
                                                 href={show(server.name).url}
                                                 className="block"
                                             >
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="truncate text-sm font-semibold">
-                                                        {server.name}
-                                                    </span>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <span className="truncate text-sm font-semibold text-ink group-hover:underline">
+                                                            {server.name}
+                                                        </span>
+                                                        <div className="mt-0.5 font-mono text-[11px] text-faint">
+                                                            {server.ip ? (
+                                                                <Redactable
+                                                                    value={
+                                                                        server.ip
+                                                                    }
+                                                                    kind="ip"
+                                                                />
+                                                            ) : (
+                                                                '—'
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                     <StatusPill tone={tone}>
                                                         {label}
                                                     </StatusPill>
                                                 </div>
-                                                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-soft">
+                                                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-soft">
                                                     <ProviderLogo
                                                         provider={
                                                             server.provider
@@ -321,6 +332,11 @@ export default function ServersIndex({
                                                             server.provider
                                                         ] ?? server.provider}
                                                     </span>
+                                                    {server.region && (
+                                                        <span>
+                                                            · {server.region}
+                                                        </span>
+                                                    )}
                                                     {server.kind ===
                                                         'discovered' && (
                                                         <span className="rounded bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-soft">
@@ -330,11 +346,6 @@ export default function ServersIndex({
                                                     {server.isCurrent && (
                                                         <span className="rounded bg-ok-tint px-1.5 py-0.5 text-[10px] font-semibold text-ok">
                                                             Active
-                                                        </span>
-                                                    )}
-                                                    {server.region && (
-                                                        <span>
-                                                            · {server.region}
                                                         </span>
                                                     )}
                                                 </div>
@@ -362,31 +373,22 @@ export default function ServersIndex({
                                                             )}
                                                         </div>
                                                     )}
-                                                <div className="mt-3 flex items-center justify-between">
-                                                    <span className="font-mono text-[11px] text-faint">
-                                                        {server.ip ? (
-                                                            <Redactable
-                                                                value={
-                                                                    server.ip
-                                                                }
-                                                                kind="ip"
-                                                            />
-                                                        ) : (
-                                                            'Provisioning IP…'
-                                                        )}
-                                                    </span>
-                                                    <span className="text-sm font-medium text-brand hover:underline">
-                                                        View →
-                                                    </span>
-                                                </div>
                                             </Link>
-                                            <div className="mt-3 border-t border-line pt-3">
+                                            <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
                                                 <ServerActions
                                                     server={server}
                                                     reachable={reachable(
                                                         server,
                                                     )}
                                                 />
+                                                <Link
+                                                    href={show(server.name).url}
+                                                    className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                                                    aria-label={`View ${server.name}`}
+                                                >
+                                                    <span>View</span>
+                                                    <ChevronRight className="size-3.5" />
+                                                </Link>
                                             </div>
                                         </div>
                                     );
