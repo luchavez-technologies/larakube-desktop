@@ -276,10 +276,10 @@ function NewWorkspace({
                         </span>
                     )}
                 </label>
-                <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-soft">
+                <div className="block">
+                    <label className="mb-1 block text-xs font-medium text-soft">
                         Framework
-                    </span>
+                    </label>
                     <SelectMenu
                         value={form.data.framework}
                         triggerClassName={inputClass}
@@ -298,11 +298,11 @@ function NewWorkspace({
                             disabled: !f.available,
                         }))}
                     />
-                </label>
-                <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-soft">
+                </div>
+                <div className="block">
+                    <label className="mb-1 block text-xs font-medium text-soft">
                         {runtime?.label ?? 'Runtime'} version
-                    </span>
+                    </label>
                     <SelectMenu
                         value={
                             form.data.runtimeVersion ||
@@ -318,7 +318,7 @@ function NewWorkspace({
                             label: version,
                         }))}
                     />
-                </label>
+                </div>
                 <label className="block">
                     <span className="mb-1 block text-xs font-medium text-soft">
                         Branch to work on
@@ -329,10 +329,10 @@ function NewWorkspace({
                         className={inputClass}
                     />
                 </label>
-                <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-soft">
+                <div className="block">
+                    <label className="mb-1 block text-xs font-medium text-soft">
                         Size
-                    </span>
+                    </label>
                     <SelectMenu
                         value={form.data.size}
                         triggerClassName={inputClass}
@@ -342,7 +342,7 @@ function NewWorkspace({
                             label: size.label,
                         }))}
                     />
-                </label>
+                </div>
                 <div className="flex items-center justify-between gap-4 sm:col-span-2">
                     <p className="text-xs leading-relaxed text-soft">
                         The first one takes a few minutes: LaraKube builds the

@@ -1349,10 +1349,10 @@ function ConfigureDnsTlsDialog({
                                             }
                                         />
                                         {dnsGroups && dnsGroups.length > 1 && (
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-medium text-soft">
+                                            <div className="block">
+                                                <label className="mb-1.5 block text-xs font-medium text-soft">
                                                     Select ExternalDNS Group
-                                                </span>
+                                                </label>
                                                 <SelectMenu
                                                     value={selectedGroup}
                                                     onChange={(val) =>
@@ -1371,7 +1371,7 @@ function ConfigureDnsTlsDialog({
                                                     name="group"
                                                     value={selectedGroup}
                                                 />
-                                            </label>
+                                            </div>
                                         )}
                                         {dnsGroups &&
                                             dnsGroups.length === 1 && (

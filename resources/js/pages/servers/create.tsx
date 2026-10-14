@@ -1310,10 +1310,10 @@ function Field({
     children: ReactNode;
 }) {
     return (
-        <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-soft">
+        <div className="block">
+            <label className="mb-1.5 block text-xs font-medium text-soft">
                 {label}
-            </span>
+            </label>
             {children}
             {error ? (
                 <span className="text-bad mt-1 block text-xs">{error}</span>
@@ -1322,7 +1322,7 @@ function Field({
                     <span className="mt-1 block text-xs text-soft">{hint}</span>
                 )
             )}
-        </label>
+        </div>
     );
 }
 

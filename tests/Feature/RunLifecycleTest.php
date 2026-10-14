@@ -207,6 +207,19 @@ test('a run that crashes quotes the CLI\'s exception message', function () {
         ->and($run->result['error'])->toBe('The LaraKube CLI stopped with: Required.');
 });
 
+test('a run under --json that fails before emitting JSON captures stdout as output and reports the CLI error', function () {
+    $run = runLifecycleRun(json: true);
+
+    event(new MessageReceived($run->alias(), "  The \"--dns-provider\" option does not exist.  \n"));
+    event(new ProcessExited($run->alias(), 1));
+
+    $run->refresh();
+
+    expect($run->status)->toBe(RunStatus::Failed)
+        ->and($run->output)->toBe("The \"--dns-provider\" option does not exist.\n")
+        ->and($run->result['error'])->toBe('The "--dns-provider" option does not exist.');
+});
+
 test('runs.stream returns live output and run details as JSON', function () {
     $run = runLifecycleRun();
     $run->update(['output' => "Building containers...\n", 'status' => RunStatus::Running]);

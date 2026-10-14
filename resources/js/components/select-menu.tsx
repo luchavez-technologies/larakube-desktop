@@ -135,7 +135,10 @@ export default function SelectMenu({
             <button
                 type="button"
                 disabled={disabled}
-                onClick={() => setOpen((prev) => !prev)}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    setOpen((prev) => !prev);
+                }}
                 aria-label={rest['aria-label']}
                 className={cn(
                     'flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2 text-left text-sm ring-1 transition outline-none disabled:cursor-not-allowed disabled:opacity-45',
@@ -164,6 +167,7 @@ export default function SelectMenu({
 
             {open && (
                 <div
+                    onClick={(event) => event.stopPropagation()}
                     className={cn(
                         'absolute top-full z-50 mt-1.5 max-h-80 w-full min-w-max overflow-y-auto rounded-2xl bg-surface p-1.5 shadow-2xl ring-1 ring-line',
                         align === 'right' ? 'right-0' : 'left-0',
@@ -217,7 +221,8 @@ export default function SelectMenu({
                                     <button
                                         type="button"
                                         disabled={option.disabled}
-                                        onClick={() => {
+                                        onClick={(event) => {
+                                            event.stopPropagation();
                                             if (option.disabled) {
                                                 return;
                                             }

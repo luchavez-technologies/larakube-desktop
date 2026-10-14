@@ -62,9 +62,20 @@ class RecordRunOutput
             return;
         }
 
+        if ($event->code !== 0 && $run->emitsJsonResult()) {
+            $rawStdout = trim($run->stdout);
+            if ($rawStdout !== '' && $this->decodeResult($rawStdout) === null) {
+                if ($run->output === '') {
+                    $run->output = $rawStdout."\n";
+                }
+            }
+        }
+
+        $rawLog = $run->output !== '' ? $run->output : $run->stdout;
+
         $result = $this->decodeResult($run->stdout)
-            ?? $this->missingFlagResult($run->output)
-            ?? ($event->code !== 0 ? $this->exceptionResult($run->output) : null);
+            ?? $this->missingFlagResult($rawLog)
+            ?? ($event->code !== 0 ? ($this->exceptionResult($rawLog) ?? $this->cliErrorResult($rawLog)) : null);
 
         $status = match (true) {
             $run->status === RunStatus::Cancelled => RunStatus::Cancelled,
@@ -76,6 +87,7 @@ class RecordRunOutput
             'status' => $status,
             'exit_code' => $event->code,
             'result' => $result,
+            'output' => $run->output,
             'finished_at' => now(),
         ])->save();
 
@@ -233,6 +245,23 @@ class RecordRunOutput
         }
 
         return ['success' => false, 'error' => "The CLI needs {$matches[1]}: {$matches[2]}."];
+    }
+
+    /**
+     * When Symfony Console or the CLI stops with a plain error message
+     * (e.g. 'The "--foo" option does not exist.' or 'Command "bar" is not defined.'),
+     * pull out the message so the run banner explains why it failed.
+     *
+     * @return array{success: false, error: string}|null
+     */
+    private function cliErrorResult(string $output): ?array
+    {
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $output))));
+        if ($lines === []) {
+            return null;
+        }
+
+        return ['success' => false, 'error' => $lines[0]];
     }
 
     private function run(string $alias): ?Run
