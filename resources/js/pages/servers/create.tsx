@@ -1,14 +1,20 @@
 import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, useEffect, type FormEvent, type ReactNode } from 'react';
 import {
+    ArrowLeft,
+    ArrowRight,
+    Check,
     CheckCircle2,
-    ChevronDown,
+    Cloud,
+    ExternalLink,
     FlaskConical,
     Globe,
     Key,
     Plus,
+    Server,
     Upload,
     Users,
+    X,
 } from 'lucide-react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import GcpPolicyHelper from '@/components/gcp-policy-helper';
@@ -135,6 +141,8 @@ function ServerForm({
         account: initial.activeAccount ?? initial.accounts?.[0]?.id ?? '',
     });
 
+    const [currentStep, setCurrentStep] = useState(1);
+    const [highestReachedStep, setHighestReachedStep] = useState(1);
     const [overrideAwsKeys, setOverrideAwsKeys] = useState(false);
     const [showAccountModal, setShowAccountModal] = useState(false);
 
@@ -161,6 +169,115 @@ function ServerForm({
     const monthlyEstimate = isManaged
         ? estimateManagedCost(price, nodeCount, form.data.ha, provider.haCost)
         : undefined;
+
+    const steps = devBox
+        ? [
+              { number: 1, title: 'Choose Provider', icon: Cloud },
+              { number: 2, title: 'Customize Dev Box', icon: Server },
+          ]
+        : [
+              { number: 1, title: 'Choose Provider', icon: Cloud },
+              { number: 2, title: 'Customize Server', icon: Server },
+              { number: 3, title: 'DNS & SSL Automation', icon: Globe },
+          ];
+
+    function goToStep(step: number) {
+        setCurrentStep(step);
+        if (step > highestReachedStep) {
+            setHighestReachedStep(step);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    const canProceedToStep2 =
+        !cliMissing &&
+        !needsGcpLogin &&
+        (!needsToken || form.data.api_token.trim() !== '') &&
+        (!needsAwsKeys ||
+            (form.data.aws_access_key_id.trim() !== '' &&
+                form.data.aws_secret_access_key.trim() !== ''));
+
+    const canProceedToStep3 =
+        canProceedToStep2 && form.data.stack_name.trim() !== '';
+
+    const hasValidDnsCredentials = (() => {
+        if (!form.data.dns_provider) return true;
+        if (form.data.dns_provider === 'cloudflare') {
+            return form.data.cloudflare_token.trim() !== '';
+        }
+        if (form.data.dns_provider === 'route53') {
+            return (
+                form.data.dns_aws_access_key_id.trim() !== '' &&
+                form.data.dns_aws_secret_access_key.trim() !== ''
+            );
+        }
+        if (form.data.dns_provider === 'google') {
+            return (
+                form.data.dns_gcp_project_id.trim() !== '' &&
+                form.data.dns_gcp_credentials.trim() !== ''
+            );
+        }
+        return true;
+    })();
+
+    const canSubmit = devBox
+        ? canProceedToStep3
+        : canProceedToStep3 && hasValidDnsCredentials;
+
+    function canGoToStep(stepNumber: number) {
+        if (stepNumber === currentStep) return true;
+        if (stepNumber === 1) return true;
+        if (stepNumber === 2) return canProceedToStep2;
+        if (stepNumber === 3) return canProceedToStep3;
+        return false;
+    }
+
+    useEffect(() => {
+        const errorKeys = Object.keys(form.errors);
+        if (errorKeys.length === 0) return;
+
+        if (
+            !devBox &&
+            errorKeys.some((k) =>
+                [
+                    'cloudflare_token',
+                    'dns_provider',
+                    'dns_aws_access_key_id',
+                    'dns_aws_secret_access_key',
+                    'dns_aws_region',
+                    'dns_gcp_project_id',
+                    'dns_gcp_credentials',
+                ].includes(k),
+            )
+        ) {
+            goToStep(3);
+        } else if (
+            errorKeys.some((k) =>
+                [
+                    'stack_name',
+                    'target_kind',
+                    'region',
+                    'size',
+                    'node_count',
+                    'ha',
+                ].includes(k),
+            )
+        ) {
+            goToStep(2);
+        } else if (
+            errorKeys.some((k) =>
+                [
+                    'provider',
+                    'api_token',
+                    'aws_access_key_id',
+                    'aws_secret_access_key',
+                    'account',
+                ].includes(k),
+            )
+        ) {
+            goToStep(1);
+        }
+    }, [form.errors]);
 
     function selectProvider(next: Provider) {
         setOverrideAwsKeys(false);
@@ -198,468 +315,692 @@ function ServerForm({
     return (
         <>
             <form onSubmit={submit} className="max-w-3xl">
-                <p className="mb-2.5 text-[13px] font-medium">Cloud provider</p>
-                <div className="grid grid-cols-2 gap-3">
-                    {providers.map((candidate) => (
-                        <button
-                            key={candidate.slug}
-                            type="button"
-                            onClick={() => selectProvider(candidate)}
-                            className={cn(
-                                'flex items-center justify-between rounded-xl bg-surface px-4 py-3.5 text-left transition',
-                                candidate.slug === provider.slug
-                                    ? 'ring-2 ring-servers'
-                                    : 'ring-1 ring-line hover:ring-faint',
-                            )}
-                        >
-                            <div className="flex items-center gap-3">
-                                <ProviderLogo
-                                    provider={candidate.slug}
-                                    size="sm"
-                                />
-                                <span className="text-sm font-medium">
-                                    {candidate.label}
-                                </span>
-                            </div>
-                            <StatusPill
-                                tone={
-                                    candidate.credentials.ready ? 'ok' : 'muted'
-                                }
+                {/* Stepper Navigation Header */}
+                <div className="mb-6 flex items-center justify-between gap-2 border-b border-line pb-5">
+                    {steps.map((s, idx) => {
+                        const isCurrent = currentStep === s.number;
+                        const isCompleted = currentStep > s.number;
+                        const isClickable = canGoToStep(s.number);
+
+                        return (
+                            <div
+                                key={s.number}
+                                className="flex flex-1 items-center"
                             >
-                                {candidate.credentials.ready
-                                    ? 'Ready'
-                                    : 'Not connected'}
-                            </StatusPill>
-                        </button>
-                    ))}
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        isClickable && goToStep(s.number)
+                                    }
+                                    disabled={!isClickable}
+                                    className={cn(
+                                        'group flex items-center gap-3 text-left transition',
+                                        !isClickable &&
+                                            'cursor-not-allowed opacity-50',
+                                    )}
+                                >
+                                    <div
+                                        className={cn(
+                                            'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition',
+                                            isCompleted
+                                                ? 'bg-servers text-white'
+                                                : isCurrent
+                                                  ? 'bg-servers text-white ring-4 ring-servers/20'
+                                                  : 'bg-surface text-soft ring-1 ring-line group-hover:ring-soft',
+                                        )}
+                                    >
+                                        {isCompleted ? (
+                                            <Check className="size-4 stroke-[2.5]" />
+                                        ) : (
+                                            <span>{s.number}</span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span
+                                                className={cn(
+                                                    'text-xs font-medium',
+                                                    isCurrent
+                                                        ? 'text-servers'
+                                                        : isCompleted
+                                                          ? 'text-foreground'
+                                                          : 'text-soft',
+                                                )}
+                                            >
+                                                {s.title}
+                                            </span>
+                                        </div>
+                                        <span className="block text-[11px] text-soft">
+                                            {s.number === 1 && provider.label}
+                                            {s.number === 2 &&
+                                                (form.data.stack_name.trim() ||
+                                                    'Name & specs')}
+                                            {s.number === 3 &&
+                                                (form.data.dns_provider
+                                                    ? form.data.dns_provider ===
+                                                      'cloudflare'
+                                                        ? 'Cloudflare'
+                                                        : form.data
+                                                                .dns_provider ===
+                                                            'route53'
+                                                          ? 'Route 53'
+                                                          : 'Google Cloud'
+                                                    : 'Optional & recommended')}
+                                        </span>
+                                    </div>
+                                </button>
+                                {idx < steps.length - 1 && (
+                                    <div
+                                        className={cn(
+                                            'mx-3 h-0.5 flex-1 transition',
+                                            currentStep > s.number
+                                                ? 'bg-servers'
+                                                : 'bg-line',
+                                        )}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
 
-                {provider.accounts && provider.accounts.length > 0 && (
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 ring-1 ring-line">
-                        <div className="flex items-center gap-2.5">
-                            <Users className="size-4 text-soft" />
-                            <div>
-                                <span className="text-foreground text-xs font-medium">
-                                    Account / Profile:
-                                </span>
-                                <span className="ml-2 font-mono text-xs text-soft">
-                                    {form.data.account ||
-                                        provider.activeAccount ||
-                                        'default'}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {provider.accounts.length > 1 && (
-                                <SelectMenu
-                                    value={form.data.account}
-                                    accent="servers"
-                                    triggerClassName="h-7 bg-background px-2.5 py-1 text-xs"
-                                    onChange={(value) =>
-                                        form.setData('account', value)
-                                    }
-                                    options={provider.accounts.map((acc) => ({
-                                        value: acc.id,
-                                        label: acc.isDefault
-                                            ? `${acc.label} · (Default)`
-                                            : acc.label,
-                                    }))}
-                                />
-                            )}
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => setShowAccountModal(true)}
-                            >
-                                <Plus className="size-3" />
-                                <span>Manage Accounts</span>
-                            </Button>
-                        </div>
-                    </div>
-                )}
-
-                {(needsGcpLogin || needsAwsKeys) && (
-                    <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
-                        {cliMissing ? (
-                            <>
-                                <span>
-                                    {provider.credentials.hint} Install it from
-                                    Setup first, then come back here.
-                                </span>
-                                <Link
-                                    href={readiness().url}
-                                    className={buttonClass(
-                                        'secondary',
-                                        'sm',
-                                        'shrink-0',
-                                    )}
-                                >
-                                    Open Setup
-                                </Link>
-                            </>
-                        ) : needsGcpLogin ? (
-                            <>
-                                <span>
-                                    {provider.credentials.hint} Authorize with
-                                    Google to continue.
-                                </span>
-                                <GcpSignIn label="Sign in with Google" />
-                            </>
-                        ) : (
-                            <span>
-                                {provider.credentials.hint} Enter your AWS keys
-                                below to continue.
-                            </span>
-                        )}
-                    </div>
-                )}
-
-                <div className="mt-5 space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
-                    <Field
-                        label={devBox ? 'Dev box name' : 'Server name'}
-                        hint="Lowercase letters, numbers and dashes."
-                        error={form.errors.stack_name}
-                    >
-                        <input
-                            value={form.data.stack_name}
-                            onChange={(event) =>
-                                form.setData('stack_name', event.target.value)
-                            }
-                            placeholder="workshop-demo"
-                            autoFocus
-                            spellCheck={false}
-                            className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
-                        />
-                    </Field>
-
-                    {canBeManaged && (
-                        <Field
-                            label="Server type"
-                            error={form.errors.target_kind}
-                        >
-                            <div className="grid grid-cols-2 gap-2">
+                {/* Step 1: Choose Provider */}
+                {currentStep === 1 && (
+                    <div>
+                        <p className="mb-2.5 text-[13px] font-medium">
+                            Cloud provider
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {providers.map((candidate) => (
                                 <button
+                                    key={candidate.slug}
                                     type="button"
-                                    onClick={() => selectTargetKind('vps')}
+                                    onClick={() => selectProvider(candidate)}
                                     className={cn(
-                                        'rounded-lg px-3 py-2 text-left text-sm transition',
-                                        !isManaged
-                                            ? 'bg-servers/10 ring-2 ring-servers'
+                                        'flex items-center justify-between rounded-xl bg-surface px-4 py-3.5 text-left transition',
+                                        candidate.slug === provider.slug
+                                            ? 'ring-2 ring-servers'
                                             : 'ring-1 ring-line hover:ring-faint',
                                     )}
                                 >
-                                    <span className="block font-medium">
-                                        Single server (VPS)
-                                    </span>
-                                    <span className="block text-xs text-soft">
-                                        k3s, single-node — cheapest, simplest
-                                        {untested.capabilities.includes(
-                                            'vps-to-managed',
-                                        ) && (
-                                            <>
-                                                . Switching to Managed later is
-                                                possible via the CLI, but that
-                                                path isn't fully validated yet.
-                                            </>
-                                        )}
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => selectTargetKind('managed')}
-                                    className={cn(
-                                        'rounded-lg px-3 py-2 text-left text-sm transition',
-                                        isManaged
-                                            ? 'bg-servers/10 ring-2 ring-servers'
-                                            : 'ring-1 ring-line hover:ring-faint',
-                                    )}
-                                >
-                                    <span className="block font-medium">
-                                        Managed Kubernetes
-                                    </span>
-                                    <span className="block text-xs text-soft">
-                                        {provider.managedProvider?.toUpperCase()}{' '}
-                                        — multi-node, scales with your traffic
-                                    </span>
-                                </button>
-                            </div>
-                        </Field>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Region" error={form.errors.region}>
-                            <Select
-                                value={form.data.region}
-                                onChange={(value) =>
-                                    form.setData('region', value)
-                                }
-                                options={provider.regions}
-                                searchable={provider.regions.length > 8}
-                            />
-                        </Field>
-                        <Field
-                            label="Size"
-                            error={form.errors.size}
-                            hint={pricingNote(provider)}
-                        >
-                            <Select
-                                value={form.data.size}
-                                onChange={(value) =>
-                                    form.setData('size', value)
-                                }
-                                options={sizeOptions}
-                                searchable={sizeOptions.length > 8}
-                            />
-                        </Field>
-                    </div>
-
-                    {isManaged && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <Field
-                                label="Node count"
-                                error={form.errors.node_count}
-                            >
-                                <input
-                                    type="number"
-                                    min={1}
-                                    max={20}
-                                    value={form.data.node_count}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'node_count',
-                                            event.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                            {provider.haOption === 'boolean' ? (
-                                <Field
-                                    label={
-                                        <span className="inline-flex items-center gap-1">
-                                            Control plane
-                                            <InfoTooltip side="right">
-                                                The control plane is what runs
-                                                Kubernetes itself (the API
-                                                server, scheduler, etcd) —
-                                                separate from your worker
-                                                node(s). Unchecked, it runs in a
-                                                single zone for free: fine for
-                                                learning or a demo, but an
-                                                outage in that zone takes the
-                                                whole cluster down with it.
-                                                Checked, it spans multiple zones
-                                                for{' '}
-                                                {provider.haCost ??
-                                                    'an extra charge'}
-                                                , so the cluster survives one
-                                                zone going down — what most
-                                                production setups choose.
-                                            </InfoTooltip>
-                                        </span>
-                                    }
-                                >
-                                    <label className="flex h-9 items-center gap-2 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.data.ha}
-                                            onChange={(event) =>
-                                                form.setData(
-                                                    'ha',
-                                                    event.target.checked,
-                                                )
-                                            }
-                                            className="size-4 rounded ring-1 ring-line"
+                                    <div className="flex items-center gap-3">
+                                        <ProviderLogo
+                                            provider={candidate.slug}
+                                            size="sm"
                                         />
-                                        <span>
-                                            High availability
-                                            {provider.haCost
-                                                ? ` (${provider.haCost})`
-                                                : ''}
+                                        <span className="text-sm font-medium">
+                                            {candidate.label}
                                         </span>
-                                    </label>
-                                </Field>
-                            ) : (
-                                provider.haOption === 'always' && (
-                                    <Field
-                                        label={
-                                            <span className="inline-flex items-center gap-1">
-                                                Control plane
-                                                <InfoTooltip side="right">
-                                                    The control plane is what
-                                                    runs Kubernetes itself (the
-                                                    API server, scheduler, etcd)
-                                                    — separate from your
-                                                    node(s). {
-                                                        provider.label
-                                                    }{' '}
-                                                    always spans it across
-                                                    multiple availability zones
-                                                    — there's no cheaper,
-                                                    single-zone option to opt
-                                                    out of — which is why it
-                                                    isn't a checkbox here like
-                                                    it is for some other
-                                                    providers. It costs{' '}
-                                                    {provider.haCost ??
-                                                        'a flat hourly fee'}
-                                                    , billed on top of your
-                                                    node(s) regardless of
-                                                    cluster size.
-                                                </InfoTooltip>
-                                            </span>
+                                    </div>
+                                    <StatusPill
+                                        tone={
+                                            candidate.credentials.ready
+                                                ? 'ok'
+                                                : 'muted'
                                         }
                                     >
-                                        <p className="flex h-9 items-center text-sm text-soft">
-                                            High availability included
-                                        </p>
+                                        {candidate.credentials.ready
+                                            ? 'Ready'
+                                            : 'Not connected'}
+                                    </StatusPill>
+                                </button>
+                            ))}
+                        </div>
+
+                        {provider.accounts && provider.accounts.length > 0 && (
+                            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 ring-1 ring-line">
+                                <div className="flex items-center gap-2.5">
+                                    <Users className="size-4 text-soft" />
+                                    <div>
+                                        <span className="text-foreground text-xs font-medium">
+                                            Account / Profile:
+                                        </span>
+                                        <span className="ml-2 font-mono text-xs text-soft">
+                                            {form.data.account ||
+                                                provider.activeAccount ||
+                                                'default'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {provider.accounts.length > 1 && (
+                                        <SelectMenu
+                                            value={form.data.account}
+                                            accent="servers"
+                                            triggerClassName="h-7 bg-background px-2.5 py-1 text-xs"
+                                            onChange={(value) =>
+                                                form.setData('account', value)
+                                            }
+                                            options={provider.accounts.map(
+                                                (acc) => ({
+                                                    value: acc.id,
+                                                    label: acc.isDefault
+                                                        ? `${acc.label} · (Default)`
+                                                        : acc.label,
+                                                }),
+                                            )}
+                                        />
+                                    )}
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() =>
+                                            setShowAccountModal(true)
+                                        }
+                                    >
+                                        <Users className="size-3.5" />
+                                        <span>Manage Accounts</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {(needsGcpLogin || needsAwsKeys || cliMissing) && (
+                            <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-warn-tint px-4 py-3 text-sm text-warn">
+                                {cliMissing ? (
+                                    <>
+                                        <span>
+                                            {provider.credentials.hint} Install
+                                            it from Setup first, then come back
+                                            here.
+                                        </span>
+                                        <Link
+                                            href={readiness().url}
+                                            className={buttonClass(
+                                                'secondary',
+                                                'sm',
+                                                'shrink-0',
+                                            )}
+                                        >
+                                            <ExternalLink className="size-3.5" />
+                                            <span>Open Setup</span>
+                                        </Link>
+                                    </>
+                                ) : needsGcpLogin ? (
+                                    <>
+                                        <span>
+                                            {provider.credentials.hint}{' '}
+                                            Authorize with Google to continue.
+                                        </span>
+                                        <GcpSignIn label="Sign in with Google" />
+                                    </>
+                                ) : (
+                                    <span>
+                                        {provider.credentials.hint} Enter your
+                                        AWS keys below to continue.
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {needsToken && (
+                            <div className="mt-4 rounded-2xl bg-surface p-5 ring-1 ring-line ring-inset">
+                                <Field
+                                    label={`${provider.label} API token`}
+                                    hint="Used for this run only. Never saved in plaintext."
+                                    error={form.errors.api_token}
+                                >
+                                    <input
+                                        type="password"
+                                        value={form.data.api_token}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'api_token',
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder={`Paste your ${provider.label} API token`}
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                            </div>
+                        )}
+
+                        {provider.slug === 'aws' &&
+                            provider.credentials.ready && (
+                                <div className="mt-3 flex items-center justify-between rounded-xl bg-surface px-4 py-3 text-xs text-soft ring-1 ring-line">
+                                    <span>
+                                        Using saved AWS credentials
+                                        (~/.aws/credentials)
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (overrideAwsKeys) {
+                                                form.setData(
+                                                    'aws_access_key_id',
+                                                    '',
+                                                );
+                                                form.setData(
+                                                    'aws_secret_access_key',
+                                                    '',
+                                                );
+                                            }
+                                            setOverrideAwsKeys(
+                                                !overrideAwsKeys,
+                                            );
+                                        }}
+                                        className="flex items-center gap-1 font-medium text-servers hover:underline"
+                                    >
+                                        <Key className="size-3" />
+                                        <span>
+                                            {overrideAwsKeys
+                                                ? 'Use saved credentials'
+                                                : 'Use different AWS keys'}
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
+
+                        {needsAwsKeys && (
+                            <div className="mt-4 space-y-4 rounded-2xl bg-surface p-5 ring-1 ring-line ring-inset">
+                                <AwsPolicyHelper
+                                    includeEks={isManaged}
+                                    includeRoute53={
+                                        form.data.dns_provider === 'route53'
+                                    }
+                                />
+                                <Field
+                                    label="AWS Access Key ID"
+                                    error={form.errors.aws_access_key_id}
+                                >
+                                    <input
+                                        type="text"
+                                        placeholder="AKIAIOSFODNN7EXAMPLE"
+                                        value={form.data.aws_access_key_id}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'aws_access_key_id',
+                                                event.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                                <Field
+                                    label="AWS Secret Access Key"
+                                    error={form.errors.aws_secret_access_key}
+                                >
+                                    <input
+                                        type="password"
+                                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                        value={form.data.aws_secret_access_key}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'aws_secret_access_key',
+                                                event.target.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                </Field>
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex items-center justify-between gap-4">
+                            <p className="text-[13px] text-soft">
+                                Billed directly by {provider.label}. You can
+                                destroy your servers at any time.
+                            </p>
+                            <div className="flex items-center gap-2.5">
+                                <Link
+                                    href={
+                                        (devBox ? devBoxesIndex() : index()).url
+                                    }
+                                    className={buttonClass('ghost')}
+                                >
+                                    <X className="size-4" />
+                                    <span>Cancel</span>
+                                </Link>
+                                <Button
+                                    type="button"
+                                    disabled={!canProceedToStep2}
+                                    onClick={() => goToStep(2)}
+                                >
+                                    <span>
+                                        Next:{' '}
+                                        {devBox
+                                            ? 'Customize Dev Box'
+                                            : 'Customize Server'}
+                                    </span>
+                                    <ArrowRight className="size-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 2: Customize Server */}
+                {currentStep === 2 && (
+                    <div>
+                        <div className="space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
+                            <Field
+                                label={devBox ? 'Dev box name' : 'Server name'}
+                                hint="Lowercase letters, numbers and dashes."
+                                error={form.errors.stack_name}
+                            >
+                                <input
+                                    value={form.data.stack_name}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'stack_name',
+                                            event.target.value,
+                                        )
+                                    }
+                                    placeholder="workshop-demo"
+                                    autoFocus
+                                    spellCheck={false}
+                                    className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+
+                            {canBeManaged && (
+                                <Field
+                                    label="Server type"
+                                    error={form.errors.target_kind}
+                                >
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                selectTargetKind('vps')
+                                            }
+                                            className={cn(
+                                                'rounded-lg px-3 py-2 text-left text-sm transition',
+                                                !isManaged
+                                                    ? 'bg-servers/10 ring-2 ring-servers'
+                                                    : 'ring-1 ring-line hover:ring-faint',
+                                            )}
+                                        >
+                                            <span className="block font-medium">
+                                                Single server (VPS)
+                                            </span>
+                                            <span className="block text-xs text-soft">
+                                                k3s, single-node — cheapest,
+                                                simplest
+                                                {untested.capabilities.includes(
+                                                    'vps-to-managed',
+                                                ) && (
+                                                    <>
+                                                        . Switching to Managed
+                                                        later is possible via
+                                                        the CLI, but that path
+                                                        isn't fully validated
+                                                        yet.
+                                                    </>
+                                                )}
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                selectTargetKind('managed')
+                                            }
+                                            className={cn(
+                                                'rounded-lg px-3 py-2 text-left text-sm transition',
+                                                isManaged
+                                                    ? 'bg-servers/10 ring-2 ring-servers'
+                                                    : 'ring-1 ring-line hover:ring-faint',
+                                            )}
+                                        >
+                                            <span className="block font-medium">
+                                                Managed Kubernetes
+                                            </span>
+                                            <span className="block text-xs text-soft">
+                                                {provider.managedProvider?.toUpperCase()}{' '}
+                                                — multi-node, scales with your
+                                                traffic
+                                            </span>
+                                        </button>
+                                    </div>
+                                </Field>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <Field
+                                    label="Region"
+                                    error={form.errors.region}
+                                >
+                                    <Select
+                                        value={form.data.region}
+                                        onChange={(value) =>
+                                            form.setData('region', value)
+                                        }
+                                        options={provider.regions}
+                                        searchable={provider.regions.length > 8}
+                                    />
+                                </Field>
+                                <Field
+                                    label="Size"
+                                    error={form.errors.size}
+                                    hint={pricingNote(provider)}
+                                >
+                                    <Select
+                                        value={form.data.size}
+                                        onChange={(value) =>
+                                            form.setData('size', value)
+                                        }
+                                        options={sizeOptions}
+                                        searchable={sizeOptions.length > 8}
+                                    />
+                                </Field>
+                            </div>
+
+                            {isManaged && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Field
+                                        label="Node count"
+                                        error={form.errors.node_count}
+                                    >
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={20}
+                                            value={form.data.node_count}
+                                            onChange={(event) =>
+                                                form.setData(
+                                                    'node_count',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                        />
                                     </Field>
-                                )
+                                    {provider.haOption === 'boolean' ? (
+                                        <Field
+                                            label={
+                                                <span className="inline-flex items-center gap-1">
+                                                    Control plane
+                                                    <InfoTooltip side="right">
+                                                        The control plane is
+                                                        what runs Kubernetes
+                                                        itself (the API server,
+                                                        scheduler, etcd) —
+                                                        separate from your
+                                                        worker node(s).
+                                                        Unchecked, it runs in a
+                                                        single zone for free:
+                                                        fine for learning or a
+                                                        demo, but an outage in
+                                                        that zone takes the
+                                                        whole cluster down with
+                                                        it. Checked, it spans
+                                                        multiple zones for{' '}
+                                                        {provider.haCost ??
+                                                            'an extra charge'}
+                                                        , so the cluster
+                                                        survives one zone going
+                                                        down — what most
+                                                        production setups
+                                                        choose.
+                                                    </InfoTooltip>
+                                                </span>
+                                            }
+                                        >
+                                            <label className="flex h-9 items-center gap-2 text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.data.ha}
+                                                    onChange={(event) =>
+                                                        form.setData(
+                                                            'ha',
+                                                            event.target
+                                                                .checked,
+                                                        )
+                                                    }
+                                                    className="size-4 rounded ring-1 ring-line"
+                                                />
+                                                <span>
+                                                    High availability
+                                                    {provider.haCost
+                                                        ? ` (${provider.haCost})`
+                                                        : ''}
+                                                </span>
+                                            </label>
+                                        </Field>
+                                    ) : (
+                                        provider.haOption === 'always' && (
+                                            <Field
+                                                label={
+                                                    <span className="inline-flex items-center gap-1">
+                                                        Control plane
+                                                        <InfoTooltip side="right">
+                                                            The control plane is
+                                                            what runs Kubernetes
+                                                            itself (the API
+                                                            server, scheduler,
+                                                            etcd) — separate
+                                                            from your node(s).{' '}
+                                                            {
+                                                                provider.label
+                                                            }{' '}
+                                                            always spans it
+                                                            across multiple
+                                                            availability zones —
+                                                            there's no cheaper,
+                                                            single-zone option
+                                                            to opt out of —
+                                                            which is why it
+                                                            isn't a checkbox
+                                                            here like it is for
+                                                            some other
+                                                            providers. It costs{' '}
+                                                            {provider.haCost ??
+                                                                'a flat hourly fee'}
+                                                            , billed on top of
+                                                            your node(s)
+                                                            regardless of
+                                                            cluster size.
+                                                        </InfoTooltip>
+                                                    </span>
+                                                }
+                                            >
+                                                <p className="flex h-9 items-center text-sm text-soft">
+                                                    High availability included
+                                                </p>
+                                            </Field>
+                                        )
+                                    )}
+                                </div>
                             )}
                         </div>
-                    )}
 
-                    {needsToken && (
-                        <Field
-                            label={`${provider.label} API token`}
-                            hint="Used for this run only. Never saved."
-                            error={form.errors.api_token}
-                        >
-                            <input
-                                type="password"
-                                value={form.data.api_token}
-                                onChange={(event) =>
-                                    form.setData(
-                                        'api_token',
-                                        event.target.value,
-                                    )
-                                }
-                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                            />
-                        </Field>
-                    )}
-
-                    {provider.slug === 'aws' && provider.credentials.ready && (
-                        <div className="flex items-center justify-between border-t border-line/60 pt-3 text-xs text-soft">
-                            <span>
-                                Using saved AWS credentials (~/.aws/credentials)
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (overrideAwsKeys) {
-                                        form.setData('aws_access_key_id', '');
-                                        form.setData(
-                                            'aws_secret_access_key',
-                                            '',
-                                        );
-                                    }
-                                    setOverrideAwsKeys(!overrideAwsKeys);
-                                }}
-                                className="flex items-center gap-1 font-medium text-servers hover:underline"
-                            >
-                                <Key className="size-3" />
-                                <span>
-                                    {overrideAwsKeys
-                                        ? 'Use saved credentials'
-                                        : 'Use different AWS keys'}
-                                </span>
-                            </button>
+                        <div className="mt-6 flex items-center justify-between gap-4">
+                            <p className="text-[13px] text-soft">
+                                {isManaged && monthlyEstimate
+                                    ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                    : price
+                                      ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                      : `Billed by ${provider.label}. You can destroy it any time.`}
+                            </p>
+                            <div className="flex items-center gap-2.5">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => goToStep(1)}
+                                >
+                                    <ArrowLeft className="size-4" />
+                                    <span>Back to Provider</span>
+                                </Button>
+                                {devBox ? (
+                                    <Button
+                                        type="submit"
+                                        disabled={form.processing || !canSubmit}
+                                    >
+                                        <Plus className="size-4" />
+                                        <span>
+                                            {form.processing
+                                                ? 'Starting…'
+                                                : 'Create dev box'}
+                                        </span>
+                                    </Button>
+                                ) : (
+                                    <>
+                                        <Button
+                                            type="submit"
+                                            variant="secondary"
+                                            disabled={
+                                                form.processing ||
+                                                !canProceedToStep3
+                                            }
+                                            title="Create server immediately without configuring DNS or SSL automation"
+                                        >
+                                            <Plus className="size-4" />
+                                            <span>Create without DNS</span>
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            disabled={!canProceedToStep3}
+                                            onClick={() => goToStep(3)}
+                                        >
+                                            <span>Next: DNS & SSL</span>
+                                            <ArrowRight className="size-4" />
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    )}
-
-                    {needsAwsKeys && (
-                        <div className="space-y-4 border-t border-line/60 pt-3">
-                            <AwsPolicyHelper
-                                includeEks={isManaged}
-                                includeRoute53={
-                                    form.data.dns_provider === 'route53'
-                                }
-                            />
-                            <Field
-                                label="AWS Access Key ID"
-                                error={form.errors.aws_access_key_id}
-                            >
-                                <input
-                                    type="text"
-                                    placeholder="AKIAIOSFODNN7EXAMPLE"
-                                    value={form.data.aws_access_key_id}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'aws_access_key_id',
-                                            event.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                            <Field
-                                label="AWS Secret Access Key"
-                                error={form.errors.aws_secret_access_key}
-                            >
-                                <input
-                                    type="password"
-                                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                    value={form.data.aws_secret_access_key}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'aws_secret_access_key',
-                                            event.target.value,
-                                        )
-                                    }
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                            </Field>
-                        </div>
-                    )}
-
-                    {!devBox && (
-                        <DnsAutomationOption form={form} provider={provider} />
-                    )}
-                </div>
-
-                <div className="mt-5 flex items-center justify-between gap-4">
-                    <p className="text-[13px] text-soft">
-                        {isManaged && monthlyEstimate
-                            ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                            : price
-                              ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                              : `Billed by ${provider.label}. You can destroy it any time.`}
-                    </p>
-                    <div className="flex items-center gap-2.5">
-                        <Link
-                            href={(devBox ? devBoxesIndex() : index()).url}
-                            className={buttonClass('ghost')}
-                        >
-                            Cancel
-                        </Link>
-                        <Button
-                            type="submit"
-                            disabled={
-                                form.processing ||
-                                needsGcpLogin ||
-                                form.data.stack_name.trim() === '' ||
-                                (needsToken &&
-                                    form.data.api_token.trim() === '') ||
-                                (needsAwsKeys &&
-                                    (form.data.aws_access_key_id.trim() ===
-                                        '' ||
-                                        form.data.aws_secret_access_key.trim() ===
-                                            ''))
-                            }
-                        >
-                            <Plus className="size-4" />
-                            <span>
-                                {form.processing
-                                    ? 'Starting…'
-                                    : devBox
-                                      ? 'Create dev box'
-                                      : 'Create server'}
-                            </span>
-                        </Button>
                     </div>
-                </div>
+                )}
+
+                {/* Step 3: Automate DNS & SSL (Regular Server Only) */}
+                {!devBox && currentStep === 3 && (
+                    <div>
+                        <DnsAutomationStep form={form} provider={provider} />
+
+                        <div className="mt-6 flex items-center justify-between gap-4">
+                            <p className="text-[13px] text-soft">
+                                {isManaged && monthlyEstimate
+                                    ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                    : price
+                                      ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                      : `Billed by ${provider.label}. You can destroy it any time.`}
+                            </p>
+                            <div className="flex items-center gap-2.5">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => goToStep(2)}
+                                >
+                                    <ArrowLeft className="size-4" />
+                                    <span>Back to Server Specs</span>
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={form.processing || !canSubmit}
+                                >
+                                    <Plus className="size-4" />
+                                    <span>
+                                        {form.processing
+                                            ? 'Starting…'
+                                            : 'Create server'}
+                                    </span>
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </form>
             {showAccountModal && (
                 <CloudAccountsModal
@@ -747,15 +1088,13 @@ function ago(iso: string | null): string {
     return `${Math.round(minutes / 1440)} days ago`;
 }
 
-function DnsAutomationOption({
+function DnsAutomationStep({
     form,
     provider,
 }: {
     form: ReturnType<typeof useForm<any>>;
     provider: Provider;
 }) {
-    const hasDns = form.data.dns_provider !== '';
-
     const parsedGcpDns = (() => {
         if (!form.data.dns_gcp_credentials) return null;
         try {
@@ -804,436 +1143,406 @@ function DnsAutomationOption({
     };
 
     return (
-        <details
-            className="group rounded-xl bg-paper/60 ring-1 ring-line"
-            open={hasDns || form.data.cloudflare_token !== ''}
-        >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-                <span className="flex items-center gap-2.5">
-                    <Globe className="size-4 shrink-0 text-servers" />
-                    <span>
-                        <span className="block text-[13px] font-medium text-ink">
-                            Automate DNS & SSL (optional)
-                        </span>
-                        <span className="block text-xs text-soft">
-                            ExternalDNS and Let's Encrypt DNS-01 wildcard SSL
-                            via Cloudflare, Route 53, or Google Cloud DNS.
-                        </span>
+        <div className="space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
+            <div className="text-foreground rounded-xl border border-servers/30 bg-servers/5 p-4 text-xs leading-relaxed">
+                <div className="flex items-center gap-2 font-medium text-servers">
+                    <Globe className="size-4 shrink-0" />
+                    <span className="text-sm font-semibold">
+                        Recommended for Workshops & Production
                     </span>
-                </span>
-                <ChevronDown className="size-4 shrink-0 text-soft transition group-open:rotate-180" />
-            </summary>
-            <div className="space-y-4 border-t border-line/60 px-4 py-3 text-xs leading-relaxed text-soft">
-                <p>
+                </div>
+                <p className="mt-1.5 text-soft">
                     Automate DNS records for every tool and application deployed
-                    to this cluster, and issue Let's Encrypt SSL certificates
-                    via DNS-01 challenge (even for proxied or wildcard domains).
+                    to this cluster (via ExternalDNS), and issue Let's Encrypt
+                    wildcard SSL certificates automatically via DNS-01 challenge
+                    (even for proxied or wildcard domains).
                 </p>
+            </div>
 
-                <Field label="DNS & TLS Provider">
-                    <Select
-                        value={
-                            form.data.dns_provider ||
-                            (form.data.cloudflare_token ? 'cloudflare' : '')
-                        }
-                        onChange={(value) => {
-                            form.setData('dns_provider', value);
-                        }}
-                        options={[
-                            {
-                                value: '',
-                                label: 'None (Configure later or manually)',
-                            },
-                            { value: 'cloudflare', label: 'Cloudflare' },
-                            {
-                                value: 'route53',
-                                label: 'AWS Route 53 (Experimental)',
-                            },
-                            {
-                                value: 'google',
-                                label: 'Google Cloud DNS (Experimental)',
-                            },
-                        ]}
-                    />
-                </Field>
+            <Field label="DNS & TLS Provider">
+                <Select
+                    value={
+                        form.data.dns_provider ||
+                        (form.data.cloudflare_token ? 'cloudflare' : '')
+                    }
+                    onChange={(value) => {
+                        form.setData('dns_provider', value);
+                    }}
+                    options={[
+                        {
+                            value: '',
+                            label: 'None (Configure later or manually)',
+                        },
+                        {
+                            value: 'cloudflare',
+                            label: 'Cloudflare (Recommended)',
+                        },
+                        {
+                            value: 'route53',
+                            label: 'AWS Route 53 (Experimental)',
+                        },
+                        {
+                            value: 'google',
+                            label: 'Google Cloud DNS (Experimental)',
+                        },
+                    ]}
+                />
+            </Field>
 
-                {(form.data.dns_provider !== '' ||
-                    form.data.cloudflare_token !== '') && (
-                    <>
-                        <div className="flex flex-col gap-2 rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
-                            <label className="flex cursor-pointer items-center gap-2 text-ink">
+            {(form.data.dns_provider !== '' ||
+                form.data.cloudflare_token !== '') && (
+                <div className="space-y-4 border-t border-line/60 pt-4">
+                    <div className="flex flex-col gap-2 rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
+                        <label className="flex cursor-pointer items-center gap-2 text-ink">
+                            <input
+                                type="checkbox"
+                                checked={form.data.enable_dns}
+                                onChange={(e) =>
+                                    form.setData('enable_dns', e.target.checked)
+                                }
+                                className="rounded border-line text-servers focus:ring-servers"
+                            />
+                            <span className="text-xs">
+                                Automate app and tool DNS records (ExternalDNS)
+                            </span>
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 text-ink">
+                            <input
+                                type="checkbox"
+                                checked={form.data.enable_tls}
+                                onChange={(e) =>
+                                    form.setData('enable_tls', e.target.checked)
+                                }
+                                className="rounded border-line text-servers focus:ring-servers"
+                            />
+                            <span className="text-xs">
+                                Enable Let's Encrypt DNS-01 challenge for SSL
+                                (wildcard/proxied hosts)
+                            </span>
+                        </label>
+                    </div>
+
+                    {(form.data.dns_provider === 'cloudflare' ||
+                        (!form.data.dns_provider &&
+                            form.data.cloudflare_token !== '')) && (
+                        <div className="space-y-3">
+                            <p className="text-xs text-soft">
+                                Create a token with the{' '}
+                                <strong>Edit zone DNS</strong> template covering
+                                your domains at{' '}
+                                <ExternalLinkButton
+                                    url="https://dash.cloudflare.com/profile/api-tokens"
+                                    showIcon
+                                    className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
+                                >
+                                    Cloudflare API Tokens
+                                </ExternalLinkButton>
+                                .
+                            </p>
+                            <Field
+                                label="Cloudflare API token"
+                                hint="Used for this run only. Never saved in plaintext."
+                                error={form.errors.cloudflare_token}
+                            >
                                 <input
-                                    type="checkbox"
-                                    checked={form.data.enable_dns}
+                                    type="password"
+                                    value={form.data.cloudflare_token}
                                     onChange={(e) =>
                                         form.setData(
-                                            'enable_dns',
-                                            e.target.checked,
+                                            'cloudflare_token',
+                                            e.target.value,
                                         )
                                     }
-                                    className="rounded border-line text-servers focus:ring-servers"
+                                    autoComplete="off"
+                                    placeholder="Paste your Cloudflare API token"
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
                                 />
-                                <span>
-                                    Automate app and tool DNS records
-                                    (ExternalDNS)
-                                </span>
-                            </label>
-                            <label className="flex cursor-pointer items-center gap-2 text-ink">
-                                <input
-                                    type="checkbox"
-                                    checked={form.data.enable_tls}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'enable_tls',
-                                            e.target.checked,
-                                        )
-                                    }
-                                    className="rounded border-line text-servers focus:ring-servers"
-                                />
-                                <span>
-                                    Enable Let's Encrypt DNS-01 challenge for
-                                    SSL (wildcard/proxied hosts)
-                                </span>
-                            </label>
+                            </Field>
                         </div>
+                    )}
 
-                        {(form.data.dns_provider === 'cloudflare' ||
-                            (!form.data.dns_provider &&
-                                form.data.cloudflare_token !== '')) && (
-                            <div className="space-y-3">
-                                <p className="text-xs text-soft">
-                                    Create a token with the{' '}
-                                    <strong>Edit zone DNS</strong> template
-                                    covering your domains at{' '}
-                                    <ExternalLinkButton
-                                        url="https://dash.cloudflare.com/profile/api-tokens"
-                                        showIcon
-                                        className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
-                                    >
-                                        Cloudflare API Tokens
-                                    </ExternalLinkButton>
-                                    .
-                                </p>
-                                <Field
-                                    label="Cloudflare API token"
-                                    hint="Used for this run only. Never saved in plaintext."
-                                    error={form.errors.cloudflare_token}
-                                >
-                                    <input
-                                        type="password"
-                                        value={form.data.cloudflare_token}
-                                        onChange={(e) =>
-                                            form.setData(
-                                                'cloudflare_token',
-                                                e.target.value,
-                                            )
-                                        }
-                                        autoComplete="off"
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    />
-                                </Field>
-                            </div>
-                        )}
-
-                        {form.data.dns_provider === 'route53' && (
-                            <div className="space-y-3">
-                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                    <div className="flex items-center gap-1.5 font-semibold">
-                                        <FlaskConical className="size-3.5 shrink-0" />
-                                        <span>Experimental Provider</span>
-                                    </div>
-                                    <p className="mt-1 leading-relaxed text-soft">
-                                        AWS Route 53 integration is supported
-                                        via ExternalDNS &amp; cert-manager, but
-                                        has not yet been live-validated in this
-                                        environment. Ensure your AWS IAM
-                                        credentials have{' '}
-                                        <code className="text-foreground font-mono">
-                                            route53:ChangeResourceRecordSets
-                                        </code>
-                                        ,{' '}
-                                        <code className="text-foreground font-mono">
-                                            route53:ListResourceRecordSets
-                                        </code>
-                                        , and{' '}
-                                        <code className="text-foreground font-mono">
-                                            route53:ListHostedZonesByName
-                                        </code>{' '}
-                                        permissions.
-                                    </p>
+                    {form.data.dns_provider === 'route53' && (
+                        <div className="space-y-3">
+                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                                <div className="flex items-center gap-1.5 font-semibold">
+                                    <FlaskConical className="size-3.5 shrink-0" />
+                                    <span>Experimental Provider</span>
                                 </div>
-                                {provider.slug === 'aws' && (
-                                    <div className="flex justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                form.setData(
-                                                    'dns_aws_access_key_id',
-                                                    form.data.aws_access_key_id,
-                                                );
-                                                form.setData(
-                                                    'dns_aws_secret_access_key',
-                                                    form.data
-                                                        .aws_secret_access_key,
-                                                );
-                                                form.setData(
-                                                    'dns_aws_region',
-                                                    form.data.region ||
-                                                        'us-east-1',
-                                                );
-                                            }}
-                                            className="flex items-center gap-1 text-xs font-medium text-servers hover:underline"
-                                        >
-                                            <Key className="size-3" />
-                                            <span>Copy server AWS keys</span>
-                                        </button>
-                                    </div>
-                                )}
-                                <AwsPolicyHelper
-                                    includeEc2={false}
-                                    includeEks={false}
-                                    includeRoute53={true}
-                                    interactive={false}
-                                />
-                                <Field
-                                    label="AWS Access Key ID"
-                                    error={form.errors.dns_aws_access_key_id}
-                                >
-                                    <input
-                                        type="text"
-                                        placeholder="AKIAIOSFODNN7EXAMPLE"
-                                        value={form.data.dns_aws_access_key_id}
-                                        onChange={(e) =>
+                                <p className="mt-1 leading-relaxed text-soft">
+                                    AWS Route 53 integration is supported via
+                                    ExternalDNS &amp; cert-manager, but has not
+                                    yet been live-validated in this environment.
+                                    Ensure your AWS IAM credentials have{' '}
+                                    <code className="text-foreground font-mono">
+                                        route53:ChangeResourceRecordSets
+                                    </code>
+                                    ,{' '}
+                                    <code className="text-foreground font-mono">
+                                        route53:ListResourceRecordSets
+                                    </code>
+                                    , and{' '}
+                                    <code className="text-foreground font-mono">
+                                        route53:ListHostedZonesByName
+                                    </code>{' '}
+                                    permissions.
+                                </p>
+                            </div>
+                            {provider.slug === 'aws' && (
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
                                             form.setData(
                                                 'dns_aws_access_key_id',
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    />
-                                </Field>
-                                <Field
-                                    label="AWS Secret Access Key"
-                                    error={
-                                        form.errors.dns_aws_secret_access_key
-                                    }
-                                >
-                                    <input
-                                        type="password"
-                                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                        value={
-                                            form.data.dns_aws_secret_access_key
-                                        }
-                                        onChange={(e) =>
+                                                form.data.aws_access_key_id,
+                                            );
                                             form.setData(
                                                 'dns_aws_secret_access_key',
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    />
-                                </Field>
-                                <Field
-                                    label="AWS Region"
-                                    error={form.errors.dns_aws_region}
-                                >
-                                    <input
-                                        type="text"
-                                        placeholder="us-east-1"
-                                        value={form.data.dns_aws_region}
-                                        onChange={(e) =>
+                                                form.data.aws_secret_access_key,
+                                            );
                                             form.setData(
                                                 'dns_aws_region',
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    />
-                                </Field>
-                            </div>
-                        )}
-
-                        {form.data.dns_provider === 'google' && (
-                            <div className="space-y-3">
-                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                                    <div className="flex items-center gap-1.5 font-semibold">
-                                        <FlaskConical className="size-3.5 shrink-0" />
-                                        <span>Experimental Provider</span>
-                                    </div>
-                                    <p className="mt-1 leading-relaxed text-soft">
-                                        Google Cloud DNS automation is supported
-                                        via ExternalDNS &amp; cert-manager, but
-                                        has not yet been live-validated in this
-                                        environment. Ensure your GCP project has
-                                        the <strong>Cloud DNS API</strong>{' '}
-                                        enabled and the Service Account
-                                        possesses the{' '}
-                                        <code className="text-foreground font-mono">
-                                            roles/dns.admin
-                                        </code>{' '}
-                                        IAM role.
-                                    </p>
-                                </div>
-
-                                <GcpPolicyHelper
-                                    includeCompute={false}
-                                    includeGke={false}
-                                    includeDns={true}
-                                    interactive={false}
-                                    projectId={
-                                        form.data.dns_gcp_project_id ||
-                                        undefined
-                                    }
-                                />
-
-                                <div className="flex items-center justify-between">
-                                    <p className="text-[11px] text-soft">
-                                        DNS zones can reside in the server's GCP
-                                        project or a separate centralized
-                                        project.
-                                    </p>
-                                    {provider.slug === 'gcp' && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (form.data.project_id) {
-                                                    form.setData(
-                                                        'dns_gcp_project_id',
-                                                        String(
-                                                            form.data
-                                                                .project_id,
-                                                        ),
-                                                    );
-                                                }
-                                            }}
-                                            className="flex shrink-0 items-center gap-1 text-xs font-medium text-servers hover:underline"
-                                        >
-                                            <Key className="size-3" />
-                                            <span>
-                                                Use server GCP project ID
-                                            </span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                <Field
-                                    label="Google Cloud Project ID"
-                                    error={form.errors.dns_gcp_project_id}
-                                >
-                                    <input
-                                        type="text"
-                                        placeholder="my-gcp-project"
-                                        value={form.data.dns_gcp_project_id}
-                                        onChange={(e) =>
-                                            form.setData(
-                                                'dns_gcp_project_id',
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    />
-                                </Field>
-
-                                <div>
-                                    <div className="mb-1.5 flex items-center justify-between">
-                                        <div>
-                                            <label className="text-foreground block text-xs font-medium">
-                                                Service Account Credentials
-                                                (JSON or path)
-                                            </label>
-                                            <p className="mt-0.5 text-[11px] text-soft">
-                                                Key JSON string, or absolute
-                                                path on this machine with
-                                                roles/dns.admin.
-                                            </p>
-                                        </div>
-                                        <label
-                                            className={cn(
-                                                buttonClass('secondary', 'sm'),
-                                                'cursor-pointer text-xs',
-                                            )}
-                                        >
-                                            <Upload className="size-3" />
-                                            <span>Browse JSON File…</span>
-                                            <input
-                                                type="file"
-                                                accept=".json,application/json"
-                                                onChange={
-                                                    handleDnsGcpFileSelect
-                                                }
-                                                className="sr-only"
-                                            />
-                                        </label>
-                                    </div>
-                                    <textarea
-                                        rows={3}
-                                        placeholder='{"type": "service_account", ...} or /path/to/key.json'
-                                        value={form.data.dns_gcp_credentials}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            form.setData(
-                                                'dns_gcp_credentials',
-                                                val,
+                                                form.data.region || 'us-east-1',
                                             );
-                                            try {
-                                                const parsed = JSON.parse(
-                                                    val.trim(),
+                                        }}
+                                        className="flex items-center gap-1 text-xs font-medium text-servers hover:underline"
+                                    >
+                                        <Key className="size-3" />
+                                        <span>Copy server AWS keys</span>
+                                    </button>
+                                </div>
+                            )}
+                            <AwsPolicyHelper
+                                includeEc2={false}
+                                includeEks={false}
+                                includeRoute53={true}
+                                interactive={false}
+                            />
+                            <Field
+                                label="AWS Access Key ID"
+                                error={form.errors.dns_aws_access_key_id}
+                            >
+                                <input
+                                    type="text"
+                                    placeholder="AKIAIOSFODNN7EXAMPLE"
+                                    value={form.data.dns_aws_access_key_id}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'dns_aws_access_key_id',
+                                            e.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+                            <Field
+                                label="AWS Secret Access Key"
+                                error={form.errors.dns_aws_secret_access_key}
+                            >
+                                <input
+                                    type="password"
+                                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                    value={form.data.dns_aws_secret_access_key}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'dns_aws_secret_access_key',
+                                            e.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+                            <Field
+                                label="AWS Region"
+                                error={form.errors.dns_aws_region}
+                            >
+                                <input
+                                    type="text"
+                                    placeholder="us-east-1"
+                                    value={form.data.dns_aws_region}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'dns_aws_region',
+                                            e.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+                        </div>
+                    )}
+
+                    {form.data.dns_provider === 'google' && (
+                        <div className="space-y-3">
+                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                                <div className="flex items-center gap-1.5 font-semibold">
+                                    <FlaskConical className="size-3.5 shrink-0" />
+                                    <span>Experimental Provider</span>
+                                </div>
+                                <p className="mt-1 leading-relaxed text-soft">
+                                    Google Cloud DNS automation is supported via
+                                    ExternalDNS &amp; cert-manager, but has not
+                                    yet been live-validated in this environment.
+                                    Ensure your GCP project has the{' '}
+                                    <strong>Cloud DNS API</strong> enabled and
+                                    the Service Account possesses the{' '}
+                                    <code className="text-foreground font-mono">
+                                        roles/dns.admin
+                                    </code>{' '}
+                                    IAM role.
+                                </p>
+                            </div>
+
+                            <GcpPolicyHelper
+                                includeCompute={false}
+                                includeGke={false}
+                                includeDns={true}
+                                interactive={false}
+                                projectId={
+                                    form.data.dns_gcp_project_id || undefined
+                                }
+                            />
+
+                            <div className="flex items-center justify-between">
+                                <p className="text-[11px] text-soft">
+                                    DNS zones can reside in the server's GCP
+                                    project or a separate centralized project.
+                                </p>
+                                {provider.slug === 'gcp' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (form.data.project_id) {
+                                                form.setData(
+                                                    'dns_gcp_project_id',
+                                                    String(
+                                                        form.data.project_id,
+                                                    ),
                                                 );
-                                                if (
-                                                    parsed.project_id &&
-                                                    (!form.data
-                                                        .dns_gcp_project_id ||
-                                                        form.data
-                                                            .dns_gcp_project_id ===
-                                                            '')
-                                                ) {
-                                                    form.setData(
-                                                        'dns_gcp_project_id',
-                                                        parsed.project_id,
-                                                    );
-                                                }
-                                            } catch {
-                                                // not JSON yet
                                             }
                                         }}
-                                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                    />
-                                    {form.errors.dns_gcp_credentials && (
-                                        <p className="mt-1 text-xs text-accent">
-                                            {form.errors.dns_gcp_credentials}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {parsedGcpDns && (
-                                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
-                                        <CheckCircle2 className="size-4 shrink-0" />
-                                        <div>
-                                            <span className="font-semibold">
-                                                Detected Service Account:
-                                            </span>{' '}
-                                            <span className="font-mono">
-                                                {parsedGcpDns.clientEmail}
-                                            </span>
-                                            {parsedGcpDns.projectId && (
-                                                <span className="text-soft">
-                                                    {' '}
-                                                    (Project:{' '}
-                                                    <code className="text-foreground font-mono">
-                                                        {parsedGcpDns.projectId}
-                                                    </code>
-                                                    )
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
+                                        className="flex shrink-0 items-center gap-1 text-xs font-medium text-servers hover:underline"
+                                    >
+                                        <Key className="size-3" />
+                                        <span>Use server GCP project ID</span>
+                                    </button>
                                 )}
                             </div>
-                        )}
-                    </>
-                )}
-            </div>
-        </details>
+
+                            <Field
+                                label="Google Cloud Project ID"
+                                error={form.errors.dns_gcp_project_id}
+                            >
+                                <input
+                                    type="text"
+                                    placeholder="my-gcp-project"
+                                    value={form.data.dns_gcp_project_id}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'dns_gcp_project_id',
+                                            e.target.value,
+                                        )
+                                    }
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                            </Field>
+
+                            <div>
+                                <div className="mb-1.5 flex items-center justify-between">
+                                    <div>
+                                        <label className="text-foreground block text-xs font-medium">
+                                            Service Account Credentials (JSON or
+                                            path)
+                                        </label>
+                                        <p className="mt-0.5 text-[11px] text-soft">
+                                            Key JSON string, or absolute path on
+                                            this machine with roles/dns.admin.
+                                        </p>
+                                    </div>
+                                    <label
+                                        className={cn(
+                                            buttonClass('secondary', 'sm'),
+                                            'cursor-pointer text-xs',
+                                        )}
+                                    >
+                                        <Upload className="size-3" />
+                                        <span>Browse JSON File…</span>
+                                        <input
+                                            type="file"
+                                            accept=".json,application/json"
+                                            onChange={handleDnsGcpFileSelect}
+                                            className="sr-only"
+                                        />
+                                    </label>
+                                </div>
+                                <textarea
+                                    rows={3}
+                                    placeholder='{"type": "service_account", ...} or /path/to/key.json'
+                                    value={form.data.dns_gcp_credentials}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        form.setData(
+                                            'dns_gcp_credentials',
+                                            val,
+                                        );
+                                        try {
+                                            const parsed = JSON.parse(
+                                                val.trim(),
+                                            );
+                                            if (
+                                                parsed.project_id &&
+                                                (!form.data
+                                                    .dns_gcp_project_id ||
+                                                    form.data
+                                                        .dns_gcp_project_id ===
+                                                        '')
+                                            ) {
+                                                form.setData(
+                                                    'dns_gcp_project_id',
+                                                    parsed.project_id,
+                                                );
+                                            }
+                                        } catch {
+                                            // not JSON yet
+                                        }
+                                    }}
+                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                                {form.errors.dns_gcp_credentials && (
+                                    <p className="mt-1 text-xs text-accent">
+                                        {form.errors.dns_gcp_credentials}
+                                    </p>
+                                )}
+                            </div>
+
+                            {parsedGcpDns && (
+                                <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                    <CheckCircle2 className="size-4 shrink-0" />
+                                    <div>
+                                        <span className="font-semibold">
+                                            Detected Service Account:
+                                        </span>{' '}
+                                        <span className="font-mono">
+                                            {parsedGcpDns.clientEmail}
+                                        </span>
+                                        {parsedGcpDns.projectId && (
+                                            <span className="text-soft">
+                                                {' '}
+                                                (Project:{' '}
+                                                <code className="text-foreground font-mono">
+                                                    {parsedGcpDns.projectId}
+                                                </code>
+                                                )
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 
