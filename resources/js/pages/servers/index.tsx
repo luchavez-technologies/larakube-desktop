@@ -146,9 +146,6 @@ export default function ServersIndex({
                                                 Domains
                                             </th>
                                             <th className="px-4 py-3 font-medium whitespace-nowrap">
-                                                Region
-                                            </th>
-                                            <th className="px-4 py-3 font-medium whitespace-nowrap">
                                                 IP address
                                             </th>
                                             <th className="px-4 py-3 font-medium whitespace-nowrap">
@@ -209,6 +206,11 @@ export default function ServersIndex({
                                                                 </span>
                                                             )}
                                                         </div>
+                                                        {server.region && (
+                                                            <div className="mt-0.5 pl-[26px] font-mono text-[11px] text-faint">
+                                                                {server.region}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td className="max-w-xs min-w-[160px] px-4 py-3.5">
                                                         {server.domains &&
@@ -239,9 +241,6 @@ export default function ServersIndex({
                                                                 —
                                                             </span>
                                                         )}
-                                                    </td>
-                                                    <td className="px-4 py-3.5 font-mono text-[13px] whitespace-nowrap text-soft">
-                                                        {server.region ?? '—'}
                                                     </td>
                                                     <td className="px-4 py-3.5 font-mono text-[13px] whitespace-nowrap">
                                                         {server.ip ? (
