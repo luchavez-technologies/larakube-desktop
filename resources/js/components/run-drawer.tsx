@@ -131,7 +131,7 @@ function TrackedRun({
     seed: ActiveRunSummary;
     expanded: boolean;
     onExpand: (id: number) => void;
-    onCollapse: () => void;
+    onCollapse: (id: number) => void;
     onDismiss: (id: number) => void;
     onFinished: (id: number) => void;
 }) {
@@ -209,7 +209,10 @@ function TrackedRun({
 
     if (expanded) {
         return (
-            <div className="mb-2 flex h-[460px] w-[620px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl transition-all">
+            <div
+                key="expanded"
+                className="mb-2 flex h-[460px] w-[620px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+            >
                 {/* Header */}
                 <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -247,7 +250,7 @@ function TrackedRun({
                         <button
                             type="button"
                             title="Minimize"
-                            onClick={onCollapse}
+                            onClick={() => onCollapse(seed.id)}
                             className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
                         >
                             <ChevronDown className="size-4" />
@@ -299,7 +302,10 @@ function TrackedRun({
     }
 
     return (
-        <div className="flex items-center gap-3 rounded-full border border-line bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur-md transition-all hover:bg-surface">
+        <div
+            key="collapsed"
+            className="flex items-center gap-3 rounded-full border border-line bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur-md transition-colors hover:bg-surface"
+        >
             <div className="flex items-center gap-2">
                 {isRunning && (
                     <RefreshCw className="size-3.5 animate-spin text-brand" />
@@ -344,6 +350,10 @@ function TrackedRun({
     );
 }
 
+let rememberedSeeds: ActiveRunSummary[] = [];
+let rememberedExpandedId: number | null | undefined = undefined;
+const explicitlyCollapsedIds = new Set<number>();
+
 export default function RunDrawer() {
     const page = usePage<{
         activeRuns?: ActiveRunSummary[];
@@ -355,10 +365,36 @@ export default function RunDrawer() {
     // One card per run still being tracked, newest first. A run stays here
     // (showing its final state) after it finishes, until dismissed —
     // dropping out of activeRuns alone never removes its card.
-    const [seeds, setSeeds] = useState<ActiveRunSummary[]>(activeRunsFromProps);
-    const [expandedId, setExpandedId] = useState<number | null>(
-        activeRunsFromProps[0]?.id ?? null,
-    );
+    const [seeds, setSeeds] = useState<ActiveRunSummary[]>(() => {
+        const known = new Set(rememberedSeeds.map((s) => s.id));
+        const merged = [...rememberedSeeds];
+        for (const run of activeRunsFromProps) {
+            if (!known.has(run.id)) {
+                merged.unshift(run);
+                known.add(run.id);
+            }
+        }
+        rememberedSeeds = merged;
+        return merged;
+    });
+
+    const [expandedId, setExpandedId] = useState<number | null>(() => {
+        if (rememberedExpandedId !== undefined) {
+            if (
+                rememberedExpandedId !== null &&
+                !rememberedSeeds.some((s) => s.id === rememberedExpandedId)
+            ) {
+                return null;
+            }
+            return rememberedExpandedId;
+        }
+        const first = activeRunsFromProps[0];
+        if (!first || explicitlyCollapsedIds.has(first.id)) {
+            return null;
+        }
+        rememberedExpandedId = first.id;
+        return first.id;
+    });
     const moveAside = useIsAnyRightDrawerOpen();
 
     useEffect(() => {
@@ -369,22 +405,56 @@ export default function RunDrawer() {
             return;
         }
 
-        setSeeds((prev) => [...fresh, ...prev]);
-        // A newly started run takes over the one expanded slot — that's
-        // the run someone just kicked off and is presumably watching.
-        setExpandedId(fresh[0].id);
+        const newest = fresh[0];
+        explicitlyCollapsedIds.delete(newest.id);
+        rememberedExpandedId = newest.id;
+        setExpandedId(newest.id);
+
+        setSeeds((prev) => {
+            const next = [...fresh, ...prev];
+            rememberedSeeds = next;
+            return next;
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [incomingKey]);
 
+    function expand(id: number) {
+        explicitlyCollapsedIds.delete(id);
+        rememberedExpandedId = id;
+        setExpandedId(id);
+    }
+
+    function collapse(id: number) {
+        explicitlyCollapsedIds.add(id);
+        rememberedExpandedId = null;
+        setExpandedId(null);
+    }
+
     function dismiss(id: number) {
-        setSeeds((prev) => prev.filter((seed) => seed.id !== id));
-        setExpandedId((prev) => (prev === id ? null : prev));
+        explicitlyCollapsedIds.delete(id);
+        setSeeds((prev) => {
+            const next = prev.filter((seed) => seed.id !== id);
+            rememberedSeeds = next;
+            return next;
+        });
+        setExpandedId((prev) => {
+            const next = prev === id ? null : prev;
+            rememberedExpandedId = next;
+            return next;
+        });
     }
 
     function finished(id: number) {
+        if (explicitlyCollapsedIds.has(id)) {
+            return;
+        }
         // Only steal the expanded slot if nothing else is already in it —
         // a run finishing shouldn't yank focus from one you're reading.
-        setExpandedId((prev) => prev ?? id);
+        setExpandedId((prev) => {
+            const next = prev ?? id;
+            rememberedExpandedId = next;
+            return next;
+        });
     }
 
     if (page.component === 'runs/show' || seeds.length === 0) {
@@ -413,8 +483,8 @@ export default function RunDrawer() {
                     key={seed.id}
                     seed={seed}
                     expanded={seed.id === expandedId}
-                    onExpand={setExpandedId}
-                    onCollapse={() => setExpandedId(null)}
+                    onExpand={expand}
+                    onCollapse={collapse}
                     onDismiss={dismiss}
                     onFinished={finished}
                 />
