@@ -15,15 +15,18 @@ export default function StatusPill({
     tone,
     children,
     className,
+    title,
 }: {
     tone: Tone;
     children: ReactNode;
     className?: string;
+    title?: string;
 }) {
     const dot = tone === 'ok' || tone === 'bad' || tone === 'busy';
 
     return (
         <span
+            title={title}
             className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap',
                 tones[tone],

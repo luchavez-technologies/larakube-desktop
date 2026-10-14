@@ -411,9 +411,28 @@ class ClusterStatus
             return null;
         }
 
-        Cache::put($key, $value ?? ['__empty' => true], $value !== null ? self::TTL_SECONDS : 60);
+        $ttl = $this->hasUnreadyItem($value) ? 10 : self::TTL_SECONDS;
+        Cache::put($key, $value ?? ['__empty' => true], $value !== null ? $ttl : 60);
 
         return $value;
+    }
+
+    /**
+     * @param  array<mixed>|null  $value
+     */
+    private function hasUnreadyItem(?array $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (is_array($item) && array_key_exists('ready', $item) && $item['ready'] === false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

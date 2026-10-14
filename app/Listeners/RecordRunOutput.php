@@ -149,6 +149,7 @@ class RecordRunOutput
 
         if ($context !== null && $run->kind === RunKind::EnableSsl) {
             app(ClusterStatus::class)->forgetTls($context);
+            app(ClusterStatus::class)->forgetDns($context);
 
             if ($server !== null) {
                 SyncServerDomainsJob::dispatch($server->id);

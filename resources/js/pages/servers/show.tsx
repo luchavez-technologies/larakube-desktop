@@ -163,6 +163,17 @@ export default function ShowServer({
         ? allTools.filter((t) => t.installed)
         : null;
 
+    const hasUnreadyDns = dnsGroups?.some((g) => !g.ready) ?? false;
+    useEffect(() => {
+        if (!hasUnreadyDns) return;
+
+        const interval = setInterval(() => {
+            router.reload({ only: ['dns'] });
+        }, 4000);
+
+        return () => clearInterval(interval);
+    }, [hasUnreadyDns]);
+
     return (
         <AppLayout title={server.name}>
             <Link
@@ -960,7 +971,12 @@ function DomainRow({
                             {group.zones.join(', ')}
                         </span>
                         {!group.ready && (
-                            <StatusPill tone="warn">Not ready</StatusPill>
+                            <StatusPill
+                                tone="warn"
+                                title="ExternalDNS pod is starting up in the cluster"
+                            >
+                                Starting up…
+                            </StatusPill>
                         )}
                     </li>
                 ))}
