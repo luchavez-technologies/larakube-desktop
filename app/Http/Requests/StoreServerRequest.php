@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\RunKind;
+use App\Enums\RunStatus;
+use App\Models\Run;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -70,6 +73,18 @@ class StoreServerRequest extends FormRequest
             // has no managed-Kubernetes offering at all.
             if ($this->input('provider') === 'hetzner' && $this->input('target_kind') === 'managed') {
                 $validator->errors()->add('target_kind', 'Hetzner Cloud does not offer a managed Kubernetes service.');
+            }
+
+            if ($this->filled('stack_name')) {
+                $name = $this->string('stack_name')->toString();
+                $alreadyRunning = Run::where('status', RunStatus::Running)
+                    ->where('kind', RunKind::CreateServer)
+                    ->where(fn ($q) => $q->where('subject', $name)->orWhere('server_name', $name)->orWhere('target_name', $name))
+                    ->exists();
+
+                if ($alreadyRunning) {
+                    $validator->errors()->add('stack_name', "A server creation run for '{$name}' is already in progress.");
+                }
             }
         });
     }

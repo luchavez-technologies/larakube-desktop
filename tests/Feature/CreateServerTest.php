@@ -238,3 +238,26 @@ test('passing an account attaches the appropriate provider flag to cloud:create'
 
     File::deleteDirectory($bin);
 });
+
+test('cannot start a server creation when one for the same name is already running', function () {
+    $bin = createServerFakeCli();
+    ChildProcess::fake();
+
+    Run::create([
+        'label' => 'Create server active-box',
+        'command' => ['larakube', 'cloud:create'],
+        'status' => RunStatus::Running,
+        'kind' => RunKind::CreateServer,
+        'subject' => 'active-box',
+    ]);
+
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'active-box',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'api_token' => 'dop_v1_secret',
+    ])->assertSessionHasErrors('stack_name');
+
+    File::deleteDirectory($bin);
+});
