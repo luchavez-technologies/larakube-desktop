@@ -205,53 +205,28 @@ export default function ServersIndex({
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="max-w-[220px]">
+                                                    <td className="max-w-xs">
                                                         {server.domains &&
                                                         server.domains.length >
                                                             0 ? (
                                                             <div className="flex flex-wrap items-center gap-1.5 py-1">
-                                                                {server.domains
-                                                                    .slice(0, 2)
-                                                                    .map(
-                                                                        (d) => (
-                                                                            <span
-                                                                                key={
+                                                                {server.domains.map(
+                                                                    (d) => (
+                                                                        <span
+                                                                            key={
+                                                                                d.domain
+                                                                            }
+                                                                            className="inline-flex items-center gap-1 rounded-md bg-badge/80 px-2 py-0.5 font-mono text-[11px] font-medium text-ink ring-1 ring-line/50"
+                                                                            title={`${d.domain}${d.dnsProvider ? ` (${d.dnsProvider})` : ''}`}
+                                                                        >
+                                                                            <Globe className="size-3 shrink-0 text-brand" />
+                                                                            <span>
+                                                                                {
                                                                                     d.domain
                                                                                 }
-                                                                                className="inline-flex items-center gap-1 rounded-md bg-badge/80 px-2 py-0.5 font-mono text-[11px] font-medium text-ink ring-1 ring-line/50"
-                                                                                title={`${d.domain}${d.dnsProvider ? ` (${d.dnsProvider})` : ''}`}
-                                                                            >
-                                                                                <Globe className="size-3 shrink-0 text-brand" />
-                                                                                <span className="max-w-[110px] truncate">
-                                                                                    {
-                                                                                        d.domain
-                                                                                    }
-                                                                                </span>
                                                                             </span>
-                                                                        ),
-                                                                    )}
-                                                                {server.domains
-                                                                    .length >
-                                                                    2 && (
-                                                                    <span
-                                                                        className="inline-flex items-center rounded-md bg-badge/80 px-1.5 py-0.5 text-[10px] font-semibold text-soft ring-1 ring-line/50"
-                                                                        title={server.domains
-                                                                            .map(
-                                                                                (
-                                                                                    d,
-                                                                                ) =>
-                                                                                    d.domain,
-                                                                            )
-                                                                            .join(
-                                                                                ', ',
-                                                                            )}
-                                                                    >
-                                                                        +
-                                                                        {server
-                                                                            .domains
-                                                                            .length -
-                                                                            2}
-                                                                    </span>
+                                                                        </span>
+                                                                    ),
                                                                 )}
                                                             </div>
                                                         ) : (
@@ -363,9 +338,8 @@ export default function ServersIndex({
                                                     server.domains.length >
                                                         0 && (
                                                         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                                                            {server.domains
-                                                                .slice(0, 2)
-                                                                .map((d) => (
+                                                            {server.domains.map(
+                                                                (d) => (
                                                                     <span
                                                                         key={
                                                                             d.domain
@@ -374,34 +348,13 @@ export default function ServersIndex({
                                                                         title={`${d.domain}${d.dnsProvider ? ` (${d.dnsProvider})` : ''}`}
                                                                     >
                                                                         <Globe className="size-3 shrink-0 text-brand" />
-                                                                        <span className="max-w-[130px] truncate">
+                                                                        <span>
                                                                             {
                                                                                 d.domain
                                                                             }
                                                                         </span>
                                                                     </span>
-                                                                ))}
-                                                            {server.domains
-                                                                .length > 2 && (
-                                                                <span
-                                                                    className="inline-flex items-center rounded-md bg-badge/80 px-1.5 py-0.5 text-[10px] font-semibold text-soft ring-1 ring-line/50"
-                                                                    title={server.domains
-                                                                        .map(
-                                                                            (
-                                                                                d,
-                                                                            ) =>
-                                                                                d.domain,
-                                                                        )
-                                                                        .join(
-                                                                            ', ',
-                                                                        )}
-                                                                >
-                                                                    +
-                                                                    {server
-                                                                        .domains
-                                                                        .length -
-                                                                        2}
-                                                                </span>
+                                                                ),
                                                             )}
                                                         </div>
                                                     )}
