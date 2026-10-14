@@ -219,6 +219,54 @@ test('Automatic SSL runs tls:init and can reuse the stored token', function () {
     File::deleteDirectory($bin);
 });
 
+test('Connect domain and Automatic SSL support Route 53 with AWS credentials', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.dns', 'workshop-demo'), [
+        'dns_provider' => 'route53',
+        'aws_access_key_id' => 'AKIAEXAMPLE',
+        'aws_secret_access_key' => 'secret123',
+        'aws_region' => 'us-west-2',
+        'group' => 'aws-dns',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tool:init', 'production', '--tool=external-dns', '--context=larakube-203.0.113.21', '--provider=route53', '--group=aws-dns', '--force', '--no-interaction']
+        && ($env['AWS_ACCESS_KEY_ID'] ?? null) === 'AKIAEXAMPLE'
+        && ($env['AWS_SECRET_ACCESS_KEY'] ?? null) === 'secret123'
+        && ($env['AWS_DEFAULT_REGION'] ?? null) === 'us-west-2');
+
+    $this->post(route('servers.tls', 'workshop-demo'), [
+        'dns_provider' => 'route53',
+        'reuse_stored' => true,
+        'group' => 'aws-dns',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tls:init', 'production', '--context=larakube-203.0.113.21', '--provider=route53', '--group=aws-dns', '--force', '--no-interaction']
+        && ! array_key_exists('AWS_ACCESS_KEY_ID', $env ?? []));
+
+    File::deleteDirectory($bin);
+});
+
+test('Connect domain and Automatic SSL support Google Cloud DNS with GCP credentials', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.dns', 'workshop-demo'), [
+        'dns_provider' => 'google',
+        'gcp_project_id' => 'my-gcp-project',
+        'gcp_credentials' => '{"type": "service_account"}',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'tool:init', 'production', '--tool=external-dns', '--context=larakube-203.0.113.21', '--provider=google', '--force', '--no-interaction']
+        && ($env['GCP_PROJECT_ID'] ?? null) === 'my-gcp-project'
+        && ($env['GCP_SERVICE_ACCOUNT_JSON'] ?? null) === '{"type": "service_account"}');
+
+    File::deleteDirectory($bin);
+});
+
 function serversFakeStacksAndEverythingElse(): void
 {
     Process::fake([

@@ -221,11 +221,11 @@ class ServerController extends Controller
 
         $run = $runner->start(
             label: "Connect a domain to {$server}",
-            arguments: ['tool:init', 'production', '--tool=external-dns', "--context={$context}", ...$request->groupArgument(), '--force'],
+            arguments: ['tool:init', 'production', '--tool=external-dns', "--context={$context}", ...$request->providerArgument(), ...$request->groupArgument(), '--force'],
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::ConnectDomain,
             subject: $server,
-            meta: ['server' => $server, 'context' => $context],
+            meta: ['server' => $server, 'context' => $context, 'provider' => $request->dnsProvider()],
             targetType: 'server',
             targetName: $server,
             serverName: $server,
@@ -241,11 +241,11 @@ class ServerController extends Controller
 
         $run = $runner->start(
             label: "Automatic SSL certificates on {$server}",
-            arguments: ['tls:init', 'production', "--context={$context}", ...$request->groupArgument(), '--force'],
+            arguments: ['tls:init', 'production', "--context={$context}", ...$request->providerArgument(), ...$request->groupArgument(), '--force'],
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::EnableSsl,
             subject: $server,
-            meta: ['server' => $server, 'context' => $context],
+            meta: ['server' => $server, 'context' => $context, 'provider' => $request->dnsProvider()],
             targetType: 'server',
             targetName: $server,
             serverName: $server,
