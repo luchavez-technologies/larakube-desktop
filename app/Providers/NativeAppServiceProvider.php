@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Jobs\Sync\SyncAppIconJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
@@ -86,6 +87,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     private function warmSync(): void
     {
         try {
+            SyncAppIconJob::dispatch();
             SyncServersJob::dispatch();
 
             foreach (Server::where('status', 'ready')->whereNotNull('context')->get() as $server) {

@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'cloud' => [
+        'url' => env('LARAKUBE_CLOUD_URL', 'https://cloud.larakube.app'),
+        'branding_url' => env('LARAKUBE_ICON_URL'),
+    ],
+
 ];
