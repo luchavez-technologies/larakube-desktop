@@ -177,10 +177,11 @@ test('only a Windows computer is asked about WSL', function () {
         ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
 });
 
-test('catalog includes gh and tea tools', function () {
+test('catalog includes gh and tea tools as local-only developer tools', function () {
     $check = app(ReadinessCheck::class);
-    $catalog = $check->catalog();
-    $slugs = array_column($catalog, 'slug');
+    $catalog = collect($check->catalog())->keyBy('slug');
 
-    expect($slugs)->toContain('gh', 'tea');
+    expect($catalog)->toHaveKeys(['gh', 'tea'])
+        ->and($catalog['gh']['localOnly'])->toBeTrue()
+        ->and($catalog['tea']['localOnly'])->toBeTrue();
 });
