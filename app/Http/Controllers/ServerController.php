@@ -7,6 +7,8 @@ use App\Http\Requests\CloudflareStepRequest;
 use App\Http\Requests\DestroyServerRequest;
 use App\Http\Requests\StoreServerRequest;
 use App\Models\Project;
+use App\Models\Server;
+use App\Models\ServerDomain;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\CloudAccount;
 use App\Services\LaraKube\ClusterMetrics;
@@ -29,8 +31,58 @@ class ServerController extends Controller
     public function index(StackCatalog $catalog, GlobalSettings $settings): Response
     {
         return Inertia::render('servers/index', [
-            'servers' => Inertia::defer(fn (): ?array => $this->visibleStacks($catalog->all(), $settings)),
+            'servers' => Inertia::defer(fn (): ?array => $this->enrichStacksWithDomains(
+                $this->visibleStacks($catalog->all(), $settings)
+            )),
         ]);
+    }
+
+    /**
+     * Attaches managed ExternalDNS domains from local database cache (0ms read)
+     * so operators can immediately see which client / base domains are tied to each server.
+     *
+     * @param  ?list<array<string, mixed>>  $stacks
+     * @return ?list<array<string, mixed>>
+     */
+    private function enrichStacksWithDomains(?array $stacks): ?array
+    {
+        if ($stacks === null || empty($stacks)) {
+            return $stacks;
+        }
+
+        $contexts = array_values(array_filter(array_column($stacks, 'context')));
+        $names = array_column($stacks, 'name');
+
+        $dbServers = Server::with(['domains' => fn ($q) => $q->where('external_dns', true)])
+            ->where(function ($q) use ($contexts, $names) {
+                if (! empty($contexts)) {
+                    $q->whereIn('context', $contexts);
+                }
+                $q->orWhereIn('name', $names);
+            })
+            ->get();
+
+        $byContext = $dbServers->whereNotNull('context')->keyBy('context');
+        $byName = $dbServers->keyBy('name');
+
+        return array_map(function (array $stack) use ($byContext, $byName): array {
+            $context = $stack['context'] ?? null;
+            $name = $stack['name'] ?? null;
+
+            $serverModel = ($context !== null ? $byContext->get($context) : null)
+                ?? ($name !== null ? $byName->get($name) : null);
+
+            $domains = $serverModel?->domains->map(fn (ServerDomain $d): array => [
+                'domain' => $d->domain,
+                'externalDns' => (bool) $d->external_dns,
+                'dnsProvider' => $d->dns_provider,
+            ])->values()->all() ?? [];
+
+            $stack['domains'] = $domains;
+            $stack['hasExternalDns'] = ! empty($domains);
+
+            return $stack;
+        }, $stacks);
     }
 
     /**

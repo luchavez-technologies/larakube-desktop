@@ -8,6 +8,7 @@ import {
     UploadCloud,
     CheckCircle2,
     X,
+    Globe,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ProviderLogo from '@/components/provider-logo';
@@ -138,6 +139,7 @@ export default function ServersIndex({
                                             {[
                                                 'Name',
                                                 'Provider',
+                                                'Domains',
                                                 'Region',
                                                 'IP address',
                                                 'Status',
@@ -202,6 +204,61 @@ export default function ServersIndex({
                                                                 </span>
                                                             )}
                                                         </div>
+                                                    </td>
+                                                    <td className="max-w-[220px]">
+                                                        {server.domains &&
+                                                        server.domains.length >
+                                                            0 ? (
+                                                            <div className="flex flex-wrap items-center gap-1.5 py-1">
+                                                                {server.domains
+                                                                    .slice(0, 2)
+                                                                    .map(
+                                                                        (d) => (
+                                                                            <span
+                                                                                key={
+                                                                                    d.domain
+                                                                                }
+                                                                                className="inline-flex items-center gap-1 rounded-md bg-badge/80 px-2 py-0.5 font-mono text-[11px] font-medium text-ink ring-1 ring-line/50"
+                                                                                title={`${d.domain}${d.dnsProvider ? ` (${d.dnsProvider})` : ''}`}
+                                                                            >
+                                                                                <Globe className="size-3 shrink-0 text-brand" />
+                                                                                <span className="max-w-[110px] truncate">
+                                                                                    {
+                                                                                        d.domain
+                                                                                    }
+                                                                                </span>
+                                                                            </span>
+                                                                        ),
+                                                                    )}
+                                                                {server.domains
+                                                                    .length >
+                                                                    2 && (
+                                                                    <span
+                                                                        className="inline-flex items-center rounded-md bg-badge/80 px-1.5 py-0.5 text-[10px] font-semibold text-soft ring-1 ring-line/50"
+                                                                        title={server.domains
+                                                                            .map(
+                                                                                (
+                                                                                    d,
+                                                                                ) =>
+                                                                                    d.domain,
+                                                                            )
+                                                                            .join(
+                                                                                ', ',
+                                                                            )}
+                                                                    >
+                                                                        +
+                                                                        {server
+                                                                            .domains
+                                                                            .length -
+                                                                            2}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="font-mono text-[13px] text-faint">
+                                                                —
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="font-mono text-[13px] text-soft">
                                                         {server.region ?? '—'}
@@ -302,6 +359,52 @@ export default function ServersIndex({
                                                         </span>
                                                     )}
                                                 </div>
+                                                {server.domains &&
+                                                    server.domains.length >
+                                                        0 && (
+                                                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                                                            {server.domains
+                                                                .slice(0, 2)
+                                                                .map((d) => (
+                                                                    <span
+                                                                        key={
+                                                                            d.domain
+                                                                        }
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-badge/80 px-2 py-0.5 font-mono text-[11px] font-medium text-ink ring-1 ring-line/50"
+                                                                        title={`${d.domain}${d.dnsProvider ? ` (${d.dnsProvider})` : ''}`}
+                                                                    >
+                                                                        <Globe className="size-3 shrink-0 text-brand" />
+                                                                        <span className="max-w-[130px] truncate">
+                                                                            {
+                                                                                d.domain
+                                                                            }
+                                                                        </span>
+                                                                    </span>
+                                                                ))}
+                                                            {server.domains
+                                                                .length > 2 && (
+                                                                <span
+                                                                    className="inline-flex items-center rounded-md bg-badge/80 px-1.5 py-0.5 text-[10px] font-semibold text-soft ring-1 ring-line/50"
+                                                                    title={server.domains
+                                                                        .map(
+                                                                            (
+                                                                                d,
+                                                                            ) =>
+                                                                                d.domain,
+                                                                        )
+                                                                        .join(
+                                                                            ', ',
+                                                                        )}
+                                                                >
+                                                                    +
+                                                                    {server
+                                                                        .domains
+                                                                        .length -
+                                                                        2}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 <div className="mt-3 flex items-center justify-between">
                                                     <span className="font-mono text-[11px] text-faint">
                                                         {server.ip ? (

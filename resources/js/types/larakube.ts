@@ -223,6 +223,7 @@ export type Server = {
     isCurrent?: boolean;
     /** Whether this server has at least one domain ExternalDNS manages — an instant DB read, present for every server, not just a selected one. */
     hasExternalDns?: boolean;
+    domains?: ServerDomain[];
 };
 
 export type DiagnoseIssue = { title: string; description: string; fix: string };
@@ -233,7 +234,7 @@ export type ServerDomain = {
     externalDns: boolean;
     /** Only meaningful when `externalDns` is true; null for a TLS-only or Ingress-only entry. */
     dnsProvider?: 'cloudflare' | 'route53' | null;
-    tls: boolean;
+    tls?: boolean;
     inUse?: boolean;
 };
 

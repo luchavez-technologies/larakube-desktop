@@ -3,6 +3,8 @@
 use App\Enums\RunKind;
 use App\Models\Project;
 use App\Models\Run;
+use App\Models\Server;
+use App\Models\ServerDomain;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\TerminalLauncher;
@@ -458,6 +460,64 @@ test('a server page asks for its backup state on its own, in one call', function
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->missing('backup'));
+
+    File::deleteDirectory($bin);
+});
+
+test('the servers list enriches servers with managed ExternalDNS domains from database', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+
+    $server = Server::create([
+        'name' => 'workshop-demo',
+        'role' => 'deploy',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-203.0.113.21',
+        'status' => 'ready',
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'client-alpha.com',
+        'external_dns' => true,
+        'dns_provider' => 'cloudflare',
+        'tls' => true,
+        'in_use' => true,
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'client-beta.io',
+        'external_dns' => true,
+        'dns_provider' => 'cloudflare',
+        'tls' => false,
+        'in_use' => false,
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'internal.test',
+        'external_dns' => false,
+        'dns_provider' => null,
+        'tls' => false,
+        'in_use' => false,
+    ]);
+
+    $this->get(route('servers.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('servers/index')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->has('servers', 2)
+                ->where('servers.0.name', 'workshop-demo')
+                ->where('servers.0.hasExternalDns', true)
+                ->has('servers.0.domains', 2)
+                ->where('servers.0.domains.0.domain', 'client-alpha.com')
+                ->where('servers.0.domains.0.dnsProvider', 'cloudflare')
+                ->where('servers.1.name', 'cancel-test')
+                ->where('servers.1.hasExternalDns', false)
+                ->has('servers.1.domains', 0)));
 
     File::deleteDirectory($bin);
 });
