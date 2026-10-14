@@ -176,3 +176,11 @@ test('only a Windows computer is asked about WSL', function () {
         ->has('shellProfile')
         ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
 });
+
+test('catalog includes gh and tea tools', function () {
+    $check = app(ReadinessCheck::class);
+    $catalog = $check->catalog();
+    $slugs = array_column($catalog, 'slug');
+
+    expect($slugs)->toContain('gh', 'tea');
+});

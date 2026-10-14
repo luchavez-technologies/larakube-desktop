@@ -93,10 +93,10 @@ test('project deploy stats can filter by specific environment', function () {
         'project_id' => $project->id,
         'environment' => 'production',
         'command' => ['deploy', 'app'],
-        'finished_at' => now()->subHours(5)->addSeconds(30),
+        'finished_at' => ($prodCreated = now()->subHours(5))->copy()->addSeconds(30),
     ]);
     $prodRun->timestamps = false;
-    $prodRun->created_at = now()->subHours(5);
+    $prodRun->created_at = $prodCreated;
     $prodRun->save();
 
     $stagingRun = new Run([
@@ -106,10 +106,10 @@ test('project deploy stats can filter by specific environment', function () {
         'project_id' => $project->id,
         'environment' => 'staging',
         'command' => ['deploy', 'app'],
-        'finished_at' => now()->subHours(2)->addSeconds(20),
+        'finished_at' => ($stagingCreated = now()->subHours(2))->copy()->addSeconds(20),
     ]);
     $stagingRun->timestamps = false;
-    $stagingRun->created_at = now()->subHours(2);
+    $stagingRun->created_at = $stagingCreated;
     $stagingRun->save();
 
     $prodStats = $service->projectDeployStats($project->id, 'production');

@@ -7,6 +7,8 @@ import {
     SiKubernetes,
     SiOpentofu,
     SiGit,
+    SiGithub,
+    SiGitea,
     SiPodman,
 } from '@icons-pack/react-simple-icons';
 import { Cloud, Server } from 'lucide-react';
@@ -124,6 +126,21 @@ function resolveVisual(id: string): Visual {
                 icon: <SiGit />,
                 containerClass:
                     'bg-[#F03C2E]/10 text-[#F03C2E] border-[#F03C2E]/25',
+            };
+        case 'gh':
+        case 'github':
+            return {
+                icon: <SiGithub />,
+                containerClass:
+                    'bg-neutral-800/10 text-neutral-800 dark:bg-white/10 dark:text-neutral-100 border-neutral-800/25 dark:border-white/20',
+            };
+        case 'tea':
+        case 'gitea':
+        case 'forgejo':
+            return {
+                icon: <SiGitea />,
+                containerClass:
+                    'bg-[#609926]/10 text-[#609926] border-[#609926]/25',
             };
         case 'k3d':
         case 'kind':
