@@ -13,6 +13,7 @@ use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
 use App\Services\LaraKube\GlobalSettings;
+use Illuminate\Support\Facades\Artisan;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Menu;
@@ -28,6 +29,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
+        $this->ensureDatabaseMigrated();
         $this->closeInterruptedLocalSetup();
         $this->syncTheme();
         $this->warmSync();
@@ -54,6 +56,15 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     Menu::quit('Quit LaraKube'),
                 )
             );
+    }
+
+    /** Ensures all database migrations are applied to the active database on startup. */
+    private function ensureDatabaseMigrated(): void
+    {
+        try {
+            Artisan::call('migrate', ['--force' => true]);
+        } catch (\Throwable) {
+        }
     }
 
     /** A local setup the app was closed during never got to remove its temporary sudo access. */

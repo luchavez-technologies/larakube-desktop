@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -156,6 +156,9 @@ function TrackedRun({
             ) {
                 forgetToolStatus();
             }
+            router.reload({
+                only: ['activeRuns', 'recentRuns', 'notifications'],
+            });
         }
         wasRunning.current = stream.status === 'running';
         // eslint-disable-next-line react-hooks/exhaustive-deps
