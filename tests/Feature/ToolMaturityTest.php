@@ -9,13 +9,16 @@ test('ToolMaturity reports the tools, frameworks, and capabilities still being t
 
     expect($untested['tools'])->toBe(['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka'])
         ->and($untested['frameworks'])->toBe(['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs'])
-        ->and($untested['capabilities'])->toBe(['dev-boxes', 'vps-to-managed', 'backups']);
+        ->and($untested['capabilities'])->toBe(['dev-boxes', 'vps-to-managed', 'backups'])
+        ->and($untested['dns_providers'])->toBe(['route53', 'google']);
 });
 
 test('redefining a maturity feature changes what ToolMaturity reports, same as any other Pennant feature', function () {
     Feature::define('untested-tools', fn () => ['wordpress']);
+    Feature::define('untested-dns-providers', fn () => ['route53']);
 
-    expect(app(ToolMaturity::class)->untested()['tools'])->toBe(['wordpress']);
+    expect(app(ToolMaturity::class)->untested()['tools'])->toBe(['wordpress'])
+        ->and(app(ToolMaturity::class)->untested()['dns_providers'])->toBe(['route53']);
 });
 
 test('the untested list is shared on every page, the same way hideProjects and experimental are', function () {
@@ -24,5 +27,6 @@ test('the untested list is shared on every page, the same way hideProjects and e
             ->where('untested.tools', ['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka'])
             ->where('untested.frameworks', ['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs'])
             ->where('untested.capabilities', ['dev-boxes', 'vps-to-managed', 'backups'])
+            ->where('untested.dns_providers', ['route53', 'google'])
         );
 });

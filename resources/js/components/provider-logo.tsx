@@ -10,6 +10,7 @@ import {
     SiGithub,
     SiGitea,
     SiPodman,
+    SiCloudflare,
 } from '@icons-pack/react-simple-icons';
 import { Cloud, Server } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -86,6 +87,7 @@ function resolveVisual(id: string): Visual {
         case 'google':
         case 'googlecloud':
         case 'googlecloudplatform':
+        case 'googleclouddns':
             return {
                 icon: <SiGooglecloud />,
                 containerClass:
@@ -94,6 +96,7 @@ function resolveVisual(id: string): Visual {
         case 'aws':
         case 'amazon':
         case 'amazonwebservices':
+        case 'route53':
             return {
                 icon: (
                     <svg
@@ -107,6 +110,12 @@ function resolveVisual(id: string): Visual {
                 ),
                 containerClass:
                     'bg-[#FF9900]/10 text-neutral-800 dark:text-neutral-100 border-[#FF9900]/30',
+            };
+        case 'cloudflare':
+            return {
+                icon: <SiCloudflare />,
+                containerClass:
+                    'bg-[#F38020]/10 text-[#F38020] border-[#F38020]/25',
             };
         case 'docker':
         case 'dockerdesktop':

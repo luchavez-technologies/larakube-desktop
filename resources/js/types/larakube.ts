@@ -626,6 +626,7 @@ export type Untested = {
     tools: string[];
     frameworks: string[];
     capabilities: string[];
+    dns_providers: string[];
 };
 
 export type BackupSchedule = {

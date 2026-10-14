@@ -12,7 +12,7 @@ use Laravel\Pennant\Feature;
 class ToolMaturity
 {
     /**
-     * @return array{tools: list<string>, frameworks: list<string>, capabilities: list<string>}
+     * @return array{tools: list<string>, frameworks: list<string>, capabilities: list<string>, dns_providers: list<string>}
      */
     public function untested(): array
     {
@@ -20,6 +20,7 @@ class ToolMaturity
             'tools' => $this->slugs(Feature::value('untested-tools')),
             'frameworks' => $this->slugs(Feature::value('untested-frameworks')),
             'capabilities' => $this->slugs(Feature::value('untested-capabilities')),
+            'dns_providers' => $this->slugs(Feature::value('untested-dns-providers')),
         ];
     }
 

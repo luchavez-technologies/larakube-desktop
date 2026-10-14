@@ -1,11 +1,15 @@
 import { type ChangeEvent, type ReactNode } from 'react';
-import { CheckCircle2, FlaskConical, Key, Upload } from 'lucide-react';
+import { CheckCircle2, FlaskConical, Key, Server, Upload } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import GcpPolicyHelper from '@/components/gcp-policy-helper';
-import SelectMenu from '@/components/select-menu';
+import SelectMenu, { type SelectMenuOption } from '@/components/select-menu';
+import ExperimentalBadge from '@/components/experimental-badge';
+import ProviderLogo from '@/components/provider-logo';
 import { buttonClass } from '@/components/button';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { cn } from '@/lib/utils';
+import type { Untested } from '@/types/larakube';
 
 export type DnsTlsProvider = 'cloudflare' | 'route53' | 'google' | '';
 
@@ -35,10 +39,41 @@ export function dnsProviderLabel(provider?: string): string {
     }
 }
 
+export function getDnsProviderOptions(untested?: Untested): SelectMenuOption[] {
+    return [
+        {
+            value: 'cloudflare',
+            label: 'Cloudflare',
+            icon: <ProviderLogo provider="cloudflare" size="xs" />,
+            badge: (
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                    Recommended
+                </span>
+            ),
+        },
+        {
+            value: 'route53',
+            label: 'AWS Route 53',
+            icon: <ProviderLogo provider="aws" size="xs" />,
+            badge: untested?.dns_providers?.includes('route53') ? (
+                <ExperimentalBadge />
+            ) : undefined,
+        },
+        {
+            value: 'google',
+            label: 'Google Cloud DNS',
+            icon: <ProviderLogo provider="gcp" size="xs" />,
+            badge: untested?.dns_providers?.includes('google') ? (
+                <ExperimentalBadge />
+            ) : undefined,
+        },
+    ];
+}
+
 export const dnsProviderOptions = [
-    { value: 'cloudflare', label: 'Cloudflare (Recommended)' },
-    { value: 'route53', label: 'AWS Route 53 (Experimental)' },
-    { value: 'google', label: 'Google Cloud DNS (Experimental)' },
+    { value: 'cloudflare', label: 'Cloudflare' },
+    { value: 'route53', label: 'AWS Route 53' },
+    { value: 'google', label: 'Google Cloud DNS' },
 ];
 
 export interface DnsTlsFieldsProps {
@@ -98,6 +133,8 @@ export default function DnsTlsFields({
     copyAwsKeys,
     copyGcpProjectId,
 }: DnsTlsFieldsProps) {
+    const { untested } = usePage<{ untested?: Untested }>().props;
+
     const activeProvider =
         lockedProvider ||
         values.dns_provider ||
@@ -126,12 +163,21 @@ export default function DnsTlsFields({
         }
     };
 
-    const options = allowEmptyProvider
+    const baseOptions = getDnsProviderOptions(untested);
+    const options: SelectMenuOption[] = allowEmptyProvider
         ? [
-              { value: '', label: 'None (Configure later or manually)' },
-              ...dnsProviderOptions,
+              {
+                  value: '',
+                  label: 'None (Configure later or manually)',
+                  icon: (
+                      <span className="inline-flex size-5 items-center justify-center rounded-md border border-line bg-surface text-soft shadow-2xs">
+                          <Server className="size-3.5" />
+                      </span>
+                  ),
+              },
+              ...baseOptions,
           ]
-        : dnsProviderOptions;
+        : baseOptions;
 
     return (
         <div className="space-y-4">
@@ -143,9 +189,24 @@ export default function DnsTlsFields({
                 />
                 {lockedProvider ? (
                     <div className="flex items-center justify-between rounded-lg bg-paper px-3 py-2 text-xs">
-                        <span className="font-medium text-ink">
-                            {dnsProviderLabel(lockedProvider)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <ProviderLogo
+                                provider={
+                                    lockedProvider === 'route53'
+                                        ? 'aws'
+                                        : lockedProvider === 'google'
+                                          ? 'gcp'
+                                          : 'cloudflare'
+                                }
+                                size="xs"
+                            />
+                            <span className="font-medium text-ink">
+                                {dnsProviderLabel(lockedProvider)}
+                            </span>
+                            {untested?.dns_providers?.includes(
+                                lockedProvider,
+                            ) && <ExperimentalBadge />}
+                        </div>
                         <span className="text-soft">Locked to cluster DNS</span>
                     </div>
                 ) : (
