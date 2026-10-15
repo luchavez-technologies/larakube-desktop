@@ -104,7 +104,7 @@ export default function PlexQuickConnectModal({
         driver?.includes('redis') ||
         !driver
     ) {
-        uriSnippet += `# Redis Connection URI\nredis://${redisHost}:${redisPort}/${redisIndex}\n\n`;
+        uriSnippet += `# Valkey / Redis Connection URI\nredis://${redisHost}:${redisPort}/${redisIndex}\n\n`;
     }
     if (
         tenant?.s3Bucket ||
@@ -115,9 +115,9 @@ export default function PlexQuickConnectModal({
         uriSnippet += `# S3 Endpoint\nhttp://${s3Internal}\n`;
     }
 
-    let tunnelSnippet = `# Port-forward Plex Commons to localhost for TablePlus, DBeaver, or Redis Insight:\n\n`;
+    let tunnelSnippet = `# Port-forward Plex Commons to localhost for TablePlus, DBeaver, or RedisInsight:\n\n`;
     tunnelSnippet += `# Database (port 5432 or 3306):\nkubectl port-forward -n larakube-plex svc/${dbOption?.driver ?? 'postgres'} ${dbPort}:${dbPort}\n\n`;
-    tunnelSnippet += `# Redis (port 6379):\nkubectl port-forward -n larakube-plex svc/redis ${redisPort}:${redisPort}\n\n`;
+    tunnelSnippet += `# Valkey / Redis (port 6379):\nkubectl port-forward -n larakube-plex svc/redis ${redisPort}:${redisPort}\n\n`;
     tunnelSnippet += `# S3 Object Storage (port 8333 / 8888):\nkubectl port-forward -n larakube-plex svc/${s3Option?.driver ?? 'seaweedfs'} 8333:8333\n`;
 
     const activeContent =

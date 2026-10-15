@@ -88,7 +88,7 @@ export default function PlexProvisionModal({
         },
         {
             service: 'redis',
-            label: 'Redis Cache & Queue DB',
+            label: 'Valkey / Redis Cache & Queue DB',
             available: redisActive,
         },
         {

@@ -384,9 +384,9 @@ export default function PlexEmptyState({ server }: { server: Server }) {
                                 </span>
                             </div>
                             <p className="mt-1 text-xs text-soft">
-                                Shared Redis 7.x instance. Tenants receive
-                                isolated database indexes (DB 0–15) or key
-                                prefixes.
+                                Shared Valkey 8.0 instance (100% drop-in Redis
+                                replacement). Tenants receive isolated database
+                                indexes (DB 0–15) or key prefixes.
                             </p>
                         </div>
                     </div>
@@ -401,20 +401,24 @@ export default function PlexEmptyState({ server }: { server: Server }) {
                         )}
                     >
                         <div className="flex items-start gap-3.5">
-                            <ToolLogo slug="redis" size="sm" />
+                            <ToolLogo slug="valkey" size="sm" />
                             <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5">
                                     <span className="text-sm font-semibold text-ink">
-                                        Redis 7.x Cache & Queue Broker
+                                        Valkey 8.0
+                                    </span>
+                                    <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
+                                        Redis-Compatible
                                     </span>
                                     <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
                                         Port 6379
                                     </span>
                                 </div>
                                 <p className="mt-1 text-xs text-soft">
-                                    Powers caching, session drivers, and queue
-                                    workers across all tenant apps with
-                                    sub-millisecond latency.
+                                    The Linux Foundation's high-performance,
+                                    open-source Redis fork. Wire-compatible with
+                                    all Laravel Redis drivers, cache, session
+                                    storage, and Horizon queues.
                                 </p>
                             </div>
                         </div>
