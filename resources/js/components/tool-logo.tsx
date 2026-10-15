@@ -276,8 +276,8 @@ function getBrandVisual(
         };
     }
 
-    // 12. ownCloud / oCIS
-    if (id === 'ocis') {
+    // 12. ownCloud / oCIS / Drive
+    if (id === 'ocis' || id === 'drive') {
         return {
             containerClass:
                 'bg-[#041E42] ring-1 ring-[#041E42]/80 text-white shadow-xs',

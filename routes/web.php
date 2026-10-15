@@ -10,6 +10,7 @@ use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\DiagnosticsController;
+use App\Http\Controllers\DriveController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
@@ -179,6 +180,15 @@ Route::post('/servers/{server}/mail/domains', [MailController::class, 'addDomain
 Route::post('/servers/{server}/mail/relay', [MailController::class, 'configureRelay'])->name('servers.mail.relay.store');
 Route::post('/servers/{server}/mail/test', [MailController::class, 'sendTest'])->name('servers.mail.test');
 Route::get('/servers/{server}/mail/check-dns', [MailController::class, 'checkDns'])->name('servers.mail.check-dns');
+
+Route::get('/drive', [DriveController::class, 'entry'])->name('drive');
+Route::get('/servers/{server}/drive', [DriveController::class, 'index'])->name('servers.drive.index');
+Route::post('/servers/{server}/drive/deploy', [DriveController::class, 'deploy'])->name('servers.drive.deploy');
+Route::post('/servers/{server}/drive/office/deploy', [DriveController::class, 'deployOffice'])->name('servers.drive.office.deploy');
+Route::post('/servers/{server}/drive/extensions/install', [DriveController::class, 'installExtension'])->name('servers.drive.extensions.install');
+Route::post('/servers/{server}/drive/extensions/uninstall', [DriveController::class, 'uninstallExtension'])->name('servers.drive.extensions.uninstall');
+Route::post('/servers/{server}/drive/restart', [DriveController::class, 'restart'])->name('servers.drive.restart');
+Route::delete('/servers/{server}/drive', [DriveController::class, 'destroy'])->name('servers.drive.destroy');
 
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
 Route::get('/servers/{server}/tools', [ClusterToolController::class, 'index'])->name('servers.tools.index');

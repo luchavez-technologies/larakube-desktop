@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncAppIconJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
@@ -97,6 +98,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
                 if ($server->mailTool()?->installed) {
                     SyncMailJob::dispatch($server->id);
+                }
+
+                if ($server->driveTool()?->installed) {
+                    SyncDriveJob::dispatch($server->id);
                 }
             }
         } catch (\Throwable) {

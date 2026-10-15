@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
@@ -190,6 +191,38 @@ class RecordRunOutput
 
             if ($status === RunStatus::Succeeded) {
                 $this->recordActivity($run, $server);
+            }
+        }
+
+        if ($server !== null && $run->kind?->changesDrive()) {
+            SyncClusterToolsJob::dispatch($server->id);
+            SyncDriveJob::dispatch($server->id);
+
+            $enableOffice = in_array($run->meta['enable_office'] ?? null, [true, '1', 1], true);
+            if ($run->kind === RunKind::DriveDeploy && $enableOffice && $status === RunStatus::Succeeded && $context !== null) {
+                $runner = app(CliRunner::class);
+                $serverName = $run->meta['server'] ?? $server->name;
+                $vpnOnly = in_array($run->meta['vpn_only'] ?? null, [true, '1', 1], true);
+                $domain = $run->meta['domain'] ?? null;
+                $args = ['drive:office:init', 'production', "--context={$context}", '--force'];
+                if ($domain !== null && $domain !== '') {
+                    $args[] = "--domain={$domain}";
+                }
+                if ($vpnOnly) {
+                    $args[] = '--vpn-only';
+                }
+
+                $runner->start(
+                    label: "Deploy Collabora Online on {$serverName}",
+                    arguments: $args,
+                    kind: RunKind::DriveOfficeDeploy,
+                    subject: $serverName,
+                    meta: ['server' => $serverName, 'context' => $context],
+                    targetType: 'server',
+                    targetName: $serverName,
+                    serverName: $serverName,
+                    context: $context,
+                );
             }
         }
     }

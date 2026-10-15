@@ -101,6 +101,14 @@ enum RunKind: string
     case MailConfigureRelay = 'mail-configure-relay';
     case MailSendTest = 'mail-send-test';
 
+    /** Drive & oCIS / Collabora Office management. */
+    case DriveDeploy = 'drive-deploy';
+    case DriveOfficeDeploy = 'drive-office-deploy';
+    case DriveInstallExtension = 'drive-install-extension';
+    case DriveUninstallExtension = 'drive-uninstall-extension';
+    case DriveRestart = 'drive-restart';
+    case DriveRemove = 'drive-remove';
+
     public function changesBackups(): bool
     {
         return in_array($this, [self::BackupInit, self::BackupSchedule, self::BackupUnschedule, self::BackupRun, self::BackupRestore, self::BackupPrune], true);
@@ -114,6 +122,11 @@ enum RunKind: string
     public function changesMail(): bool
     {
         return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailConfigureRelay], true);
+    }
+
+    public function changesDrive(): bool
+    {
+        return in_array($this, [self::DriveDeploy, self::DriveOfficeDeploy, self::DriveInstallExtension, self::DriveUninstallExtension, self::DriveRestart, self::DriveRemove], true);
     }
 
     /**

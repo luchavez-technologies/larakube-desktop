@@ -762,3 +762,59 @@ export type FleetMetrics = {
     avgDeployDurationSeconds: number | null;
     deployActivity14d: number[];
 };
+
+export type DriveComponent = {
+    name: string;
+    ready: boolean;
+    replicas?: string;
+    restartCount?: number;
+};
+
+export type DriveOfficeInfo = {
+    installed: boolean;
+    ready: boolean;
+    host: string | null;
+    url: string | null;
+};
+
+export type DriveServerInfo = {
+    installed: boolean;
+    host?: string | null;
+    url?: string | null;
+    webdavUrl?: string | null;
+    adminUsername?: string | null;
+    adminPassword?: string | null;
+    adminEmail?: string | null;
+    storageMode?: string | null;
+    bucket?: string | null;
+    office?: DriveOfficeInfo | null;
+    components?: DriveComponent[];
+    sso?: {
+        installed: boolean;
+        provider?: string | null;
+        clientId?: string | null;
+    };
+    smtp?: {
+        installed: boolean;
+        host?: string | null;
+    };
+    vpn?: {
+        installed: boolean;
+        active?: boolean;
+    };
+};
+
+export type DriveExtension = {
+    id: string;
+    name: string;
+    description: string;
+    version: string;
+    category: string;
+    installed: boolean;
+};
+
+export type DriveSyncState = {
+    status: 'fresh' | 'stale' | 'syncing' | 'error';
+    lastSyncedAt: string | null;
+    error: string | null;
+};

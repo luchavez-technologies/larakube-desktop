@@ -11,6 +11,7 @@ import {
     Code2,
     Mail,
     Layers,
+    HardDrive,
     HelpCircle,
     Heart,
     PanelLeftClose,
@@ -21,7 +22,7 @@ import { ExternalLinkButton } from '@/lib/open-external';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { cn } from '@/lib/utils';
 import type { Untested } from '@/types/larakube';
-import { dashboard, mail, plex, readiness, tools } from '@/routes';
+import { dashboard, drive, mail, plex, readiness, tools } from '@/routes';
 import { show as helpShow } from '@/routes/help';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
@@ -59,7 +60,8 @@ const navigation: NavItem[] = [
             url.startsWith('/servers') &&
             !url.includes('/tools') &&
             !url.includes('/mail') &&
-            !url.includes('/plex'),
+            !url.includes('/plex') &&
+            !url.includes('/drive'),
         accent: 'bg-servers',
         icon: Server,
     },
@@ -107,6 +109,15 @@ const navigation: NavItem[] = [
             url.startsWith('/plex') || /^\/servers\/[^/]+\/plex/.test(url),
         accent: 'bg-violet-600',
         icon: Layers,
+    },
+    {
+        label: 'Drive',
+        description: 'Files & office suite',
+        href: drive().url,
+        active: (url) =>
+            url.startsWith('/drive') || /^\/servers\/[^/]+\/drive/.test(url),
+        accent: 'bg-sky-600',
+        icon: HardDrive,
     },
     {
         label: 'Activity',

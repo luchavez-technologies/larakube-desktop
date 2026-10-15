@@ -122,6 +122,12 @@ class Server extends Model
         return $this->clusterTools()->whereIn('tool', ['mail', 'stalwart'])->first();
     }
 
+    /** The cluster tool row for oCIS drive, under either slug the CLI has used. */
+    public function driveTool(): ?ClusterTool
+    {
+        return $this->clusterTools()->whereIn('tool', ['drive', 'ocis'])->first();
+    }
+
     public function isFresh(): bool
     {
         return $this->sync_status === 'fresh';
