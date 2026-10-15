@@ -65,9 +65,7 @@ export default function ProjectsIndex({
             store().url,
             {},
             {
-                preserveState: true,
-                preserveScroll: true,
-                only: ['errors', 'flash'],
+                onError: () => setIsAddingFolder(false),
                 onFinish: () => setIsAddingFolder(false),
             },
         );

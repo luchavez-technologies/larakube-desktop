@@ -9,14 +9,18 @@ class FolderPicker
 {
     public function pick(string $title, ?string $defaultPath = null): ?string
     {
-        $dialog = Dialog::new()->title($title)->folders();
+        try {
+            $dialog = Dialog::new()->title($title)->folders();
 
-        if ($defaultPath !== null && $defaultPath !== '') {
-            $dialog->defaultPath($defaultPath);
+            if ($defaultPath !== null && $defaultPath !== '' && is_dir($defaultPath)) {
+                $dialog->defaultPath($defaultPath);
+            }
+
+            $path = $dialog->open();
+
+            return is_string($path) && $path !== '' ? $path : null;
+        } catch (\Throwable) {
+            return null;
         }
-
-        $path = $dialog->open();
-
-        return is_string($path) && $path !== '' ? $path : null;
     }
 }

@@ -219,6 +219,9 @@ export default function CreateProject({
                         form.clearErrors('parent');
                     }
                 },
+                onError: () => {
+                    setIsPickingFolder(false);
+                },
                 onFinish: () => {
                     setIsPickingFolder(false);
                 },
