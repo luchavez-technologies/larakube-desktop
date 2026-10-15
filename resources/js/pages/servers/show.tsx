@@ -687,6 +687,29 @@ export default function ShowServer({
                                             truncate={false}
                                         />
                                     </ListRow>
+                                    {Boolean(
+                                        server.port && server.port !== 22,
+                                    ) && (
+                                        <ListRow
+                                            action={
+                                                server.ip ? (
+                                                    <CopyButton
+                                                        value={`ssh -p ${server.port} larakube@${server.ip}`}
+                                                    />
+                                                ) : undefined
+                                            }
+                                        >
+                                            <TwoLine
+                                                title="SSH Port"
+                                                detail={
+                                                    server.ip
+                                                        ? `Port ${server.port} (direct: ssh -p ${server.port} larakube@${server.ip})`
+                                                        : `Port ${server.port}`
+                                                }
+                                                mono
+                                            />
+                                        </ListRow>
+                                    )}
                                     <ListRow>
                                         <TwoLine
                                             title="Login user"

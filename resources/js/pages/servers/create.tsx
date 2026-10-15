@@ -137,6 +137,7 @@ function ServerForm({
         aws_secret_access_key: '',
         project_id: projectId,
         account: initial.activeAccount ?? initial.accounts?.[0]?.id ?? '',
+        ssh_port: 22,
     });
 
     const [currentStep, setCurrentStep] = useState(1);
@@ -925,6 +926,139 @@ function ServerForm({
                                     />
                                 </Field>
                             </div>
+
+                            {!isManaged && (
+                                <Field
+                                    label={
+                                        <span className="inline-flex items-center gap-1.5">
+                                            SSH port
+                                            <InfoTooltip side="right">
+                                                Port the SSH daemon will listen
+                                                on. Default is{' '}
+                                                <strong>22</strong>.
+                                                <br />
+                                                <br />
+                                                If your local network,
+                                                university, or corporate
+                                                firewall blocks outbound port
+                                                22, choose an alternate port
+                                                such as <strong>
+                                                    8443
+                                                </strong> or{' '}
+                                                <strong>2200</strong>.
+                                            </InfoTooltip>
+                                        </span>
+                                    }
+                                    hint={
+                                        <span className="flex flex-wrap items-center gap-2 pt-1">
+                                            <span className="text-xs text-soft">
+                                                Firewall bypass presets:
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    form.setData(
+                                                        'ssh_port',
+                                                        8443,
+                                                    )
+                                                }
+                                                className={cn(
+                                                    'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
+                                                    Number(
+                                                        form.data.ssh_port,
+                                                    ) === 8443
+                                                        ? 'bg-servers/15 text-servers ring-servers'
+                                                        : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                )}
+                                            >
+                                                8443 (Recommended)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    form.setData(
+                                                        'ssh_port',
+                                                        2200,
+                                                    )
+                                                }
+                                                className={cn(
+                                                    'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
+                                                    Number(
+                                                        form.data.ssh_port,
+                                                    ) === 2200
+                                                        ? 'bg-servers/15 text-servers ring-servers'
+                                                        : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                )}
+                                            >
+                                                2200
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    form.setData('ssh_port', 22)
+                                                }
+                                                className={cn(
+                                                    'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
+                                                    Number(
+                                                        form.data.ssh_port,
+                                                    ) === 22
+                                                        ? 'bg-servers/15 text-servers ring-servers'
+                                                        : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                )}
+                                            >
+                                                22 (Default)
+                                            </button>
+                                        </span>
+                                    }
+                                    error={form.errors.ssh_port}
+                                >
+                                    <div className="space-y-1.5">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={65535}
+                                            value={form.data.ssh_port}
+                                            onChange={(event) =>
+                                                form.setData(
+                                                    'ssh_port',
+                                                    event.target.value === ''
+                                                        ? 22
+                                                        : parseInt(
+                                                              event.target
+                                                                  .value,
+                                                              10,
+                                                          ) || 22,
+                                                )
+                                            }
+                                            placeholder="22"
+                                            className="w-full max-w-xs rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                        />
+                                        {Number(form.data.ssh_port) === 443 && (
+                                            <p className="text-xs text-rose-500">
+                                                Port 443 is reserved for Traefik
+                                                HTTPS ingress on single-node
+                                                VPS. Choose an alternate like
+                                                8443.
+                                            </p>
+                                        )}
+                                        {Number(form.data.ssh_port) === 80 && (
+                                            <p className="text-xs text-rose-500">
+                                                Port 80 is reserved for Traefik
+                                                HTTP web ingress. Choose an
+                                                alternate like 8443.
+                                            </p>
+                                        )}
+                                        {Number(form.data.ssh_port) ===
+                                            2222 && (
+                                            <p className="text-xs text-rose-500">
+                                                Port 2222 is reserved for Git
+                                                (Forgejo) SSH service. Choose an
+                                                alternate like 8443 or 2200.
+                                            </p>
+                                        )}
+                                    </div>
+                                </Field>
+                            )}
 
                             {isManaged && (
                                 <div className="grid grid-cols-2 gap-4">

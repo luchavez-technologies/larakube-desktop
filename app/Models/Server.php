@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string $kind
  * @property string|null $region
  * @property string|null $ip
+ * @property int $port
  * @property string|null $context
  * @property string|null $ssh_key
  * @property list<string>|null $bindings
@@ -44,6 +45,7 @@ class Server extends Model
         'kind',
         'region',
         'ip',
+        'port',
         'context',
         'ssh_key',
         'bindings',
@@ -68,6 +70,7 @@ class Server extends Model
     protected function casts(): array
     {
         return [
+            'port' => 'integer',
             'bindings' => 'array',
             'last_synced_at' => 'datetime',
             'domains_last_synced_at' => 'datetime',
@@ -172,7 +175,7 @@ class Server extends Model
      * freshness stamp), just making sure the row exists and agrees with the
      * live truth before ToolCatalog/MailStatus look it up by context.
      *
-     * @param  array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string}  $stack
+     * @param  array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, sshPort?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string}  $stack
      */
     public static function syncFromStack(array $stack): self
     {
@@ -182,6 +185,7 @@ class Server extends Model
             'kind' => $stack['kind'],
             'region' => $stack['region'] ?? null,
             'ip' => $stack['ip'] ?? null,
+            'port' => (int) ($stack['port'] ?? $stack['sshPort'] ?? 22),
             'context' => $stack['context'] ?? null,
             'ssh_key' => $stack['sshKey'] ?? null,
             'bindings' => $stack['bindings'] ?? null,

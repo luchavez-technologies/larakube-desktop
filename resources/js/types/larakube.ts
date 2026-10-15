@@ -214,6 +214,7 @@ export type Server = {
     kind: string;
     region: string | null;
     ip: string | null;
+    port?: number | null;
     context: string | null;
     account?: string | null;
     projectId?: string | null;

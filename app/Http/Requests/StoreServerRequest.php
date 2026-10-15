@@ -63,6 +63,7 @@ class StoreServerRequest extends FormRequest
             'aws_secret_access_key' => ['nullable', 'string', 'max:200'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
             'account' => ['nullable', 'string', 'max:100'],
+            'ssh_port' => ['nullable', 'integer', 'between:1,65535'],
         ];
     }
 
@@ -73,6 +74,17 @@ class StoreServerRequest extends FormRequest
             // has no managed-Kubernetes offering at all.
             if ($this->input('provider') === 'hetzner' && $this->input('target_kind') === 'managed') {
                 $validator->errors()->add('target_kind', 'Hetzner Cloud does not offer a managed Kubernetes service.');
+            }
+
+            if ($this->filled('ssh_port')) {
+                $port = $this->integer('ssh_port');
+                if ($port === 443) {
+                    $validator->errors()->add('ssh_port', 'Port 443 is reserved for Traefik HTTPS ingress on single-node VPS clusters.');
+                } elseif ($port === 80) {
+                    $validator->errors()->add('ssh_port', 'Port 80 is reserved for Traefik HTTP web ingress.');
+                } elseif ($port === 2222) {
+                    $validator->errors()->add('ssh_port', 'Port 2222 is reserved for Git (Forgejo) SSH service.');
+                }
             }
 
             if ($this->filled('stack_name')) {

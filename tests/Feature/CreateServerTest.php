@@ -3,6 +3,7 @@
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Native\Desktop\Facades\ChildProcess;
@@ -260,4 +261,95 @@ test('cannot start a server creation when one for the same name is already runni
     ])->assertSessionHasErrors('stack_name');
 
     File::deleteDirectory($bin);
+});
+
+test('creating a server with custom ssh_port passes --ssh-port to cloud:create', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'campus-vps',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'api_token' => 'dop_v1_secret',
+        'ssh_port' => 8443,
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd = null, ?array $env = null, bool $persistent = false, mixed ...$rest): bool => in_array('--ssh-port=8443', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});
+
+test('creating a server with default ssh_port 22 omits --ssh-port', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'standard-vps',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'api_token' => 'dop_v1_secret',
+        'ssh_port' => 22,
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd = null, ?array $env = null, bool $persistent = false, mixed ...$rest): bool => ! in_array('--ssh-port=22', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});
+
+test('conflicting ssh ports are rejected with specific error messages', function () {
+    $bin = createServerFakeCli();
+    ChildProcess::fake();
+
+    // Port 443
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'clash-vps',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'ssh_port' => 443,
+    ])->assertSessionHasErrors(['ssh_port' => 'Port 443 is reserved for Traefik HTTPS ingress on single-node VPS clusters.']);
+
+    // Port 80
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'clash-vps-2',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'ssh_port' => 80,
+    ])->assertSessionHasErrors(['ssh_port' => 'Port 80 is reserved for Traefik HTTP web ingress.']);
+
+    // Port 2222
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'clash-vps-3',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'ssh_port' => 2222,
+    ])->assertSessionHasErrors(['ssh_port' => 'Port 2222 is reserved for Git (Forgejo) SSH service.']);
+
+    // Out of range
+    $this->post(route('servers.store'), [
+        'provider' => 'do',
+        'stack_name' => 'clash-vps-4',
+        'region' => 'sgp1',
+        'size' => 's-1vcpu-2gb',
+        'ssh_port' => 70000,
+    ])->assertSessionHasErrors('ssh_port');
+
+    File::deleteDirectory($bin);
+});
+
+test('Server::syncFromStack persists port from stack', function () {
+    $server = Server::syncFromStack([
+        'name' => 'campus-server',
+        'provider' => 'do',
+        'kind' => 'vps',
+        'port' => 8443,
+        'status' => 'ready',
+    ]);
+
+    expect($server->port)->toBe(8443);
 });

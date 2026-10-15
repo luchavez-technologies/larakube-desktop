@@ -21,7 +21,7 @@ class DevBoxShell
     /**
      * The ssh command line that runs `larakube <arguments>` in the projects folder on the box.
      *
-     * @param  array{ip?: ?string, sshKey?: ?string}  $box  a dev box from the stack list
+     * @param  array{ip?: ?string, sshKey?: ?string, port?: ?int, sshPort?: ?int}  $box  a dev box from the stack list
      * @param  list<string>  $arguments  CLI arguments after the binary
      * @param  string|null  $project  a project folder under the projects folder to run in, for commands that act on the project in the current directory
      * @param  string|null  $readSecret  the name of an environment variable the command needs; its value is read from the first line of standard input on the box, so it is never in any command line
@@ -31,6 +31,7 @@ class DevBoxShell
     {
         $ip = (string) ($box['ip'] ?? '');
         $key = (string) ($box['sshKey'] ?? '');
+        $port = (int) ($box['port'] ?? $box['sshPort'] ?? 22);
 
         if (filter_var($ip, FILTER_VALIDATE_IP) === false || $key === '') {
             throw new InvalidArgumentException('This dev box has no address or SSH key on this computer.');
@@ -53,6 +54,7 @@ class DevBoxShell
 
         return [
             $this->locator->find('ssh') ?? '/usr/bin/ssh',
+            ...($port !== 22 ? ['-p', (string) $port] : []),
             '-i', $key,
             '-o', 'BatchMode=yes',
             '-o', 'StrictHostKeyChecking=accept-new',

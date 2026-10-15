@@ -161,6 +161,11 @@ class ServerController extends Controller
             $dnsArgs[] = '--cloudflare';
         }
 
+        $sshPort = $request->integer('ssh_port', 22);
+        $sshPortArg = ($targetKind === 'vps' && $sshPort > 0 && $sshPort !== 22)
+            ? ["--ssh-port={$sshPort}"]
+            : [];
+
         $run = $runner->start(
             label: $targetKind === 'managed' ? "Create managed cluster {$stackName}" : "Create server {$stackName}",
             arguments: [
@@ -173,6 +178,7 @@ class ServerController extends Controller
                 '--json',
                 ...$accountArg,
                 ...$dnsArgs,
+                ...$sshPortArg,
                 // Inside a project, the environment argument binds it to the new server.
                 ...($project !== null ? [ProjectController::ENVIRONMENT] : []),
             ],

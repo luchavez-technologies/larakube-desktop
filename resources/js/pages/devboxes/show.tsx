@@ -244,6 +244,27 @@ export default function ShowDevBox({
                         <ListRow action={<CopyButton value={ssh} />}>
                             <TwoLine title="SSH" detail={ssh} mono />
                         </ListRow>
+                        {Boolean(box.port && box.port !== 22) && (
+                            <ListRow
+                                action={
+                                    box.ip ? (
+                                        <CopyButton
+                                            value={`ssh -p ${box.port} larakube@${box.ip}`}
+                                        />
+                                    ) : undefined
+                                }
+                            >
+                                <TwoLine
+                                    title="SSH Port"
+                                    detail={
+                                        box.ip
+                                            ? `Port ${box.port} (direct: ssh -p ${box.port} larakube@${box.ip})`
+                                            : `Port ${box.port}`
+                                    }
+                                    mono
+                                />
+                            </ListRow>
+                        )}
                         <ListRow>
                             <TwoLine
                                 title="Login user"

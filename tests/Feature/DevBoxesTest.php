@@ -119,3 +119,23 @@ test('a dev box has no server page, but it can be destroyed, and the run says it
 
     File::deleteDirectory($bin);
 });
+
+test('creating a dev box with custom ssh_port passes --ssh-port to devbox:create', function () {
+    $bin = devBoxesCli();
+    devBoxesExperimental(true);
+    devBoxesStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('devboxes.store'), [
+        'provider' => 'hetzner',
+        'stack_name' => 'campus-dev',
+        'region' => 'fsn1',
+        'size' => 'cx32',
+        'api_token' => 'secret-token',
+        'ssh_port' => 8443,
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--ssh-port=8443', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});

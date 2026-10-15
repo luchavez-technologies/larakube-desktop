@@ -85,6 +85,11 @@ class DevBoxController extends Controller
             default => [],
         };
 
+        $sshPort = $request->integer('ssh_port', 22);
+        $sshPortArg = ($sshPort > 0 && $sshPort !== 22)
+            ? ["--ssh-port={$sshPort}"]
+            : [];
+
         $run = $runner->start(
             label: "Create dev box {$stackName}",
             arguments: [
@@ -96,6 +101,7 @@ class DevBoxController extends Controller
                 '--channel='.$this->settings->get()['cliChannel'],
                 '--json',
                 ...$accountArg,
+                ...$sshPortArg,
             ],
             secretEnvironment: $request->secretEnvironment(),
             kind: RunKind::CreateDevBox,

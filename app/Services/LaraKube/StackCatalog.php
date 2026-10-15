@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Process;
  * registered stacks plus unfinished setups an interrupted create left behind,
  * plus automatically discovered clusters from ~/.kube/config.
  *
- * @phpstan-type StackItem array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}
+ * @phpstan-type StackItem array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}
  */
 class StackCatalog
 {
@@ -39,7 +39,7 @@ class StackCatalog
     /**
      * The servers apps and tools run on. Dev boxes, which are machines to work on, are listed by devBoxes().
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
     public function all(bool $fresh = false): ?array
     {
@@ -51,7 +51,7 @@ class StackCatalog
     /**
      * Development machines made with `devbox:create`.
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
     public function devBoxes(bool $fresh = false): ?array
     {
@@ -63,7 +63,7 @@ class StackCatalog
     /**
      * Every stack and discovered cluster, unfiltered by role — what SyncServersJob mirrors into the servers table.
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
     public function everything(bool $fresh = false): ?array
     {
@@ -116,7 +116,7 @@ class StackCatalog
     /**
      * Return only registered cloud stacks provisioned via LaraKube.
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}>
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}>
      */
     public function cloudStacks(): array
     {
@@ -126,7 +126,7 @@ class StackCatalog
     /**
      * Return only discovered clusters from ~/.kube/config.
      *
-     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}>
+     * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string}>
      */
     public function discoveredClusters(): array
     {
@@ -134,7 +134,7 @@ class StackCatalog
     }
 
     /**
-     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string}|null
+     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string}|null
      */
     public function find(string $name): ?array
     {
