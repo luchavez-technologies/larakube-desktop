@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncAppIconJob;
+use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncMailJob;
@@ -35,6 +36,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->ensureDatabaseMigrated();
         $this->closeInterruptedLocalSetup();
         $this->syncTheme();
+        $this->syncCliOnDesktopUpdate();
         $this->warmSync();
 
         AppMenu::register();
@@ -110,6 +112,42 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 if ($server->driveTool()?->installed) {
                     SyncDriveJob::dispatch($server->id);
                 }
+            }
+        } catch (\Throwable) {
+            // The database may not be migrated yet on a first launch.
+        }
+    }
+
+    /**
+     * A Desktop update is the signal to also bring the CLI up to the saved
+     * release channel — Desktop depends on it for nearly everything, and a
+     * new Desktop feature often needs a CLI it shipped alongside. Compares
+     * against the version last seen at boot rather than any "just installed"
+     * event, since that is the one signal that survives both the auto-updater
+     * (download now, relaunch into it later) and a manual reinstall.
+     * Skipped outside a packaged build, and on a fresh install (nothing seen
+     * yet, so there is nothing to call an update) — SyncCliWithDesktopJob
+     * itself also skips a machine that was never taken through Setup.
+     */
+    private function syncCliOnDesktopUpdate(): void
+    {
+        if (! app()->isProduction()) {
+            return;
+        }
+
+        try {
+            $settings = app(GlobalSettings::class);
+            $current = (string) config('nativephp.version');
+            $previous = $settings->lastSeenDesktopVersion();
+
+            if ($current === '' || $current === $previous) {
+                return;
+            }
+
+            $settings->rememberDesktopVersion($current);
+
+            if ($previous !== null) {
+                SyncCliWithDesktopJob::dispatch();
             }
         } catch (\Throwable) {
             // The database may not be migrated yet on a first launch.

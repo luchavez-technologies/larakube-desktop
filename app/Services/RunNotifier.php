@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Models\User;
+use App\Notifications\CliUpdatedNotification;
 use App\Notifications\RunFinishedNotification;
 use App\Notifications\UpdateReadyNotification;
 use Native\Desktop\Facades\Notification;
@@ -54,6 +55,16 @@ class RunNotifier
         }
 
         $this->show('LaraKube Desktop update ready', "Version {$version} is downloaded. Click to restart and finish updating.", 'update');
+    }
+
+    public function cliUpdated(string $channel): void
+    {
+        try {
+            User::defaultUser()->notify(new CliUpdatedNotification($channel));
+        } catch (Throwable) {
+        }
+
+        $this->show('LaraKube CLI synced', "Updated to the latest {$channel} build to match this Desktop version.", 'cli-update');
     }
 
     private function show(string $title, string $message, string $reference): void

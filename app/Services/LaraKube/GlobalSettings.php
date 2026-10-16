@@ -199,6 +199,21 @@ class GlobalSettings
         $this->writeConfig($config);
     }
 
+    /** The Desktop version last seen at boot, so NativeAppServiceProvider can tell "just updated" from "same launch as before". */
+    public function lastSeenDesktopVersion(): ?string
+    {
+        $version = $this->readConfig()['desktopVersion'] ?? null;
+
+        return is_string($version) ? $version : null;
+    }
+
+    public function rememberDesktopVersion(string $version): void
+    {
+        $config = $this->readConfig();
+        $config['desktopVersion'] = $version;
+        $this->writeConfig($config);
+    }
+
     public function wslShutdownMode(): string
     {
         $config = $this->readConfig();
