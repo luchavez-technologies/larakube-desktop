@@ -14,6 +14,7 @@ use App\Jobs\Sync\SyncServersJob;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
+use App\Services\LaraKube\AppMenu;
 use App\Services\LaraKube\GlobalSettings;
 use Illuminate\Support\Facades\Artisan;
 use Native\Desktop\Contracts\ProvidesPhpIni;
@@ -36,7 +37,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->syncTheme();
         $this->warmSync();
 
-        Menu::default();
+        AppMenu::register();
 
         Window::open()
             ->title(config('app.name'))
@@ -50,10 +51,16 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->icon(public_path('IconTemplate.png'))
             ->tooltip(config('app.name', 'LaraKube'))
             ->showDockIcon(true)
-            ->onlyShowContextMenu()
+            ->onlyShowContextMenu(false)
+            ->width(360)
+            ->height(520)
+            ->resizable(false)
+            ->url(url('/tray'))
             ->withContextMenu(
                 Menu::make(
-                    Menu::link(url('/'), 'Open LaraKube'),
+                    Menu::link(url('/'), 'Open LaraKube Desktop'),
+                    Menu::separator(),
+                    Menu::link(url('/settings'), 'Settings…'),
                     Menu::separator(),
                     Menu::quit('Quit LaraKube'),
                 )

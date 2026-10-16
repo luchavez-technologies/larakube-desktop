@@ -28,6 +28,8 @@ use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ToolInstallController;
+use App\Http\Controllers\TrayController;
+use App\Http\Controllers\UninstallController;
 use App\Http\Controllers\UpdatesController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\WslSetupController;
@@ -225,6 +227,17 @@ Route::get('/settings', [SettingsController::class, 'show'])->name('settings.sho
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('settings.theme');
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');
+Route::post('/uninstall', [UninstallController::class, 'execute'])->name('uninstall.execute');
+
+Route::get('/tray', [TrayController::class, 'index'])->name('tray.index');
+Route::get('/tray/data', [TrayController::class, 'data'])->name('tray.data');
+Route::post('/tray/open-main', [TrayController::class, 'openMain'])->name('tray.open-main');
+Route::post('/tray/open-settings', [TrayController::class, 'openSettings'])->name('tray.open-settings');
+Route::post('/tray/open-project/{project}', [TrayController::class, 'openProject'])->name('tray.open-project');
+Route::post('/tray/open-server/{server}', [TrayController::class, 'openServer'])->name('tray.open-server');
+Route::post('/tray/open-editor/{project}', [TrayController::class, 'openEditor'])->name('tray.open-editor');
+Route::post('/tray/projects/{project}/toggle', [TrayController::class, 'toggleProject'])->name('tray.project.toggle');
+Route::post('/tray/stop-all', [TrayController::class, 'stopAll'])->name('tray.stop-all');
 
 Route::post('/open', OpenExternalController::class)->name('open');
 Route::get('/api/qr', [QrCodeController::class, 'show'])->name('api.qr');

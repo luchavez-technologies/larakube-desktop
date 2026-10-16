@@ -3,12 +3,14 @@ import { cn } from '@/lib/utils';
 
 type Props = {
     value: number | null;
-    label: string;
+    label?: string;
     subtext?: string | null;
-    size?: 'sm' | 'md' | 'lg';
-    tone?: 'ok' | 'warn' | 'bad' | 'auto';
+    size?: 'xs' | 'sm' | 'md' | 'lg';
+    tone?: 'ok' | 'warn' | 'bad' | 'tools' | 'brand' | 'auto';
     unit?: string;
+    displayValue?: string | React.ReactNode;
     direction?: 'higher-is-better' | 'lower-is-better';
+    className?: string;
 };
 
 export default function RadialGauge({
@@ -18,12 +20,15 @@ export default function RadialGauge({
     size = 'md',
     tone = 'auto',
     unit = '%',
+    displayValue,
     direction = 'lower-is-better',
+    className,
 }: Props) {
     const isWarmingUp = value === null || isNaN(value);
     const safeValue = isWarmingUp ? 0 : Math.min(100, Math.max(0, value));
 
     const dimensions = {
+        xs: { size: 44, stroke: 4, radius: 16, fontSize: 'text-[10px]' },
         sm: { size: 68, stroke: 6, radius: 26, fontSize: 'text-xs' },
         md: { size: 92, stroke: 8, radius: 36, fontSize: 'text-base' },
         lg: { size: 120, stroke: 10, radius: 48, fontSize: 'text-xl' },
@@ -49,14 +54,23 @@ export default function RadialGauge({
 
     const strokeColor = isWarmingUp
         ? 'stroke-line'
-        : resolvedTone === 'bad'
-          ? 'stroke-rose-500 dark:stroke-rose-400'
-          : resolvedTone === 'warn'
-            ? 'stroke-amber-500 dark:stroke-amber-400'
-            : 'stroke-emerald-500 dark:stroke-emerald-400';
+        : resolvedTone === 'tools'
+          ? 'stroke-tools'
+          : resolvedTone === 'brand'
+            ? 'stroke-brand'
+            : resolvedTone === 'bad'
+              ? 'stroke-rose-500 dark:stroke-rose-400'
+              : resolvedTone === 'warn'
+                ? 'stroke-amber-500 dark:stroke-amber-400'
+                : 'stroke-emerald-500 dark:stroke-emerald-400';
 
     return (
-        <div className="flex flex-col items-center justify-center p-3 text-center">
+        <div
+            className={cn(
+                'flex flex-col items-center justify-center p-3 text-center',
+                className,
+            )}
+        >
             <div
                 className="relative flex items-center justify-center"
                 style={{ width: dimensions.size, height: dimensions.size }}
@@ -98,12 +112,16 @@ export default function RadialGauge({
                             dimensions.fontSize,
                         )}
                     >
-                        {isWarmingUp ? '—' : `${safeValue}${unit}`}
+                        {isWarmingUp
+                            ? '—'
+                            : (displayValue ?? `${safeValue}${unit}`)}
                     </span>
                 </div>
             </div>
 
-            <p className="mt-2 text-xs font-medium text-ink">{label}</p>
+            {label && (
+                <p className="mt-2 text-xs font-medium text-ink">{label}</p>
+            )}
             {subtext && (
                 <p className="font-mono text-[11px] text-faint">{subtext}</p>
             )}
