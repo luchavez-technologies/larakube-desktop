@@ -350,8 +350,6 @@ function TrackedRun({
     );
 }
 
-let rememberedSeeds: ActiveRunSummary[] = [];
-let rememberedExpandedId: number | null | undefined = undefined;
 const explicitlyCollapsedIds = new Set<number>();
 
 export default function RunDrawer() {
@@ -362,37 +360,18 @@ export default function RunDrawer() {
     const activeRunsFromProps = page.props.activeRuns ?? [];
     const incomingKey = activeRunsFromProps.map((run) => run.id).join(',');
 
-    // One card per run still being tracked, newest first. A run stays here
-    // (showing its final state) after it finishes, until dismissed —
-    // dropping out of activeRuns alone never removes its card.
-    const [seeds, setSeeds] = useState<ActiveRunSummary[]>(() => {
-        const known = new Set(rememberedSeeds.map((s) => s.id));
-        const merged = [...rememberedSeeds];
-        for (const run of activeRunsFromProps) {
-            if (!known.has(run.id)) {
-                merged.unshift(run);
-                known.add(run.id);
-            }
-        }
-        rememberedSeeds = merged;
-        return merged;
-    });
+    // One card per run still being tracked, newest first. While on the page,
+    // a run stays here (showing its final state) after it finishes, until dismissed.
+    // On fresh page mount/reload, we only track runs that are currently active in props.
+    const [seeds, setSeeds] = useState<ActiveRunSummary[]>(() => [
+        ...activeRunsFromProps,
+    ]);
 
     const [expandedId, setExpandedId] = useState<number | null>(() => {
-        if (rememberedExpandedId !== undefined) {
-            if (
-                rememberedExpandedId !== null &&
-                !rememberedSeeds.some((s) => s.id === rememberedExpandedId)
-            ) {
-                return null;
-            }
-            return rememberedExpandedId;
-        }
         const first = activeRunsFromProps[0];
         if (!first || explicitlyCollapsedIds.has(first.id)) {
             return null;
         }
-        rememberedExpandedId = first.id;
         return first.id;
     });
     const moveAside = useIsAnyRightDrawerOpen();
@@ -407,41 +386,26 @@ export default function RunDrawer() {
 
         const newest = fresh[0];
         explicitlyCollapsedIds.delete(newest.id);
-        rememberedExpandedId = newest.id;
         setExpandedId(newest.id);
 
-        setSeeds((prev) => {
-            const next = [...fresh, ...prev];
-            rememberedSeeds = next;
-            return next;
-        });
+        setSeeds((prev) => [...fresh, ...prev]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [incomingKey]);
 
     function expand(id: number) {
         explicitlyCollapsedIds.delete(id);
-        rememberedExpandedId = id;
         setExpandedId(id);
     }
 
     function collapse(id: number) {
         explicitlyCollapsedIds.add(id);
-        rememberedExpandedId = null;
         setExpandedId(null);
     }
 
     function dismiss(id: number) {
         explicitlyCollapsedIds.delete(id);
-        setSeeds((prev) => {
-            const next = prev.filter((seed) => seed.id !== id);
-            rememberedSeeds = next;
-            return next;
-        });
-        setExpandedId((prev) => {
-            const next = prev === id ? null : prev;
-            rememberedExpandedId = next;
-            return next;
-        });
+        setSeeds((prev) => prev.filter((seed) => seed.id !== id));
+        setExpandedId((prev) => (prev === id ? null : prev));
     }
 
     function finished(id: number) {
@@ -450,11 +414,7 @@ export default function RunDrawer() {
         }
         // Only steal the expanded slot if nothing else is already in it —
         // a run finishing shouldn't yank focus from one you're reading.
-        setExpandedId((prev) => {
-            const next = prev ?? id;
-            rememberedExpandedId = next;
-            return next;
-        });
+        setExpandedId((prev) => prev ?? id);
     }
 
     if (page.component === 'runs/show' || seeds.length === 0) {

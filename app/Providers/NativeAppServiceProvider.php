@@ -34,7 +34,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     public function boot(): void
     {
         $this->ensureDatabaseMigrated();
-        $this->closeInterruptedLocalSetup();
+        $this->closeInterruptedRuns();
         $this->syncTheme();
         $this->syncCliOnDesktopUpdate();
         $this->warmSync();
@@ -78,15 +78,22 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         }
     }
 
-    /** A local setup the app was closed during never got to remove its temporary sudo access. */
-    private function closeInterruptedLocalSetup(): void
+    /** Cleans up any runs that were left in 'running' state when the previous app instance closed. */
+    private function closeInterruptedRuns(): void
     {
         try {
-            $interrupted = Run::query()->where('kind', RunKind::SetupLocal)->where('status', RunStatus::Running);
+            $interrupted = Run::query()->where('status', RunStatus::Running);
 
             if ($interrupted->exists()) {
-                app(Elevation::class)->revoke();
-                $interrupted->update(['status' => RunStatus::Failed, 'finished_at' => now()]);
+                $hasLocalSetup = (clone $interrupted)->where('kind', RunKind::SetupLocal)->exists();
+                if ($hasLocalSetup) {
+                    app(Elevation::class)->revoke();
+                }
+
+                $interrupted->update([
+                    'status' => RunStatus::Failed,
+                    'finished_at' => now(),
+                ]);
             }
         } catch (\Throwable) {
             // The database may not be migrated yet on a first launch.

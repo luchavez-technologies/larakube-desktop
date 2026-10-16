@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Form } from '@inertiajs/react';
 import {
     X,
@@ -170,6 +170,11 @@ export function HostForm({
         setValue(currentHost ?? '');
     }, [currentHost]);
 
+    const handleHostChange = useCallback((resolvedHost: string) => {
+        setJustSaved(false);
+        setValue(resolvedHost);
+    }, []);
+
     const isChangingLiveHost = Boolean(currentHost) && value !== currentHost;
 
     const matchedZone = useMemo(() => {
@@ -204,10 +209,7 @@ export function HostForm({
                         name="host"
                         value={value}
                         defaultValue={currentHost}
-                        onChange={(resolvedHost) => {
-                            setJustSaved(false);
-                            setValue(resolvedHost);
-                        }}
+                        onChange={handleHostChange}
                         domains={domains}
                         serverName={serverName}
                         serverIp={serverIp}

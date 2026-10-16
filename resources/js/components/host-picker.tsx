@@ -155,12 +155,17 @@ export default function HostPicker({
         null,
     );
     const [loadingDomains, setLoadingDomains] = useState(false);
+    const lastFetchedServerRef = useRef<string | null>(null);
 
     // Fetch domains dynamically if not passed via props but serverName is available
     useEffect(() => {
         if ((domains && domains.length > 0) || !serverName) {
             return;
         }
+        if (lastFetchedServerRef.current === serverName) {
+            return;
+        }
+        lastFetchedServerRef.current = serverName;
 
         let cancelled = false;
         setLoadingDomains(true);
@@ -218,9 +223,29 @@ export default function HostPicker({
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
     const domainDropdownRef = useRef<HTMLDivElement>(null);
 
-    // Sync whenever incoming controlled value changes
+    const initialResolved = initialParsed.useCustomDomain
+        ? initialParsed.customDomain.trim().toLowerCase()
+        : initialParsed.baseDomain
+          ? initialParsed.subdomain
+              ? `${initialParsed.subdomain.trim().toLowerCase()}.${initialParsed.baseDomain.trim().toLowerCase()}`
+              : initialParsed.baseDomain.trim().toLowerCase()
+          : initialParsed.subdomain.trim().toLowerCase();
+
+    const lastEmittedHostRef = useRef<string | null>(
+        value ?? defaultValue ?? initialResolved,
+    );
+    const onChangeRef = useRef(onChange);
+    useEffect(() => {
+        onChangeRef.current = onChange;
+    });
+
+    // Sync whenever incoming controlled value changes from outside
     useEffect(() => {
         if (value === undefined) return;
+        // If the incoming value matches what we already emitted from internal state, skip!
+        // This is critical to prevent typing loops from resetting user input.
+        if (value === lastEmittedHostRef.current) return;
+        lastEmittedHostRef.current = value;
         const parsed = parseInitialHost(
             value,
             activeDomains,
@@ -304,9 +329,13 @@ export default function HostPicker({
         return `${sub}.${base}`;
     }, [useCustomDomain, customDomain, subdomain, baseDomain]);
 
-    // Notify parent of resolved change
+    // Notify parent of resolved change ONLY when the resolved domain actually changes
     useEffect(() => {
-        onChange?.(resolvedDomain, {
+        if (resolvedDomain === lastEmittedHostRef.current) {
+            return;
+        }
+        lastEmittedHostRef.current = resolvedDomain;
+        onChangeRef.current?.(resolvedDomain, {
             subdomain,
             baseDomain,
             useCustomDomain,
@@ -320,7 +349,6 @@ export default function HostPicker({
         useCustomDomain,
         hasExternalDns,
         matchedExternalDnsDomain,
-        onChange,
     ]);
 
     const handleToggleCustomDomain = () => {
