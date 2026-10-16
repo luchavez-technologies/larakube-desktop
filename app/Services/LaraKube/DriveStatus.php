@@ -38,10 +38,10 @@ class DriveStatus
             'category' => 'Media',
         ],
         [
-            'id' => 'com.github.owncloud.web-extensions.dicom-viewer',
+            'id' => 'com.github.owncloud.web-app-dicom-viewer',
             'name' => 'DICOM Viewer',
             'description' => 'Medical radiology and imaging file viewer (.dcm)',
-            'version' => 'v0.1.0',
+            'version' => 'v1.0.0',
             'category' => 'Specialized',
         ],
         [
@@ -148,16 +148,22 @@ class DriveStatus
 
         foreach (self::CURATED_EXTENSIONS as $curated) {
             $isInstalled = in_array($curated['id'], $installedIds, true)
-                || in_array(basename(str_replace('.', '/', $curated['id'])), $installedIds, true);
+                || in_array(basename(str_replace('.', '/', $curated['id'])), $installedIds, true)
+                || in_array(str_replace('web-extensions.', 'web-app-', $curated['id']), $installedIds, true)
+                || in_array(str_replace('web-app-', 'web-extensions.', $curated['id']), $installedIds, true);
 
             $seen[$curated['id']] = true;
+            $seen[str_replace('web-extensions.', 'web-app-', $curated['id'])] = true;
+            $seen[str_replace('web-app-', 'web-extensions.', $curated['id'])] = true;
+            $seen[basename(str_replace('.', '/', $curated['id']))] = true;
+
             $result[] = [
                 ...$curated,
                 'installed' => $isInstalled,
             ];
         }
 
-        // Add any additional installed extensions found on cluster
+        // Add any additional catalog or installed extensions found on cluster
         foreach ($installedList as $ext) {
             if (is_array($ext) && isset($ext['id']) && is_string($ext['id']) && empty($seen[$ext['id']])) {
                 $result[] = [
@@ -166,7 +172,7 @@ class DriveStatus
                     'description' => isset($ext['description']) && is_string($ext['description']) ? $ext['description'] : '',
                     'version' => isset($ext['version']) && is_string($ext['version']) ? $ext['version'] : 'v1.0.0',
                     'category' => 'Custom',
-                    'installed' => (bool) ($ext['installed'] ?? true),
+                    'installed' => (bool) ($ext['installed'] ?? false),
                 ];
                 $seen[$ext['id']] = true;
             }

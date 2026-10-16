@@ -1,5 +1,5 @@
-import { Head, usePoll } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, usePage, usePoll } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import {
     HardDrive,
     FileText,
@@ -85,11 +85,33 @@ export default function DriveIndex({
 }: Props) {
     const [activeTab, setActiveTab] = useState<TabType>('overview');
 
-    usePoll(
+    const { activeRuns } = usePage<{
+        activeRuns?: Array<{ kind?: string; status?: string }>;
+    }>().props;
+
+    const isDriveRunning = (activeRuns ?? []).some(
+        (r) =>
+            typeof r.kind === 'string' &&
+            r.kind.startsWith('drive-') &&
+            r.status === 'running',
+    );
+
+    const shouldPoll =
+        isInstalled && (driveSync.status === 'syncing' || isDriveRunning);
+
+    const { start, stop } = usePoll(
         2000,
         { only: ['serverInfo', 'extensions', 'driveSync'] },
-        { autoStart: isInstalled && driveSync.status === 'syncing' },
+        { autoStart: shouldPoll },
     );
+
+    useEffect(() => {
+        if (shouldPoll) {
+            start();
+        } else {
+            stop();
+        }
+    }, [shouldPoll, start, stop]);
 
     const loading =
         isInstalled && (serverInfo === undefined || extensions === undefined);

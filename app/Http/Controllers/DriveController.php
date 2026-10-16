@@ -86,6 +86,9 @@ class DriveController extends Controller
             $args[] = '--extensions='.implode(',', array_filter(array_map('trim', $extensions)));
         }
 
+        $serverModel = Server::firstWhere('context', $context);
+        $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
+
         $run = $runner->start(
             label: "Deploy ownCloud Drive on {$server}",
             arguments: $args,
@@ -127,6 +130,9 @@ class DriveController extends Controller
             $args[] = '--vpn-only';
         }
 
+        $serverModel = Server::firstWhere('context', $context);
+        $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
+
         $run = $runner->start(
             label: "Deploy Collabora Online on {$server}",
             arguments: $args,
@@ -152,6 +158,9 @@ class DriveController extends Controller
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
         $extension = $request->string('extension')->trim()->toString();
+
+        $serverModel = Server::firstWhere('context', $context);
+        $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
 
         $run = $runner->start(
             label: "Install {$extension} extension on {$server}",
@@ -179,6 +188,9 @@ class DriveController extends Controller
         $context = (string) $stack['context'];
         $extension = $request->string('extension')->trim()->toString();
 
+        $serverModel = Server::firstWhere('context', $context);
+        $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
+
         $run = $runner->start(
             label: "Uninstall {$extension} extension on {$server}",
             arguments: ['drive:ext:remove', 'production', "--context={$context}", "--extension={$extension}"],
@@ -202,6 +214,9 @@ class DriveController extends Controller
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
 
+        $serverModel = Server::firstWhere('context', $context);
+        $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
+
         $run = $runner->start(
             label: "Restart ownCloud Drive on {$server}",
             arguments: ['tool:init', '--tool=ocis', 'production', "--context={$context}", '--force'],
@@ -224,6 +239,9 @@ class DriveController extends Controller
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
+
+        $serverModel = Server::firstWhere('context', $context);
+        $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
 
         $args = ['ocis:remove', 'production', "--context={$context}", '--force'];
         if ($request->boolean('purge')) {
