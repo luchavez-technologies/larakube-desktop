@@ -832,7 +832,7 @@ function CloudEnvironmentOverviewCard({
                                     onClick={() =>
                                         setShowSwitchServer(!showSwitchServer)
                                     }
-                                    className="text-[11px] text-brand hover:underline"
+                                    className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                 >
                                     {showSwitchServer ? 'Cancel' : 'Change'}
                                 </button>
@@ -2327,7 +2327,7 @@ function LinkServerForm({
     const [server, setServer] = useState(servers[0]?.name ?? '');
 
     return (
-        <Form action={link(project.id)} className="space-y-1.5">
+        <Form action={link(project.id)} className="space-y-2">
             {({ errors, processing }) => (
                 <>
                     <input
@@ -2335,13 +2335,14 @@ function LinkServerForm({
                         name="environment"
                         value={environment}
                     />
-                    <div className="flex items-center gap-2.5">
+                    <div className="space-y-2">
                         <SelectMenu
                             name="server"
                             value={server}
                             accent="servers"
                             disabled={!project.initialized}
-                            triggerClassName="py-1.5 text-[13px]"
+                            className="w-full min-w-0"
+                            triggerClassName="py-1.5 text-xs truncate"
                             onChange={setServer}
                             options={servers.map((candidate) => ({
                                 value: candidate.name,
@@ -2364,17 +2365,20 @@ function LinkServerForm({
                                 ),
                             }))}
                         />
-                        <Button
-                            type="submit"
-                            size="sm"
-                            disabled={
-                                !project.initialized ||
-                                processing ||
-                                servers.length === 0
-                            }
-                        >
-                            {processing ? 'Linking…' : 'Link'}
-                        </Button>
+                        <div className="flex items-center justify-end">
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={
+                                    !project.initialized ||
+                                    processing ||
+                                    servers.length === 0
+                                }
+                            >
+                                <RotateCw className="size-3" />
+                                <span>{processing ? 'Linking…' : 'Link'}</span>
+                            </Button>
+                        </div>
                     </div>
                     {errors.server && (
                         <p className="text-xs text-accent">{errors.server}</p>
