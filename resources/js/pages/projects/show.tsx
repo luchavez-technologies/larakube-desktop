@@ -26,9 +26,7 @@ import {
     Unplug,
     Code2,
     ChevronDown,
-    GitBranch,
     Key,
-    ShieldCheck,
     ArrowUpCircle,
     Square,
     PowerOff,
@@ -36,7 +34,12 @@ import {
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
-import HostPicker from '@/components/host-picker';
+import EnvironmentSettingsDrawer, {
+    LinkServerForm,
+    HostForm,
+    CiPipelineForm,
+    type EnvironmentSettingsDrawerSection,
+} from '@/components/environment-settings-drawer';
 import BackingServicesCard from '@/components/backing-services-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
@@ -62,13 +65,11 @@ import { cn } from '@/lib/utils';
 import QrCodePopover from '@/components/qr-code-popover';
 import { ExternalLinkButton } from '@/lib/open-external';
 import {
-    ci as configureCiRoute,
     deploy,
     destroy,
     down,
     editor as openEditor,
     folder as showFolder,
-    host as setHost,
     index,
     init,
     link,
@@ -753,7 +754,7 @@ function CloudEnvironmentOverviewCard({
     runs,
     domains,
     onOpenDeploy,
-    onOpenCi,
+    onOpenCi: _onOpenCi,
 }: {
     project: Project;
     activeEnv: string;
@@ -767,9 +768,8 @@ function CloudEnvironmentOverviewCard({
     onOpenDeploy: () => void;
     onOpenCi?: () => void;
 }) {
-    const [showSwitchServer, setShowSwitchServer] = useState(false);
-    const [showEditHost, setShowEditHost] = useState(false);
-    const [showRotateConfirm, setShowRotateConfirm] = useState(false);
+    const [settingsSection, setSettingsSection] =
+        useState<EnvironmentSettingsDrawerSection | null>(null);
 
     const activeCi =
         activeEnvConfig?.ci ?? project.environments?.[activeEnv]?.ci;
@@ -827,17 +827,15 @@ function CloudEnvironmentOverviewCard({
                             <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Target Server
                             </span>
-                            {readyServers.length > 1 && activeServer && (
+                            {activeServer ? (
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setShowSwitchServer(!showSwitchServer)
-                                    }
+                                    onClick={() => setSettingsSection('server')}
                                     className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                 >
-                                    {showSwitchServer ? 'Cancel' : 'Change'}
+                                    Change
                                 </button>
-                            )}
+                            ) : null}
                         </div>
 
                         {activeServer ? (
@@ -885,25 +883,11 @@ function CloudEnvironmentOverviewCard({
                                 <span>No server linked yet. </span>
                                 <button
                                     type="button"
-                                    onClick={onOpenDeploy}
-                                    className="font-medium text-brand hover:underline"
+                                    onClick={() => setSettingsSection('server')}
+                                    className="cursor-pointer font-medium text-brand hover:underline"
                                 >
                                     Link server
                                 </button>
-                            </div>
-                        )}
-
-                        {showSwitchServer && (
-                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2">
-                                <p className="mb-1.5 text-[11px] font-medium text-ink">
-                                    Rebind {activeEnv} to:
-                                </p>
-                                <LinkServerForm
-                                    project={project}
-                                    servers={readyServers}
-                                    environment={activeEnv}
-                                    onSuccess={() => setShowSwitchServer(false)}
-                                />
                             </div>
                         )}
                     </div>
@@ -914,17 +898,13 @@ function CloudEnvironmentOverviewCard({
                             <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Public Address
                             </span>
-                            {activeHost && (
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setShowEditHost(!showEditHost)
-                                    }
-                                    className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
-                                >
-                                    {showEditHost ? 'Cancel' : 'Edit'}
-                                </button>
-                            )}
+                            <button
+                                type="button"
+                                onClick={() => setSettingsSection('address')}
+                                className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
+                            >
+                                {activeHost ? 'Edit' : 'Configure'}
+                            </button>
                         </div>
 
                         {activeHost ? (
@@ -957,25 +937,13 @@ function CloudEnvironmentOverviewCard({
                                 <span>No domain configured. </span>
                                 <button
                                     type="button"
-                                    onClick={() => setShowEditHost(true)}
-                                    className="font-medium text-brand hover:underline"
+                                    onClick={() =>
+                                        setSettingsSection('address')
+                                    }
+                                    className="cursor-pointer font-medium text-brand hover:underline"
                                 >
                                     Configure domain
                                 </button>
-                            </div>
-                        )}
-
-                        {showEditHost && (
-                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2.5">
-                                <HostForm
-                                    project={project}
-                                    serverIp={activeServer?.ip ?? null}
-                                    serverName={activeServer?.name ?? null}
-                                    disabled={!project.initialized}
-                                    environment={activeEnv}
-                                    currentHost={activeHost}
-                                    domains={domains}
-                                />
                             </div>
                         )}
                     </div>
@@ -986,16 +954,14 @@ function CloudEnvironmentOverviewCard({
                             <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Delivery Pipeline
                             </span>
-                            {activeCi?.hasWorkflow && (
+                            {activeCi?.hasWorkflow ? (
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            setShowRotateConfirm(
-                                                !showRotateConfirm,
-                                            )
+                                            setSettingsSection('pipeline')
                                         }
-                                        className="flex items-center gap-1 text-[11px] text-soft hover:text-ink"
+                                        className="flex cursor-pointer items-center gap-1 text-[11px] text-soft hover:text-ink focus:outline-none"
                                         title="Rotate scoped deployer secrets"
                                     >
                                         <Key className="size-2.5" />
@@ -1003,18 +969,24 @@ function CloudEnvironmentOverviewCard({
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            if (onOpenCi) {
-                                                onOpenCi();
-                                            } else {
-                                                onOpenDeploy();
-                                            }
-                                        }}
-                                        className="text-[11px] text-brand hover:underline"
+                                        onClick={() =>
+                                            setSettingsSection('pipeline')
+                                        }
+                                        className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                     >
                                         Edit
                                     </button>
                                 </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setSettingsSection('pipeline')
+                                    }
+                                    className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
+                                >
+                                    Set up
+                                </button>
                             )}
                         </div>
 
@@ -1057,69 +1029,30 @@ function CloudEnvironmentOverviewCard({
                                 <span>Automated CI/CD not configured. </span>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        if (onOpenCi) {
-                                            onOpenCi();
-                                        } else {
-                                            onOpenDeploy();
-                                        }
-                                    }}
-                                    className="font-medium text-brand hover:underline"
+                                    onClick={() =>
+                                        setSettingsSection('pipeline')
+                                    }
+                                    className="cursor-pointer font-medium text-brand hover:underline"
                                 >
                                     Set up CI/CD
                                 </button>
                             </div>
                         )}
-
-                        {showRotateConfirm && (
-                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2.5">
-                                <p className="mb-2 text-[11px] text-ink">
-                                    Rotate scoped deployer secrets for{' '}
-                                    <strong>{activeEnv}</strong>?
-                                </p>
-                                <Form
-                                    action={configureCiRoute(project.id)}
-                                    onSuccess={() =>
-                                        setShowRotateConfirm(false)
-                                    }
-                                >
-                                    <input
-                                        type="hidden"
-                                        name="environment"
-                                        value={activeEnv}
-                                    />
-                                    <input
-                                        type="hidden"
-                                        name="rotate"
-                                        value="1"
-                                    />
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            type="submit"
-                                            size="sm"
-                                            variant="primary"
-                                            className="gap-1 text-xs"
-                                        >
-                                            <RotateCw className="size-2.5" />
-                                            <span>Confirm Rotate</span>
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="secondary"
-                                            className="text-xs"
-                                            onClick={() =>
-                                                setShowRotateConfirm(false)
-                                            }
-                                        >
-                                            Cancel
-                                        </Button>
-                                    </div>
-                                </Form>
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                <EnvironmentSettingsDrawer
+                    isOpen={settingsSection !== null}
+                    onClose={() => setSettingsSection(null)}
+                    project={project}
+                    environment={activeEnv}
+                    activeServer={activeServer}
+                    readyServers={readyServers}
+                    activeHost={activeHost}
+                    domains={domains}
+                    activeCi={activeCi}
+                    initialSection={settingsSection}
+                />
 
                 {/* Deploy Action Banner */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
@@ -2315,545 +2248,6 @@ function InitForm({
     );
 }
 
-/** Binds the project's cloud environment to one of the user's ready servers. */
-function LinkServerForm({
-    project,
-    servers,
-    environment = 'production',
-    onSuccess: _onSuccess,
-}: {
-    project: Project;
-    servers: ReadyServer[];
-    environment?: string;
-    onSuccess?: () => void;
-}) {
-    const [server, setServer] = useState(servers[0]?.name ?? '');
-
-    return (
-        <Form action={link(project.id)} className="space-y-2">
-            {({ errors, processing }) => (
-                <>
-                    <input
-                        type="hidden"
-                        name="environment"
-                        value={environment}
-                    />
-                    <div className="space-y-2">
-                        <SelectMenu
-                            name="server"
-                            value={server}
-                            accent="servers"
-                            disabled={!project.initialized}
-                            className="w-full min-w-0"
-                            triggerClassName="py-1.5 text-xs truncate"
-                            onChange={setServer}
-                            options={servers.map((candidate) => ({
-                                value: candidate.name,
-                                label: (
-                                    <>
-                                        {candidate.name}
-                                        {candidate.provider
-                                            ? ` (${providerLabels[candidate.provider] ?? candidate.provider})`
-                                            : ''}
-                                        {candidate.ip && (
-                                            <>
-                                                {' · '}
-                                                <Redactable
-                                                    value={candidate.ip}
-                                                    kind="ip"
-                                                />
-                                            </>
-                                        )}
-                                    </>
-                                ),
-                            }))}
-                        />
-                        <div className="flex items-center justify-end">
-                            <Button
-                                type="submit"
-                                size="sm"
-                                disabled={
-                                    !project.initialized ||
-                                    processing ||
-                                    servers.length === 0
-                                }
-                            >
-                                <RotateCw className="size-3" />
-                                <span>{processing ? 'Linking…' : 'Link'}</span>
-                            </Button>
-                        </div>
-                    </div>
-                    {errors.server && (
-                        <p className="text-xs text-accent">{errors.server}</p>
-                    )}
-                </>
-            )}
-        </Form>
-    );
-}
-
-function HostForm({
-    project,
-    serverIp,
-    serverName,
-    disabled,
-    environment = 'production',
-    currentHost,
-    domains,
-    onSuccess,
-}: {
-    project: Project;
-    serverIp: string | null;
-    serverName?: string | null;
-    disabled: boolean;
-    environment?: string;
-    currentHost?: string | null;
-    domains?: ServerDomain[] | null;
-    onSuccess?: () => void;
-}) {
-    const [value, setValue] = useState(currentHost ?? project.webHost ?? '');
-    const [justSaved, setJustSaved] = useState(false);
-
-    useEffect(() => {
-        setValue(currentHost ?? '');
-    }, [currentHost]);
-
-    // Changing an address that's already live is a different, riskier action
-    // than setting one for the first time: the old address doesn't get
-    // touched automatically (no redirect, DNS record untouched), and Saving
-    // here only rewrites the blueprint — it takes a Deploy afterward to
-    // actually create the new Ingress/TLS cert.
-    const isChangingLiveHost = Boolean(currentHost) && value !== currentHost;
-
-    const matchedZone = useMemo(() => {
-        if (!domains || value === '') return null;
-        return (
-            domains.find(
-                (d) =>
-                    d.externalDns &&
-                    (value === d.domain || value.endsWith(`.${d.domain}`)),
-            ) ?? null
-        );
-    }, [domains, value]);
-
-    return (
-        <Form
-            action={setHost(project.id)}
-            className="space-y-2.5"
-            onSuccess={() => {
-                setJustSaved(true);
-                onSuccess?.();
-            }}
-        >
-            {({ errors, processing }) => (
-                <>
-                    <input
-                        type="hidden"
-                        name="environment"
-                        value={environment}
-                    />
-
-                    <HostPicker
-                        name="host"
-                        value={value}
-                        defaultValue={currentHost}
-                        onChange={(resolvedHost) => {
-                            setJustSaved(false);
-                            setValue(resolvedHost);
-                        }}
-                        domains={domains}
-                        serverName={serverName}
-                        serverIp={serverIp}
-                        defaultSubdomain={project.name
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, '')}
-                        disabled={disabled || processing}
-                        isLocal={
-                            serverIp === '127.0.0.1' ||
-                            serverIp === 'localhost' ||
-                            serverIp === 'local' ||
-                            !serverIp
-                        }
-                    />
-
-                    {errors.host && (
-                        <p className="text-xs text-accent">{errors.host}</p>
-                    )}
-
-                    {!errors.host && isChangingLiveHost && (
-                        <p className="rounded-md bg-paper px-2.5 py-2 text-xs text-soft ring-1 ring-line/60">
-                            {justSaved ? (
-                                <>
-                                    Saved. <strong>{currentHost}</strong> keeps
-                                    serving traffic until you deploy — click{' '}
-                                    <strong>Deploy</strong> below to create the
-                                    new address&rsquo;s Ingress and TLS
-                                    certificate.
-                                </>
-                            ) : (
-                                <>
-                                    Saving only updates the blueprint — it takes
-                                    a <strong>Deploy</strong> afterward to
-                                    actually go live.
-                                </>
-                            )}{' '}
-                            {matchedZone ? (
-                                <>
-                                    <strong>{value || 'The new name'}</strong>
-                                    &rsquo;s DNS record will be created
-                                    automatically by ExternalDNS once you
-                                    deploy.
-                                </>
-                            ) : (
-                                <>
-                                    Point{' '}
-                                    <strong>{value || 'the new name'}</strong>
-                                    &rsquo;s DNS at {serverIp ??
-                                        'the server'}{' '}
-                                    same as above.
-                                </>
-                            )}{' '}
-                            <strong>{currentHost}</strong>&rsquo;s own DNS
-                            record and anyone linking to it are untouched — it
-                            simply stops resolving to anything once you deploy,
-                            unless you point it elsewhere (e.g. a redirect)
-                            yourself.
-                        </p>
-                    )}
-
-                    <div className="flex items-center justify-end pt-1">
-                        <Button
-                            type="submit"
-                            size="sm"
-                            disabled={
-                                disabled ||
-                                processing ||
-                                value === '' ||
-                                value === (currentHost ?? '')
-                            }
-                        >
-                            {processing ? (
-                                <RotateCw className="size-3 animate-spin" />
-                            ) : (
-                                <Save className="size-3" />
-                            )}
-                            <span>{processing ? 'Saving…' : 'Save'}</span>
-                        </Button>
-                    </div>
-                </>
-            )}
-        </Form>
-    );
-}
-
-function CiPipelineForm({
-    project,
-    environment,
-    currentCi,
-    onSuccess,
-    onSkip,
-}: {
-    project: Project;
-    environment: string;
-    currentCi?: ProjectEnvironment['ci'];
-    onSuccess?: () => void;
-    onSkip?: () => void;
-}) {
-    const defaultRegistry =
-        currentCi?.registry?.provider ??
-        (project.git?.platform === 'gitlab'
-            ? 'gitlab'
-            : project.git?.platform === 'forgejo'
-              ? 'forgejo'
-              : 'ghcr');
-    const defaultImage =
-        currentCi?.registry?.image ??
-        project.git?.repoSlug ??
-        project.name.toLowerCase();
-    const defaultBranch = currentCi?.branch ?? 'main';
-
-    const [registry, setRegistry] = useState(defaultRegistry);
-    const [image, setImage] = useState(defaultImage);
-    const [branch, setBranch] = useState(defaultBranch);
-    const [showSecurity, setShowSecurity] = useState(false);
-
-    // Security Gate Toggles
-    const [withTests, setWithTests] = useState(
-        currentCi?.securityAudit?.withTests ?? true,
-    );
-    const [strict, setStrict] = useState(
-        currentCi?.securityAudit?.strict ?? false,
-    );
-    const [scanGitleaks, setScanGitleaks] = useState(
-        !(currentCi?.securityAudit?.noGitleaks ?? false),
-    );
-    const [scanSemgrep, setScanSemgrep] = useState(
-        !(currentCi?.securityAudit?.noSemgrep ?? false),
-    );
-    const [scanTrivy, setScanTrivy] = useState(
-        !(currentCi?.securityAudit?.noTrivy ?? false),
-    );
-
-    return (
-        <Form
-            action={configureCiRoute(project.id)}
-            onSuccess={onSuccess}
-            className="space-y-3"
-        >
-            {({ processing, errors }) => (
-                <>
-                    <input
-                        type="hidden"
-                        name="environment"
-                        value={environment}
-                    />
-                    <input type="hidden" name="registry" value={registry} />
-                    <input type="hidden" name="branch" value={branch} />
-                    <input type="hidden" name="image" value={image} />
-                    {withTests && (
-                        <input type="hidden" name="with_tests" value="1" />
-                    )}
-                    {strict && <input type="hidden" name="strict" value="1" />}
-                    {!scanGitleaks && (
-                        <input type="hidden" name="no_gitleaks" value="1" />
-                    )}
-                    {!scanSemgrep && (
-                        <input type="hidden" name="no_semgrep" value="1" />
-                    )}
-                    {!scanTrivy && (
-                        <input type="hidden" name="no_trivy" value="1" />
-                    )}
-
-                    {project.git?.platform && (
-                        <div className="flex items-center gap-2 rounded-lg border border-line/60 bg-paper/60 px-2.5 py-1.5 text-xs text-soft">
-                            {project.git.platform === 'gitlab' ? (
-                                <SiGitlab className="size-3.5 text-[#FC6D26]" />
-                            ) : project.git.platform === 'forgejo' ? (
-                                <SiForgejo className="size-3.5 text-[#FB532A]" />
-                            ) : (
-                                <SiGithub className="size-3.5 text-ink" />
-                            )}
-                            <span>
-                                Git remote detected:{' '}
-                                <strong className="text-ink">
-                                    {project.git.repoSlug ?? project.git.remote}
-                                </strong>
-                            </span>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-medium text-ink">
-                                Container Registry
-                            </label>
-                            <SelectMenu
-                                value={registry}
-                                accent="servers"
-                                disabled={processing}
-                                triggerClassName="py-1.5 text-[13px]"
-                                onChange={setRegistry}
-                                options={[
-                                    {
-                                        value: 'ghcr',
-                                        label: 'GitHub Container Registry (GHCR)',
-                                    },
-                                    {
-                                        value: 'dockerhub',
-                                        label: 'Docker Hub',
-                                    },
-                                    {
-                                        value: 'gitlab',
-                                        label: 'GitLab Registry',
-                                    },
-                                    {
-                                        value: 'forgejo',
-                                        label: 'Forgejo Registry',
-                                    },
-                                    {
-                                        value: 'gar',
-                                        label: 'Google Artifact Registry (GAR)',
-                                    },
-                                ]}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="mb-1 block text-xs font-medium text-ink">
-                                Target Branch
-                            </label>
-                            <div className="flex items-center gap-1.5 rounded-lg bg-paper px-3 py-1.5 ring-1 ring-line">
-                                <GitBranch className="size-3.5 text-soft" />
-                                <input
-                                    value={branch}
-                                    onChange={(e) =>
-                                        setBranch(e.target.value.trim())
-                                    }
-                                    placeholder="main"
-                                    disabled={processing}
-                                    className="w-full border-0 bg-transparent p-0 font-mono text-[13px] outline-none placeholder:text-faint"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="mb-1 block text-xs font-medium text-ink">
-                            Image Repository Name
-                        </label>
-                        <input
-                            value={image}
-                            onChange={(e) =>
-                                setImage(e.target.value.trim().toLowerCase())
-                            }
-                            placeholder="owner/repo"
-                            disabled={processing}
-                            className="w-full rounded-lg border-0 bg-paper px-3 py-1.5 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers disabled:opacity-45"
-                        />
-                        <p className="mt-1 text-[11px] text-soft">
-                            Tag is derived from commit SHA during automated CI
-                            builds.
-                        </p>
-                    </div>
-
-                    {/* Expandable Security Gates */}
-                    <div className="rounded-lg border border-line bg-paper/40 p-2.5">
-                        <button
-                            type="button"
-                            onClick={() => setShowSecurity(!showSecurity)}
-                            className="flex w-full items-center justify-between text-left text-xs font-medium text-ink"
-                        >
-                            <div className="flex items-center gap-1.5">
-                                <ShieldCheck className="size-3.5 text-brand" />
-                                <span>Security Gates & Testing Policies</span>
-                            </div>
-                            <ChevronDown
-                                className={cn(
-                                    'size-3.5 text-soft transition-transform',
-                                    showSecurity && 'rotate-180',
-                                )}
-                            />
-                        </button>
-
-                        {showSecurity && (
-                            <div className="mt-2.5 space-y-2 border-t border-line/50 pt-2 text-xs">
-                                <label className="flex cursor-pointer items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={withTests}
-                                        onChange={(e) =>
-                                            setWithTests(e.target.checked)
-                                        }
-                                        className="rounded border-line text-brand focus:ring-brand"
-                                    />
-                                    <span className="text-ink">
-                                        Run test suite (Pest / PHPUnit) before
-                                        shipping
-                                    </span>
-                                </label>
-                                <label className="flex cursor-pointer items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={strict}
-                                        onChange={(e) =>
-                                            setStrict(e.target.checked)
-                                        }
-                                        className="rounded border-line text-brand focus:ring-brand"
-                                    />
-                                    <span className="text-ink">
-                                        Strict gate (abort release on
-                                        High/Critical CVEs)
-                                    </span>
-                                </label>
-                                <div className="pt-1 text-[11px] font-medium tracking-wider text-soft uppercase">
-                                    Security Scanners
-                                </div>
-                                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-                                    <label className="flex cursor-pointer items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={scanGitleaks}
-                                            onChange={(e) =>
-                                                setScanGitleaks(
-                                                    e.target.checked,
-                                                )
-                                            }
-                                            className="rounded border-line text-brand focus:ring-brand"
-                                        />
-                                        <span className="text-soft">
-                                            Gitleaks
-                                        </span>
-                                    </label>
-                                    <label className="flex cursor-pointer items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={scanSemgrep}
-                                            onChange={(e) =>
-                                                setScanSemgrep(e.target.checked)
-                                            }
-                                            className="rounded border-line text-brand focus:ring-brand"
-                                        />
-                                        <span className="text-soft">
-                                            Semgrep SAST
-                                        </span>
-                                    </label>
-                                    <label className="flex cursor-pointer items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={scanTrivy}
-                                            onChange={(e) =>
-                                                setScanTrivy(e.target.checked)
-                                            }
-                                            className="rounded border-line text-brand focus:ring-brand"
-                                        />
-                                        <span className="text-soft">
-                                            Trivy Image
-                                        </span>
-                                    </label>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {errors.ci && (
-                        <p className="text-xs text-accent">{errors.ci}</p>
-                    )}
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                        <Button
-                            type="submit"
-                            size="sm"
-                            disabled={processing}
-                            className="gap-1.5"
-                        >
-                            <GitBranch className="size-3.5" />
-                            <span>
-                                {processing
-                                    ? 'Configuring CI/CD…'
-                                    : currentCi?.hasWorkflow
-                                      ? 'Update Pipeline & Secrets'
-                                      : 'Configure & Push Secrets'}
-                            </span>
-                        </Button>
-                        {onSkip && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={onSkip}
-                                className="gap-1 text-soft hover:text-ink"
-                            >
-                                <span>Skip to Direct Deploy</span>
-                                <ArrowRight className="size-3" />
-                            </Button>
-                        )}
-                    </div>
-                </>
-            )}
-        </Form>
-    );
-}
-
 /** Opens the project folder in a code editor found on this machine. */
 function EditorMenu({
     project,
@@ -3268,7 +2662,12 @@ function ProjectTldForm({ project }: { project: Project }) {
                             processing || tldValue === (project.localTld ?? '')
                         }
                     >
-                        {processing ? 'Saving…' : 'Save'}
+                        {processing ? (
+                            <RotateCw className="size-3 animate-spin" />
+                        ) : (
+                            <Save className="size-3" />
+                        )}
+                        <span>{processing ? 'Saving…' : 'Save'}</span>
                     </Button>
                 </>
             )}
