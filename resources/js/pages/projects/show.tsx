@@ -2387,13 +2387,27 @@ function HostForm({
     currentHost?: string | null;
 }) {
     const [value, setValue] = useState(currentHost ?? project.webHost ?? '');
+    const [justSaved, setJustSaved] = useState(false);
 
     useEffect(() => {
         setValue(currentHost ?? '');
     }, [currentHost]);
 
+    // Changing an address that's already live is a different, riskier action
+    // than setting one for the first time: the old address doesn't get
+    // touched automatically (no redirect, DNS record untouched), and Saving
+    // here only rewrites the blueprint — it takes a Deploy afterward to
+    // actually create the new Ingress/TLS cert. Only shown once there's a
+    // real previous host to move away from, so first-time setup keeps the
+    // plain DNS hint below instead of this longer sequence.
+    const isChangingLiveHost = Boolean(currentHost) && value !== currentHost;
+
     return (
-        <Form action={setHost(project.id)} className="space-y-1.5">
+        <Form
+            action={setHost(project.id)}
+            className="space-y-1.5"
+            onSuccess={() => setJustSaved(true)}
+        >
             {({ errors, processing }) => (
                 <>
                     <input
@@ -2405,11 +2419,12 @@ function HostForm({
                         <input
                             name="host"
                             value={value}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                                setJustSaved(false);
                                 setValue(
                                     event.target.value.trim().toLowerCase(),
-                                )
-                            }
+                                );
+                            }}
                             placeholder={
                                 environment === 'production'
                                     ? 'app.example.com'
@@ -2443,6 +2458,32 @@ function HostForm({
                         {errors.host ??
                             `Point this name's DNS at ${serverIp ?? 'your server'} (or connect a domain on the server page).`}
                     </p>
+                    {!errors.host && isChangingLiveHost && (
+                        <p className="rounded-md bg-paper px-2.5 py-2 text-xs text-soft ring-1 ring-line/60">
+                            {justSaved ? (
+                                <>
+                                    Saved. <strong>{currentHost}</strong> keeps
+                                    serving traffic until you deploy — click{' '}
+                                    <strong>Deploy</strong> below to create the
+                                    new address&rsquo;s Ingress and TLS
+                                    certificate.
+                                </>
+                            ) : (
+                                <>
+                                    Saving only updates the blueprint — it takes
+                                    a <strong>Deploy</strong> afterward to
+                                    actually go live.
+                                </>
+                            )}{' '}
+                            Point <strong>{value || 'the new name'}</strong>
+                            &rsquo;s DNS at {serverIp ?? 'the server'} same as
+                            above; <strong>{currentHost}</strong>&rsquo;s own
+                            DNS record and anyone linking to it are untouched —
+                            it simply stops resolving to anything once you
+                            deploy, unless you point it elsewhere (e.g. a
+                            redirect) yourself.
+                        </p>
+                    )}
                 </>
             )}
         </Form>
