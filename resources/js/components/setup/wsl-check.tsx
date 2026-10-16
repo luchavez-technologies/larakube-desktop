@@ -7,31 +7,55 @@ import CopyButton from '@/components/copy-button';
 import { forgetToolStatus } from '@/lib/tool-status';
 
 export type WslState = {
-    state: 'ready' | 'missing' | 'no-distro' | 'old-version' | 'broken';
+    state:
+        | 'ready'
+        | 'missing'
+        | 'no-distro'
+        | 'old-version'
+        | 'broken'
+        | 'stale';
     distro: string | null;
     version: number | null;
     message: string;
     command: string | null;
 };
 
-type WslStep = 'enable' | 'download' | 'import';
+type WslStep =
+    | 'enable'
+    | 'download'
+    | 'import'
+    | 'backup'
+    | 'reset'
+    | 'restore';
 
 const WSL_STEP_LABELS: Record<WslStep, string> = {
     enable: 'Turning on Windows Subsystem for Linux',
     download: 'Downloading LaraKube Linux (about 300 MB)',
     import: 'Installing LaraKube Linux',
+    backup: 'Backing up your projects',
+    reset: 'Removing the older LaraKube Linux',
+    restore: 'Restoring your projects',
 };
 
-async function runWslStep(step: WslStep) {
+async function runWslStep(step: WslStep, body?: Record<string, string>) {
     const token = decodeURIComponent(
         document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] ?? '',
     );
     const response = await fetch(`/setup/wsl/${step}`, {
         method: 'POST',
-        headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token },
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-XSRF-TOKEN': token,
+        },
+        body: body ? JSON.stringify(body) : undefined,
     });
 
-    return (await response.json()) as { ok: boolean; message: string };
+    return (await response.json()) as {
+        ok: boolean;
+        message: string;
+        path?: string;
+    };
 }
 
 export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
@@ -52,12 +76,20 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
 
     const run = async (steps: WslStep[]) => {
         setError(null);
+        let backupPath: string | undefined;
 
         for (const step of steps) {
             setWorking(step);
-            const result = await runWslStep(step).catch(() => ({
+            // restore needs the path backup just produced a few steps earlier
+            // in this same run — never a path from anywhere else.
+            const body =
+                step === 'restore' && backupPath
+                    ? { path: backupPath }
+                    : undefined;
+            const result = await runWslStep(step, body).catch(() => ({
                 ok: false,
                 message: 'LaraKube Desktop could not reach itself. Try again.',
+                path: undefined,
             }));
 
             if (!result.ok) {
@@ -65,6 +97,10 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
                 setError(result.message);
 
                 return;
+            }
+
+            if (step === 'backup' && result.path) {
+                backupPath = result.path;
             }
         }
 
@@ -85,7 +121,9 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
             ? ['enable']
             : wsl.state === 'no-distro'
               ? ['download', 'import']
-              : null;
+              : wsl.state === 'stale'
+                ? ['backup', 'reset', 'download', 'import', 'restore']
+                : null;
 
     return (
         <Card label="LaraKube Linux">
@@ -104,7 +142,9 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
                             <p className="text-soft">
                                 {wsl.state === 'missing'
                                     ? 'LaraKube Desktop runs its tools in a small Linux that Windows provides. Windows will ask for permission once.'
-                                    : 'LaraKube Desktop will download its own small Linux, with every tool ready. It stays separate from anything else on this computer.'}
+                                    : wsl.state === 'stale'
+                                      ? 'Your projects are backed up, the Linux is replaced with the newer one, then your projects are put back — all in one step.'
+                                      : 'LaraKube Desktop will download its own small Linux, with every tool ready. It stays separate from anything else on this computer.'}
                             </p>
                             <Button
                                 disabled={working !== null}
@@ -114,7 +154,9 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
                                     ? `${WSL_STEP_LABELS[working]}…`
                                     : wsl.state === 'missing'
                                       ? 'Turn on WSL'
-                                      : 'Set up LaraKube Linux'}
+                                      : wsl.state === 'stale'
+                                        ? 'Update LaraKube Linux'
+                                        : 'Set up LaraKube Linux'}
                             </Button>
                         </>
                     ) : wsl.command ? (

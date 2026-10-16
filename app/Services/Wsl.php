@@ -24,7 +24,7 @@ class Wsl
     }
 
     /**
-     * @return array{state: 'ready'|'missing'|'no-distro'|'old-version'|'broken', distro: ?string, version: ?int, message: string, command: ?string}
+     * @return array{state: 'ready'|'missing'|'no-distro'|'old-version'|'broken'|'stale', distro: ?string, version: ?int, message: string, command: ?string}
      */
     public function check(): array
     {
@@ -50,7 +50,24 @@ class Wsl
             return $this->result('broken', WslDistro::NAME, 2, 'LaraKube Linux did not start. Virtualization may be turned off in your computer\'s BIOS, or Windows needs a restart after turning WSL on.', null);
         }
 
+        if ($this->isStale()) {
+            return $this->result('stale', WslDistro::NAME, 2, 'LaraKube Linux is from an older release and is missing a tool LaraKube now needs for faster, more reliable domain resolution.', null);
+        }
+
         return $this->result('ready', WslDistro::NAME, 2, 'LaraKube Linux (WSL 2) is ready.', null);
+    }
+
+    /**
+     * Whether the imported distro predates dnsmasq being added to the image
+     * (see larakube-ubuntu's Dockerfile) — the live, direct signal, rather
+     * than comparing release versions or re-parsing /etc/larakube-rootfs.json
+     * (which never tracked apt packages like this one).
+     */
+    public function isStale(): bool
+    {
+        return ! Process::timeout(30)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', 'which', 'dnsmasq',
+        ])->successful();
     }
 
     /**
@@ -215,6 +232,50 @@ class Wsl
     }
 
     /**
+     * Extracts a backupUserHome() archive back into a freshly (re)imported
+     * distro's /home/larakube — the step that closes the loop on reset(): a
+     * reset without this leaves the student with an empty distro and a
+     * tarball they'd otherwise have to extract by hand.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function restoreUserHome(string $windowsBackupPath): array
+    {
+        $distro = $this->distro();
+        if ($distro === null) {
+            return ['ok' => false, 'message' => 'LaraKube Linux is not installed.'];
+        }
+
+        // Only ever a path this service itself produced via backupUserHome() —
+        // the request carrying it is otherwise just a filename a browser-side
+        // caller chose, and tar -xzf must never be pointed at an arbitrary file.
+        $backupDir = rtrim(str_replace('\\', '/', $this->backupDirectory()), '/').'/';
+        $normalized = str_replace('\\', '/', $windowsBackupPath);
+        if (! str_starts_with($normalized, $backupDir) || str_contains($windowsBackupPath, '..')) {
+            return ['ok' => false, 'message' => 'That backup path is not recognized.'];
+        }
+
+        if (! is_file($windowsBackupPath) && ! app()->runningUnitTests()) {
+            return ['ok' => false, 'message' => "Backup file not found: {$windowsBackupPath}."];
+        }
+
+        $linuxBackupFile = WslDistro::toLinux($windowsBackupPath);
+
+        $result = Process::timeout(600)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER,
+            '--', 'tar', '-xzf', $linuxBackupFile, '-C', WslDistro::HOME,
+        ]);
+
+        if (! $result->successful()) {
+            $err = trim($this->text($result->errorOutput().' '.$result->output()));
+
+            return ['ok' => false, 'message' => "Restore failed: {$err}. Your backup is still safe at {$windowsBackupPath}."];
+        }
+
+        return ['ok' => true, 'message' => 'Your projects were restored.'];
+    }
+
+    /**
      * Non-destructive in-place update of LaraKube CLI and tools inside the WSL distro.
      * Preserves all user projects, files, and configurations in /home/larakube.
      *
@@ -349,8 +410,8 @@ class Wsl
     }
 
     /**
-     * @param  'ready'|'missing'|'no-distro'|'old-version'|'broken'  $state
-     * @return array{state: 'ready'|'missing'|'no-distro'|'old-version'|'broken', distro: ?string, version: ?int, message: string, command: ?string}
+     * @param  'ready'|'missing'|'no-distro'|'old-version'|'broken'|'stale'  $state
+     * @return array{state: 'ready'|'missing'|'no-distro'|'old-version'|'broken'|'stale', distro: ?string, version: ?int, message: string, command: ?string}
      */
     private function result(string $state, ?string $distro, ?int $version, string $message, ?string $command): array
     {

@@ -64,3 +64,23 @@ test('the backup step runs user home backup without clearing tool cache', functi
 
     expect(Cache::has('readiness.tool.larakube'))->toBeTrue();
 });
+
+test('the restore step passes the given path through to restoreUserHome', function () {
+    $wsl = Mockery::mock(Wsl::class)->makePartial();
+    $wsl->shouldReceive('isWindows')->andReturn(true);
+    $wsl->shouldReceive('restoreUserHome')->once()->with('C:\\backups\\home-backup-x.tar.gz')
+        ->andReturn(['ok' => true, 'message' => 'Your projects were restored.']);
+    app()->instance(Wsl::class, $wsl);
+
+    $this->postJson('/setup/wsl/restore', ['path' => 'C:\\backups\\home-backup-x.tar.gz'])
+        ->assertOk()
+        ->assertJson(['ok' => true, 'message' => 'Your projects were restored.']);
+});
+
+test('the restore step requires a path', function () {
+    $wsl = Mockery::mock(Wsl::class)->makePartial();
+    $wsl->shouldReceive('isWindows')->andReturn(true);
+    app()->instance(Wsl::class, $wsl);
+
+    $this->postJson('/setup/wsl/restore', [])->assertStatus(422);
+});

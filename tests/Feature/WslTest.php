@@ -59,6 +59,7 @@ test('a stopped WSL 2 distribution counts as ready once it answers a command', f
         '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
         '*--list*' => Process::result(output: wslListing('  docker-desktop   Running   2', '* larakube-ubuntu Stopped   2')),
         '*echo*' => Process::result(output: "ok\n"),
+        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
     ]);
 
     $result = (new Wsl(windows: true))->check();
@@ -75,6 +76,28 @@ test('a distribution that will not start is reported as broken', function () {
     ]);
 
     expect((new Wsl(windows: true))->check()['state'])->toBe('broken');
+});
+
+test('a distro missing dnsmasq (imported before it was added to the image) is reported as stale', function () {
+    Process::fake([
+        '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*echo*' => Process::result(output: "ok\n"),
+        '*which*dnsmasq*' => Process::result(output: '', exitCode: 1),
+    ]);
+
+    expect((new Wsl(windows: true))->check()['state'])->toBe('stale');
+});
+
+test('a distro with dnsmasq installed is ready, not stale', function () {
+    Process::fake([
+        '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*echo*' => Process::result(output: "ok\n"),
+        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
+    ]);
+
+    expect((new Wsl(windows: true))->check()['state'])->toBe('ready');
 });
 
 test('the image is downloaded, checked against its published checksum, and kept only when it matches', function () {
@@ -241,6 +264,48 @@ test('resetting automatically creates a safety backup before unregistering the d
 
     Process::assertRan(fn ($process) => in_array('tar', (array) $process->command, true));
     Process::assertRan(fn ($process) => in_array('--unregister', (array) $process->command, true));
+
+    File::deleteDirectory($home);
+});
+
+test('restoreUserHome extracts a backup produced by backupUserHome back into the distro', function () {
+    $home = wslHome();
+    $backupDir = $home.'/LaraKube/backups';
+    mkdir($backupDir, 0777, true);
+    $backupPath = $backupDir.'/home-backup-20261017-010203.tar.gz';
+    file_put_contents($backupPath, 'fake archive bytes');
+
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*tar*' => Process::result(),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    $result = $wsl->restoreUserHome($backupPath);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['message'])->toContain('restored');
+
+    Process::assertRan(fn ($process) => in_array('tar', (array) $process->command, true)
+        && in_array('-xzf', (array) $process->command, true));
+
+    File::deleteDirectory($home);
+});
+
+test('restoreUserHome refuses a path outside the LaraKube backups directory', function () {
+    $home = wslHome();
+
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    $result = $wsl->restoreUserHome('C:\\Users\\student\\Documents\\anything.tar.gz');
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('not recognized');
+
+    Process::assertNotRan(fn ($process) => in_array('tar', (array) $process->command, true));
 
     File::deleteDirectory($home);
 });

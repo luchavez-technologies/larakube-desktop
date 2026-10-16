@@ -42,6 +42,7 @@ class SettingsController extends Controller
             'contexts' => $contexts,
             'currentContext' => $currentContext,
             'windows' => $wsl->isWindows(),
+            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
             'serverNames' => Inertia::defer(function () use ($catalog): ?array {
                 $stacks = $catalog->all();
 

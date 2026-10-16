@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
+import WslCheck, { type WslState } from '@/components/setup/wsl-check';
 
 type AgentInfo = {
     name: string;
@@ -57,6 +58,7 @@ type SettingsProps = {
     contexts?: string[];
     currentContext?: string | null;
     windows?: boolean;
+    wsl?: WslState | null;
     serverNames?: string[] | null;
 };
 
@@ -106,6 +108,7 @@ export default function SettingsIndex({
     contexts = [],
     currentContext = null,
     windows = false,
+    wsl = null,
     serverNames,
 }: SettingsProps) {
     const [activeTheme, setActiveTheme] = useState<ThemeMode>(
@@ -185,6 +188,7 @@ export default function SettingsIndex({
 
             <UpdatesCard />
             <DiagnosticsCard />
+            {windows && wsl?.state === 'stale' && <WslCheck wsl={wsl} />}
             {windows && <LinuxCard />}
 
             <div className="grid grid-cols-[1fr_360px] items-start gap-6">

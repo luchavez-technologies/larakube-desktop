@@ -48,7 +48,7 @@ Route::post('/setup/cli/update', [ToolInstallController::class, 'updateCli'])->n
 Route::post('/setup/tools/{tool}/install', [ToolInstallController::class, 'store'])->name('setup.tools.install');
 Route::post('/setup/tools/{tool}/update', [ToolInstallController::class, 'updateTool'])->name('setup.tools.update');
 Route::get('/setup/tools/{tool}/status', [ReadinessController::class, 'toolStatus'])->name('setup.tools.status');
-Route::post('/setup/wsl/{step}', [WslSetupController::class, 'store'])->whereIn('step', ['enable', 'download', 'import', 'update', 'backup', 'reset'])->name('setup.wsl');
+Route::post('/setup/wsl/{step}', [WslSetupController::class, 'store'])->whereIn('step', ['enable', 'download', 'import', 'update', 'backup', 'reset', 'restore'])->name('setup.wsl');
 Route::post('/setup/local', [LocalSetupController::class, 'store'])->name('setup.local');
 Route::post('/setup/terminal/install', [ReadinessController::class, 'installTerminal'])->name('setup.terminal.install');
 Route::post('/setup/usage', [ReadinessController::class, 'setUsage'])->name('setup.usage');
