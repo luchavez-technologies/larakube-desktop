@@ -1,15 +1,8 @@
 import { useState } from 'react';
-import {
-    Activity,
-    Check,
-    Code2,
-    Copy,
-    ExternalLink,
-    Filter,
-    Server,
-} from 'lucide-react';
+import { Check, Code2, Copy, ExternalLink, Filter, Server } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import RadialGauge from '@/components/metrics/radial-gauge';
 import { brandIcon } from '@/components/tool-logo';
 import type {
     PlexServiceCategoryDetail,
@@ -17,6 +10,98 @@ import type {
     PlexTenant,
     PodMetrics,
 } from '@/types/larakube';
+
+function parseMemoryToMiB(str?: string | null): number {
+    if (!str) return 0;
+    const clean = str.trim().toLowerCase();
+    if (clean.endsWith('gi')) {
+        return (parseFloat(clean.replace('gi', '')) || 0) * 1024;
+    }
+    if (clean.endsWith('mi')) {
+        return parseFloat(clean.replace('mi', '')) || 0;
+    }
+    if (clean.endsWith('ki')) {
+        return (parseFloat(clean.replace('ki', '')) || 0) / 1024;
+    }
+    return parseFloat(clean) || 0;
+}
+
+function parseCpuToMilli(str?: string | null): number {
+    if (!str) return 0;
+    const clean = str.trim().toLowerCase();
+    if (clean.endsWith('m')) {
+        return parseFloat(clean.replace('m', '')) || 0;
+    }
+    return (parseFloat(clean) || 0) * 1000;
+}
+
+type EngineSpec = {
+    memoryLimitMiB: number;
+    cpuLimitMilli: number;
+    maxCapacity: number;
+    capacityLabel: string;
+    capacityUnit: string;
+};
+
+function getEngineSpec(driver: string): EngineSpec {
+    const d = driver.toLowerCase();
+    if (d.includes('redis')) {
+        return {
+            memoryLimitMiB: 256,
+            cpuLimitMilli: 250,
+            maxCapacity: 16,
+            capacityLabel: 'DB Slots',
+            capacityUnit: 'slots',
+        };
+    }
+    if (d.includes('postgres') || d.includes('mysql')) {
+        return {
+            memoryLimitMiB: 512,
+            cpuLimitMilli: 500,
+            maxCapacity: 100,
+            capacityLabel: 'Connections',
+            capacityUnit: 'conn',
+        };
+    }
+    if (d.includes('meili')) {
+        return {
+            memoryLimitMiB: 512,
+            cpuLimitMilli: 500,
+            maxCapacity: 50,
+            capacityLabel: 'Indices',
+            capacityUnit: 'idx',
+        };
+    }
+    if (d.includes('seaweed') || d.includes('minio') || d.includes('garage')) {
+        return {
+            memoryLimitMiB: 512,
+            cpuLimitMilli: 500,
+            maxCapacity: 100,
+            capacityLabel: 'S3 Buckets',
+            capacityUnit: 'buckets',
+        };
+    }
+    if (
+        d.includes('chrome') ||
+        d.includes('render') ||
+        d.includes('headless')
+    ) {
+        return {
+            memoryLimitMiB: 512,
+            cpuLimitMilli: 500,
+            maxCapacity: 5,
+            capacityLabel: 'Workers',
+            capacityUnit: 'workers',
+        };
+    }
+    return {
+        memoryLimitMiB: 512,
+        cpuLimitMilli: 500,
+        maxCapacity: 50,
+        capacityLabel: 'Capacity',
+        capacityUnit: 'slots',
+    };
+}
 
 export default function PlexServiceEngineCard({
     category,
@@ -73,6 +158,57 @@ export default function PlexServiceEngineCard({
         allocationDetail = 'Dedicated Service';
     }
 
+    const spec = getEngineSpec(option.driver);
+
+    // RAM calculation
+    const usedMemMiB = parseMemoryToMiB(componentMetrics?.memory);
+    const ramPercent = componentMetrics?.memory
+        ? Math.min(100, Math.round((usedMemMiB / spec.memoryLimitMiB) * 100))
+        : null;
+    const memRemainingMiB = Math.max(
+        0,
+        spec.memoryLimitMiB - Math.round(usedMemMiB),
+    );
+    const ramTone =
+        ramPercent === null
+            ? 'auto'
+            : ramPercent >= 85
+              ? 'bad'
+              : ramPercent >= 70
+                ? 'warn'
+                : 'ok';
+
+    // CPU calculation
+    const usedCpuMilli = parseCpuToMilli(componentMetrics?.cpu);
+    const cpuPercent = componentMetrics?.cpu
+        ? Math.min(100, Math.round((usedCpuMilli / spec.cpuLimitMilli) * 100))
+        : null;
+    const cpuRemainingMilli = Math.max(
+        0,
+        spec.cpuLimitMilli - Math.round(usedCpuMilli),
+    );
+    const cpuTone =
+        cpuPercent === null
+            ? 'auto'
+            : cpuPercent >= 85
+              ? 'bad'
+              : cpuPercent >= 70
+                ? 'warn'
+                : 'ok';
+
+    // Capacity / Connections calculation
+    const isChrome =
+        option.driver.toLowerCase().includes('chrome') ||
+        option.driver.toLowerCase().includes('render');
+    const usedCapacity = isChrome ? 1 : allocationCount;
+    const capPercent = Math.min(
+        100,
+        Math.round((usedCapacity / spec.maxCapacity) * 100),
+    );
+    const capRemaining = Math.max(0, spec.maxCapacity - usedCapacity);
+    const capTone =
+        capPercent >= 85 ? 'bad' : capPercent >= 70 ? 'warn' : 'tools';
+
     const copyToClipboard = (text: string, label: string) => {
         void navigator.clipboard.writeText(text);
         setCopiedLabel(label);
@@ -114,27 +250,83 @@ export default function PlexServiceEngineCard({
                     </span>
                 </div>
 
-                {/* Telemetry Chips */}
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {componentMetrics ? (
-                        <div className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 font-mono text-[11px] text-ink">
-                            <Activity className="size-3 text-soft" />
-                            <span>{componentMetrics.memory}</span>
-                            <span className="text-line">/</span>
-                            <span>{componentMetrics.cpu}</span>
-                            {componentMetrics.podCount > 1 && (
-                                <span className="text-soft">
-                                    (×{componentMetrics.podCount})
-                                </span>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper/50 px-2.5 py-1 text-[11px] text-soft">
-                            <Activity className="size-3 text-faint" />
-                            <span>Workload Ready</span>
-                        </div>
-                    )}
+                {/* Commons Limits & Health Radial Gauges */}
+                <div className="mt-4 grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-paper/40 py-2.5 shadow-2xs">
+                    {/* 1. RAM Radial */}
+                    <div className="flex flex-col items-center justify-center px-1 text-center">
+                        <RadialGauge
+                            value={ramPercent}
+                            displayValue={
+                                ramPercent !== null ? `${ramPercent}%` : '—'
+                            }
+                            size="xs"
+                            tone={ramTone}
+                            className="p-0"
+                        />
+                        <span className="mt-1.5 text-[9.5px] font-semibold tracking-wider text-soft uppercase">
+                            RAM
+                        </span>
+                        <span className="font-mono text-[9px] font-medium text-ink">
+                            {usedMemMiB > 0
+                                ? `${Math.round(usedMemMiB)}Mi`
+                                : '—'}
+                        </span>
+                        <span className="text-[8.5px] text-faint">
+                            {usedMemMiB > 0
+                                ? `${memRemainingMiB}Mi left`
+                                : 'Optimal'}
+                        </span>
+                    </div>
 
+                    {/* 2. CPU Radial */}
+                    <div className="flex flex-col items-center justify-center px-1 text-center">
+                        <RadialGauge
+                            value={cpuPercent}
+                            displayValue={
+                                cpuPercent !== null ? `${cpuPercent}%` : '—'
+                            }
+                            size="xs"
+                            tone={cpuTone}
+                            className="p-0"
+                        />
+                        <span className="mt-1.5 text-[9.5px] font-semibold tracking-wider text-soft uppercase">
+                            CPU
+                        </span>
+                        <span className="font-mono text-[9px] font-medium text-ink">
+                            {usedCpuMilli > 0
+                                ? `${Math.round(usedCpuMilli)}m`
+                                : '—'}
+                        </span>
+                        <span className="text-[8.5px] text-faint">
+                            {usedCpuMilli > 0
+                                ? `${cpuRemainingMilli}m left`
+                                : 'Optimal'}
+                        </span>
+                    </div>
+
+                    {/* 3. Capacity / Connections Radial */}
+                    <div className="flex flex-col items-center justify-center px-1 text-center">
+                        <RadialGauge
+                            value={capPercent}
+                            displayValue={`${usedCapacity}`}
+                            size="xs"
+                            tone={capTone}
+                            className="p-0"
+                        />
+                        <span className="mt-1.5 truncate text-[9.5px] font-semibold tracking-wider text-soft uppercase">
+                            {spec.capacityLabel}
+                        </span>
+                        <span className="font-mono text-[9px] font-medium text-ink">
+                            {usedCapacity} / {spec.maxCapacity}
+                        </span>
+                        <span className="text-[8.5px] text-faint">
+                            {capRemaining} left
+                        </span>
+                    </div>
+                </div>
+
+                {/* Connection Address & Links */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                     {internalDetail && (
                         <button
                             type="button"

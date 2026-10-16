@@ -52,6 +52,7 @@ class PlexController extends Controller
                     : null;
             }, 'services'),
             'podMetrics' => Inertia::defer(fn (): ?array => $metrics->podMetrics($context, 'larakube-plex'), 'podMetrics'),
+            'nodeMetrics' => Inertia::defer(fn (): ?array => $metrics->nodeMetrics($context), 'nodeMetrics'),
         ]);
     }
 

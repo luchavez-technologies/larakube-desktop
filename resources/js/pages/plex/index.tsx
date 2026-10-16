@@ -20,6 +20,7 @@ import AppLayout from '@/layouts/app-layout';
 import { show as showServer } from '@/routes/servers';
 import { index as plexIndex, refresh } from '@/routes/servers/plex';
 import type {
+    NodeMetrics,
     PlexCommonsServicesReport,
     PlexServiceCategoryDetail,
     PlexServiceOptionDetail,
@@ -52,35 +53,26 @@ function PlexPageHeader({
     onOpenAddEngine?: () => void;
 }) {
     return (
-        <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-            <div>
+        <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+            <div className="min-w-0">
                 <div className="flex items-center gap-2.5">
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em] text-ink">
+                    <h1 className="truncate text-[28px] leading-tight font-semibold tracking-[-0.03em] text-ink">
                         Plex Commons
                     </h1>
                     {badge}
                 </div>
-                <p className="mt-1 max-w-xl text-sm leading-relaxed text-soft">
+                <p className="mt-1 text-sm leading-relaxed text-soft">
                     Shared backing infrastructure backbone — powering tenant
                     apps, cluster tools, and devboxes.
                 </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
                 <ServerSwitcher
                     servers={servers}
                     value={server.name}
                     buildHref={(name) => plexIndex(name).url}
                 />
-
-                <Link
-                    href={showServer(server.name).url}
-                    className={buttonClass('secondary', 'md')}
-                    title={`Open ${server.name} in Servers`}
-                >
-                    <ExternalLink className="size-3.5" />
-                    <span>Open server</span>
-                </Link>
 
                 {onOpenQuickConnect && (
                     <Button
@@ -108,7 +100,7 @@ function PlexPageHeader({
 
                 {onOpenProvision && (
                     <Button
-                        variant="primary"
+                        variant="secondary"
                         size="md"
                         onClick={onOpenProvision}
                         title="Provision custom credentials for an external workload"
@@ -122,11 +114,20 @@ function PlexPageHeader({
                     href={refresh(server.name).url}
                     method="post"
                     as="button"
-                    className={buttonClass('secondary', 'md')}
+                    className={buttonClass('secondary', 'md', 'px-2.5')}
                     title="Refresh status from cluster"
                 >
                     <RotateCw className="size-3.5" />
-                    <span>Refresh</span>
+                    <span className="sr-only">Refresh</span>
+                </Link>
+
+                <Link
+                    href={showServer(server.name).url}
+                    className={buttonClass('secondary', 'md', 'px-2.5')}
+                    title={`Open ${server.name} in Servers`}
+                >
+                    <ExternalLink className="size-3.5" />
+                    <span className="sr-only">Open server</span>
                 </Link>
             </div>
         </header>
@@ -140,6 +141,7 @@ export default function PlexIndex({
     plexSync,
     services,
     podMetrics,
+    nodeMetrics,
 }: {
     server: Server;
     servers: Server[];
@@ -151,12 +153,13 @@ export default function PlexIndex({
     };
     services?: PlexCommonsServicesReport | null;
     podMetrics?: PodMetrics | null;
+    nodeMetrics?: NodeMetrics | null;
 }) {
     const awaitingFirstSync = plex === null && plexSync.status !== 'error';
 
     usePoll(
         2000,
-        { only: ['plex', 'services', 'plexSync', 'podMetrics'] },
+        { only: ['plex', 'services', 'plexSync', 'podMetrics', 'nodeMetrics'] },
         { autoStart: plexSync.status === 'syncing' || awaitingFirstSync },
     );
 
@@ -329,6 +332,7 @@ export default function PlexIndex({
                         plex={plex}
                         services={services}
                         podMetrics={podMetrics}
+                        nodeMetrics={nodeMetrics}
                     />
 
                     {/* 2. Backing Service Engine Deck (Dedicated Cards Grid) */}
