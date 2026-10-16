@@ -46,7 +46,7 @@ return [
     /**
      * The Website of your application.
      */
-    'website' => env('NATIVEPHP_APP_WEBSITE', 'https://www.larakube.app'),
+    'website' => env('NATIVEPHP_APP_WEBSITE', 'https://docs.larakube.app'),
 
     /**
      * The default service provider for your application. This provider

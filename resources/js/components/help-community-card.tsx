@@ -1,4 +1,4 @@
-import { Mail } from 'lucide-react';
+import { BookOpen, Mail } from 'lucide-react';
 import {
     SiDiscord,
     SiFacebook,
@@ -26,6 +26,12 @@ type HelpLink = {
 };
 
 const GET_HELP: HelpLink[] = [
+    {
+        label: 'Documentation',
+        detail: 'Guides, tutorials, and CLI references',
+        href: 'https://docs.larakube.app',
+        icon: <BookOpen className="size-4 text-soft" />,
+    },
     {
         label: 'Discord',
         detail: 'Ask questions, share what you built',

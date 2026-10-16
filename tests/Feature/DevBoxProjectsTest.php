@@ -233,8 +233,8 @@ test('updating the CLI on a box runs the installer there on the channel Desktop 
 
     File::deleteDirectory($bin);
 })->with([
-    'canary' => ['canary', 'curl -fsSL https://cli.larakube.app/install.sh | bash -s -- --canary'],
-    'stable' => ['stable', 'curl -fsSL https://cli.larakube.app/install.sh | bash &&'],
+    'canary' => ['canary', 'curl -fsSL https://docs.larakube.app/install.sh | bash -s -- --canary'],
+    'stable' => ['stable', 'curl -fsSL https://docs.larakube.app/install.sh | bash &&'],
 ]);
 
 test('updating the CLI on a box via Inertia returns back to stay on the dev box page', function () {

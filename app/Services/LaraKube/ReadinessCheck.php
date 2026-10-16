@@ -30,7 +30,7 @@ class ReadinessCheck
         'podman' => ['label' => 'Podman', 'purpose' => 'Builds your apps to deploy them, instead of Docker.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
     ];
 
-    public const CLI_INSTALL_COMMAND = 'curl -fsSL https://cli.larakube.app/install.sh | bash -s -- --canary';
+    public const CLI_INSTALL_COMMAND = 'curl -fsSL https://docs.larakube.app/install.sh | bash -s -- --canary';
 
     /** Which cloud provider (GlobalSettings::CLOUD_PROVIDERS key) each provider-specific CLI tool is for. DO/Hetzner need no CLI binary — just the API token fields already on Setup/Settings. */
     private const PROVIDER_TOOLS = ['aws' => 'aws', 'gcloud' => 'gcp'];

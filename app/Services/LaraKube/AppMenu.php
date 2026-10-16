@@ -116,7 +116,7 @@ class AppMenu
         )->label('Window');
 
         $helpMenu = Menu::make(
-            Menu::link('https://larakube.app/docs', 'LaraKube Documentation')->openInBrowser(),
+            Menu::link('https://docs.larakube.app', 'LaraKube Documentation')->openInBrowser(),
             Menu::link('https://github.com/luchavez-technologies/larakube-desktop/discussions', 'Community & Discussions')->openInBrowser(),
             Menu::link('https://github.com/luchavez-technologies/larakube-desktop/issues', 'Report an Issue…')->openInBrowser(),
             Menu::separator(),
