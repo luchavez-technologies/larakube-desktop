@@ -42,7 +42,7 @@ class AppServiceProvider extends ServiceProvider
 
         Feature::define('untested-frameworks', fn () => ['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs']);
 
-        Feature::define('untested-capabilities', fn () => ['dev-boxes', 'vps-to-managed', 'backups']);
+        Feature::define('untested-capabilities', fn () => ['dev-boxes', 'vps-to-managed', 'backups', 'mail', 'drive']);
 
         Feature::define('untested-dns-providers', fn () => ['route53', 'google']);
     }

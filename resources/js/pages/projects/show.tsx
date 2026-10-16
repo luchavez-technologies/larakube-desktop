@@ -29,6 +29,9 @@ import {
     GitBranch,
     Key,
     ShieldCheck,
+    ArrowUpCircle,
+    Square,
+    PowerOff,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
@@ -404,6 +407,12 @@ export default function ShowProject({
                                         <LocalClusterCard
                                             project={project}
                                             runs={runs}
+                                            healthMetrics={
+                                                healthMetrics?.local ?? null
+                                            }
+                                            podMetrics={
+                                                podMetrics?.local ?? null
+                                            }
                                         />
                                     )}
 
@@ -2818,10 +2827,16 @@ function EditorMenu({
 function LocalClusterCard({
     project,
     runs,
+    healthMetrics,
+    podMetrics,
 }: {
     project: Project;
     runs: RecentRun[];
+    healthMetrics?: HealthMetrics | null;
+    podMetrics?: PodMetrics | null;
 }) {
+    const [confirmDownOpen, setConfirmDownOpen] = useState(false);
+
     const activeLifecycle = runs.find(
         (run) =>
             [
@@ -2831,17 +2846,70 @@ function LocalClusterCard({
                 'stop-project',
             ].includes(run.kind ?? '') && run.status === 'running',
     );
+
+    const latestLifecycleRun = runs.find(
+        (run) =>
+            [
+                'up-project',
+                'down-project',
+                'start-project',
+                'stop-project',
+            ].includes(run.kind ?? '') &&
+            ['succeeded', 'running'].includes(run.status),
+    );
+
+    const isLiveUp = Boolean(healthMetrics?.isUp);
+    const hasActivePods = Boolean(
+        podMetrics?.available &&
+        Object.values(podMetrics.components ?? {}).some(
+            (c) => (c.podCount ?? 0) > 0,
+        ),
+    );
+
+    const status: 'running' | 'stopped' | 'down' | 'busy' = useMemo(() => {
+        if (activeLifecycle) return 'busy';
+        if (
+            latestLifecycleRun?.kind === 'down-project' &&
+            latestLifecycleRun?.status === 'succeeded'
+        ) {
+            return 'down';
+        }
+        if (
+            latestLifecycleRun?.kind === 'stop-project' &&
+            latestLifecycleRun?.status === 'succeeded'
+        ) {
+            return 'stopped';
+        }
+        if (isLiveUp || hasActivePods) {
+            return 'running';
+        }
+        if (
+            latestLifecycleRun?.kind === 'up-project' &&
+            latestLifecycleRun?.status === 'succeeded'
+        ) {
+            return 'running';
+        }
+
+        return 'down';
+    }, [activeLifecycle, latestLifecycleRun, isLiveUp, hasActivePods]);
+
     const effectiveTld =
         project.effectiveTld || project.localTld || project.globalTld || 'test';
     const domain = `${project.name}.${effectiveTld}`;
 
+    const isBusy = Boolean(activeLifecycle);
+    const canUp = !isBusy;
+    const canStart = !isBusy && status === 'stopped';
+    const canStop = !isBusy && status === 'running';
+    const canDown = !isBusy && (status === 'running' || status === 'stopped');
+
     return (
         <Card label="Local Development">
-            <div className="space-y-3.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-medium">
+                            <span className="font-mono text-sm font-semibold text-ink">
                                 https://{domain}
                             </span>
                             <ExternalLinkButton
@@ -2852,83 +2920,217 @@ function LocalClusterCard({
                                 <ExternalLink className="size-3" />
                             </ExternalLinkButton>
                         </div>
-                        <p className="text-xs text-soft">
+                        <p className="mt-0.5 text-xs text-soft">
                             Local cluster address (Traefik SSL)
                         </p>
                     </div>
-                    {activeLifecycle && (
-                        <Link
-                            href={showRun(activeLifecycle.id).url}
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
-                        >
-                            <span className="size-2 animate-ping rounded-full bg-brand" />
-                            {activeLifecycle.label}…
-                        </Link>
-                    )}
+
+                    {/* Status Badge */}
+                    <div className="flex items-center gap-2">
+                        {status === 'running' && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                                Running
+                            </span>
+                        )}
+                        {status === 'stopped' && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 ring-1 ring-amber-500/20 dark:text-amber-400">
+                                <span className="size-1.5 rounded-full bg-amber-500" />
+                                Stopped (Paused)
+                            </span>
+                        )}
+                        {status === 'down' && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-500/10 px-2.5 py-1 text-xs font-medium text-zinc-500 ring-1 ring-zinc-500/20 dark:text-zinc-400">
+                                <span className="size-1.5 rounded-full bg-zinc-400" />
+                                Down (Offline)
+                            </span>
+                        )}
+                        {status === 'busy' && activeLifecycle && (
+                            <Link
+                                href={showRun(activeLifecycle.id).url}
+                                className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand ring-1 ring-brand/20 hover:underline"
+                            >
+                                <span className="size-1.5 animate-ping rounded-full bg-brand" />
+                                {activeLifecycle.label}…
+                            </Link>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                    <Form action={up(project.id)}>
-                        {({ processing }) => (
-                            <Button
-                                type="submit"
-                                size="sm"
-                                disabled={
-                                    Boolean(activeLifecycle) || processing
-                                }
-                            >
-                                {processing ? 'Starting…' : 'Up / Rebuild'}
-                            </Button>
-                        )}
-                    </Form>
-                    <Form action={startLifecycle(project.id)}>
-                        {({ processing }) => (
-                            <Button
-                                type="submit"
-                                variant="secondary"
-                                size="sm"
-                                disabled={
-                                    Boolean(activeLifecycle) || processing
-                                }
-                            >
-                                Resume
-                            </Button>
-                        )}
-                    </Form>
-                    <Form action={stopLifecycle(project.id)}>
-                        {({ processing }) => (
-                            <Button
-                                type="submit"
-                                variant="secondary"
-                                size="sm"
-                                disabled={
-                                    Boolean(activeLifecycle) || processing
-                                }
-                            >
-                                Pause
-                            </Button>
-                        )}
-                    </Form>
-                    <Form action={down(project.id)}>
-                        {({ processing }) => (
-                            <Button
-                                type="submit"
-                                variant="ghost"
-                                size="sm"
-                                disabled={
-                                    Boolean(activeLifecycle) || processing
-                                }
-                            >
-                                Down
-                            </Button>
-                        )}
-                    </Form>
+                {/* Lifecycle Controls Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Up / Rebuild */}
+                        <Form action={up(project.id)}>
+                            {({ processing }) => (
+                                <Button
+                                    type="submit"
+                                    variant={
+                                        status === 'down'
+                                            ? 'primary'
+                                            : 'secondary'
+                                    }
+                                    size="sm"
+                                    disabled={!canUp || processing}
+                                    title={
+                                        status === 'running'
+                                            ? 'Re-orchestrate and restart containers on local cluster (larakube up)'
+                                            : 'Build and start local cluster workloads (larakube up)'
+                                    }
+                                >
+                                    <ArrowUpCircle className="size-3.5" />
+                                    <span>
+                                        {processing
+                                            ? 'Starting…'
+                                            : status === 'running'
+                                              ? 'Rebuild / Up'
+                                              : 'Up (Build & Run)'}
+                                    </span>
+                                </Button>
+                            )}
+                        </Form>
+
+                        {/* Start (Resume) */}
+                        <Form action={startLifecycle(project.id)}>
+                            {({ processing }) => (
+                                <Button
+                                    type="submit"
+                                    variant={
+                                        status === 'stopped'
+                                            ? 'primary'
+                                            : 'secondary'
+                                    }
+                                    size="sm"
+                                    disabled={!canStart || processing}
+                                    title={
+                                        status === 'running'
+                                            ? 'Workloads are already running'
+                                            : status === 'down'
+                                              ? 'Project is down. Run Up first.'
+                                              : 'Resume paused workloads (larakube start)'
+                                    }
+                                >
+                                    <Play className="size-3.5" />
+                                    <span>
+                                        {processing ? 'Starting…' : 'Start'}
+                                    </span>
+                                </Button>
+                            )}
+                        </Form>
+
+                        {/* Stop (Pause) */}
+                        <Form action={stopLifecycle(project.id)}>
+                            {({ processing }) => (
+                                <Button
+                                    type="submit"
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={!canStop || processing}
+                                    title={
+                                        status === 'stopped'
+                                            ? 'Workloads are already stopped'
+                                            : status === 'down'
+                                              ? 'Project is down'
+                                              : 'Pause workloads to save CPU & RAM (larakube stop)'
+                                    }
+                                >
+                                    <Square className="size-3.5" />
+                                    <span>
+                                        {processing ? 'Stopping…' : 'Stop'}
+                                    </span>
+                                </Button>
+                            )}
+                        </Form>
+                    </div>
+
+                    {/* Down (Destructive / Teardown) */}
+                    <div>
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            disabled={!canDown}
+                            onClick={() => setConfirmDownOpen(true)}
+                            title={
+                                status === 'down'
+                                    ? 'Local cluster environment is already down'
+                                    : 'Tear down local Kubernetes pods and services (larakube down)'
+                            }
+                        >
+                            <PowerOff className="size-3.5" />
+                            <span>Down</span>
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="border-t border-line pt-2.5">
                     <ProjectTldForm project={project} />
                 </div>
             </div>
+
+            {/* Confirmation Modal for Down */}
+            {confirmDownOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/20">
+                                <PowerOff className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Tear Down Local Environment?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    This will run{' '}
+                                    <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                        larakube down
+                                    </code>{' '}
+                                    to remove all Kubernetes pods, deployments,
+                                    services, and ingress for{' '}
+                                    <strong className="text-ink">
+                                        {project.name}
+                                    </strong>{' '}
+                                    on your local cluster.
+                                </p>
+                                <p className="mt-2 text-[11px] text-faint">
+                                    Your project files, source repository, and
+                                    database volumes remain safe and untouched.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setConfirmDownOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Form
+                                action={down(project.id)}
+                                onSubmit={() => setConfirmDownOpen(false)}
+                            >
+                                {({ processing }) => (
+                                    <Button
+                                        type="submit"
+                                        variant="dangerFill"
+                                        size="sm"
+                                        disabled={processing}
+                                    >
+                                        <PowerOff className="size-3.5" />
+                                        <span>
+                                            {processing
+                                                ? 'Tearing down…'
+                                                : 'Confirm Down'}
+                                        </span>
+                                    </Button>
+                                )}
+                            </Form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Card>
     );
 }

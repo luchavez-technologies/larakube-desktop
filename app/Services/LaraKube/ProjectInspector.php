@@ -224,10 +224,17 @@ class ProjectInspector
             };
         }
 
-        $hasWorkflow = file_exists("{$hostPath}/.github/workflows/deploy.yml")
+        // The CLI's own generator (ConfiguresCloudEnvironment::configureGha/
+        // configureForgejo) names each environment's workflow
+        // larakube-deploy-{environment}.yml, never a literal deploy.yml — the
+        // exact glob cloud:configure's own detector (InteractsWithPipelines)
+        // uses. A hardcoded single filename here always missed every real
+        // workflow the CLI has ever generated, showing "not configured" for
+        // projects that were deployed and working.
+        $hasWorkflow = (glob("{$hostPath}/.github/workflows/larakube-deploy-*.yml") ?: []) !== []
             || file_exists("{$hostPath}/.gitlab-ci.yml")
-            || file_exists("{$hostPath}/.forgejo/workflows/deploy.yml")
-            || file_exists("{$hostPath}/.gitea/workflows/deploy.yml");
+            || (glob("{$hostPath}/.forgejo/workflows/larakube-deploy-*.yml") ?: []) !== []
+            || (glob("{$hostPath}/.gitea/workflows/larakube-deploy-*.yml") ?: []) !== [];
 
         return [
             'remote' => $remote,

@@ -9,6 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
+import ExperimentalBadge from '@/components/experimental-badge';
 import MailEmptyState from './mail-empty-state';
 import MailboxesTab, { type AccountRow } from './mailboxes-tab';
 import DomainsTab, { type DomainRow } from './domains-tab';
@@ -219,6 +220,7 @@ export default function MailIndex({
                             <h1 className="text-xl font-bold tracking-tight text-ink">
                                 Mail Management
                             </h1>
+                            <ExperimentalBadge side="bottom" />
                             {isInstalled && (
                                 <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
                                     Stalwart Active

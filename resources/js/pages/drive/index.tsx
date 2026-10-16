@@ -14,6 +14,7 @@ import AppLayout from '@/layouts/app-layout';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
+import ExperimentalBadge from '@/components/experimental-badge';
 import ToolLogo from '@/components/tool-logo';
 import DriveEmptyState from './drive-empty-state';
 import OverviewTab from './overview-tab';
@@ -168,6 +169,7 @@ export default function DriveIndex({
                             <h1 className="text-xl font-bold tracking-tight text-ink">
                                 Drive Management
                             </h1>
+                            <ExperimentalBadge side="bottom" />
                             {isInstalled && (
                                 <span className="inline-flex items-center rounded-md bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-600 ring-1 ring-sky-500/20 dark:text-sky-400">
                                     ownCloud oCIS

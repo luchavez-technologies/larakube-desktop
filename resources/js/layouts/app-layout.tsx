@@ -93,15 +93,6 @@ const navigation: NavItem[] = [
         icon: Wrench,
     },
     {
-        label: 'Mail',
-        description: 'Email & mailboxes',
-        href: mail().url,
-        active: (url) =>
-            url.startsWith('/mail') || /^\/servers\/[^/]+\/mail/.test(url),
-        accent: 'bg-emerald-600',
-        icon: Mail,
-    },
-    {
         label: 'Plex Commons',
         description: 'Shared infrastructure',
         href: plex().url,
@@ -111,6 +102,16 @@ const navigation: NavItem[] = [
         icon: Layers,
     },
     {
+        label: 'Mail',
+        description: 'Email & mailboxes',
+        href: mail().url,
+        active: (url) =>
+            url.startsWith('/mail') || /^\/servers\/[^/]+\/mail/.test(url),
+        accent: 'bg-emerald-600',
+        icon: Mail,
+        experimental: true,
+    },
+    {
         label: 'Drive',
         description: 'Files & office suite',
         href: drive().url,
@@ -118,6 +119,7 @@ const navigation: NavItem[] = [
             url.startsWith('/drive') || /^\/servers\/[^/]+\/drive/.test(url),
         accent: 'bg-sky-600',
         icon: HardDrive,
+        experimental: true,
     },
     {
         label: 'Activity',
@@ -327,7 +329,7 @@ export default function AppLayout({
                     {visibleNavigation.map((item) => {
                         const active = item.active(url);
                         const Icon = item.icon;
-                        const tooltipText = `${item.label}${item.description ? ` · ${item.description}` : ''}`;
+                        const tooltipText = `${item.label}${item.description ? ` · ${item.description}` : ''}${item.experimental ? ' · Experimental' : ''}`;
 
                         const iconContent = (
                             <span
@@ -373,15 +375,12 @@ export default function AppLayout({
                                 <span className="min-w-0 leading-tight">
                                     <span className="flex flex-wrap items-center gap-1 text-sm font-medium">
                                         {item.label}
-                                        {item.label === 'Dev Boxes' &&
-                                            props.untested?.capabilities.includes(
-                                                'dev-boxes',
-                                            ) && (
-                                                <ExperimentalBadge
-                                                    compact
-                                                    side="right"
-                                                />
-                                            )}
+                                        {item.experimental && (
+                                            <ExperimentalBadge
+                                                compact
+                                                side="right"
+                                            />
+                                        )}
                                     </span>
                                     <span className="block text-xs text-soft">
                                         {item.description}

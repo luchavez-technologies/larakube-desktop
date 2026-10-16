@@ -9,7 +9,7 @@ test('ToolMaturity reports the tools, frameworks, and capabilities still being t
 
     expect($untested['tools'])->toBe(['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka'])
         ->and($untested['frameworks'])->toBe(['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs'])
-        ->and($untested['capabilities'])->toBe(['dev-boxes', 'vps-to-managed', 'backups'])
+        ->and($untested['capabilities'])->toBe(['dev-boxes', 'vps-to-managed', 'backups', 'mail', 'drive'])
         ->and($untested['dns_providers'])->toBe(['route53', 'google']);
 });
 
@@ -26,7 +26,7 @@ test('the untested list is shared on every page, the same way hideProjects and e
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('untested.tools', ['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka'])
             ->where('untested.frameworks', ['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs'])
-            ->where('untested.capabilities', ['dev-boxes', 'vps-to-managed', 'backups'])
+            ->where('untested.capabilities', ['dev-boxes', 'vps-to-managed', 'backups', 'mail', 'drive'])
             ->where('untested.dns_providers', ['route53', 'google'])
         );
 });

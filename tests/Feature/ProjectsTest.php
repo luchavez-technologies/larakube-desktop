@@ -842,7 +842,11 @@ test('project inspector detects git forge, workflow, and blueprint registry conf
     File::ensureDirectoryExists("{$sandbox['app']}/.git");
     File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = git@github.com:acme/cool-shop.git\n");
     File::ensureDirectoryExists("{$sandbox['app']}/.github/workflows");
-    File::put("{$sandbox['app']}/.github/workflows/deploy.yml", "name: Deploy\n");
+    // The CLI's real generated filename (ConfiguresCloudEnvironment), never
+    // a literal deploy.yml — this fixture used to use the wrong name and
+    // still passed, which is exactly how the ProjectInspector bug went
+    // undetected: the test and the code shared the same wrong assumption.
+    File::put("{$sandbox['app']}/.github/workflows/larakube-deploy-production.yml", "name: Deploy\n");
 
     File::put("{$sandbox['app']}/.larakube.json", json_encode([
         'name' => 'shop',
