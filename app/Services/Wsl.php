@@ -218,25 +218,31 @@ class Wsl
      * Non-destructive in-place update of LaraKube CLI and tools inside the WSL distro.
      * Preserves all user projects, files, and configurations in /home/larakube.
      *
+     * $channel must be threaded through explicitly — `larakube update` defaults to the
+     * stable channel with no flag at all, so a caller that wants canary (CliInstaller::channel())
+     * has to say so, or this silently updates a canary install back to stable.
+     *
      * @param  array{name: string, version: int}|null  $distro
      * @return array{ok: bool, message: string}
      */
-    public function update(?array $distro = null): array
+    public function update(?array $distro = null, ?string $channel = null): array
     {
         $distro ??= $this->distro();
         if ($distro === null) {
             return ['ok' => false, 'message' => 'LaraKube Linux is not installed yet.'];
         }
 
+        $updateArgs = $channel === 'canary' ? ['update', '--canary', '--yes'] : ['update', '--yes'];
+
         $updateCli = Process::timeout(300)->run([
             'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER,
-            '--', '/usr/local/bin/larakube', 'update', '--yes',
+            '--', '/usr/local/bin/larakube', ...$updateArgs,
         ]);
 
         if (! $updateCli->successful()) {
             $updateSudo = Process::timeout(300)->run([
                 'wsl.exe', '-d', WslDistro::NAME, '--user', 'root',
-                '--', '/usr/local/bin/larakube', 'update', '--yes',
+                '--', '/usr/local/bin/larakube', ...$updateArgs,
             ]);
 
             if (! $updateSudo->successful()) {

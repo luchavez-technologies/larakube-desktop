@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
@@ -10,7 +11,7 @@ use Throwable;
 /** The Windows first-run steps that create LaraKube Desktop's own WSL distro; the Setup page runs them one after another. */
 class WslSetupController extends Controller
 {
-    public function store(string $step, Wsl $wsl, ReadinessCheck $readiness): JsonResponse
+    public function store(string $step, Wsl $wsl, ReadinessCheck $readiness, CliInstaller $installer): JsonResponse
     {
         abort_unless($wsl->isWindows(), 404);
 
@@ -21,7 +22,7 @@ class WslSetupController extends Controller
                     : ['ok' => false, 'message' => 'WSL was not turned on. The administrator prompt may have been declined.'],
                 'download' => $wsl->download(),
                 'import' => $wsl->import(),
-                'update' => $wsl->update(),
+                'update' => $wsl->update(channel: $installer->channel()),
                 'backup' => $wsl->backupUserHome(),
                 'reset' => $wsl->reset(),
                 default => abort(404),
