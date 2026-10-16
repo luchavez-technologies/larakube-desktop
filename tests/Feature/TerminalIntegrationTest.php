@@ -51,3 +51,34 @@ test('setup terminal install route executes installation and redirects back', fu
     $terminal = new TerminalIntegration;
     expect($terminal->isConfigured())->toBeTrue();
 });
+
+test('uninstall removes export line from profile file and preserves other content', function () {
+    $terminal = new TerminalIntegration;
+    $profile = $terminal->profilePath();
+
+    File::put($profile, "export OTHER_VAR=1\n");
+    $terminal->install();
+
+    expect($terminal->isConfigured())->toBeTrue();
+
+    $result = $terminal->uninstall();
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['files'])->toContain($profile)
+        ->and($terminal->isConfigured())->toBeFalse()
+        ->and(File::get($profile))->toContain('export OTHER_VAR=1')
+        ->and(File::get($profile))->not->toContain(TerminalIntegration::EXPORT_LINE);
+});
+
+test('uninstall is safe and idempotent when profile does not contain export line', function () {
+    $terminal = new TerminalIntegration;
+    $profile = $terminal->profilePath();
+
+    File::put($profile, "export OTHER_VAR=1\n");
+
+    $result = $terminal->uninstall();
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['files'])->toBeEmpty()
+        ->and($terminal->isConfigured())->toBeFalse();
+});

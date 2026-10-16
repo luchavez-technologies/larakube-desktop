@@ -75,4 +75,51 @@ class TerminalIntegration
             'message' => "Added LaraKube bin directory to {$file}.",
         ];
     }
+
+    /**
+     * Remove the LaraKube bin directory export from all user shell configuration files.
+     *
+     * @return array{success: bool, files: list<string>, message: string}
+     */
+    public function uninstall(): array
+    {
+        $home = ToolLocator::home();
+        $candidates = [
+            "{$home}/.zshrc",
+            "{$home}/.bashrc",
+            "{$home}/.bash_profile",
+            "{$home}/.profile",
+        ];
+
+        $cleaned = [];
+        foreach ($candidates as $candidate) {
+            if (! File::exists($candidate)) {
+                continue;
+            }
+
+            $content = (string) File::get($candidate);
+            if (str_contains($content, '.larakube/bin')) {
+                // Remove with leading comment if present
+                $pattern = '/\n?# Added by LaraKube Desktop\n'.preg_quote(self::EXPORT_LINE, '/').'\n?/';
+                $newContent = preg_replace($pattern, "\n", $content);
+
+                // Fallback for standalone export line
+                if (is_string($newContent) && str_contains($newContent, self::EXPORT_LINE)) {
+                    $newContent = str_replace(self::EXPORT_LINE."\n", '', $newContent);
+                    $newContent = str_replace(self::EXPORT_LINE, '', $newContent);
+                }
+
+                File::put($candidate, trim((string) $newContent)."\n");
+                $cleaned[] = $candidate;
+            }
+        }
+
+        return [
+            'success' => true,
+            'files' => $cleaned,
+            'message' => count($cleaned) > 0
+                ? 'Removed LaraKube from shell profile configuration.'
+                : 'No shell configuration files needed updating.',
+        ];
+    }
 }
