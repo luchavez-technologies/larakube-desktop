@@ -51,7 +51,7 @@ import {
     show as showProject,
 } from '@/routes/projects';
 import { dns, index, terminal, tls } from '@/routes/servers';
-import { index as toolsIndex, show as showTool } from '@/routes/servers/tools';
+import { index as toolsIndex } from '@/routes/servers/tools';
 import BackupsCard from '@/pages/servers/backups-card';
 import PlexCommonsCard, { CheckingRow } from '@/components/plex-commons-card';
 import { providerLabels, toolName, toolTagline } from '@/types/larakube';
@@ -463,19 +463,14 @@ export default function ShowServer({
                                     const url = tool.url?.split(' ')[0] ?? null;
                                     const name = toolName(tool);
                                     const tagline = toolTagline(tool);
-                                    const href = showTool(
-                                        {
-                                            server: server.name,
-                                            tool: tool.tool,
+                                    const href = toolsIndex(server.name, {
+                                        query: {
+                                            manage: tool.tool,
+                                            ...(tool.host
+                                                ? { domain: tool.host }
+                                                : {}),
                                         },
-                                        tool.host
-                                            ? {
-                                                  query: {
-                                                      domain: tool.host,
-                                                  },
-                                              }
-                                            : undefined,
-                                    ).url;
+                                    }).url;
 
                                     return (
                                         <div

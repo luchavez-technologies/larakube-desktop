@@ -29,6 +29,7 @@ import ToolLogo from '@/components/tool-logo';
 import Redactable from '@/components/redactable';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
+import ManageToolDrawer from '@/components/manage-tool-drawer';
 import AppLayout from '@/layouts/app-layout';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
@@ -219,7 +220,21 @@ export default function ToolsIndex({
     const [installingTool, setInstallingTool] = useState<ClusterTool | null>(
         null,
     );
+    const [managingTool, setManagingTool] = useState<ClusterTool | null>(null);
     const [isNewInstance, setIsNewInstance] = useState(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const manageSlug = params.get('manage') || params.get('tool');
+        if (manageSlug && tools) {
+            const found =
+                tools.find((t) => t.tool === manageSlug && t.installed) ??
+                tools.find((t) => t.tool === manageSlug);
+            if (found && found.installed) {
+                setManagingTool(found);
+            }
+        }
+    }, [tools]);
 
     const handleAddInstance = (tool: ClusterTool) => {
         setInstallingTool(tool);
@@ -612,6 +627,7 @@ export default function ToolsIndex({
                                                 activeCommonsServices ?? []
                                             }
                                             onAddInstance={handleAddInstance}
+                                            onManage={setManagingTool}
                                             onCategoryClick={
                                                 setSelectedCategory
                                             }
@@ -698,10 +714,6 @@ export default function ToolsIndex({
                                                             tool.url?.split(
                                                                 ' ',
                                                             )[0] ?? null;
-                                                        const href = detailUrl(
-                                                            server,
-                                                            tool,
-                                                        );
 
                                                         return (
                                                             <tr
@@ -718,16 +730,19 @@ export default function ToolsIndex({
                                                                         />
                                                                         <div className="flex min-w-0 flex-col">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                <Link
-                                                                                    href={
-                                                                                        href
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() =>
+                                                                                        setManagingTool(
+                                                                                            tool,
+                                                                                        )
                                                                                     }
-                                                                                    className="font-semibold text-ink hover:underline"
+                                                                                    className="cursor-pointer text-left font-semibold text-ink hover:underline"
                                                                                 >
                                                                                     {
                                                                                         name
                                                                                     }
-                                                                                </Link>
+                                                                                </button>
                                                                             </div>
                                                                             <span className="max-w-[220px] truncate text-xs text-soft">
                                                                                 {
@@ -878,18 +893,21 @@ export default function ToolsIndex({
                                                                                 </span>
                                                                             </button>
                                                                         )}
-                                                                        <Link
-                                                                            href={
-                                                                                href
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                setManagingTool(
+                                                                                    tool,
+                                                                                )
                                                                             }
-                                                                            className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+                                                                            className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-brand hover:underline"
                                                                             aria-label={`Manage ${name}`}
                                                                         >
                                                                             <span>
                                                                                 Manage
                                                                             </span>
                                                                             <ArrowRight className="size-3.5" />
-                                                                        </Link>
+                                                                        </button>
                                                                     </div>
                                                                 </td>
                                                             </tr>
@@ -1131,6 +1149,15 @@ export default function ToolsIndex({
                     }}
                 />
             )}
+
+            {managingTool && (
+                <ManageToolDrawer
+                    server={server}
+                    tool={managingTool}
+                    onClose={() => setManagingTool(null)}
+                    onDeployAnother={handleAddInstance}
+                />
+            )}
         </AppLayout>
     );
 }
@@ -1230,12 +1257,14 @@ function InstalledCard({
     tool,
     activeCommonsServices,
     onAddInstance,
+    onManage,
     onCategoryClick,
 }: {
     server: Server;
     tool: ClusterTool;
     activeCommonsServices?: string[];
     onAddInstance?: (tool: ClusterTool) => void;
+    onManage?: (tool: ClusterTool) => void;
     onCategoryClick?: (category: string) => void;
 }) {
     const { untested } = usePage<{ untested: Untested }>().props;
@@ -1255,12 +1284,22 @@ function InstalledCard({
                         <ToolLogo tool={tool} size="lg" />
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                                <Link
-                                    href={href}
-                                    className="truncate text-[15px] font-semibold text-ink hover:underline"
-                                >
-                                    {name}
-                                </Link>
+                                {onManage ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onManage(tool)}
+                                        className="cursor-pointer truncate text-left text-[15px] font-semibold text-ink hover:underline"
+                                    >
+                                        {name}
+                                    </button>
+                                ) : (
+                                    <Link
+                                        href={href}
+                                        className="truncate text-[15px] font-semibold text-ink hover:underline"
+                                    >
+                                        {name}
+                                    </Link>
+                                )}
                                 {untested.tools.includes(tool.tool) && (
                                     <ExperimentalBadge />
                                 )}
@@ -1365,13 +1404,32 @@ function InstalledCard({
                         <ArrowUpCircle className="size-3.5" />
                         <span>Update</span>
                     </button>
-                    <Link
-                        href={href}
-                        className={buttonClass('secondary', 'sm', 'h-8 px-3')}
-                    >
-                        <Settings2 className="size-3.5" />
-                        <span>Manage</span>
-                    </Link>
+                    {onManage ? (
+                        <button
+                            type="button"
+                            onClick={() => onManage(tool)}
+                            className={buttonClass(
+                                'secondary',
+                                'sm',
+                                'h-8 px-3 cursor-pointer',
+                            )}
+                        >
+                            <Settings2 className="size-3.5" />
+                            <span>Manage</span>
+                        </button>
+                    ) : (
+                        <Link
+                            href={href}
+                            className={buttonClass(
+                                'secondary',
+                                'sm',
+                                'h-8 px-3',
+                            )}
+                        >
+                            <Settings2 className="size-3.5" />
+                            <span>Manage</span>
+                        </Link>
+                    )}
                 </div>
             </div>
         </article>
