@@ -44,7 +44,9 @@ enum RunKind: string
     case RebindClusterTool = 'rebind-cluster-tool';
     case QuickLaunchApp = 'quick-launch-app';
     case ConnectDomain = 'connect-domain';
+    case DisconnectDomain = 'disconnect-domain';
     case EnableSsl = 'enable-ssl';
+    case PruneTls = 'prune-tls';
     /** A brand-new app scaffolded by one of the CLI's `*:new` commands. */
     case NewProject = 'new-project';
     case CloneProject = 'clone-project';
@@ -117,7 +119,7 @@ enum RunKind: string
 
     public function changesClusterTools(): bool
     {
-        return in_array($this, [self::InstallClusterTool, self::RemoveClusterTool, self::RebindClusterTool, self::ConnectDomain, self::QuickLaunchApp], true);
+        return in_array($this, [self::InstallClusterTool, self::RemoveClusterTool, self::RebindClusterTool, self::ConnectDomain, self::DisconnectDomain, self::QuickLaunchApp], true);
     }
 
     public function changesMail(): bool

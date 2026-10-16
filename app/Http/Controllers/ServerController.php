@@ -319,6 +319,56 @@ class ServerController extends Controller
         return to_route('runs.show', $run);
     }
 
+    public function disconnectDomain(Request $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $request->validate([
+            'group' => ['required', 'string'],
+        ]);
+
+        $group = (string) $request->input('group');
+        $context = $this->readyContext($server, $catalog);
+
+        $run = $runner->start(
+            label: "Disconnect domain group '{$group}' from {$server}",
+            arguments: ['external-dns:remove', 'production', "--group={$group}", "--context={$context}", '--force'],
+            kind: RunKind::DisconnectDomain,
+            subject: $server,
+            meta: [
+                'server' => $server,
+                'context' => $context,
+                'group' => $group,
+            ],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    public function pruneTls(Request $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $context = $this->readyContext($server, $catalog);
+
+        $run = $runner->start(
+            label: "Prune unused SSL certificates on {$server}",
+            arguments: ['tls:prune', 'production', "--context={$context}", '--force'],
+            kind: RunKind::PruneTls,
+            subject: $server,
+            meta: [
+                'server' => $server,
+                'context' => $context,
+            ],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     private function readyContext(string $server, StackCatalog $catalog): string
     {
         $stack = $catalog->find($server);

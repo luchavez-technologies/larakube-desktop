@@ -132,14 +132,14 @@ class RecordRunOutput
             }
         }
 
-        if ($context !== null && $run->kind === RunKind::ConnectDomain) {
+        if ($context !== null && in_array($run->kind, [RunKind::ConnectDomain, RunKind::DisconnectDomain], true)) {
             app(ClusterStatus::class)->forgetDns($context);
 
             if ($server !== null) {
                 SyncServerDomainsJob::dispatch($server->id);
             }
 
-            if (($run->meta['also_enable_tls'] ?? '0') === '1' && $status === RunStatus::Succeeded) {
+            if ($run->kind === RunKind::ConnectDomain && ($run->meta['also_enable_tls'] ?? '0') === '1' && $status === RunStatus::Succeeded) {
                 $runner = app(CliRunner::class);
                 $serverName = $run->meta['server'] ?? ($server !== null ? $server->name : 'server');
                 $provider = $run->meta['provider'] ?? 'cloudflare';
@@ -160,7 +160,7 @@ class RecordRunOutput
             }
         }
 
-        if ($context !== null && $run->kind === RunKind::EnableSsl) {
+        if ($context !== null && in_array($run->kind, [RunKind::EnableSsl, RunKind::PruneTls], true)) {
             app(ClusterStatus::class)->forgetTls($context);
             app(ClusterStatus::class)->forgetDns($context);
 

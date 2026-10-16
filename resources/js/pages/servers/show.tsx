@@ -78,6 +78,7 @@ type TlsReport = {
     provider?: string;
     zones?: string[];
     cannotRenew?: string[];
+    unusedCertificates?: string[];
 };
 type Dialog =
     | 'destroy'
@@ -272,6 +273,7 @@ export default function ShowServer({
                             fallback={<CheckingRow title="Connect a domain" />}
                         >
                             <DomainRow
+                                server={server}
                                 groups={dnsGroups}
                                 disabled={!ready}
                                 onSetUp={() => setDialog('domain')}
@@ -284,6 +286,7 @@ export default function ShowServer({
                             }
                         >
                             <SslRow
+                                server={server}
                                 report={tlsReport}
                                 disabled={!ready}
                                 onEnable={() => setDialog('ssl')}
@@ -930,14 +933,34 @@ function NodeMetricsCard({ metrics }: { metrics?: NodeMetrics | null }) {
 }
 
 function DomainRow({
+    server,
     groups,
     disabled,
     onSetUp,
 }: {
+    server: Server;
     groups?: DnsGroup[] | null;
     disabled: boolean;
     onSetUp: () => void;
 }) {
+    const [disconnecting, setDisconnecting] = useState<string | null>(null);
+
+    const handleDisconnect = (group: DnsGroup) => {
+        if (
+            !confirm(
+                `Disconnect domain group "${group.group}" from ${server.name}?\n\nDNS reconciliation will stop for: ${group.zones.join(', ')}.\n\nExisting records in Cloudflare will not be deleted.`,
+            )
+        ) {
+            return;
+        }
+
+        setDisconnecting(group.group);
+        router.delete(`/servers/${server.name}/dns`, {
+            data: { group: group.group },
+            onFinish: () => setDisconnecting(null),
+        });
+    };
+
     if (!groups || groups.length === 0) {
         return (
             <ListRow
@@ -1019,6 +1042,19 @@ function DomainRow({
                                 Starting up…
                             </StatusPill>
                         )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={disabled || disconnecting === group.group}
+                            onClick={() => handleDisconnect(group)}
+                            title={`Disconnect ${group.group}`}
+                            className="text-soft hover:text-red-500"
+                        >
+                            <Trash2 className="size-3.5" />
+                            <span className="sr-only">
+                                Disconnect {group.group}
+                            </span>
+                        </Button>
                     </li>
                 ))}
             </ul>
@@ -1027,17 +1063,40 @@ function DomainRow({
 }
 
 function SslRow({
+    server,
     report,
     disabled,
     onEnable,
 }: {
+    server: Server;
     report?: TlsReport | null;
     disabled: boolean;
     onEnable: () => void;
 }) {
     const blocked = report?.cannotRenew ?? [];
+    const unused = report?.unusedCertificates ?? [];
     const enabled = report?.challenge === 'dns';
     const providerLabel = dnsProviderLabel(report?.provider);
+    const [pruning, setPruning] = useState(false);
+
+    const handlePrune = () => {
+        if (
+            !confirm(
+                `Prune ${unused.length} unused certificate(s) from Traefik on ${server.name}?\n\n• ${unused.join('\n• ')}\n\nTraefik will restart briefly while the certificate store is updated.`,
+            )
+        ) {
+            return;
+        }
+
+        setPruning(true);
+        router.post(
+            `/servers/${server.name}/tls/prune`,
+            {},
+            {
+                onFinish: () => setPruning(false),
+            },
+        );
+    };
 
     return (
         <div className="border-t border-line py-2.5">
@@ -1091,6 +1150,26 @@ function SslRow({
                     These can't renew because they're outside {providerLabel}'s
                     managed domains: {blocked.join(', ')}.
                 </p>
+            )}
+            {unused.length > 0 && (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2 text-xs text-soft">
+                    <span>
+                        Unused certificate{unused.length > 1 ? 's' : ''} in
+                        Traefik:{' '}
+                        <span className="font-mono text-ink">
+                            {unused.join(', ')}
+                        </span>
+                    </span>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={disabled || pruning}
+                        onClick={handlePrune}
+                    >
+                        <Trash2 className="size-3.5" />
+                        <span>{pruning ? 'Pruning…' : 'Prune'}</span>
+                    </Button>
+                </div>
             )}
         </div>
     );

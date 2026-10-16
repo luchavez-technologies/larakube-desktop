@@ -537,3 +537,37 @@ test('the servers list enriches servers with managed ExternalDNS domains from da
 
     File::deleteDirectory($bin);
 });
+
+test('disconnecting a domain group starts external-dns:remove run', function () {
+    $bin = serversFakeCli();
+    $fake = ChildProcess::fake();
+    serversFakeStacks();
+
+    $response = $this->delete(route('servers.dns.disconnect', 'workshop-demo'), [
+        'group' => 'company-domains',
+    ]);
+
+    $response->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'external-dns:remove', 'production', '--group=company-domains', '--context=larakube-203.0.113.21', '--force', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
+test('pruning unused TLS certificates starts tls:prune run', function () {
+    $bin = serversFakeCli();
+    $fake = ChildProcess::fake();
+    serversFakeStacks();
+
+    $response = $this->post(route('servers.tls.prune', 'workshop-demo'));
+
+    $response->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'tls:prune', 'production', '--context=larakube-203.0.113.21', '--force', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
