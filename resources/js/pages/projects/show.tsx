@@ -32,10 +32,11 @@ import {
     ArrowUpCircle,
     Square,
     PowerOff,
-    Check,
+    Save,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
+import HostPicker from '@/components/host-picker';
 import BackingServicesCard from '@/components/backing-services-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
@@ -919,7 +920,7 @@ function CloudEnvironmentOverviewCard({
                                     onClick={() =>
                                         setShowEditHost(!showEditHost)
                                     }
-                                    className="text-[11px] text-soft hover:text-ink"
+                                    className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                 >
                                     {showEditHost ? 'Cancel' : 'Edit'}
                                 </button>
@@ -965,10 +966,11 @@ function CloudEnvironmentOverviewCard({
                         )}
 
                         {showEditHost && (
-                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2">
+                            <div className="mt-2.5 rounded-lg border border-line bg-surface p-2.5">
                                 <HostForm
                                     project={project}
                                     serverIp={activeServer?.ip ?? null}
+                                    serverName={activeServer?.name ?? null}
                                     disabled={!project.initialized}
                                     environment={activeEnv}
                                     currentHost={activeHost}
@@ -1787,6 +1789,7 @@ function DeployDialog({
                         <HostForm
                             project={project}
                             serverIp={activeServer?.ip ?? null}
+                            serverName={activeServer?.name ?? null}
                             disabled={!project.initialized}
                             environment={activeEnv}
                             currentHost={activeHost}
@@ -2392,17 +2395,21 @@ function LinkServerForm({
 function HostForm({
     project,
     serverIp,
+    serverName,
     disabled,
     environment = 'production',
     currentHost,
     domains,
+    onSuccess,
 }: {
     project: Project;
     serverIp: string | null;
+    serverName?: string | null;
     disabled: boolean;
     environment?: string;
     currentHost?: string | null;
     domains?: ServerDomain[] | null;
+    onSuccess?: () => void;
 }) {
     const [value, setValue] = useState(currentHost ?? project.webHost ?? '');
     const [justSaved, setJustSaved] = useState(false);
@@ -2415,16 +2422,9 @@ function HostForm({
     // than setting one for the first time: the old address doesn't get
     // touched automatically (no redirect, DNS record untouched), and Saving
     // here only rewrites the blueprint — it takes a Deploy afterward to
-    // actually create the new Ingress/TLS cert. Only shown once there's a
-    // real previous host to move away from, so first-time setup keeps the
-    // plain DNS hint below instead of this longer sequence.
+    // actually create the new Ingress/TLS cert.
     const isChangingLiveHost = Boolean(currentHost) && value !== currentHost;
 
-    // The zone this host falls under, if any — same suffix match the Cluster
-    // Tools install drawer uses (exact match or a subdomain of a known zone).
-    // Only an ExternalDNS-managed zone means the record creates itself once
-    // this host's Ingress deploys; a TLS-only or Ingress-only zone still
-    // needs the manual DNS step below.
     const matchedZone = useMemo(() => {
         if (!domains || value === '') return null;
         return (
@@ -2439,8 +2439,11 @@ function HostForm({
     return (
         <Form
             action={setHost(project.id)}
-            className="space-y-1.5"
-            onSuccess={() => setJustSaved(true)}
+            className="space-y-2.5"
+            onSuccess={() => {
+                setJustSaved(true);
+                onSuccess?.();
+            }}
         >
             {({ errors, processing }) => (
                 <>
@@ -2449,57 +2452,34 @@ function HostForm({
                         name="environment"
                         value={environment}
                     />
-                    <div className="flex items-center gap-2.5">
-                        <input
-                            name="host"
-                            value={value}
-                            onChange={(event) => {
-                                setJustSaved(false);
-                                setValue(
-                                    event.target.value.trim().toLowerCase(),
-                                );
-                            }}
-                            placeholder={
-                                environment === 'production'
-                                    ? 'app.example.com'
-                                    : `${environment}.example.com`
-                            }
-                            disabled={disabled}
-                            spellCheck={false}
-                            className="w-72 rounded-lg border-0 px-3 py-1.5 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers disabled:opacity-45"
-                        />
-                        <Button
-                            type="submit"
-                            variant="secondary"
-                            size="sm"
-                            disabled={
-                                disabled ||
-                                processing ||
-                                value === '' ||
-                                value === (currentHost ?? '')
-                            }
-                        >
-                            {processing ? 'Saving…' : 'Save'}
-                        </Button>
-                    </div>
-                    {errors.host ? (
+
+                    <HostPicker
+                        name="host"
+                        value={value}
+                        defaultValue={currentHost}
+                        onChange={(resolvedHost) => {
+                            setJustSaved(false);
+                            setValue(resolvedHost);
+                        }}
+                        domains={domains}
+                        serverName={serverName}
+                        serverIp={serverIp}
+                        defaultSubdomain={project.name
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, '')}
+                        disabled={disabled || processing}
+                        isLocal={
+                            serverIp === '127.0.0.1' ||
+                            serverIp === 'localhost' ||
+                            serverIp === 'local' ||
+                            !serverIp
+                        }
+                    />
+
+                    {errors.host && (
                         <p className="text-xs text-accent">{errors.host}</p>
-                    ) : matchedZone ? (
-                        <p className="inline-flex items-center gap-1 text-xs font-medium text-ok">
-                            <Check className="size-3" /> DNS is managed
-                            automatically through ExternalDNS on{' '}
-                            {matchedZone.dnsProvider === 'route53'
-                                ? 'Route 53'
-                                : 'Cloudflare'}{' '}
-                            — no DNS action needed.
-                        </p>
-                    ) : (
-                        <p className="text-xs text-soft">
-                            Point this name&rsquo;s DNS at{' '}
-                            {serverIp ?? 'your server'} (or connect a domain on
-                            the server page).
-                        </p>
                     )}
+
                     {!errors.host && isChangingLiveHost && (
                         <p className="rounded-md bg-paper px-2.5 py-2 text-xs text-soft ring-1 ring-line/60">
                             {justSaved ? (
@@ -2540,6 +2520,26 @@ function HostForm({
                             yourself.
                         </p>
                     )}
+
+                    <div className="flex items-center justify-end pt-1">
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={
+                                disabled ||
+                                processing ||
+                                value === '' ||
+                                value === (currentHost ?? '')
+                            }
+                        >
+                            {processing ? (
+                                <RotateCw className="size-3 animate-spin" />
+                            ) : (
+                                <Save className="size-3" />
+                            )}
+                            <span>{processing ? 'Saving…' : 'Save'}</span>
+                        </Button>
+                    </div>
                 </>
             )}
         </Form>
