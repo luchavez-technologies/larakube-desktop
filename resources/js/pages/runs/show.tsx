@@ -86,10 +86,36 @@ function backLink(run: Run): { href: string; label: string } {
         case 'destroy-server':
             return { href: serversIndex().url, label: 'Servers' };
         case 'restart-server':
+        case 'repair-server':
+        case 'resize-server':
         case 'connect-domain':
+        case 'disconnect-domain':
         case 'enable-ssl':
+        case 'prune-tls':
         case 'cluster-grant':
         case 'cluster-revoke':
+        case 'backup-init':
+        case 'backup-schedule':
+        case 'backup-unschedule':
+        case 'backup-run':
+        case 'backup-check':
+        case 'backup-restore':
+        case 'backup-prune':
+        case 'mail-deploy':
+        case 'mail-create-account':
+        case 'mail-delete-account':
+        case 'mail-reset-password':
+        case 'mail-sync-sso':
+        case 'mail-add-domain':
+        case 'mail-configure-relay':
+        case 'mail-send-test':
+        case 'drive-deploy':
+        case 'drive-office-deploy':
+        case 'drive-install-extension':
+        case 'drive-uninstall-extension':
+        case 'drive-restart':
+        case 'drive-remove':
+        case 'rebind-cluster-tool':
             return server
                 ? { href: showServer(server).url, label: server }
                 : { href: serversIndex().url, label: 'Servers' };
@@ -102,6 +128,9 @@ function backLink(run: Run): { href: string; label: string } {
         case 'install-tool':
             return { href: readiness().url, label: 'Setup' };
         default:
+            if (server) {
+                return { href: showServer(server).url, label: server };
+            }
             return { href: runsIndex().url, label: 'Activity' };
     }
 }
@@ -130,6 +159,7 @@ export default function ShowRun({ run }: { run: Run }) {
         run.kind === 'create-server' && run.meta?.targetKind === 'managed';
     const isCreate = run.kind === 'create-server' || isDevBox;
     const server = run.meta?.server ?? run.serverName ?? null;
+    const tool = run.meta?.tool ?? run.tool ?? run.subject ?? null;
     // Celebrated more broadly than isCreate's card-rendering scope — a
     // cloned project gets no special card here at all, but it's still
     // something just got created, so it still earns the confetti.
@@ -250,7 +280,14 @@ export default function ShowRun({ run }: { run: Run }) {
                     )}
                     {!running &&
                         (run.kind === 'cluster-grant' ||
-                            run.kind === 'cluster-revoke') &&
+                            run.kind === 'cluster-revoke' ||
+                            run.kind === 'restart-server' ||
+                            run.kind === 'repair-server' ||
+                            run.kind === 'resize-server' ||
+                            run.kind === 'connect-domain' ||
+                            run.kind === 'disconnect-domain' ||
+                            run.kind === 'enable-ssl' ||
+                            run.kind === 'prune-tls') &&
                         server && (
                             <Link
                                 href={showServer(server).url}
@@ -258,6 +295,62 @@ export default function ShowRun({ run }: { run: Run }) {
                             >
                                 <ArrowLeft className="size-4" />
                                 <span>Back to {server}</span>
+                            </Link>
+                        )}
+                    {!running &&
+                        run.kind === 'rebind-cluster-tool' &&
+                        server && (
+                            <>
+                                {tool && (
+                                    <Link
+                                        href={
+                                            toolsIndex(server, {
+                                                query: {
+                                                    manage: tool,
+                                                    ...(typeof run.meta
+                                                        ?.new_host === 'string'
+                                                        ? {
+                                                              domain: run.meta
+                                                                  .new_host,
+                                                          }
+                                                        : typeof run.meta
+                                                                ?.current_host ===
+                                                            'string'
+                                                          ? {
+                                                                domain: run.meta
+                                                                    .current_host,
+                                                            }
+                                                          : {}),
+                                                },
+                                            }).url
+                                        }
+                                        className={buttonClass('secondary')}
+                                    >
+                                        <Wrench className="size-4" />
+                                        <span>
+                                            Back to {run.targetName || tool}
+                                        </span>
+                                    </Link>
+                                )}
+                                <Link
+                                    href={toolsIndex(server).url}
+                                    className={buttonClass('secondary')}
+                                >
+                                    <ArrowLeft className="size-4" />
+                                    <span>Tools on {server}</span>
+                                </Link>
+                            </>
+                        )}
+                    {!running &&
+                        (run.kind === 'install-cluster-tool' ||
+                            run.kind === 'remove-cluster-tool') &&
+                        server && (
+                            <Link
+                                href={toolsIndex(server).url}
+                                className={buttonClass('secondary')}
+                            >
+                                <ArrowLeft className="size-4" />
+                                <span>Tools on {server}</span>
                             </Link>
                         )}
                 </div>
@@ -295,6 +388,10 @@ export default function ShowRun({ run }: { run: Run }) {
                 (run.kind === 'quick-launch-app' ||
                     run.kind === 'install-cluster-tool') && (
                     <AppReadyCard run={run} />
+                )}
+            {run.status === 'succeeded' &&
+                run.kind === 'rebind-cluster-tool' && (
+                    <ToolReboundCard run={run} />
                 )}
             {run.status === 'failed' && (
                 <Card tone="error" className="mb-4">
@@ -829,6 +926,153 @@ function AppReadyCard({ run }: { run: Run }) {
                         </p>
                     </div>
                 )}
+            </div>
+        </Card>
+    );
+}
+
+function ToolReboundCard({ run }: { run: Run }) {
+    const tool = run.meta?.tool ?? run.tool ?? run.subject ?? 'tool';
+    const appName = run.targetName || (tool ? String(tool) : 'Tool');
+    const newHost =
+        (run.meta?.new_host as string) ||
+        (run.meta?.host as string) ||
+        (run.meta?.domain as string) ||
+        null;
+    const currentHost = (run.meta?.current_host as string) || null;
+    const serverName = run.serverName || (run.meta?.server as string) || null;
+    const wireSso = Boolean(
+        run.meta?.wire_sso === '1' ||
+        run.meta?.wire_sso === true ||
+        run.meta?.wire_sso === 1,
+    );
+    const url = newHost
+        ? newHost.startsWith('http')
+            ? newHost
+            : `https://${newHost}`
+        : null;
+
+    const openInBrowser = () => {
+        if (!url) return;
+        void openExternalUrl(url);
+    };
+
+    return (
+        <Card className="mb-4 divide-y divide-line p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-ok/10 text-ok">
+                        <Check className="size-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-ink">
+                                {appName} Rebound Successfully
+                            </h3>
+                            <StatusPill tone="ok">Rebound</StatusPill>
+                        </div>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Routing and ingress updated to{' '}
+                            {newHost ? (
+                                <strong className="text-ink">{newHost}</strong>
+                            ) : (
+                                'new domain'
+                            )}
+                            {serverName ? ` on ${serverName}` : ''}.
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    {serverName && (
+                        <Link
+                            href={
+                                toolsIndex(serverName, {
+                                    query: {
+                                        manage: tool,
+                                        ...(newHost
+                                            ? { domain: newHost }
+                                            : currentHost
+                                              ? { domain: currentHost }
+                                              : {}),
+                                    },
+                                }).url
+                            }
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            <Wrench className="size-3.5" />
+                            <span>Manage {appName}</span>
+                        </Link>
+                    )}
+                    {serverName && (
+                        <Link
+                            href={toolsIndex(serverName).url}
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            <ArrowLeft className="size-3.5" />
+                            <span>Tools on {serverName}</span>
+                        </Link>
+                    )}
+                    {url && (
+                        <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            onClick={openInBrowser}
+                        >
+                            <ExternalLink className="size-3.5" />
+                            <span>Open {appName}</span>
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2">
+                {url && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Active Live URL
+                        </span>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-ink select-all">
+                                {url}
+                            </span>
+                            <CopyButton value={url} />
+                        </div>
+                    </div>
+                )}
+
+                {currentHost && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Previous Domain
+                        </span>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-mono text-xs text-soft line-through select-all">
+                                {currentHost}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {serverName && (
+                    <div>
+                        <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                            Target Server
+                        </span>
+                        <p className="mt-1 text-xs font-medium text-ink">
+                            {serverName}
+                        </p>
+                    </div>
+                )}
+
+                <div>
+                    <span className="block text-[11px] font-medium tracking-wider text-soft uppercase">
+                        SSO Wiring
+                    </span>
+                    <p className="mt-1 text-xs font-medium text-ink">
+                        {wireSso ? 'Configured & Synced' : 'Unchanged'}
+                    </p>
+                </div>
             </div>
         </Card>
     );

@@ -1336,7 +1336,8 @@ function ConfigureDnsTlsDialog({
                                                   : 'Connect a domain'}
                                         </h3>
                                         <p className="text-xs text-soft">
-                                            {server.name} ({server.ip})
+                                            {server.name}
+                                            {server.ip ? ` (${server.ip})` : ''}
                                         </p>
                                     </div>
                                 </div>
