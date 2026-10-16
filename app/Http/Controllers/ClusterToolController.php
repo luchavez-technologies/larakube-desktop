@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Http\Requests\InstallClusterToolRequest;
+use App\Http\Requests\RebindClusterToolRequest;
 use App\Http\Requests\RemoveClusterToolRequest;
 use App\Models\Run;
 use App\Models\Server;
@@ -268,6 +269,54 @@ class ClusterToolController extends Controller
             kind: RunKind::RemoveClusterTool,
             subject: $tool,
             meta: ['server' => $server, 'context' => $context, 'tool' => $tool, 'host' => $host ?? ''],
+            targetType: 'tool',
+            targetName: $displayName,
+            serverName: $server,
+            context: $context,
+            tool: $tool,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    public function rebind(RebindClusterToolRequest $request, string $server, string $tool): RedirectResponse
+    {
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $currentHost = $request->string('current_host')->trim()->toString();
+        $newHost = $request->string('new_host')->trim()->toString();
+        $instance = $request->string('instance')->trim()->toString();
+
+        $row = $this->tools->find($context, $tool, $currentHost !== '' ? $currentHost : ($instance !== '' ? $instance : null));
+        abort_if($row === null || ! ($row['installed'] ?? false), 404);
+
+        $displayName = $this->displayName($row);
+        $wireSso = $request->boolean('wire_sso');
+
+        $arguments = [
+            'tool:rebind',
+            'production',
+            "--tool={$tool}",
+            "--domain={$currentHost}",
+            "--to={$newHost}",
+            "--context={$context}",
+            $wireSso ? '--wire-sso' : '--no-wire-sso',
+            '--force',
+        ];
+
+        $run = app(CliRunner::class)->start(
+            label: "Rebind {$displayName} on {$server} to {$newHost}",
+            arguments: $arguments,
+            kind: RunKind::RebindClusterTool,
+            subject: $tool,
+            meta: [
+                'server' => $server,
+                'context' => $context,
+                'tool' => $tool,
+                'current_host' => $currentHost,
+                'new_host' => $newHost,
+                'wire_sso' => $wireSso ? '1' : '0',
+            ],
             targetType: 'tool',
             targetName: $displayName,
             serverName: $server,

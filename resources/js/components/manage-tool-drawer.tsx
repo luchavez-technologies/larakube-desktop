@@ -13,6 +13,7 @@ import {
     Mail,
     Key,
     Server,
+    ArrowRightLeft,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
@@ -20,10 +21,11 @@ import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import CopyButton from '@/components/copy-button';
 import QrCodePopover from '@/components/qr-code-popover';
+import HostPicker from '@/components/host-picker';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
-import { destroy } from '@/routes/servers/tools';
+import { destroy, rebind } from '@/routes/servers/tools';
 import {
     toolName,
     toolTagline,
@@ -33,6 +35,7 @@ import {
 import type {
     ClusterTool,
     Server as StackServer,
+    ServerDomain,
     Wiring,
 } from '@/types/larakube';
 
@@ -54,6 +57,8 @@ function WiringPill({ value }: { value: Wiring }) {
 export type ManageToolDrawerProps = {
     server: StackServer;
     tool: ClusterTool;
+    domains?: ServerDomain[] | null;
+    serverIp?: string | null;
     onClose: () => void;
     onDeployAnother?: (tool: ClusterTool) => void;
 };
@@ -61,6 +66,8 @@ export type ManageToolDrawerProps = {
 export default function ManageToolDrawer({
     server,
     tool,
+    domains,
+    serverIp,
     onClose,
     onDeployAnother,
 }: ManageToolDrawerProps) {
@@ -70,6 +77,9 @@ export default function ManageToolDrawer({
     const [isRemoving, setIsRemoving] = useState(false);
     const [typedConfirm, setTypedConfirm] = useState('');
     const [purge, setPurge] = useState(false);
+    const [isRebinding, setIsRebinding] = useState(false);
+    const [newHost, setNewHost] = useState('');
+    const [wireSso, setWireSso] = useState(tool.sso === 'wired');
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => setSlidIn(true));
@@ -225,26 +235,228 @@ export default function ManageToolDrawer({
                         </div>
                         <div className="space-y-3 text-xs">
                             {url ? (
-                                <div className="flex items-center justify-between gap-2 rounded-xl bg-badge/60 p-2.5 ring-1 ring-line/50">
-                                    <div className="min-w-0 flex-1">
-                                        <span className="block text-[10px] font-medium text-faint uppercase">
-                                            Address
-                                        </span>
-                                        <span className="block truncate font-mono text-xs text-ink select-all">
-                                            {url}
-                                        </span>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-1">
-                                        <CopyButton value={url} />
-                                        <ExternalLinkButton
-                                            url={url}
-                                            className="rounded-md p-1.5 text-soft transition hover:bg-paper hover:text-ink"
-                                            title="Open address"
+                                isRebinding ? (
+                                    <div className="space-y-3.5 rounded-xl border border-line bg-paper/60 p-3.5">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5">
+                                                <ArrowRightLeft className="size-3.5 text-ink" />
+                                                <span className="text-xs font-semibold text-ink">
+                                                    Change Host
+                                                </span>
+                                            </div>
+                                            <StatusPill tone="ok">
+                                                Zero Data Loss
+                                            </StatusPill>
+                                        </div>
+
+                                        <p className="text-[11px] leading-relaxed text-soft">
+                                            Re-points Ingress routing and TLS
+                                            without recreating databases,
+                                            persistent volumes, or deployments.
+                                        </p>
+
+                                        <div className="rounded-lg bg-surface/80 p-2.5 ring-1 ring-line/50">
+                                            <span className="block text-[10px] font-medium text-faint uppercase">
+                                                Current Address
+                                            </span>
+                                            <span className="block truncate font-mono text-xs text-soft line-through select-all">
+                                                {url}
+                                            </span>
+                                        </div>
+
+                                        <Form
+                                            action={rebind({
+                                                server: server.name,
+                                                tool: tool.tool,
+                                            })}
+                                            className="space-y-3.5"
                                         >
-                                            <ExternalLink className="size-3.5" />
-                                        </ExternalLinkButton>
+                                            {({ errors, processing }) => (
+                                                <>
+                                                    <input
+                                                        type="hidden"
+                                                        name="current_host"
+                                                        value={tool.host ?? ''}
+                                                    />
+                                                    {tool.instance && (
+                                                        <input
+                                                            type="hidden"
+                                                            name="instance"
+                                                            value={
+                                                                tool.instance
+                                                            }
+                                                        />
+                                                    )}
+                                                    <input
+                                                        type="hidden"
+                                                        name="wire_sso"
+                                                        value={
+                                                            wireSso ? '1' : '0'
+                                                        }
+                                                    />
+
+                                                    <HostPicker
+                                                        name="new_host"
+                                                        value={newHost}
+                                                        onChange={(
+                                                            resolved,
+                                                        ) => {
+                                                            setNewHost(
+                                                                resolved,
+                                                            );
+                                                        }}
+                                                        domains={domains}
+                                                        serverName={server.name}
+                                                        serverIp={
+                                                            serverIp ??
+                                                            server.ip
+                                                        }
+                                                        defaultSubdomain={
+                                                            tool.tool
+                                                        }
+                                                        disabled={processing}
+                                                        label="New Host Address"
+                                                        showBanners={false}
+                                                    />
+
+                                                    {errors.new_host && (
+                                                        <p className="text-xs text-accent">
+                                                            {errors.new_host}
+                                                        </p>
+                                                    )}
+                                                    {errors.current_host && (
+                                                        <p className="text-xs text-accent">
+                                                            {
+                                                                errors.current_host
+                                                            }
+                                                        </p>
+                                                    )}
+
+                                                    {tool.sso === 'wired' && (
+                                                        <div className="rounded-xl border border-line/70 bg-badge/40 p-3">
+                                                            <label className="flex cursor-pointer items-start gap-2.5">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={
+                                                                        wireSso
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        setWireSso(
+                                                                            e
+                                                                                .target
+                                                                                .checked,
+                                                                        )
+                                                                    }
+                                                                    className="mt-0.5 size-4 rounded border-line text-ink focus:ring-ink"
+                                                                />
+                                                                <div className="space-y-0.5">
+                                                                    <span className="block text-xs font-medium text-ink">
+                                                                        Automatically
+                                                                        update
+                                                                        Zitadel
+                                                                        SSO
+                                                                        callback
+                                                                        URI
+                                                                    </span>
+                                                                    <span className="block text-[11px] leading-normal text-soft">
+                                                                        Your
+                                                                        Zitadel
+                                                                        project,
+                                                                        roles,
+                                                                        and
+                                                                        permissions
+                                                                        are
+                                                                        preserved
+                                                                        under
+                                                                        the same
+                                                                        pinned
+                                                                        instance.
+                                                                    </span>
+                                                                </div>
+                                                            </label>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-center justify-end gap-2 pt-1">
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setIsRebinding(
+                                                                    false,
+                                                                );
+                                                                setNewHost('');
+                                                            }}
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            <X className="size-3.5" />
+                                                            <span>Cancel</span>
+                                                        </Button>
+                                                        <Button
+                                                            type="submit"
+                                                            variant="dark"
+                                                            size="sm"
+                                                            disabled={
+                                                                !newHost ||
+                                                                newHost ===
+                                                                    tool.host ||
+                                                                processing
+                                                            }
+                                                        >
+                                                            <ArrowRightLeft className="size-3.5" />
+                                                            <span>
+                                                                {processing
+                                                                    ? 'Starting…'
+                                                                    : 'Rebind Host'}
+                                                            </span>
+                                                        </Button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </Form>
                                     </div>
-                                </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between gap-2 rounded-xl bg-badge/60 p-2.5 ring-1 ring-line/50">
+                                            <div className="min-w-0 flex-1">
+                                                <span className="block text-[10px] font-medium text-faint uppercase">
+                                                    Address
+                                                </span>
+                                                <span className="block truncate font-mono text-xs text-ink select-all">
+                                                    {url}
+                                                </span>
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-1">
+                                                <CopyButton value={url} />
+                                                <ExternalLinkButton
+                                                    url={url}
+                                                    className="rounded-md p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                                                    title="Open address"
+                                                >
+                                                    <ExternalLink className="size-3.5" />
+                                                </ExternalLinkButton>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => {
+                                                setIsRebinding(true);
+                                                setNewHost('');
+                                            }}
+                                            className="w-full justify-center gap-1.5"
+                                        >
+                                            <ArrowRightLeft className="size-3.5" />
+                                            <span>Change Host…</span>
+                                        </Button>
+                                    </>
+                                )
                             ) : (
                                 <div className="rounded-xl bg-badge/40 p-2.5 text-soft">
                                     <span className="font-medium text-ink">

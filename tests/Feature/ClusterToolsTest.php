@@ -669,3 +669,65 @@ test('a tool\'s page carries what it holds on the Commons, for the shared backin
 
     File::deleteDirectory($bin);
 });
+
+test('rebind validates inputs', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->post(route('servers.tools.rebind', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'current_host' => 'sso.example.com',
+        'new_host' => 'sso.example.com',
+    ])->assertSessionHasErrors('new_host');
+
+    $this->post(route('servers.tools.rebind', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'current_host' => '',
+        'new_host' => 'new.example.com',
+    ])->assertSessionHasErrors('current_host');
+
+    File::deleteDirectory($bin);
+});
+
+test('rebind dispatches tool:rebind CLI runner with --wire-sso', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.rebind', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'current_host' => 'sso.example.com',
+        'new_host' => 'auth.newdomain.com',
+        'wire_sso' => '1',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube",
+        'tool:rebind',
+        'production',
+        '--tool=sso',
+        '--domain=sso.example.com',
+        '--to=auth.newdomain.com',
+        '--context=larakube-203.0.113.21',
+        '--wire-sso',
+        '--force',
+        '--no-interaction',
+    ]);
+
+    expect(Run::sole()->label)->toBe('Rebind SSO on workshop-demo to auth.newdomain.com');
+
+    File::deleteDirectory($bin);
+});
+
+test('rebind dispatches tool:rebind CLI runner with --no-wire-sso when wire_sso is false', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.rebind', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'current_host' => 'sso.example.com',
+        'new_host' => 'auth.newdomain.com',
+        'wire_sso' => '0',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--no-wire-sso', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});

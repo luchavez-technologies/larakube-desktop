@@ -200,6 +200,7 @@ Route::post('/servers/{server}/tools/refresh', [ClusterToolController::class, 'r
 Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'show'])->name('servers.tools.show');
 Route::get('/servers/{server}/tools/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.tools.credentials');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
+Route::post('/servers/{server}/tools/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.tools.rebind');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');
 Route::get('/quick-actions/fields', [QuickActionController::class, 'fields'])->name('quick-actions.fields');
 Route::post('/quick-actions/launch', [QuickActionController::class, 'launch'])->name('quick-actions.launch');

@@ -1154,6 +1154,8 @@ export default function ToolsIndex({
                 <ManageToolDrawer
                     server={server}
                     tool={managingTool}
+                    domains={domains}
+                    serverIp={server.ip}
                     onClose={() => setManagingTool(null)}
                     onDeployAnother={handleAddInstance}
                 />
