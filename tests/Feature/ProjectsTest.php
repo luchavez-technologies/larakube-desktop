@@ -4,6 +4,8 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Project;
 use App\Models\Run;
+use App\Models\Server;
+use App\Models\ServerDomain;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\ProjectInspector;
@@ -117,6 +119,49 @@ test('a project page reads its framework, host and bound server from the .laraku
             ->where('project.environments.production.serverProvider', 'gcp')
             ->where('readyServers.0.provider', 'gcp')
             ->where('server.name', 'workshop-demo'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a project page reports whether its environment host falls under a zone ExternalDNS already manages', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+    File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'docs', 'framework' => 'astro', 'environments' => ['production' => ['hosts' => ['web' => 'docs.larakube.app']]]]));
+    File::put("{$sandbox['app']}/.larakube.local.json", json_encode(['environments' => ['production' => ['cloud' => ['ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21']]]]));
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $server = Server::create([
+        'name' => 'workshop-demo',
+        'role' => 'deploy',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-203.0.113.21',
+        'status' => 'ready',
+        // Already "fresh" so DomainCatalog reads these seeded rows directly
+        // instead of dispatching SyncServerDomainsJob (QUEUE_CONNECTION=sync
+        // in tests, which would run it inline against a real, unfaked CLI
+        // call and delete these rows as stale).
+        'domains_sync_status' => 'fresh',
+        'domains_last_synced_at' => now(),
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'larakube.app',
+        'external_dns' => true,
+        'dns_provider' => 'cloudflare',
+        'tls' => true,
+        'in_use' => true,
+    ]);
+
+    $this->get(route('projects.show', $project))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->has('domains.production', 1)
+                ->where('domains.production.0.domain', 'larakube.app')
+                ->where('domains.production.0.externalDns', true)));
 
     File::deleteDirectory($sandbox['home']);
 });

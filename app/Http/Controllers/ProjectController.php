@@ -12,6 +12,7 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DevBoxShell;
+use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FleetMetrics;
 use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\FrameworkForm;
@@ -529,6 +530,7 @@ class ProjectController extends Controller
         HealthPing $healthPing,
         ClusterMetrics $clusterMetrics,
         FleetMetrics $fleetMetrics,
+        DomainCatalog $domains,
     ): Response {
         $scaffold = $this->lastScaffold($project);
 
@@ -643,6 +645,18 @@ class ProjectController extends Controller
 
                 return $metrics;
             }, 'deployMetrics'),
+            // Which environments' hosts fall under a zone ExternalDNS already
+            // manages, so the Address field can say the record creates
+            // itself instead of always asking the user to point DNS by hand.
+            'domains' => Inertia::defer(function () use ($domains, $inspection): array {
+                $result = [];
+                foreach ($inspection['environments'] as $name => $env) {
+                    $context = $env['serverContext'] ?? null;
+                    $result[$name] = $context !== null ? ($domains->forContext($context) ?? []) : [];
+                }
+
+                return $result;
+            }, 'domains'),
         ]);
     }
 

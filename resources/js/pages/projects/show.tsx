@@ -32,6 +32,7 @@ import {
     ArrowUpCircle,
     Square,
     PowerOff,
+    Check,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
@@ -91,6 +92,7 @@ import type {
     ProjectEnvironment,
     RunStatus,
     Server,
+    ServerDomain,
 } from '@/types/larakube';
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
@@ -136,6 +138,7 @@ export default function ShowProject({
     healthMetrics,
     podMetrics,
     deployMetrics,
+    domains,
 }: {
     project: Project;
     server: Server | null;
@@ -152,6 +155,7 @@ export default function ShowProject({
     healthMetrics?: Record<string, HealthMetrics | null> | null;
     podMetrics?: Record<string, PodMetrics | null>;
     deployMetrics?: Record<string, DeployMetrics | null> | null;
+    domains?: Record<string, ServerDomain[]> | null;
 }) {
     const isRunning =
         runs.some((r) => r.status === 'running') ||
@@ -476,6 +480,7 @@ export default function ShowProject({
                                         activeHost={activeHost}
                                         readyServers={readyServers}
                                         runs={runs}
+                                        domains={domains?.[activeEnv] ?? null}
                                         onOpenDeploy={() =>
                                             setDeployModalOpen(true)
                                         }
@@ -559,6 +564,7 @@ export default function ShowProject({
                         email={email}
                         laravelOptions={laravelOptions}
                         readyServers={readyServers}
+                        domains={domains?.[activeCloudEnvName] ?? null}
                     />
 
                     {/* Add Environment Modal Popup */}
@@ -744,6 +750,7 @@ function CloudEnvironmentOverviewCard({
     activeHost,
     readyServers,
     runs,
+    domains,
     onOpenDeploy,
     onOpenCi,
 }: {
@@ -755,6 +762,7 @@ function CloudEnvironmentOverviewCard({
     activeHost: string | null;
     readyServers: ReadyServer[];
     runs: RecentRun[];
+    domains?: ServerDomain[] | null;
     onOpenDeploy: () => void;
     onOpenCi?: () => void;
 }) {
@@ -964,6 +972,7 @@ function CloudEnvironmentOverviewCard({
                                     disabled={!project.initialized}
                                     environment={activeEnv}
                                     currentHost={activeHost}
+                                    domains={domains}
                                 />
                             </div>
                         )}
@@ -1492,6 +1501,7 @@ function DeployDialog({
     email,
     laravelOptions,
     readyServers,
+    domains,
 }: {
     open: boolean;
     onClose: () => void;
@@ -1509,6 +1519,7 @@ function DeployDialog({
     email: string;
     laravelOptions?: NewAppQuestion[] | null;
     readyServers: ReadyServer[];
+    domains?: ServerDomain[] | null;
 }) {
     const [showSwitchServer, setShowSwitchServer] = useState(false);
     const [showEditCi, setShowEditCi] = useState(false);
@@ -1779,6 +1790,7 @@ function DeployDialog({
                             disabled={!project.initialized}
                             environment={activeEnv}
                             currentHost={activeHost}
+                            domains={domains}
                         />
                         {latestRun?.kind === 'configure-host' && (
                             <p
@@ -2379,12 +2391,14 @@ function HostForm({
     disabled,
     environment = 'production',
     currentHost,
+    domains,
 }: {
     project: Project;
     serverIp: string | null;
     disabled: boolean;
     environment?: string;
     currentHost?: string | null;
+    domains?: ServerDomain[] | null;
 }) {
     const [value, setValue] = useState(currentHost ?? project.webHost ?? '');
     const [justSaved, setJustSaved] = useState(false);
@@ -2401,6 +2415,22 @@ function HostForm({
     // real previous host to move away from, so first-time setup keeps the
     // plain DNS hint below instead of this longer sequence.
     const isChangingLiveHost = Boolean(currentHost) && value !== currentHost;
+
+    // The zone this host falls under, if any — same suffix match the Cluster
+    // Tools install drawer uses (exact match or a subdomain of a known zone).
+    // Only an ExternalDNS-managed zone means the record creates itself once
+    // this host's Ingress deploys; a TLS-only or Ingress-only zone still
+    // needs the manual DNS step below.
+    const matchedZone = useMemo(() => {
+        if (!domains || value === '') return null;
+        return (
+            domains.find(
+                (d) =>
+                    d.externalDns &&
+                    (value === d.domain || value.endsWith(`.${d.domain}`)),
+            ) ?? null
+        );
+    }, [domains, value]);
 
     return (
         <Form
@@ -2448,16 +2478,24 @@ function HostForm({
                             {processing ? 'Saving…' : 'Save'}
                         </Button>
                     </div>
-                    <p
-                        className={
-                            errors.host
-                                ? 'text-xs text-accent'
-                                : 'text-xs text-soft'
-                        }
-                    >
-                        {errors.host ??
-                            `Point this name's DNS at ${serverIp ?? 'your server'} (or connect a domain on the server page).`}
-                    </p>
+                    {errors.host ? (
+                        <p className="text-xs text-accent">{errors.host}</p>
+                    ) : matchedZone ? (
+                        <p className="inline-flex items-center gap-1 text-xs font-medium text-ok">
+                            <Check className="size-3" /> DNS is managed
+                            automatically through ExternalDNS on{' '}
+                            {matchedZone.dnsProvider === 'route53'
+                                ? 'Route 53'
+                                : 'Cloudflare'}{' '}
+                            — no DNS action needed.
+                        </p>
+                    ) : (
+                        <p className="text-xs text-soft">
+                            Point this name&rsquo;s DNS at{' '}
+                            {serverIp ?? 'your server'} (or connect a domain on
+                            the server page).
+                        </p>
+                    )}
                     {!errors.host && isChangingLiveHost && (
                         <p className="rounded-md bg-paper px-2.5 py-2 text-xs text-soft ring-1 ring-line/60">
                             {justSaved ? (
@@ -2475,13 +2513,27 @@ function HostForm({
                                     actually go live.
                                 </>
                             )}{' '}
-                            Point <strong>{value || 'the new name'}</strong>
-                            &rsquo;s DNS at {serverIp ?? 'the server'} same as
-                            above; <strong>{currentHost}</strong>&rsquo;s own
-                            DNS record and anyone linking to it are untouched —
-                            it simply stops resolving to anything once you
-                            deploy, unless you point it elsewhere (e.g. a
-                            redirect) yourself.
+                            {matchedZone ? (
+                                <>
+                                    <strong>{value || 'The new name'}</strong>
+                                    &rsquo;s DNS record will be created
+                                    automatically by ExternalDNS once you
+                                    deploy.
+                                </>
+                            ) : (
+                                <>
+                                    Point{' '}
+                                    <strong>{value || 'the new name'}</strong>
+                                    &rsquo;s DNS at {serverIp ??
+                                        'the server'}{' '}
+                                    same as above.
+                                </>
+                            )}{' '}
+                            <strong>{currentHost}</strong>&rsquo;s own DNS
+                            record and anyone linking to it are untouched — it
+                            simply stops resolving to anything once you deploy,
+                            unless you point it elsewhere (e.g. a redirect)
+                            yourself.
                         </p>
                     )}
                 </>
