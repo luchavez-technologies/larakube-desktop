@@ -110,7 +110,7 @@ export default function ShowDevBoxProject({
         local: {
             name: 'local',
             isLocal: true,
-            webHost: `${name}.test`,
+            webHost: `${name}.${blueprint?.localTld || 'kube'}`,
             serverIp: null,
             plex: [],
             managed: [],

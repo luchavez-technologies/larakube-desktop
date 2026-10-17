@@ -201,7 +201,7 @@ export default function ShowProject({
                 project.environments?.['local'] ?? {
                     name: 'local',
                     isLocal: true,
-                    webHost: `${project.name}.${project.effectiveTld || project.localTld || project.globalTld || 'test'}`,
+                    webHost: `${project.name}.${project.effectiveTld || project.localTld || project.globalTld || 'kube'}`,
                     serverIp: null,
                     serverName: 'Local Dev Cluster',
                     plex: project.environments?.['local']?.plex ?? [],
@@ -2645,7 +2645,7 @@ function ProjectTldForm({ project }: { project: Project }) {
                         options={[
                             {
                                 value: '',
-                                label: `Default (.${project.globalTld || 'test'})`,
+                                label: `Default (.${project.globalTld || 'kube'})`,
                             },
                             { value: 'test', label: '.test' },
                             { value: 'kube', label: '.kube' },

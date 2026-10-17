@@ -144,11 +144,15 @@ class ProjectInspector
             ? $blueprint['name']
             : ($path !== '' ? basename($path) : 'app');
 
+        $projectLocalTld = is_string($blueprint['localTld'] ?? null) ? $blueprint['localTld'] : null;
+        $globalTld = $this->globalSettings?->getLocalTld() ?? 'kube';
+        $effectiveTld = ($projectLocalTld !== null && $projectLocalTld !== '') ? $projectLocalTld : $globalTld;
+
         if (! isset($environments['local'])) {
             $environments['local'] = [
                 'name' => 'local',
                 'isLocal' => true,
-                'webHost' => "{$projectName}.test",
+                'webHost' => "{$projectName}.{$effectiveTld}",
                 'serverIp' => null,
                 'serverContext' => null,
                 'plex' => [],
@@ -167,10 +171,6 @@ class ProjectInspector
                 ],
             ];
         }
-
-        $projectLocalTld = is_string($blueprint['localTld'] ?? null) ? $blueprint['localTld'] : null;
-        $globalTld = $this->globalSettings?->getLocalTld() ?? 'test';
-        $effectiveTld = ($projectLocalTld !== null && $projectLocalTld !== '') ? $projectLocalTld : $globalTld;
 
         $hostPath = $this->hostPath($path);
 

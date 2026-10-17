@@ -451,7 +451,7 @@ export default function ToolsIndex({
                             on your local cluster. Available over secure local
                             domains (e.g.{' '}
                             <code className="font-mono text-ink">
-                                https://adminer.test
+                                https://adminer.kube
                             </code>
                             ).
                         </p>

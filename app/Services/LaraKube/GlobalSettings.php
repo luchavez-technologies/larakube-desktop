@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Services\Runtime\WslDistro;
 use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Settings;
 use Native\Desktop\Facades\System;
@@ -345,8 +346,9 @@ class GlobalSettings
     private function configPath(): string
     {
         $home = ToolLocator::home();
+        $path = $home !== '' ? "{$home}/.larakube/config.json" : storage_path('larakube/config.json');
 
-        return $home !== '' ? "{$home}/.larakube/config.json" : storage_path('larakube/config.json');
+        return $this->locator->isWindows() ? WslDistro::toWindows($path) : $path;
     }
 
     private function isAgentBridged(string $configPath): bool
