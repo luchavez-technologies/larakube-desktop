@@ -12,6 +12,13 @@ use Throwable;
 /** The Windows first-run steps that create LaraKube Desktop's own WSL distro; the Setup page runs them one after another. */
 class WslSetupController extends Controller
 {
+    public function progress(Wsl $wsl): JsonResponse
+    {
+        abort_unless($wsl->isWindows(), 404);
+
+        return response()->json($wsl->downloadProgress());
+    }
+
     public function store(Request $request, string $step, Wsl $wsl, ReadinessCheck $readiness, CliInstaller $installer): JsonResponse
     {
         abort_unless($wsl->isWindows(), 404);

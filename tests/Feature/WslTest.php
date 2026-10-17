@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Wsl;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -115,6 +116,35 @@ test('a download that does not match its checksum is deleted', function () {
 
     expect($result['ok'])->toBeFalse()
         ->and(file_exists($home.'/LaraKube/wsl/larakube-ubuntu.tar.gz'))->toBeFalse();
+});
+
+test('download progress returns default state when no download is in progress', function () {
+    Cache::forget('wsl.download.progress');
+
+    $wsl = new Wsl(windows: true);
+    expect($wsl->downloadProgress())->toBe([
+        'total' => 0,
+        'downloaded' => 0,
+        'percent' => 0,
+        'formatted' => null,
+    ]);
+});
+
+test('download progress reads cached progress values', function () {
+    Cache::put('wsl.download.progress', [
+        'total' => 500000000,
+        'downloaded' => 250000000,
+        'percent' => 50,
+        'formatted' => '238.4 MB / 476.8 MB',
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    expect($wsl->downloadProgress())->toBe([
+        'total' => 500000000,
+        'downloaded' => 250000000,
+        'percent' => 50,
+        'formatted' => '238.4 MB / 476.8 MB',
+    ]);
 });
 
 test('importing creates the distro once and restarts it, and a second run does not import again', function () {

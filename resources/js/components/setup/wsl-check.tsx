@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import {
+    AlertCircle,
+    ArrowUpCircle,
+    Download,
+    Power,
+    RefreshCw,
+} from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -18,6 +24,13 @@ export type WslState = {
     version: number | null;
     message: string;
     command: string | null;
+};
+
+export type DownloadProgress = {
+    total: number;
+    downloaded: number;
+    percent: number;
+    formatted: string | null;
 };
 
 type WslStep =
@@ -60,8 +73,44 @@ async function runWslStep(step: WslStep, body?: Record<string, string>) {
 
 export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
     const [working, setWorking] = useState<WslStep | null>(null);
+    const [downloadProgress, setDownloadProgress] =
+        useState<DownloadProgress | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [restart, setRestart] = useState(false);
+
+    useEffect(() => {
+        if (working !== 'download') {
+            setDownloadProgress(null);
+
+            return;
+        }
+
+        let active = true;
+
+        const poll = async () => {
+            try {
+                const response = await fetch('/setup/wsl/progress', {
+                    headers: { Accept: 'application/json' },
+                });
+                if (response.ok && active) {
+                    const data = (await response.json()) as DownloadProgress;
+                    if (active) {
+                        setDownloadProgress(data);
+                    }
+                }
+            } catch {
+                // Ignore polling errors
+            }
+        };
+
+        void poll();
+        const interval = setInterval(() => void poll(), 400);
+
+        return () => {
+            active = false;
+            clearInterval(interval);
+        };
+    }, [working]);
 
     if (!wsl) {
         return (
@@ -146,17 +195,60 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
                                       ? 'Your projects are backed up, the Linux is replaced with the newer one, then your projects are put back — all in one step.'
                                       : 'LaraKube Desktop will download its own small Linux, with every tool ready. It stays separate from anything else on this computer.'}
                             </p>
+                            {working === 'download' &&
+                                downloadProgress &&
+                                downloadProgress.total > 0 && (
+                                    <div className="space-y-1.5 rounded-lg border border-line bg-paper/60 p-3">
+                                        <div className="flex items-center justify-between text-xs text-soft">
+                                            <span className="font-medium text-ink">
+                                                Downloading rootfs image…
+                                            </span>
+                                            <span>
+                                                {downloadProgress.formatted}
+                                                {downloadProgress.percent > 0
+                                                    ? ` (${downloadProgress.percent}%)`
+                                                    : ''}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 w-full overflow-hidden rounded-full bg-badge">
+                                            <div
+                                                className="h-full bg-accent transition-all duration-300 ease-out"
+                                                style={{
+                                                    width: `${Math.min(100, Math.max(0, downloadProgress.percent))}%`,
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             <Button
                                 disabled={working !== null}
                                 onClick={() => run(steps)}
                             >
-                                {working
-                                    ? `${WSL_STEP_LABELS[working]}…`
-                                    : wsl.state === 'missing'
-                                      ? 'Turn on WSL'
-                                      : wsl.state === 'stale'
-                                        ? 'Update LaraKube Linux'
-                                        : 'Set up LaraKube Linux'}
+                                {working ? (
+                                    <>
+                                        <RefreshCw className="size-4 animate-spin" />
+                                        {working === 'download' &&
+                                        downloadProgress &&
+                                        downloadProgress.percent > 0
+                                            ? `Downloading… ${downloadProgress.percent}%`
+                                            : `${WSL_STEP_LABELS[working]}…`}
+                                    </>
+                                ) : wsl.state === 'missing' ? (
+                                    <>
+                                        <Power className="size-4" />
+                                        Turn on WSL
+                                    </>
+                                ) : wsl.state === 'stale' ? (
+                                    <>
+                                        <ArrowUpCircle className="size-4" />
+                                        Update LaraKube Linux
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download className="size-4" />
+                                        Set up LaraKube Linux
+                                    </>
+                                )}
                             </Button>
                         </>
                     ) : wsl.command ? (

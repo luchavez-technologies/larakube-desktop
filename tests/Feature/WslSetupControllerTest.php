@@ -84,3 +84,28 @@ test('the restore step requires a path', function () {
 
     $this->postJson('/setup/wsl/restore', [])->assertStatus(422);
 });
+
+test('the progress endpoint is not available outside Windows', function () {
+    $this->get('/setup/wsl/progress')->assertNotFound();
+});
+
+test('the progress endpoint returns download progress on Windows', function () {
+    $wsl = Mockery::mock(Wsl::class)->makePartial();
+    $wsl->shouldReceive('isWindows')->andReturn(true);
+    $wsl->shouldReceive('downloadProgress')->andReturn([
+        'total' => 1048576,
+        'downloaded' => 524288,
+        'percent' => 50,
+        'formatted' => '0.5 MB / 1.0 MB',
+    ]);
+    app()->instance(Wsl::class, $wsl);
+
+    $this->get('/setup/wsl/progress')
+        ->assertOk()
+        ->assertJson([
+            'total' => 1048576,
+            'downloaded' => 524288,
+            'percent' => 50,
+            'formatted' => '0.5 MB / 1.0 MB',
+        ]);
+});

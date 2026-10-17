@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Services\Runtime\WslDistro;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
@@ -127,9 +128,36 @@ class Wsl
 
         if (! is_file($path) || hash_file('sha256', $path) !== $expected) {
             set_time_limit(0);
-            $response = Http::timeout(3600)->withOptions(['sink' => $path])->get($this->imageUrl());
+
+            Cache::put('wsl.download.progress', [
+                'total' => 0,
+                'downloaded' => 0,
+                'percent' => 0,
+                'formatted' => 'Connecting…',
+            ], 60);
+
+            $lastUpdate = 0.0;
+
+            $response = Http::timeout(3600)->withOptions([
+                'sink' => $path,
+                'progress' => function (int $totalBytes, int $downloadedBytes) use (&$lastUpdate) {
+                    if ($totalBytes > 0) {
+                        $now = microtime(true);
+                        if ($now - $lastUpdate >= 0.25 || $downloadedBytes >= $totalBytes) {
+                            $lastUpdate = $now;
+                            Cache::put('wsl.download.progress', [
+                                'total' => $totalBytes,
+                                'downloaded' => $downloadedBytes,
+                                'percent' => (int) round(($downloadedBytes / $totalBytes) * 100),
+                                'formatted' => sprintf('%.1f MB / %.1f MB', $downloadedBytes / 1048576, $totalBytes / 1048576),
+                            ], 60);
+                        }
+                    }
+                },
+            ])->get($this->imageUrl());
 
             if (! $response->successful()) {
+                Cache::forget('wsl.download.progress');
                 @unlink($path);
 
                 return ['ok' => false, 'message' => 'The download failed. Check your internet connection and try again.'];
@@ -137,12 +165,35 @@ class Wsl
         }
 
         if (hash_file('sha256', $path) !== $expected) {
+            Cache::forget('wsl.download.progress');
             @unlink($path);
 
             return ['ok' => false, 'message' => 'The downloaded file did not match its checksum, so it was deleted. Try again.'];
         }
 
+        $size = is_file($path) ? (int) filesize($path) : 0;
+        Cache::put('wsl.download.progress', [
+            'total' => $size,
+            'downloaded' => $size,
+            'percent' => 100,
+            'formatted' => sprintf('%.1f MB / %.1f MB', $size / 1048576, $size / 1048576),
+        ], 60);
+
         return ['ok' => true, 'message' => 'Downloaded and verified.'];
+    }
+
+    /**
+     * @return array{total: int, downloaded: int, percent: int, formatted: ?string}
+     */
+    public function downloadProgress(): array
+    {
+        /** @var array{total: int, downloaded: int, percent: int, formatted: ?string} */
+        return Cache::get('wsl.download.progress', [
+            'total' => 0,
+            'downloaded' => 0,
+            'percent' => 0,
+            'formatted' => null,
+        ]);
     }
 
     /**
