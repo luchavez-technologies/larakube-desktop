@@ -56,17 +56,24 @@ test('a WSL 1 distribution is asked to be converted', function () {
 });
 
 test('a stopped WSL 2 distribution counts as ready once it answers a command', function () {
+    $home = wslHome();
+    mkdir($home.'/LaraKube/wsl', 0777, true);
+    $checksum = str_repeat('d', 64);
+    file_put_contents($home.'/LaraKube/wsl/imported.sha256', $checksum);
+
     Process::fake([
         '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
         '*--list*' => Process::result(output: wslListing('  docker-desktop   Running   2', '* larakube-ubuntu Stopped   2')),
         '*echo*' => Process::result(output: "ok\n"),
-        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
     ]);
+    Http::fake(['*.sha256' => Http::response($checksum.'  larakube-ubuntu-amd64.tar.gz')]);
 
     $result = (new Wsl(windows: true))->check();
 
     expect($result)->toMatchArray(['state' => 'ready', 'distro' => 'larakube-ubuntu', 'version' => 2]);
     Process::assertRan(fn ($process) => in_array('larakube-ubuntu', (array) $process->command, true) && in_array('echo', (array) $process->command, true));
+
+    File::deleteDirectory($home);
 });
 
 test('a distribution that will not start is reported as broken', function () {
@@ -80,13 +87,74 @@ test('a distribution that will not start is reported as broken', function () {
 });
 
 test('a running distribution is reported as ready', function () {
+    $home = wslHome();
+    mkdir($home.'/LaraKube/wsl', 0777, true);
+    $checksum = str_repeat('e', 64);
+    file_put_contents($home.'/LaraKube/wsl/imported.sha256', $checksum);
+
     Process::fake([
         '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
         '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
         '*echo*' => Process::result(output: "ok\n"),
     ]);
+    Http::fake(['*.sha256' => Http::response($checksum.'  larakube-ubuntu-amd64.tar.gz')]);
 
     expect((new Wsl(windows: true))->check()['state'])->toBe('ready');
+
+    File::deleteDirectory($home);
+});
+
+test('a distro whose recorded checksum no longer matches the latest published image is reported as stale', function () {
+    $home = wslHome();
+    mkdir($home.'/LaraKube/wsl', 0777, true);
+    file_put_contents($home.'/LaraKube/wsl/imported.sha256', str_repeat('a', 64));
+
+    Process::fake([
+        '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*echo*' => Process::result(output: "ok\n"),
+    ]);
+    Http::fake(['*.sha256' => Http::response(str_repeat('b', 64).'  larakube-ubuntu-amd64.tar.gz')]);
+
+    expect((new Wsl(windows: true))->check()['state'])->toBe('stale');
+
+    File::deleteDirectory($home);
+});
+
+test('a distro whose recorded checksum matches the latest published image is not stale', function () {
+    $home = wslHome();
+    mkdir($home.'/LaraKube/wsl', 0777, true);
+    $checksum = str_repeat('c', 64);
+    file_put_contents($home.'/LaraKube/wsl/imported.sha256', $checksum);
+
+    Process::fake([
+        '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
+        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*echo*' => Process::result(output: "ok\n"),
+    ]);
+    Http::fake(['*.sha256' => Http::response($checksum.'  larakube-ubuntu-amd64.tar.gz')]);
+
+    expect((new Wsl(windows: true))->check()['state'])->toBe('ready');
+
+    File::deleteDirectory($home);
+});
+
+test('importing records the imported image\'s checksum for later staleness checks', function () {
+    $home = wslHome();
+    mkdir($home.'/LaraKube/wsl', 0777, true);
+    file_put_contents($home.'/LaraKube/wsl/larakube-ubuntu.tar.gz', 'rootfs bytes');
+
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing()),
+        '*' => Process::result(),
+    ]);
+
+    expect((new Wsl(windows: true))->import()['ok'])->toBeTrue();
+
+    expect(file_get_contents($home.'/LaraKube/wsl/imported.sha256'))
+        ->toBe(hash('sha256', 'rootfs bytes'));
+
+    File::deleteDirectory($home);
 });
 
 test('the image is downloaded, checked against its published checksum, and kept only when it matches', function () {

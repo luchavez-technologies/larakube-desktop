@@ -51,15 +51,43 @@ class Wsl
             return $this->result('broken', WslDistro::NAME, 2, 'LaraKube Linux did not start. Virtualization may be turned off in your computer\'s BIOS, or Windows needs a restart after turning WSL on.', null);
         }
 
+        if ($this->isStale()) {
+            return $this->result('stale', WslDistro::NAME, 2, 'LaraKube Linux is from an older release and is missing updates LaraKube now needs.', null);
+        }
+
         return $this->result('ready', WslDistro::NAME, 2, 'LaraKube Linux (WSL 2) is ready.', null);
     }
 
     /**
-     * Whether the imported distro needs updating.
+     * Whether the imported distro is behind the latest published image —
+     * compares the checksum recorded at import() time against a fresh
+     * expectedChecksum() (the same check download() uses, just persisted).
+     * A generalized replacement for the old per-tool dnsmasq probe, which
+     * only ever caught that one specific past change.
      */
     public function isStale(): bool
     {
-        return false;
+        $importedPath = $this->importedChecksumPath();
+
+        if (! is_file($importedPath)) {
+            return true;
+        }
+
+        $expected = $this->expectedChecksum();
+
+        if ($expected === null) {
+            // Couldn't reach the network to check — fail open, don't nag
+            // the user with a false "stale" over a failed informational check.
+            return false;
+        }
+
+        return trim((string) @file_get_contents($importedPath)) !== $expected;
+    }
+
+    /** Where the checksum of the currently-imported image is recorded. */
+    private function importedChecksumPath(): string
+    {
+        return $this->installDirectory().DIRECTORY_SEPARATOR.'imported.sha256';
     }
 
     /**
@@ -219,6 +247,11 @@ class Wsl
 
         $this->ensureMirroredNetworking();
         $this->terminate();
+
+        $checksum = hash_file('sha256', $this->imagePath());
+        if ($checksum !== false) {
+            @file_put_contents($this->importedChecksumPath(), $checksum);
+        }
 
         return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
     }
