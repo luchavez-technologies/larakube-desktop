@@ -34,3 +34,7 @@ test('checking and installing do nothing when the updater is off in this build',
     $this->post('/updates/install')->assertNotFound();
     $this->getJson('/updates')->assertOk()->assertJson(['enabled' => false]);
 });
+
+test('browser navigation to /updates redirects to settings with updates action', function () {
+    $this->get('/updates')->assertRedirect('/settings?action=updates');
+});

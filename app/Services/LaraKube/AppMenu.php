@@ -120,7 +120,7 @@ class AppMenu
             Menu::link('https://github.com/luchavez-technologies/larakube-desktop/discussions', 'Community & Discussions')->openInBrowser(),
             Menu::link('https://github.com/luchavez-technologies/larakube-desktop/issues', 'Report an Issue…')->openInBrowser(),
             Menu::separator(),
-            Menu::link(url('/updates'), 'Check for Updates…'),
+            Menu::link(url('/settings?action=updates'), 'Check for Updates…'),
             Menu::separator(),
             Menu::link(url('/settings?action=uninstall'), 'Uninstall LaraKube Desktop…'),
         )->label('Help');
@@ -130,6 +130,7 @@ class AppMenu
             $appMenu = Menu::make(
                 Menu::about(),
                 Menu::separator(),
+                Menu::link(url('/settings?action=updates'), 'Check for Updates…'),
                 Menu::link(url('/settings'), 'Preferences…', 'CmdOrCtrl+,'),
                 Menu::separator(),
                 Menu::hide(),

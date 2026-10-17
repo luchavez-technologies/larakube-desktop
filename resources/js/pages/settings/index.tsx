@@ -5,6 +5,7 @@ import {
     AlertTriangle,
     Archive,
     ArrowRightLeft,
+    ArrowUpCircle,
     Check,
     ChevronDown,
     ChevronRight,
@@ -824,6 +825,21 @@ function UpdatesCard() {
         };
     }, [busy]);
 
+    useEffect(() => {
+        if (
+            typeof window !== 'undefined' &&
+            window.location.search.includes('action=updates')
+        ) {
+            void updatesCall('/updates/check', 'POST').then((next) => {
+                if (next) setStatus(next);
+            });
+            const el = document.getElementById('app-updates-card');
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }, []);
+
     if (!status) {
         return null;
     }
@@ -843,7 +859,7 @@ function UpdatesCard() {
                   : 'LaraKube Desktop also checks each time it opens.';
 
     return (
-        <div className="mb-5">
+        <div id="app-updates-card" className="mb-5">
             <Card
                 label="App updates"
                 action={
@@ -855,6 +871,7 @@ function UpdatesCard() {
                                     updatesCall('/updates/install', 'POST')
                                 }
                             >
+                                <ArrowUpCircle className="size-4" />
                                 Restart to update
                             </Button>
                         ) : (
@@ -868,6 +885,12 @@ function UpdatesCard() {
                                     )
                                 }
                             >
+                                <RotateCw
+                                    className={cn(
+                                        'size-4',
+                                        busy && 'animate-spin',
+                                    )}
+                                />
                                 Check for updates
                             </Button>
                         )

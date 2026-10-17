@@ -4,11 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Services\AppUpdates;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class UpdatesController extends Controller
 {
-    public function status(AppUpdates $updates): JsonResponse
+    public function status(Request $request, AppUpdates $updates): JsonResponse|RedirectResponse
     {
+        if (! $request->wantsJson()) {
+            if ($updates->enabled()) {
+                $updates->check();
+            }
+
+            return redirect('/settings?action=updates');
+        }
+
         return response()->json($updates->status());
     }
 
