@@ -201,6 +201,7 @@ test('updating runs larakube update --yes inside the distro without touching pro
 test('updating falls back to root if larakube user update fails', function () {
     Process::fake([
         '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
+        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
         '*' => Process::sequence()
             ->push(Process::result(errorOutput: 'permission denied', exitCode: 1))
             ->push(Process::result(output: "✅ LaraKube updated successfully!\n")),
@@ -296,4 +297,26 @@ test('restoreUserHome refuses a path outside the LaraKube backups directory', fu
     Process::assertNotRan(fn ($process) => in_array('tar', (array) $process->command, true));
 
     File::deleteDirectory($home);
+});
+
+test('ensureDnsmasq succeeds immediately if dnsmasq is already on path', function () {
+    Process::fake([
+        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    expect($wsl->ensureDnsmasq())->toBeTrue();
+    Process::assertNotRan(fn ($process) => in_array('apt-get', (array) $process->command, true));
+});
+
+test('ensureDnsmasq installs dnsmasq via apt if missing', function () {
+    Process::fake([
+        '*which*dnsmasq*' => Process::result(output: '', exitCode: 1),
+        '*apt-get*install*' => Process::result(output: "Setting up dnsmasq...\n"),
+    ]);
+
+    $wsl = new Wsl(windows: true);
+    expect($wsl->ensureDnsmasq())->toBeTrue();
+    Process::assertRan(fn ($process) => in_array('apt-get', (array) $process->command, true)
+        && in_array('dnsmasq', (array) $process->command, true));
 });

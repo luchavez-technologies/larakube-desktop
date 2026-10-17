@@ -284,6 +284,8 @@ class Wsl
             return ['ok' => false, 'message' => 'LaraKube Linux is not installed yet.'];
         }
 
+        $this->ensureDnsmasq();
+
         $updateArgs = $channel === 'canary' ? ['update', '--canary', '--yes'] : ['update', '--yes'];
 
         $updateCli = Process::timeout(300)->run([
@@ -305,6 +307,24 @@ class Wsl
         }
 
         return ['ok' => true, 'message' => 'LaraKube Linux updated successfully.'];
+    }
+
+    /**
+     * Auto-installs dnsmasq in-place if missing, without resetting or re-downloading the distro.
+     */
+    public function ensureDnsmasq(): bool
+    {
+        $check = Process::timeout(10)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', 'which', 'dnsmasq',
+        ]);
+
+        if ($check->successful()) {
+            return true;
+        }
+
+        return Process::timeout(120)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', 'root', '--', 'apt-get', 'install', '-y', '--no-install-recommends', 'dnsmasq',
+        ])->successful();
     }
 
     /**
