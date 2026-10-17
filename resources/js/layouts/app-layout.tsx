@@ -265,7 +265,7 @@ export default function AppLayout({
             <aside
                 className={cn(
                     'z-30 flex h-full shrink-0 flex-col border-r border-line bg-surface py-5 transition-[width,padding] duration-200 ease-in-out',
-                    collapsed ? 'w-16 px-2' : 'w-60 px-3',
+                    collapsed ? 'w-16 px-2' : 'w-64 px-3',
                 )}
             >
                 {collapsed ? (
@@ -286,22 +286,28 @@ export default function AppLayout({
                         <NotificationBell />
                     </div>
                 ) : (
-                    <div className="mb-5 flex items-start justify-between px-1">
+                    <div className="mb-5 flex items-start justify-between gap-2 px-1">
                         <div className="flex min-w-0 items-start gap-2">
                             <img
                                 src="/logo.png"
                                 alt="LaraKube"
                                 className="mt-0.5 size-8 shrink-0 rounded-lg shadow-2xs"
                             />
-                            <div className="min-w-0 leading-tight">
+                            <div className="min-w-0 flex-1 leading-tight">
                                 <span className="block truncate text-[14px] font-semibold tracking-tight text-ink">
                                     LaraKube
                                 </span>
-                                <span className="mt-0.5 block font-mono text-[10px] whitespace-nowrap text-faint">
+                                <span
+                                    className="mt-0.5 block truncate font-mono text-[10px] text-faint"
+                                    title={`Desktop v${props.versions?.desktop ?? '1.0.0'}`}
+                                >
                                     Desktop v
                                     {props.versions?.desktop ?? '1.0.0'}
                                 </span>
-                                <span className="block font-mono text-[10px] whitespace-nowrap text-faint">
+                                <span
+                                    className="block truncate font-mono text-[10px] text-faint"
+                                    title={`CLI ${props.versions?.cli ? (props.versions.cli.startsWith('v') ? props.versions.cli : `v${props.versions.cli}`) : '—'}`}
+                                >
                                     CLI{' '}
                                     {props.versions?.cli
                                         ? props.versions.cli.startsWith('v')
