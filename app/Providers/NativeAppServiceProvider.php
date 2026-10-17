@@ -18,6 +18,7 @@ use App\Services\Elevation;
 use App\Services\LaraKube\AppMenu;
 use App\Services\LaraKube\GlobalSettings;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Menu;
@@ -49,8 +50,12 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minHeight(640)
             ->rememberState();
 
+        $trayIcon = PHP_OS_FAMILY === 'Windows'
+            ? (file_exists(public_path('icon.ico')) ? public_path('icon.ico') : public_path('icon.png'))
+            : public_path('IconTemplate.png');
+
         MenuBar::create()
-            ->icon(public_path('IconTemplate.png'))
+            ->icon($trayIcon)
             ->tooltip(config('app.name', 'LaraKube'))
             ->showDockIcon(true)
             ->onlyShowContextMenu(false)
@@ -74,7 +79,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         try {
             Artisan::call('migrate', ['--force' => true]);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning('Startup migration warning: '.$e->getMessage());
         }
     }
 

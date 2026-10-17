@@ -48,18 +48,25 @@ class HandleInertiaRequests extends Middleware
             // Every run still going, not just the latest — the floating HUD
             // stacks one card per run, so a long EKS create doesn't crowd out
             // something started after it (ADR: multiple concurrent runs).
-            'activeRuns' => fn () => Run::query()
+            'activeRuns' => fn () => rescue(fn () => Run::query()
                 ->where('status', RunStatus::Running)
                 ->latest('id')
                 ->limit(10)
-                ->get(['id', 'label', 'status', 'created_at']),
-            'recentRuns' => fn () => Run::query()
+                ->get(['id', 'label', 'status', 'created_at']), collect(), report: false),
+            'recentRuns' => fn () => rescue(fn () => Run::query()
                 ->latest('id')
                 ->limit(5)
-                ->get(['id', 'label', 'status', 'kind', 'created_at', 'finished_at']),
+                ->get(['id', 'label', 'status', 'kind', 'created_at', 'finished_at']), collect(), report: false),
             'notifications' => function () {
                 $this->ensureNotificationsSeeded();
-                $user = User::defaultUser();
+                $user = rescue(fn () => User::defaultUser(), null, report: false);
+
+                if (! $user) {
+                    return [
+                        'unreadCount' => 0,
+                        'items' => [],
+                    ];
+                }
 
                 return [
                     'unreadCount' => rescue(fn () => $user->unreadNotifications()->count(), 0, report: false),
