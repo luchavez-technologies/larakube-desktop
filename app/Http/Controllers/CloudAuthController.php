@@ -6,6 +6,7 @@ use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\GcpSignIn;
 use App\Services\LaraKube\CloudAccount;
+use App\Services\LaraKube\ReadinessCheck;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ use RuntimeException;
 
 class CloudAuthController extends Controller
 {
-    public function saveAws(Request $request, CloudAccount $account): RedirectResponse
+    public function saveAws(Request $request, CloudAccount $account, ReadinessCheck $readiness): RedirectResponse
     {
         $validated = $request->validate([
             'access_key_id' => ['required', 'string', 'regex:/^[A-Z0-9]{16,32}$/'],
@@ -36,6 +37,8 @@ class CloudAuthController extends Controller
             return back()->withErrors(['aws' => (string) ($result['error'] ?? 'Could not save the AWS credentials.')]);
         }
 
+        $readiness->forget();
+
         if (($result['verified'] ?? null) === false) {
             return back()->withErrors(['aws' => 'AWS credentials saved, but AWS did not accept them. Check the keys.']);
         }
@@ -43,10 +46,10 @@ class CloudAuthController extends Controller
         return back()->with('success', 'AWS credentials saved'.(($result['verified'] ?? null) === true ? ' and verified' : '').'.');
     }
 
-    public function loginGcp(GcpSignIn $signIn): JsonResponse
+    public function loginGcp(Request $request, GcpSignIn $signIn): JsonResponse
     {
         try {
-            $run = $signIn->start();
+            $run = $signIn->start($request->boolean('restart'));
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -77,7 +80,7 @@ class CloudAuthController extends Controller
         return response()->json(['projects' => $signIn->projects()]);
     }
 
-    public function setGcpProject(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
+    public function setGcpProject(Request $request, CloudAccount $account, ReadinessCheck $readiness): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'project_id' => ['required', 'string', 'regex:/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/'],
@@ -85,6 +88,10 @@ class CloudAuthController extends Controller
 
         $result = $account->call(['cloud:project', '--provider=gcp', "--project={$validated['project_id']}"]);
         $saved = ($result['success'] ?? false) === true;
+
+        if ($saved) {
+            $readiness->forget();
+        }
 
         if ($request->expectsJson()) {
             return response()->json(['ok' => $saved, 'message' => $saved ? null : ($result['error'] ?? null)], $saved ? 200 : 422);
@@ -95,7 +102,7 @@ class CloudAuthController extends Controller
             : back()->withErrors(['gcp' => (string) ($result['error'] ?? 'Could not set the project.')]);
     }
 
-    public function saveGcpServiceAccount(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
+    public function saveGcpServiceAccount(Request $request, CloudAccount $account, ReadinessCheck $readiness): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'credentials' => ['required', 'string'],
@@ -107,6 +114,10 @@ class CloudAuthController extends Controller
         );
 
         $saved = ($result['success'] ?? false) === true;
+
+        if ($saved) {
+            $readiness->forget();
+        }
 
         if ($request->expectsJson()) {
             return response()->json([

@@ -20,8 +20,24 @@ class GcpSignIn
 
     public function __construct(private CliRunner $runner, private CloudAccount $account) {}
 
-    public function start(): Run
+    public function current(): ?Run
     {
+        return Run::query()
+            ->where('subject', self::SUBJECT)
+            ->where('status', RunStatus::Running)
+            ->latest('id')
+            ->first();
+    }
+
+    public function start(bool $restart = false): Run
+    {
+        if (! $restart) {
+            $existing = $this->current();
+            if ($existing !== null) {
+                return $existing;
+            }
+        }
+
         Run::query()->where('subject', self::SUBJECT)->where('status', RunStatus::Running)->get()->each(function (Run $old): void {
             ChildProcess::stop($old->alias());
             $old->forceFill(['status' => RunStatus::Cancelled, 'finished_at' => now()])->save();

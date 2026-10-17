@@ -9,6 +9,7 @@ import {
     CheckCircle2,
     RotateCw,
     AlertCircle,
+    ClipboardPaste,
 } from 'lucide-react';
 import Button from '@/components/button';
 import CopyButton from '@/components/copy-button';
@@ -74,6 +75,7 @@ export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
     const [projects, setProjects] = useState<Project[] | null>(null);
     const [project, setProject] = useState('');
     const [attempt, setAttempt] = useState(0);
+    const [detectedFromClipboard, setDetectedFromClipboard] = useState(false);
 
     useEffect(() => {
         const id = requestAnimationFrame(() => setSlidIn(true));
@@ -101,24 +103,68 @@ export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
         setError(null);
         setStatus({ state: 'starting', url: null, message: null });
 
-        void sendJson<{ run: number }>('/setup/cloud/gcp/login', 'POST').then(
-            (result) => {
-                if (!alive) {
-                    return;
-                }
+        void sendJson<{ run: number }>('/setup/cloud/gcp/login', 'POST', {
+            restart: attempt > 0,
+        }).then((result) => {
+            if (!alive) {
+                return;
+            }
 
-                if (result.ok) {
-                    setRun(result.data.run);
-                } else {
-                    setError(result.data.message ?? 'Could not start sign-in.');
-                }
-            },
-        );
+            if (result.ok) {
+                setRun(result.data.run);
+            } else {
+                setError(result.data.message ?? 'Could not start sign-in.');
+            }
+        });
 
         return () => {
             alive = false;
         };
     }, [attempt]);
+
+    useEffect(() => {
+        if (status.state !== 'waiting-code' || code.trim() !== '') {
+            return;
+        }
+
+        const handleFocus = async () => {
+            try {
+                if (navigator.clipboard?.readText) {
+                    const text = (await navigator.clipboard.readText()).trim();
+                    if (/^4\/[A-Za-z0-9_/.-]{20,}$/.test(text)) {
+                        setCode(text);
+                        setDetectedFromClipboard(true);
+                    }
+                }
+            } catch {
+                // Clipboard read permission might not be granted without direct gesture
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, [status.state, code]);
+
+    const pasteFromClipboard = async () => {
+        try {
+            const text = (await navigator.clipboard.readText()).trim();
+            if (text) {
+                setCode(text);
+                setDetectedFromClipboard(false);
+            }
+        } catch {
+            setError(
+                'Could not read clipboard. Please paste the code directly.',
+            );
+        }
+    };
+
+    const handleBackdropClick = () => {
+        if (status.state === 'waiting-code' || status.state === 'signing-in') {
+            return;
+        }
+        handleClose();
+    };
 
     useEffect(() => {
         if (
@@ -207,7 +253,7 @@ export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
                 'fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-300',
                 slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}
-            onClick={handleClose}
+            onClick={handleBackdropClick}
         >
             <div
                 role="dialog"
@@ -347,15 +393,40 @@ export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
                                             </p>
                                         </div>
                                         <div className="space-y-2.5">
-                                            <input
-                                                value={code}
-                                                onChange={(e) =>
-                                                    setCode(e.target.value)
-                                                }
-                                                placeholder="Paste authorization code here (e.g. 4/0A...)"
-                                                spellCheck={false}
-                                                className="w-full rounded-xl border-0 bg-surface px-3.5 py-2.5 font-mono text-xs ring-1 ring-line outline-none placeholder:font-sans placeholder:text-faint focus:ring-2 focus:ring-brand"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    value={code}
+                                                    onChange={(e) => {
+                                                        setCode(e.target.value);
+                                                        setDetectedFromClipboard(
+                                                            false,
+                                                        );
+                                                    }}
+                                                    placeholder="Paste authorization code here (e.g. 4/0A...)"
+                                                    spellCheck={false}
+                                                    className="w-full rounded-xl border-0 bg-surface px-3.5 py-2.5 pr-20 font-mono text-xs ring-1 ring-line outline-none placeholder:font-sans placeholder:text-faint focus:ring-2 focus:ring-brand"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        void pasteFromClipboard()
+                                                    }
+                                                    className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 cursor-pointer items-center gap-1 rounded-lg bg-badge px-2 py-1 text-[11px] font-medium text-soft transition hover:bg-line/70 hover:text-ink"
+                                                    title="Paste from clipboard"
+                                                >
+                                                    <ClipboardPaste className="size-3.5" />
+                                                    <span>Paste</span>
+                                                </button>
+                                            </div>
+                                            {detectedFromClipboard && (
+                                                <div className="flex items-center gap-1.5 rounded-lg border border-ok/20 bg-ok/10 px-2.5 py-1.5 text-[11px] font-medium text-ok dark:text-emerald-400">
+                                                    <CheckCircle2 className="size-3.5 shrink-0" />
+                                                    <span>
+                                                        Google verification code
+                                                        detected from clipboard!
+                                                    </span>
+                                                </div>
+                                            )}
                                             <Button
                                                 type="button"
                                                 variant="primary"

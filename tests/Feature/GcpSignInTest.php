@@ -100,3 +100,34 @@ test('saving gcp service account credentials delegates to CLI cloud:credentials'
         ->assertRedirect()
         ->assertSessionHas('success');
 });
+
+test('starting sign-in reuses an active running session unless restart is requested', function () {
+    gcpSignInWindows();
+    ChildProcess::fake();
+    $signIn = app(GcpSignIn::class);
+
+    $initialRun = $signIn->start();
+    expect($signIn->start()->id)->toBe($initialRun->id);
+
+    // With restart = true, old run is cancelled and new run is started
+    $restartedRun = $signIn->start(restart: true);
+    expect($restartedRun->id)->not->toBe($initialRun->id)
+        ->and($initialRun->fresh()->status)->toBe(RunStatus::Cancelled);
+});
+
+test('loginGcp endpoint reuses running session unless restart flag is sent', function () {
+    gcpSignInWindows();
+    ChildProcess::fake();
+
+    $res1 = $this->postJson('/setup/cloud/gcp/login');
+    $res1->assertOk();
+    $runId1 = $res1->json('run');
+
+    $res2 = $this->postJson('/setup/cloud/gcp/login');
+    $res2->assertOk();
+    expect($res2->json('run'))->toBe($runId1);
+
+    $res3 = $this->postJson('/setup/cloud/gcp/login', ['restart' => true]);
+    $res3->assertOk();
+    expect($res3->json('run'))->not->toBe($runId1);
+});
