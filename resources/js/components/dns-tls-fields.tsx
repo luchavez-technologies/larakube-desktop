@@ -281,7 +281,11 @@ export default function DnsTlsFields({
                             <p className="text-xs text-soft">
                                 Create a token with the{' '}
                                 <strong>Edit zone DNS</strong> template covering
-                                your domains at{' '}
+                                your domains, plus{' '}
+                                <strong>Zone → Zone Settings → Read</strong>{' '}
+                                (not included in that template) so LaraKube can
+                                confirm SSL/TLS mode before proxying a host
+                                through Cloudflare, at{' '}
                                 <ExternalLinkButton
                                     url="https://dash.cloudflare.com/profile/api-tokens"
                                     showIcon
