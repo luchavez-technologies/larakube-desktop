@@ -15,12 +15,20 @@ class CliInstaller
     public function __construct(
         private GlobalSettings $settings,
         private ?string $binDir = null,
+        private ?string $os = null,
+        private ?string $arch = null,
     ) {}
 
     public function binDir(): string
     {
         if ($this->binDir !== null) {
             return $this->binDir;
+        }
+
+        if ($this->os() === 'windows') {
+            $profile = ToolLocator::hostProfile(true);
+
+            return $profile !== '' ? "{$profile}/.larakube/bin" : '';
         }
 
         $home = ToolLocator::home();
@@ -44,11 +52,27 @@ class CliInstaller
 
     public function os(): string
     {
+        if ($this->os !== null) {
+            return $this->os;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            return 'windows';
+        }
+
         return PHP_OS_FAMILY === 'Darwin' ? 'mac' : 'linux';
     }
 
     public function arch(): string
     {
+        if ($this->arch !== null) {
+            return $this->arch;
+        }
+
+        if ($this->os() === 'windows') {
+            return 'x64';
+        }
+
         $machine = php_uname('m');
 
         if (in_array($machine, ['arm64', 'aarch64'], true)) {
@@ -60,7 +84,9 @@ class CliInstaller
 
     public function binaryName(): string
     {
-        return "larakube-{$this->os()}-{$this->arch()}";
+        $ext = $this->os() === 'windows' ? '.exe' : '';
+
+        return "larakube-{$this->os()}-{$this->arch()}{$ext}";
     }
 
     public function downloadUrl(?string $channel = null): string
@@ -88,7 +114,8 @@ class CliInstaller
             return ['success' => false, 'path' => null, 'error' => 'Could not determine user binary directory.'];
         }
 
-        $target = "{$binDir}/larakube";
+        $ext = $this->os() === 'windows' ? '.exe' : '';
+        $target = "{$binDir}/larakube{$ext}";
 
         try {
             if (! is_dir($binDir)) {
@@ -125,9 +152,9 @@ class CliInstaller
             chmod($target, 0755);
 
             // Initialize global config if not already created
-            $home = ToolLocator::home();
-            $configPath = "{$home}/.larakube/config.json";
-            if ($home !== '' && ! file_exists($configPath)) {
+            $configDir = dirname($binDir);
+            $configPath = "{$configDir}/config.json";
+            if (! file_exists($configPath)) {
                 @file_put_contents($configPath, json_encode(['email' => 'admin@larakube.dev'], JSON_PRETTY_PRINT));
             }
 

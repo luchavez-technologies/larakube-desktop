@@ -113,6 +113,10 @@ class ToolInstallController extends Controller
 
         $channel = in_array($request->input('channel'), CliInstaller::CHANNELS, true) ? (string) $request->input('channel') : $installer->channel();
 
+        // Update native Windows binary outside WSL
+        $installer->install($channel);
+        $readiness->forget('larakube');
+
         $run = $runner->start(
             label: "Update LaraKube CLI ({$channel})",
             arguments: ['update', ...($channel === 'canary' ? ['--canary'] : []), '--yes'],

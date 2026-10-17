@@ -49,3 +49,24 @@ test('tool install controller installs larakube directly in app', function () {
         ->and($run->subject)->toBe('larakube')
         ->and(file_exists("{$this->tempBin}/larakube"))->toBeTrue();
 });
+
+test('cli installer resolves windows binary name and download url on windows', function () {
+    $installer = new CliInstaller(app(GlobalSettings::class), binDir: $this->tempBin, os: 'windows');
+
+    expect($installer->os())->toBe('windows')
+        ->and($installer->binaryName())->toBe('larakube-windows-x64.exe')
+        ->and($installer->downloadUrl('canary'))->toContain('/download/canary/larakube-windows-x64.exe')
+        ->and($installer->downloadUrl('stable'))->toContain('/latest/download/larakube-windows-x64.exe');
+});
+
+test('cli installer installs larakube.exe on windows', function () {
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response('fake binary content longer than 1024 bytes '.str_repeat('A', 2048), 200),
+    ]);
+
+    $installer = new CliInstaller(app(GlobalSettings::class), binDir: $this->tempBin, os: 'windows');
+    $result = $installer->install('canary');
+
+    expect($result['success'])->toBeTrue()
+        ->and(file_exists("{$this->tempBin}/larakube.exe"))->toBeTrue();
+});
