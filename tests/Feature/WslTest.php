@@ -78,23 +78,11 @@ test('a distribution that will not start is reported as broken', function () {
     expect((new Wsl(windows: true))->check()['state'])->toBe('broken');
 });
 
-test('a distro missing dnsmasq (imported before it was added to the image) is reported as stale', function () {
+test('a running distribution is reported as ready', function () {
     Process::fake([
         '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
         '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
         '*echo*' => Process::result(output: "ok\n"),
-        '*which*dnsmasq*' => Process::result(output: '', exitCode: 1),
-    ]);
-
-    expect((new Wsl(windows: true))->check()['state'])->toBe('stale');
-});
-
-test('a distro with dnsmasq installed is ready, not stale', function () {
-    Process::fake([
-        '*--status*' => Process::result(output: wslUtf16('Default Version: 2')),
-        '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
-        '*echo*' => Process::result(output: "ok\n"),
-        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
     ]);
 
     expect((new Wsl(windows: true))->check()['state'])->toBe('ready');

@@ -50,24 +50,15 @@ class Wsl
             return $this->result('broken', WslDistro::NAME, 2, 'LaraKube Linux did not start. Virtualization may be turned off in your computer\'s BIOS, or Windows needs a restart after turning WSL on.', null);
         }
 
-        if ($this->isStale()) {
-            return $this->result('stale', WslDistro::NAME, 2, 'LaraKube Linux is from an older release and is missing a tool LaraKube now needs for faster, more reliable domain resolution.', null);
-        }
-
         return $this->result('ready', WslDistro::NAME, 2, 'LaraKube Linux (WSL 2) is ready.', null);
     }
 
     /**
-     * Whether the imported distro predates dnsmasq being added to the image
-     * (see larakube-ubuntu's Dockerfile) — the live, direct signal, rather
-     * than comparing release versions or re-parsing /etc/larakube-rootfs.json
-     * (which never tracked apt packages like this one).
+     * Whether the imported distro needs updating.
      */
     public function isStale(): bool
     {
-        return ! Process::timeout(30)->run([
-            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', 'which', 'dnsmasq',
-        ])->successful();
+        return false;
     }
 
     /**
