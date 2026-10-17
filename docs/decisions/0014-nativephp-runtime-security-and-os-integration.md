@@ -50,9 +50,10 @@ To ensure security across untrusted environments:
         'AWS_*', 'AZURE_*', 'GITHUB_*', 'DO_SPACES_*',
         'CLOUDFLARE_*', 'HETZNER_*', 'DIGITALOCEAN_*',
         'GCP_*', 'GOOGLE_*', 'TAILSCALE_*', 'OPENBAO_*', 'VAULT_*',
-        '*_SECRET', '*_TOKEN', '*_KEY',
+        '*_SECRET', '*_TOKEN', '*_API_KEY', '*_ACCESS_KEY', '*_PRIVATE_KEY',
         'BIFROST_*', 'NATIVEPHP_*',
     ],
+    // Note: Do not use '*_KEY' as it strips Laravel's essential APP_KEY.
     ```
 2. **Encrypted Local Storage**:
    Any credentials, API tokens, or server passwords persisted to local SQLite tables must be encrypted using `Illuminate\Support\Facades\Crypt::encryptString()`.
