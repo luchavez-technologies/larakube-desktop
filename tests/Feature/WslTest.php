@@ -350,3 +350,41 @@ test('ensureDnsmasq installs dnsmasq via apt if missing', function () {
     Process::assertRan(fn ($process) => in_array('apt-get', (array) $process->command, true)
         && in_array('dnsmasq', (array) $process->command, true));
 });
+
+test('ensureMirroredNetworking creates .wslconfig if missing', function () {
+    $temp = sys_get_temp_dir().'/userprofile-'.bin2hex(random_bytes(4));
+    mkdir($temp, 0777, true);
+    putenv('USERPROFILE='.$temp);
+
+    try {
+        $wsl = new Wsl(windows: true);
+        expect($wsl->ensureMirroredNetworking())->toBeTrue();
+
+        $content = file_get_contents($temp.'/.wslconfig');
+        expect($content)->toContain('[wsl2]')
+            ->and($content)->toContain('networkingMode=mirrored');
+    } finally {
+        File::deleteDirectory($temp);
+        putenv('USERPROFILE');
+    }
+});
+
+test('ensureMirroredNetworking updates existing .wslconfig in place', function () {
+    $temp = sys_get_temp_dir().'/userprofile-'.bin2hex(random_bytes(4));
+    mkdir($temp, 0777, true);
+    putenv('USERPROFILE='.$temp);
+    file_put_contents($temp.'/.wslconfig', "[wsl2]\nnetworkingMode=nat\nmemory=8GB\n");
+
+    try {
+        $wsl = new Wsl(windows: true);
+        expect($wsl->ensureMirroredNetworking())->toBeTrue();
+
+        $content = file_get_contents($temp.'/.wslconfig');
+        expect($content)->toContain('networkingMode=mirrored')
+            ->and($content)->not->toContain('networkingMode=nat')
+            ->and($content)->toContain('memory=8GB');
+    } finally {
+        File::deleteDirectory($temp);
+        putenv('USERPROFILE');
+    }
+});

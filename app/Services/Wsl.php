@@ -217,6 +217,7 @@ class Wsl
             }
         }
 
+        $this->ensureMirroredNetworking();
         $this->terminate();
 
         return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
@@ -478,5 +479,45 @@ class Wsl
     private function result(string $state, ?string $distro, ?int $version, string $message, ?string $command): array
     {
         return ['state' => $state, 'distro' => $distro, 'version' => $version, 'message' => $message, 'command' => $command];
+    }
+
+    /**
+     * Ensures WSL2 mirrored networking mode is configured in %USERPROFILE%\.wslconfig.
+     * Mirrored mode shares localhost between Windows and WSL so the browser reaches
+     * the cluster at 127.0.0.1.
+     */
+    public function ensureMirroredNetworking(): bool
+    {
+        if (! $this->isWindows()) {
+            return true;
+        }
+
+        $userProfile = (string) (getenv('USERPROFILE') ?: '');
+        if ($userProfile === '') {
+            return false;
+        }
+
+        $configPath = $userProfile.DIRECTORY_SEPARATOR.'.wslconfig';
+        $content = is_file($configPath) ? (string) @file_get_contents($configPath) : '';
+
+        if (preg_match('/^[ \t]*networkingMode[ \t]*=[ \t]*mirrored\b/mi', $content) === 1) {
+            return true;
+        }
+
+        $entry = 'networkingMode=mirrored';
+        if (preg_match('/^[ \t]*networkingMode[ \t]*=/mi', $content) === 1) {
+            $newContent = preg_replace('/^[ \t]*networkingMode[ \t]*=.*$/mi', $entry, $content, 1) ?? $content;
+        } elseif (preg_match('/^[ \t]*\[wsl2\][ \t]*$/mi', $content) === 1) {
+            $newContent = preg_replace('/^([ \t]*\[wsl2\][ \t]*)$/mi', "$1\r\n".$entry, $content, 1) ?? $content;
+        } else {
+            $prefix = trim($content) === '' ? '' : rtrim($content)."\r\n\r\n";
+            $newContent = $prefix."[wsl2]\r\n".$entry."\r\n";
+        }
+
+        try {
+            return @file_put_contents($configPath, $newContent) !== false;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

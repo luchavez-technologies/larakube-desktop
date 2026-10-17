@@ -59,8 +59,26 @@ class ToolLocator
         }
 
         if ($this->isWindows()) {
+            $sysRoot = rtrim((string) (getenv('SystemRoot') ?: 'C:\\Windows'), '\\');
+            $winDir = WslDistro::toLinux($sysRoot);
+
             // The same places as on a Mac or Linux: the CLI puts the Google Cloud SDK in ~/google-cloud-sdk, and snap tools in /snap/bin.
-            return [WslDistro::HOME.'/.local/bin', WslDistro::HOME.'/.larakube/bin', WslDistro::HOME.'/bin', WslDistro::HOME.'/google-cloud-sdk/bin', '/usr/local/bin', '/snap/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+            // Also include Windows System32 and PowerShell paths so WSL commands (like cmd.exe / powershell.exe) can run from WSL.
+            return [
+                WslDistro::HOME.'/.local/bin',
+                WslDistro::HOME.'/.larakube/bin',
+                WslDistro::HOME.'/bin',
+                WslDistro::HOME.'/google-cloud-sdk/bin',
+                '/usr/local/bin',
+                '/snap/bin',
+                '/usr/bin',
+                '/bin',
+                '/usr/sbin',
+                '/sbin',
+                "{$winDir}/System32",
+                $winDir,
+                "{$winDir}/System32/WindowsPowerShell/v1.0",
+            ];
         }
 
         $home = self::home();

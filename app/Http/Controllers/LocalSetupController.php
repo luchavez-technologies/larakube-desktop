@@ -5,14 +5,19 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Services\Elevation;
 use App\Services\LaraKube\CliRunner;
+use App\Services\Wsl;
 use Illuminate\Http\RedirectResponse;
 
 class LocalSetupController extends Controller
 {
     public const MANUAL_COMMAND = 'larakube setup --profile=local --runtime=podman';
 
-    public function store(CliRunner $runner, Elevation $elevation): RedirectResponse
+    public function store(CliRunner $runner, Elevation $elevation, Wsl $wsl): RedirectResponse
     {
+        if ($wsl->isWindows()) {
+            $wsl->ensureMirroredNetworking();
+        }
+
         if ($elevation->method() === null || ! $elevation->grant()) {
             return back()->withErrors([
                 'local' => 'Desktop could not get administrator access. Open a terminal and run: '.self::MANUAL_COMMAND,
