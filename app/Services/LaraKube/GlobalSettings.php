@@ -44,7 +44,7 @@ class GlobalSettings
     public function get(): array
     {
         $config = $this->readConfig();
-        $home = ToolLocator::home();
+        $home = ToolLocator::hostProfile($this->locator->isWindows());
         $binary = $this->locator->find('larakube') ?? 'larakube';
 
         $agents = [
@@ -294,7 +294,7 @@ class GlobalSettings
 
     public function bridge(string $agent): bool
     {
-        $home = ToolLocator::home();
+        $home = ToolLocator::hostProfile($this->locator->isWindows());
         $binary = $this->locator->find('larakube') ?? 'larakube';
 
         $mcpConfig = [
@@ -318,14 +318,28 @@ class GlobalSettings
      */
     private function readConfig(): array
     {
-        $path = $this->configPath();
-        if (! is_file($path)) {
-            return [];
+        $path = $this->hostConfigPath();
+        if (@is_file($path)) {
+            $decoded = json_decode((string) @file_get_contents($path), true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
         }
 
-        $decoded = json_decode((string) file_get_contents($path), true);
+        $wslPath = $this->wslConfigPath();
+        if ($wslPath !== null) {
+            try {
+                if (@is_file($wslPath)) {
+                    $decoded = json_decode((string) @file_get_contents($wslPath), true);
+                    if (is_array($decoded)) {
+                        return $decoded;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
 
-        return is_array($decoded) ? $decoded : [];
+        return [];
     }
 
     /**
@@ -333,22 +347,48 @@ class GlobalSettings
      */
     private function writeConfig(array $config): void
     {
-        $path = $this->configPath();
+        $path = $this->hostConfigPath();
         $dir = dirname($path);
 
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        try {
+            if (! @is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+
+            @file_put_contents($path, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } catch (\Throwable) {
         }
 
-        file_put_contents($path, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $wslPath = $this->wslConfigPath();
+        if ($wslPath !== null) {
+            try {
+                $wslDir = dirname($wslPath);
+                if (! @is_dir($wslDir)) {
+                    @mkdir($wslDir, 0755, true);
+                }
+
+                @file_put_contents($wslPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            } catch (\Throwable) {
+            }
+        }
     }
 
-    private function configPath(): string
+    private function hostConfigPath(): string
     {
-        $home = ToolLocator::home();
-        $path = $home !== '' ? "{$home}/.larakube/config.json" : storage_path('larakube/config.json');
+        $profile = ToolLocator::hostProfile($this->locator->isWindows());
 
-        return $this->locator->isWindows() ? WslDistro::toWindows($path) : $path;
+        return $profile !== ''
+            ? rtrim(str_replace('\\', '/', $profile), '/').'/.larakube/config.json'
+            : storage_path('larakube/config.json');
+    }
+
+    private function wslConfigPath(): ?string
+    {
+        if (PHP_OS_FAMILY !== 'Windows' || ! $this->locator->isWindows()) {
+            return null;
+        }
+
+        return WslDistro::toWindows(WslDistro::HOME.'/.larakube/config.json');
     }
 
     private function isAgentBridged(string $configPath): bool

@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
@@ -143,4 +144,32 @@ test('demo mode is shared to every Inertia page like hideProjects and experiment
         ->assertInertia(fn (AssertableInertia $page) => $page->where('demoMode', true));
 
     File::deleteDirectory($home);
+});
+
+test('usage choice can be set on Windows without WSL being installed or accessible', function () {
+    $tempProfile = storage_path('framework/testing/win-profile-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($tempProfile);
+    $_SERVER['USERPROFILE'] = realpath($tempProfile);
+
+    $locator = new ToolLocator(windows: true);
+    app()->instance(ToolLocator::class, $locator);
+    $settings = new GlobalSettings($locator);
+    app()->instance(GlobalSettings::class, $settings);
+
+    $this->from(route('onboarding'))
+        ->post(route('setup.usage'), ['usage' => 'tools'])
+        ->assertRedirect(route('onboarding'));
+
+    expect($settings->get()['usage'])->toBe('tools')
+        ->and($settings->hideProjects())->toBeTrue();
+
+    // Verify written to host profile
+    $hostConfigFile = realpath($tempProfile).'/.larakube/config.json';
+    expect(File::exists($hostConfigFile))->toBeTrue();
+    $decoded = json_decode((string) File::get($hostConfigFile), true);
+    expect($decoded['usage'])->toBe('tools')
+        ->and($decoded['hideProjects'])->toBeTrue();
+
+    File::deleteDirectory($tempProfile);
+    unset($_SERVER['USERPROFILE']);
 });
