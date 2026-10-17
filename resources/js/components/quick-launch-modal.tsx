@@ -151,15 +151,24 @@ export default function QuickLaunchModal({
 }: Props) {
     useRightDrawerOpen(isOpen);
 
-    const { untested, demoMode } = usePage<{
+    const {
+        untested,
+        demoMode,
+        localTld: pageLocalTld = 'kube',
+    } = usePage<{
         untested: Untested;
         demoMode?: boolean;
+        localTld?: string;
     }>().props;
 
     const readyServers = useMemo(
         () => servers.filter((s) => s.status === 'ready' && s.context),
         [servers],
     );
+
+    const [clusterLocalTld, setClusterLocalTld] =
+        useState<string>(pageLocalTld);
+    const activeLocalTld = clusterLocalTld || pageLocalTld || 'kube';
 
     const [currentStep, setCurrentStep] = useState<number>(1);
     const [highestReachedStep, setHighestReachedStep] = useState<number>(1);
@@ -396,8 +405,17 @@ export default function QuickLaunchModal({
                 (data: {
                     domains?: ServerDomain[];
                     activeCommonsServices?: string[];
+                    localTld?: string;
                 }) => {
                     if (cancelled) return;
+                    if (data.localTld) {
+                        setClusterLocalTld(data.localTld);
+                    }
+                    const activeTld =
+                        data.localTld ||
+                        clusterLocalTld ||
+                        pageLocalTld ||
+                        'kube';
                     const fetched: ServerDomain[] = data.domains ?? [];
                     setDomains(fetched);
 
@@ -417,11 +435,11 @@ export default function QuickLaunchModal({
                         setBaseDomain(bestDomain.domain);
                         setUseCustomDomain(false);
                     } else if (isLocalServer) {
-                        setBaseDomain('dev.test');
+                        setBaseDomain(activeTld);
                         setUseCustomDomain(false);
                     } else {
                         // Cloud server without connected cluster domains:
-                        // Do not suggest local .dev.test or third-party nip.io. Let operator enter their own domain.
+                        // Do not suggest third-party nip.io. Let operator enter their own domain.
                         setBaseDomain('');
                         setUseCustomDomain(false);
                     }
@@ -562,15 +580,32 @@ export default function QuickLaunchModal({
         // The domain the person is actually launching on (the base domain
         // they picked, not the app's own subdomain prefix) reads as a real
         // admin address — a per-server ".local" placeholder didn't.
+        // If the base domain is a single-label local TLD (e.g. "kube" or "test"),
+        // include the subdomain to form a valid email address (e.g. admin@pocketbase.kube).
         const domain = useCustomDomain
             ? customDomain.trim().toLowerCase()
             : baseDomain.trim().toLowerCase();
         if (domain) {
-            setAdminEmail(`admin@${domain}`);
+            if (!domain.includes('.')) {
+                const sub = (subdomain || currentApp.defaultSubdomain || 'app')
+                    .trim()
+                    .toLowerCase();
+                setAdminEmail(`admin@${sub}.${domain}`);
+            } else {
+                setAdminEmail(`admin@${domain}`);
+            }
         } else if (currentServer?.ip) {
             setAdminEmail(`admin@${currentServer.name}.local`);
         }
-    }, [currentServer, baseDomain, useCustomDomain, customDomain, demoMode]);
+    }, [
+        currentServer,
+        baseDomain,
+        useCustomDomain,
+        customDomain,
+        subdomain,
+        currentApp.defaultSubdomain,
+        demoMode,
+    ]);
 
     const appSupportsMail = Boolean(
         currentApp.capabilities.mail?.includes('smtp'),
@@ -625,7 +660,7 @@ export default function QuickLaunchModal({
         }
         const sub =
             subdomain.trim().toLowerCase() || currentApp.defaultSubdomain;
-        const fallbackBase = isLocalServer ? 'dev.test' : 'example.com';
+        const fallbackBase = isLocalServer ? activeLocalTld : 'example.com';
         const base = baseDomain.trim().toLowerCase() || fallbackBase;
         return `${sub}.${base}`;
     }, [
@@ -635,6 +670,7 @@ export default function QuickLaunchModal({
         currentApp.defaultSubdomain,
         baseDomain,
         isLocalServer,
+        activeLocalTld,
     ]);
 
     if (!isOpen) {
@@ -1287,7 +1323,7 @@ export default function QuickLaunchModal({
                                                         type="button"
                                                         onClick={() => {
                                                             setBaseDomain(
-                                                                'dev.test',
+                                                                activeLocalTld,
                                                             );
                                                             setUseCustomDomain(
                                                                 false,
@@ -1297,7 +1333,8 @@ export default function QuickLaunchModal({
                                                     >
                                                         <Zap className="size-3" />
                                                         <span>
-                                                            Use local .dev.test
+                                                            Use local .
+                                                            {activeLocalTld}
                                                         </span>
                                                     </button>
                                                 ) : null}
@@ -1518,7 +1555,7 @@ export default function QuickLaunchModal({
                                                         }
                                                         placeholder={
                                                             isLocalServer
-                                                                ? 'dev.test'
+                                                                ? activeLocalTld
                                                                 : 'example.com'
                                                         }
                                                         className="w-48 rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"

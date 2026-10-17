@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { usePage } from '@inertiajs/react';
 import { Check, ChevronDown, Globe, Plus, Sparkles, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ServerDomain } from '@/types/larakube';
@@ -29,8 +30,10 @@ export type HostPickerProps = {
     serverIp?: string | null;
     /** Default subdomain fallback (e.g. project name) */
     defaultSubdomain?: string;
-    /** Whether target server is local dev (.dev.test) */
+    /** Whether target server is local dev (.kube or .dev.test) */
     isLocal?: boolean;
+    /** Custom local TLD override (defaults to global settings / Inertia page prop) */
+    localTld?: string;
     /** Disabled state */
     disabled?: boolean;
     /** Header label text, defaults to "Domain / Host Address" */
@@ -49,6 +52,7 @@ function parseInitialHost(
     domains: ServerDomain[],
     defaultSubdomain: string,
     isLocal: boolean,
+    localTld: string = 'kube',
 ): {
     useCustomDomain: boolean;
     subdomain: string;
@@ -82,7 +86,7 @@ function parseInitialHost(
         const bestBase =
             domains.find((d) => d.externalDns)?.domain ??
             domains[0]?.domain ??
-            (isLocal ? 'dev.test' : '');
+            (isLocal ? localTld : '');
         const dotIndex = raw.indexOf('.');
         const sub = dotIndex > 0 ? raw.slice(0, dotIndex) : defaultSubdomain;
 
@@ -113,10 +117,10 @@ function parseInitialHost(
         return {
             useCustomDomain: false,
             subdomain: defaultSubdomain,
-            baseDomain: 'dev.test',
+            baseDomain: localTld,
             customDomain: defaultSubdomain
-                ? `${defaultSubdomain}.dev.test`
-                : 'dev.test',
+                ? `${defaultSubdomain}.${localTld}`
+                : localTld,
         };
     }
 
@@ -138,6 +142,7 @@ export default function HostPicker({
     serverIp,
     defaultSubdomain = 'app',
     isLocal,
+    localTld: propLocalTld,
     disabled = false,
     label = 'Domain / Host Address',
     hideLabel = false,
@@ -145,6 +150,12 @@ export default function HostPicker({
     children,
     className,
 }: HostPickerProps) {
+    const pageLocalTld =
+        (usePage().props as { localTld?: string }).localTld || 'kube';
+    const [serverLocalTld, setServerLocalTld] = useState<string | null>(null);
+    const activeLocalTld =
+        propLocalTld || serverLocalTld || pageLocalTld || 'kube';
+
     const isLocalServer = Boolean(
         isLocal ||
         (serverIp && ['127.0.0.1', 'localhost', 'local'].includes(serverIp)) ||
@@ -172,12 +183,21 @@ export default function HostPicker({
 
         fetch(`/servers/${encodeURIComponent(serverName)}/domains`)
             .then((res) => (res.ok ? res.json() : { domains: [] }))
-            .then((data: { domains?: ServerDomain[] }) => {
-                if (cancelled) return;
-                if (Array.isArray(data.domains)) {
-                    setFetchedDomains(data.domains);
-                }
-            })
+            .then(
+                (data: {
+                    domains?: ServerDomain[];
+                    localTld?: string;
+                    isLocal?: boolean;
+                }) => {
+                    if (cancelled) return;
+                    if (Array.isArray(data.domains)) {
+                        setFetchedDomains(data.domains);
+                    }
+                    if (data.localTld) {
+                        setServerLocalTld(data.localTld);
+                    }
+                },
+            )
             .catch(() => {
                 if (!cancelled) setFetchedDomains([]);
             })
@@ -203,6 +223,7 @@ export default function HostPicker({
                 activeDomains,
                 defaultSubdomain,
                 isLocalServer,
+                activeLocalTld,
             ),
         // Only run on mount / first render
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -251,22 +272,33 @@ export default function HostPicker({
             activeDomains,
             defaultSubdomain,
             isLocalServer,
+            activeLocalTld,
         );
         setUseCustomDomain(parsed.useCustomDomain);
         setSubdomain(parsed.subdomain);
         setBaseDomain(parsed.baseDomain);
         setCustomDomain(parsed.customDomain);
-    }, [value, activeDomains, defaultSubdomain, isLocalServer]);
+    }, [value, activeDomains, defaultSubdomain, isLocalServer, activeLocalTld]);
 
     // When activeDomains loads/updates and baseDomain is empty, auto-pick best domain
     useEffect(() => {
-        if (activeDomains.length > 0 && !baseDomain && !useCustomDomain) {
-            const best =
-                activeDomains.find((d) => d.externalDns)?.domain ??
-                activeDomains[0].domain;
-            setBaseDomain(best);
+        if (!baseDomain && !useCustomDomain) {
+            if (activeDomains.length > 0) {
+                const best =
+                    activeDomains.find((d) => d.externalDns)?.domain ??
+                    activeDomains[0].domain;
+                setBaseDomain(best);
+            } else if (isLocalServer) {
+                setBaseDomain(activeLocalTld);
+            }
         }
-    }, [activeDomains, baseDomain, useCustomDomain]);
+    }, [
+        activeDomains,
+        baseDomain,
+        useCustomDomain,
+        isLocalServer,
+        activeLocalTld,
+    ]);
 
     // Close dropdown on outside click or Escape
     useEffect(() => {
@@ -398,13 +430,13 @@ export default function HostPicker({
                                 type="button"
                                 disabled={disabled}
                                 onClick={() => {
-                                    setBaseDomain('dev.test');
+                                    setBaseDomain(activeLocalTld);
                                     setUseCustomDomain(false);
                                 }}
                                 className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-brand hover:underline disabled:opacity-45"
                             >
                                 <Zap className="size-3" />
-                                <span>Use local .dev.test</span>
+                                <span>Use local .{activeLocalTld}</span>
                             </button>
                         ) : null}
 
@@ -593,7 +625,7 @@ export default function HostPicker({
                             disabled={disabled}
                             onChange={(e) => setBaseDomain(e.target.value)}
                             placeholder={
-                                isLocalServer ? 'dev.test' : 'example.com'
+                                isLocalServer ? activeLocalTld : 'example.com'
                             }
                             className="w-48 rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2 focus:ring-brand disabled:opacity-45"
                             required

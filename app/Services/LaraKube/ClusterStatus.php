@@ -173,7 +173,12 @@ class ClusterStatus
                     foreach ($hosts as $host) {
                         $parts = explode('.', strtolower(trim($host)));
                         if (count($parts) >= 2) {
-                            $base = count($parts) >= 3 ? implode('.', array_slice($parts, 1)) : implode('.', $parts);
+                            $lastPart = end($parts);
+                            if (count($parts) === 2 && in_array($lastPart, GlobalSettings::ALLOWED_TLDS, true)) {
+                                $base = $lastPart;
+                            } else {
+                                $base = count($parts) >= 3 ? implode('.', array_slice($parts, 1)) : implode('.', $parts);
+                            }
                             $domains[$base] ??= [
                                 'domain' => $base,
                                 'externalDns' => false,

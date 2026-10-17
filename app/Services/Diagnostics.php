@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use Throwable;
 
@@ -34,15 +35,17 @@ class Diagnostics
                     $networking = $m[1];
                 }
             }
-            $sections[] = "WSL Networking Mode: {$networking}".($networking === 'mirrored' ? ' (optimal for *.dev.test)' : ' (mirrored recommended)');
+            /** @var string $localTld */
+            $localTld = rescue(fn (): string => app(GlobalSettings::class)->getLocalTld(), 'kube', report: false);
+            $sections[] = "WSL Networking Mode: {$networking}".($networking === 'mirrored' ? " (optimal for *.{$localTld})" : ' (mirrored recommended)');
 
             $hostsFile = (string) (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\drivers\\etc\\hosts';
             $hostsEntries = 0;
             if (is_file($hostsFile)) {
                 $hostsContent = (string) file_get_contents($hostsFile);
-                $hostsEntries = preg_match_all('/\.test\b/i', $hostsContent);
+                $hostsEntries = preg_match_all('/\.'.preg_quote($localTld, '/').'\b/i', $hostsContent);
             }
-            $sections[] = 'Windows hosts file: '.(is_file($hostsFile) ? "accessible ({$hostsEntries} .test entries)" : 'not found');
+            $sections[] = 'Windows hosts file: '.(is_file($hostsFile) ? "accessible ({$hostsEntries} .{$localTld} entries)" : 'not found');
 
             $backupDir = $this->wsl->backupDirectory();
             $backupCount = is_dir($backupDir) ? count(glob($backupDir.DIRECTORY_SEPARATOR.'*.tar.gz') ?: []) : 0;

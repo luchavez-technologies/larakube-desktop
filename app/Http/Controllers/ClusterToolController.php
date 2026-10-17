@@ -104,14 +104,30 @@ class ClusterToolController extends Controller
         ]);
     }
 
-    public function domains(string $server, ClusterStatus $status, DomainCatalog $domains): JsonResponse
+    public function domains(string $server, ClusterStatus $status, DomainCatalog $domains, GlobalSettings $settings): JsonResponse
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
+        $isLocal = Server::isStackLocal($stack);
+        $localTld = $settings->getLocalTld();
+
+        $serverDomains = $domains->forContext($context) ?? [];
+
+        if ($isLocal && ! collect($serverDomains)->contains('domain', $localTld)) {
+            array_unshift($serverDomains, [
+                'domain' => $localTld,
+                'externalDns' => false,
+                'dnsProvider' => null,
+                'tls' => true,
+                'inUse' => true,
+            ]);
+        }
 
         return response()->json([
-            'domains' => $domains->forContext($context) ?? [],
+            'domains' => $serverDomains,
             'activeCommonsServices' => $this->activeServices($status, $context),
+            'localTld' => $localTld,
+            'isLocal' => $isLocal,
         ]);
     }
 
