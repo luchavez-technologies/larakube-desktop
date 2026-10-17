@@ -466,6 +466,83 @@ class Wsl
         return Process::timeout(30)->run(['wsl.exe', '--shutdown'])->successful();
     }
 
+    /** @return list<string> every currently-running distro's name */
+    private function runningDistros(): array
+    {
+        $listing = Process::timeout(30)->run(['wsl.exe', '--list', '--running', '--verbose']);
+
+        if (! $listing->successful()) {
+            return [];
+        }
+
+        $names = [];
+        foreach (preg_split('/\R/', $this->text($listing->output())) ?: [] as $line) {
+            if (preg_match('/^\s*\*?\s*(\S+)\s+(Running)\s+([12])\s*$/i', $line, $match) === 1) {
+                $names[] = $match[1];
+            }
+        }
+
+        return $names;
+    }
+
+    /** Whether larakube-ubuntu itself is currently running. */
+    public function distroIsRunning(): bool
+    {
+        return in_array(WslDistro::NAME, $this->runningDistros(), true);
+    }
+
+    /**
+     * Names of running WSL distros besides larakube-ubuntu — `wsl --shutdown`
+     * tears down every distro on the machine, not just this one, so a caller
+     * needs this before restarting WSL on the user's behalf.
+     *
+     * @return list<string>
+     */
+    public function otherRunningDistros(): array
+    {
+        return array_values(array_filter($this->runningDistros(), fn (string $name): bool => $name !== WslDistro::NAME));
+    }
+
+    /**
+     * Whether ~/.wslconfig already requests mirrored networking, read-only —
+     * distinct from ensureMirroredNetworking(), which also writes it. The
+     * answer can change between two calls once something else in between
+     * writes to the file (ensureMirroredNetworking() itself, a user editing
+     * it by hand), so callers comparing before/after must not have this
+     * memoized.
+     *
+     * @phpstan-impure
+     */
+    public function mirroredNetworkingRequested(): bool
+    {
+        $userProfile = (string) (getenv('USERPROFILE') ?: '');
+        if ($userProfile === '') {
+            return false;
+        }
+
+        $content = is_file($userProfile.DIRECTORY_SEPARATOR.'.wslconfig')
+            ? (string) @file_get_contents($userProfile.DIRECTORY_SEPARATOR.'.wslconfig')
+            : '';
+
+        return preg_match('/^[ \t]*networkingMode[ \t]*=[ \t]*mirrored\b/mi', $content) === 1;
+    }
+
+    /**
+     * Restarts WSL to apply a networking config change, but only when no
+     * other distro is running (a silent `wsl --shutdown` would interrupt
+     * someone else's unrelated work). Returns false when skipped for that
+     * reason — the CLI's own reminder (ConfiguresWslNetworking) remains the
+     * fallback whenever this doesn't run.
+     */
+    public function restartForNetworkingChange(): bool
+    {
+        if ($this->otherRunningDistros() !== []) {
+            return false;
+        }
+
+        return $this->shutdown();
+    }
+
     /** @return array{name: string, version: int}|null */
     public function distro(): ?array
     {
