@@ -315,3 +315,34 @@ test('cluster tool index provides activeCommonsServices prop', function () {
         )
     );
 });
+
+test('quick actions fields defaults proxied to 0 on local clusters', function () {
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'local-cluster', 'provider' => 'k3d', 'kind' => 'local', 'region' => 'local', 'ip' => '127.0.0.1', 'context' => 'k3d-local', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([
+            [
+                'tool' => 'pocketbase', 'instance' => '', 'icon' => '*', 'brand' => 'PocketBase', 'label' => 'Data / Backend (PocketBase)', 'installed' => false,
+                'removeCommand' => 'pocketbase:remove', 'namespace' => 'larakube-shared', 'host' => null, 'aliases' => [], 'url' => null,
+                'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+                'commonsCapabilities' => ['databases' => ['sqlite'], 'cache' => [], 'storage' => ['s3'], 'auth' => [], 'mail' => []],
+                'initFields' => [
+                    ['key' => 'domain', 'label' => 'Domain', 'type' => 'text', 'role' => 'host', 'flag' => '--domain='],
+                    ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text', 'role' => 'account'],
+                    ['key' => 'proxied', 'label' => 'Proxied', 'type' => 'confirm', 'role' => 'access', 'flag' => '--proxied=', 'default' => '1'],
+                ],
+            ],
+        ])),
+    ]);
+
+    $response = $this->getJson(route('quick-actions.fields', [
+        'server' => 'local-cluster',
+        'tool' => 'pocketbase',
+    ]));
+
+    $response->assertOk();
+    $proxiedField = collect($response->json('fields'))->firstWhere('key', 'proxied');
+    expect($proxiedField)->not->toBeNull()
+        ->and($proxiedField['default'])->toBe('0');
+});

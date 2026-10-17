@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
 use App\Http\Requests\QuickLaunchAppRequest;
+use App\Models\Server;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\StackCatalog;
@@ -33,7 +34,9 @@ class QuickActionController extends Controller
 
         abort_if($row === null, 404);
 
-        return response()->json(['fields' => $this->optionFields($row)]);
+        $isLocal = Server::isStackLocal($stack);
+
+        return response()->json(['fields' => $this->optionFields($row, $isLocal)]);
     }
 
     public function launch(QuickLaunchAppRequest $request, CliRunner $runner): JsonResponse
@@ -63,8 +66,10 @@ class QuickActionController extends Controller
 
         $extraOptions = (array) $request->input('options', []);
 
+        $isLocal = Server::isStackLocal($stack);
+
         $resolved = app(FrameworkForm::class)->resolve(
-            $this->optionFields($row),
+            $this->optionFields($row, $isLocal),
             $extraOptions,
         );
 
@@ -145,10 +150,21 @@ class QuickActionController extends Controller
      * @param  array<string, mixed>  $row
      * @return list<array<string, mixed>>
      */
-    private function optionFields(array $row): array
+    private function optionFields(array $row, bool $isLocal = false): array
     {
         $fields = is_array($row['initFields'] ?? null) ? $row['initFields'] : [];
 
-        return array_values(array_filter($fields, fn (array $field): bool => ! in_array($field['role'] ?? 'option', ['host', 'account'], true)));
+        $filtered = array_values(array_filter($fields, fn (array $field): bool => ! in_array($field['role'] ?? 'option', ['host', 'account'], true)));
+
+        if ($isLocal) {
+            foreach ($filtered as &$field) {
+                if (($field['key'] ?? '') === 'proxied') {
+                    $field['default'] = '0';
+                }
+            }
+            unset($field);
+        }
+
+        return $filtered;
     }
 }

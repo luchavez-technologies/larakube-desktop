@@ -1973,6 +1973,33 @@ function InstallDialog({
             ),
         [tool.initFields],
     );
+    const isLocalServer = useMemo(() => {
+        const provider = (server.provider ?? '').toLowerCase();
+        const localProviders = [
+            'local',
+            'k3d',
+            'kind',
+            'orbstack',
+            'minikube',
+            'docker',
+        ];
+        if (localProviders.includes(provider)) return true;
+        if (server.region === 'local') return true;
+        if (
+            server.ip &&
+            ['127.0.0.1', 'localhost', 'local'].includes(server.ip)
+        ) {
+            return true;
+        }
+        if (
+            !server.ip &&
+            !['gcp', 'aws', 'do', 'hetzner', 'vps', 'cloud'].includes(provider)
+        ) {
+            return true;
+        }
+        return false;
+    }, [server]);
+
     const [options, setOptions] = useState<NewAppAnswers>(() => {
         const answers = defaultAnswers(optionFields);
 
@@ -1995,11 +2022,12 @@ function InstallDialog({
                   (d) => d.domain === selectedBaseDomain && d.externalDns,
               );
 
-        if (
-            optionFields.some((field) => field.key === 'proxied') &&
-            matched?.dnsProvider === 'cloudflare'
-        ) {
-            answers.proxied = true;
+        // For local clusters, proxied must always be false by default.
+        // For cloud servers, default to true only when Cloudflare-managed.
+        if (optionFields.some((field) => field.key === 'proxied')) {
+            answers.proxied = isLocalServer
+                ? false
+                : matched?.dnsProvider === 'cloudflare';
         }
 
         return answers;

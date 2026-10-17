@@ -534,15 +534,10 @@ export default function QuickLaunchModal({
             ) {
                 answers.db = 'mysql';
             }
-            // Cloudflare already proxies every Ingress on the zone — deploying
-            // straight through DNS-only would be the surprising choice, not
-            // the safe one, so default a "proxied" field on when the chosen
-            // host is actually Cloudflare-managed.
-            if (
-                fetched.some((field) => field.key === 'proxied') &&
-                isCloudflareManaged
-            ) {
-                answers.proxied = true;
+            // For local clusters, proxied must always be false by default.
+            // For cloud servers, default to true only when Cloudflare-managed.
+            if (fetched.some((field) => field.key === 'proxied')) {
+                answers.proxied = isLocalServer ? false : isCloudflareManaged;
             }
             setOptions(answers);
         })();
@@ -556,6 +551,7 @@ export default function QuickLaunchModal({
         isOpen,
         clusterServices,
         isCloudflareManaged,
+        isLocalServer,
     ]);
 
     // Initial server selection and email
