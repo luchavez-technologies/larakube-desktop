@@ -260,12 +260,14 @@ test('an unavailable option value is rejected with a field-scoped error', functi
 test('the fields endpoint returns a tool\'s own init fields, live', function () {
     $this->get(route('quick-actions.fields', ['tool' => 'n8n', 'server' => 'prod-server']))
         ->assertOk()
+        ->assertJsonPath('needsAdminEmail', false)
         ->assertJsonMissingPath('fields.1') // domain (host role) is filtered: Quick Launch's own Domain/Host Address field already covers it
         ->assertJsonPath('fields.0.key', 'noPlex')
         ->assertJsonPath('fields.0.flag', '--no-plex');
 
     $this->get(route('quick-actions.fields', ['tool' => 'wordpress', 'server' => 'prod-server']))
         ->assertOk()
+        ->assertJsonPath('needsAdminEmail', true)
         ->assertJsonPath('fields.0.key', 'db')
         ->assertJsonCount(1, 'fields'); // domain (host) and adminEmail (account) are filtered out — Quick Launch already has dedicated UI for both
 

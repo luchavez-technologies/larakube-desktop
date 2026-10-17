@@ -6,7 +6,9 @@ use App\Enums\RunKind;
 use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\DriveStatus;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,8 +34,13 @@ class DriveController extends Controller
     /**
      * Drive management overview for the selected server.
      */
-    public function index(string $server, DriveStatus $status, CurrentServer $current): Response
-    {
+    public function index(
+        string $server,
+        DriveStatus $status,
+        CurrentServer $current,
+        DomainCatalog $domains,
+        GlobalSettings $settings,
+    ): Response {
         $stack = $this->readyServer($server);
         $current->remember($server);
 
@@ -41,10 +48,17 @@ class DriveController extends Controller
         $isInstalled = $status->isInstalled($context);
         $servers = array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready'));
 
+        $serverDomains = $domains->forContext($context) ?? [];
+        $isLocal = Server::isStackLocal($stack);
+        $localTld = $settings->getLocalTld();
+
         return Inertia::render('drive/index', [
             'server' => $stack,
             'servers' => $servers,
             'isInstalled' => $isInstalled,
+            'domains' => $serverDomains,
+            'isLocal' => $isLocal,
+            'localTld' => $localTld,
             'serverInfo' => $isInstalled
                 ? Inertia::defer(fn (): ?array => $status->serverInfo($context), 'serverInfo')
                 : null,
@@ -64,7 +78,6 @@ class DriveController extends Controller
         $context = (string) $stack['context'];
 
         $domain = $request->string('domain')->trim()->lower()->toString();
-        $adminEmail = $request->string('admin_email')->trim()->toString();
         $vpnOnly = $request->boolean('vpn_only');
         $enableOffice = $request->boolean('enable_office');
         $extensions = $request->input('extensions');
@@ -75,9 +88,6 @@ class DriveController extends Controller
         $args = ['tool:init', '--tool=ocis', 'production', "--context={$context}", '--force'];
         if ($domain !== '') {
             $args[] = "--domain={$domain}";
-        }
-        if ($adminEmail !== '') {
-            $args[] = "--admin-email={$adminEmail}";
         }
         if ($vpnOnly) {
             $args[] = '--vpn-only';

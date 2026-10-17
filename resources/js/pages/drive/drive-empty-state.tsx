@@ -12,16 +12,25 @@ import {
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
-import type { Server } from '@/types/larakube';
+import HostPicker from '@/components/host-picker';
+import type { Server, ServerDomain } from '@/types/larakube';
 
 type Props = {
     server: Server;
     otherServers?: Server[];
+    domains?: ServerDomain[];
+    isLocal?: boolean;
+    localTld?: string;
 };
 
-export default function DriveEmptyState({ server, otherServers = [] }: Props) {
+export default function DriveEmptyState({
+    server,
+    otherServers = [],
+    domains = [],
+    isLocal,
+    localTld,
+}: Props) {
     const [domain, setDomain] = useState('');
-    const [adminEmail, setAdminEmail] = useState('');
     const [enableOffice, setEnableOffice] = useState(false);
     const [vpnOnly, setVpnOnly] = useState(false);
     const [selectedExtensions, setSelectedExtensions] = useState<string[]>([
@@ -116,39 +125,20 @@ export default function DriveEmptyState({ server, otherServers = [] }: Props) {
                         method="post"
                         className="mt-5 space-y-5"
                     >
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Primary Drive Domain
-                                </label>
-                                <input
-                                    type="text"
-                                    name="domain"
-                                    value={domain}
-                                    onChange={(e) => setDomain(e.target.value)}
-                                    placeholder="e.g. drive.example.com"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                                <p className="text-muted mt-1 text-[11px]">
-                                    Leave empty to use default domain
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Admin Email (Optional)
-                                </label>
-                                <input
-                                    type="email"
-                                    name="admin_email"
-                                    value={adminEmail}
-                                    onChange={(e) =>
-                                        setAdminEmail(e.target.value)
-                                    }
-                                    placeholder="admin@example.com"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
+                        <div>
+                            <HostPicker
+                                name="domain"
+                                value={domain}
+                                onChange={setDomain}
+                                domains={domains}
+                                serverName={server.name}
+                                serverIp={server.ip}
+                                defaultSubdomain="drive"
+                                isLocal={isLocal}
+                                localTld={localTld}
+                                label="Primary Drive Domain"
+                                showBanners={true}
+                            />
                         </div>
 
                         {/* Collabora Online Opt-in - unchecked by default */}

@@ -26,12 +26,16 @@ import type {
     DriveServerInfo,
     DriveSyncState,
     Server,
+    ServerDomain,
 } from '@/types/larakube';
 
 type Props = {
     server: Server;
     servers: Server[];
     isInstalled: boolean;
+    domains?: ServerDomain[];
+    isLocal?: boolean;
+    localTld?: string;
     serverInfo?: DriveServerInfo | null;
     extensions?: DriveExtension[];
     driveSync: DriveSyncState;
@@ -80,6 +84,9 @@ export default function DriveIndex({
     server,
     servers,
     isInstalled,
+    domains,
+    isLocal,
+    localTld,
     serverInfo,
     extensions,
     driveSync,
@@ -223,6 +230,9 @@ export default function DriveIndex({
                     <DriveEmptyState
                         server={server}
                         otherServers={otherDriveServers}
+                        domains={domains}
+                        isLocal={isLocal}
+                        localTld={localTld}
                     />
                 ) : (
                     <>

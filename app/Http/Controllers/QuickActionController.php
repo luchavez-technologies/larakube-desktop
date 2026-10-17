@@ -36,7 +36,14 @@ class QuickActionController extends Controller
 
         $isLocal = Server::isStackLocal($stack);
 
-        return response()->json(['fields' => $this->optionFields($row, $isLocal)]);
+        $needsAdminEmail = is_array($row['initFields'] ?? null)
+            ? collect($row['initFields'])->contains('key', 'adminEmail')
+            : (bool) ($row['requiresAdminEmail'] ?? false);
+
+        return response()->json([
+            'fields' => $this->optionFields($row, $isLocal),
+            'needsAdminEmail' => $needsAdminEmail,
+        ]);
     }
 
     public function launch(QuickLaunchAppRequest $request, CliRunner $runner): JsonResponse

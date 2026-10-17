@@ -11,6 +11,7 @@
 /storage/*.key
 /storage/pail
 /storage/framework/temp
+/storage/larakube
 /vendor
 .env
 .env.backup

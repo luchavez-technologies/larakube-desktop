@@ -110,6 +110,9 @@ test('viewing drive page renders drive/index with installation status', function
             ->component('drive/index')
             ->where('server.name', 'prod-vps')
             ->where('isInstalled', true)
+            ->has('domains')
+            ->has('isLocal')
+            ->has('localTld')
         );
 });
 
@@ -119,7 +122,6 @@ test('deploying Drive starts a drive-deploy run with options', function () {
 
     $this->post(route('servers.drive.deploy', 'prod-vps'), [
         'domain' => 'drive.example.com',
-        'admin_email' => 'admin@example.com',
         'enable_office' => true,
         'vpn_only' => true,
         'extensions' => ['drawio', 'excalidraw'],
@@ -128,7 +130,7 @@ test('deploying Drive starts a drive-deploy run with options', function () {
     $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
         return array_slice((array) $cmd, 4) === [
             $bin, 'tool:init', '--tool=ocis', 'production', '--context=larakube-do-ams3',
-            '--force', '--domain=drive.example.com', '--admin-email=admin@example.com',
+            '--force', '--domain=drive.example.com',
             '--vpn-only', '--extensions=drawio,excalidraw', '--no-interaction',
         ];
     });

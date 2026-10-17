@@ -613,7 +613,7 @@ function EnvironmentSwitchBar({
     );
 
     const effectiveTld =
-        project.effectiveTld || project.localTld || project.globalTld || 'test';
+        project.effectiveTld || project.localTld || project.globalTld || 'kube';
     const localDomain = `${project.name}.${effectiveTld}`;
 
     // Only the cloud environments the project really has: none until one is created.
@@ -2385,7 +2385,7 @@ function LocalClusterCard({
     }, [activeLifecycle, latestLifecycleRun, isLiveUp, hasActivePods]);
 
     const effectiveTld =
-        project.effectiveTld || project.localTld || project.globalTld || 'test';
+        project.effectiveTld || project.localTld || project.globalTld || 'kube';
     const domain = `${project.name}.${effectiveTld}`;
 
     const isBusy = Boolean(activeLifecycle);

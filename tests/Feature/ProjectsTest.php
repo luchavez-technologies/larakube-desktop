@@ -596,6 +596,25 @@ test('a blueprint with no framework reads as Laravel, as the LaraKube CLI does',
     File::deleteDirectory($sandbox['home']);
 });
 
+test('project inspector resolves global tld from GlobalSettings when no local override is set', function () {
+    $sandbox = projectsSandbox();
+    projectsFrameworks();
+
+    File::ensureDirectoryExists("{$sandbox['home']}/.larakube");
+    File::put("{$sandbox['home']}/.larakube/config.json", json_encode(['localTld' => 'internal']));
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode(['name' => 'shop', 'framework' => 'vite']));
+
+    $inspection = app(ProjectInspector::class)->inspect($sandbox['app']);
+
+    expect($inspection['localTld'])->toBeNull()
+        ->and($inspection['globalTld'])->toBe('internal')
+        ->and($inspection['effectiveTld'])->toBe('internal')
+        ->and($inspection['environments']['local']['webHost'])->toBe('shop.internal');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('linking a ready server creates the production environment on it, with no prompts', function () {
     $sandbox = projectsSandbox();
     projectsStacks();

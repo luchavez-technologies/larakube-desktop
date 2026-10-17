@@ -15,7 +15,10 @@ class ProjectInspector
         private FrameworkCatalog $catalog,
         private ?GlobalSettings $globalSettings = null,
         private ?ToolLocator $locator = null,
-    ) {}
+    ) {
+        $this->globalSettings = $globalSettings ?? rescue(fn () => app(GlobalSettings::class), report: false);
+        $this->locator = $locator ?? rescue(fn () => app(ToolLocator::class), report: false);
+    }
 
     private function hostPath(string $path): string
     {

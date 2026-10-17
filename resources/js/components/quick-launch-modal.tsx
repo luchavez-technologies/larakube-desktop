@@ -193,6 +193,7 @@ export default function QuickLaunchModal({
     const [customDomain, setCustomDomain] = useState<string>('');
     const [useCustomDomain, setUseCustomDomain] = useState<boolean>(false);
     const [adminEmail, setAdminEmail] = useState<string>('');
+    const [needsAdminEmail, setNeedsAdminEmail] = useState<boolean>(false);
     // ADR 0010: a tool's own deploy options (e.g. n8n/WordPress's choice of
     // database) are fetched live from the CLI's initFields, never hand-
     // curated per app — fields is what the CLI reports for the current
@@ -504,6 +505,7 @@ export default function QuickLaunchModal({
         if (!isOpen || !selectedServerName) {
             setFields([]);
             setOptions({});
+            setNeedsAdminEmail(false);
             return;
         }
 
@@ -512,6 +514,7 @@ export default function QuickLaunchModal({
         void (async () => {
             const res = await sendJson<{
                 fields?: FrameworkField[];
+                needsAdminEmail?: boolean;
             }>(
                 `/quick-actions/fields?tool=${encodeURIComponent(currentApp.id)}&server=${encodeURIComponent(selectedServerName)}`,
                 'GET',
@@ -521,6 +524,7 @@ export default function QuickLaunchModal({
 
             const fetched = res.ok ? (res.data.fields ?? []) : [];
             setFields(fetched);
+            setNeedsAdminEmail(Boolean(res.ok && res.data.needsAdminEmail));
 
             const answers = defaultAnswers(fetched);
             // The one piece of cluster-aware "smart default" worth keeping:
@@ -1725,25 +1729,27 @@ export default function QuickLaunchModal({
                                     )}
 
                                     {/* Admin Email */}
-                                    <div>
-                                        <label className="mb-1.5 block text-xs font-medium text-soft">
-                                            Administrator Email
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="email"
-                                                value={adminEmail}
-                                                onChange={(e) =>
-                                                    setAdminEmail(
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                placeholder="admin@example.com"
-                                                className="w-full rounded-xl border-0 bg-surface py-2.5 pr-3 pl-9 text-sm text-ink ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
-                                            />
-                                            <Mail className="pointer-events-none absolute top-3 left-3 size-4 text-soft" />
+                                    {needsAdminEmail && (
+                                        <div>
+                                            <label className="mb-1.5 block text-xs font-medium text-soft">
+                                                Administrator Email
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="email"
+                                                    value={adminEmail}
+                                                    onChange={(e) =>
+                                                        setAdminEmail(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="admin@example.com"
+                                                    className="w-full rounded-xl border-0 bg-surface py-2.5 pr-3 pl-9 text-sm text-ink ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
+                                                />
+                                                <Mail className="pointer-events-none absolute top-3 left-3 size-4 text-soft" />
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Integrations & Wiring */}
                                     {!appSupportsMail && !appSupportsSso ? (
@@ -2012,15 +2018,17 @@ export default function QuickLaunchModal({
                                                     {databaseEngineLabel}
                                                 </span>
                                             </div>
-                                            <div className="col-span-2">
-                                                <span className="block text-[10px] text-faint uppercase">
-                                                    Admin Email
-                                                </span>
-                                                <span className="font-semibold text-ink">
-                                                    {adminEmail ||
-                                                        `admin@${resolvedDomain}`}
-                                                </span>
-                                            </div>
+                                            {needsAdminEmail && (
+                                                <div className="col-span-2">
+                                                    <span className="block text-[10px] text-faint uppercase">
+                                                        Admin Email
+                                                    </span>
+                                                    <span className="font-semibold text-ink">
+                                                        {adminEmail ||
+                                                            `admin@${resolvedDomain}`}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {(wireMail || wireSso) && (
