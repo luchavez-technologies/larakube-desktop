@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import {
     AlertCircle,
     ArrowUpCircle,
+    Check,
     Download,
     Power,
     RefreshCw,
@@ -11,6 +12,7 @@ import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import { forgetToolStatus } from '@/lib/tool-status';
+import { cn } from '@/lib/utils';
 
 export type WslState = {
     state:
@@ -43,11 +45,30 @@ type WslStep =
 
 const WSL_STEP_LABELS: Record<WslStep, string> = {
     enable: 'Turning on Windows Subsystem for Linux',
-    download: 'Downloading LaraKube Linux (about 300 MB)',
+    download: 'Downloading LaraKube Linux',
     import: 'Installing LaraKube Linux',
     backup: 'Backing up your projects',
     reset: 'Removing the older LaraKube Linux',
     restore: 'Restoring your projects',
+};
+
+const WSL_STEP_SHORT_LABELS: Record<WslStep, string> = {
+    enable: 'Enable WSL',
+    download: 'Download',
+    import: 'Install',
+    backup: 'Backup',
+    reset: 'Reset',
+    restore: 'Restore',
+};
+
+const WSL_STEP_DESCRIPTIONS: Record<WslStep, string> = {
+    enable: 'Asking Windows for permission to enable WSL…',
+    download:
+        'Downloading rootfs image with pre-installed Kubernetes & cloud tools (~300 MB)…',
+    import: 'Unpacking and registering LaraKube Linux with WSL2. This usually takes 1 to 2 minutes on Windows.',
+    backup: 'Creating a safety backup of your projects folder…',
+    reset: 'Removing the older LaraKube Linux distribution…',
+    restore: 'Restoring your projects back into LaraKube Linux…',
 };
 
 async function runWslStep(step: WslStep, body?: Record<string, string>) {
@@ -195,31 +216,105 @@ export default function WslCheck({ wsl }: { wsl?: WslState | null }) {
                                       ? 'Your projects are backed up, the Linux is replaced with the newer one, then your projects are put back — all in one step.'
                                       : 'LaraKube Desktop will download its own small Linux, with every tool ready. It stays separate from anything else on this computer.'}
                             </p>
-                            {working === 'download' &&
-                                downloadProgress &&
-                                downloadProgress.total > 0 && (
-                                    <div className="space-y-1.5 rounded-lg border border-line bg-paper/60 p-3">
-                                        <div className="flex items-center justify-between text-xs text-soft">
-                                            <span className="font-medium text-ink">
-                                                Downloading rootfs image…
-                                            </span>
-                                            <span>
-                                                {downloadProgress.formatted}
-                                                {downloadProgress.percent > 0
-                                                    ? ` (${downloadProgress.percent}%)`
-                                                    : ''}
-                                            </span>
-                                        </div>
-                                        <div className="h-2 w-full overflow-hidden rounded-full bg-badge">
+                            {working !== null && (
+                                <div className="space-y-3 rounded-xl border border-line bg-paper/60 p-4">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="font-semibold text-ink">
+                                            {steps.length > 1
+                                                ? `Step ${steps.indexOf(working) + 1} of ${steps.length}: ${WSL_STEP_LABELS[working]}`
+                                                : WSL_STEP_LABELS[working]}
+                                        </span>
+                                        <span className="font-mono text-soft">
+                                            {working === 'download' &&
+                                            downloadProgress &&
+                                            downloadProgress.total > 0
+                                                ? `${downloadProgress.formatted ?? ''}${downloadProgress.percent > 0 ? ` (${downloadProgress.percent}%)` : ''}`
+                                                : working === 'import'
+                                                  ? 'Unpacking (~1–2m)…'
+                                                  : 'Working…'}
+                                        </span>
+                                    </div>
+                                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-badge">
+                                        {working === 'download' &&
+                                        downloadProgress &&
+                                        downloadProgress.total > 0 ? (
                                             <div
                                                 className="h-full bg-accent transition-all duration-300 ease-out"
                                                 style={{
                                                     width: `${Math.min(100, Math.max(0, downloadProgress.percent))}%`,
                                                 }}
                                             />
-                                        </div>
+                                        ) : (
+                                            <div className="h-full w-full animate-pulse rounded-full bg-accent/80" />
+                                        )}
                                     </div>
-                                )}
+                                    <p className="text-xs leading-relaxed text-soft">
+                                        {WSL_STEP_DESCRIPTIONS[working]}
+                                    </p>
+                                    {steps.length > 1 && (
+                                        <div className="flex flex-wrap items-center gap-2 border-t border-line/60 pt-2">
+                                            {steps.map((s, idx) => {
+                                                const currentIdx =
+                                                    steps.indexOf(working);
+                                                const isDone = idx < currentIdx;
+                                                const isCurrent =
+                                                    idx === currentIdx;
+
+                                                return (
+                                                    <div
+                                                        key={s}
+                                                        className="flex items-center gap-1.5 text-xs"
+                                                    >
+                                                        <span
+                                                            className={cn(
+                                                                'flex size-5 items-center justify-center rounded-full text-[10px] font-semibold transition-colors',
+                                                                isDone &&
+                                                                    'bg-ok text-white',
+                                                                isCurrent &&
+                                                                    'animate-pulse bg-accent text-white',
+                                                                !isDone &&
+                                                                    !isCurrent &&
+                                                                    'bg-badge text-faint',
+                                                            )}
+                                                        >
+                                                            {isDone ? (
+                                                                <Check className="size-3 stroke-[3]" />
+                                                            ) : (
+                                                                idx + 1
+                                                            )}
+                                                        </span>
+                                                        <span
+                                                            className={cn(
+                                                                'text-[12px]',
+                                                                isCurrent &&
+                                                                    'font-semibold text-ink',
+                                                                isDone &&
+                                                                    'font-medium text-soft',
+                                                                !isDone &&
+                                                                    !isCurrent &&
+                                                                    'text-faint',
+                                                            )}
+                                                        >
+                                                            {
+                                                                WSL_STEP_SHORT_LABELS[
+                                                                    s
+                                                                ]
+                                                            }
+                                                        </span>
+                                                        {idx <
+                                                            steps.length -
+                                                                1 && (
+                                                            <span className="text-faint/60">
+                                                                →
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             <Button
                                 disabled={working !== null}
                                 onClick={() => run(steps)}
