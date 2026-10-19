@@ -38,6 +38,7 @@ class CliRunner
         ?string $targetName = null,
         ?int $projectId = null,
         ?string $projectName = null,
+        ?int $serverId = null,
         ?string $environment = null,
         ?string $serverName = null,
         ?string $context = null,
@@ -77,6 +78,10 @@ class CliRunner
 
         if ($environment === null && isset($meta['environment'])) {
             $environment = (string) $meta['environment'];
+        }
+
+        if ($serverId === null && isset($meta['server_id']) && is_numeric($meta['server_id'])) {
+            $serverId = (int) $meta['server_id'];
         }
 
         if ($serverName === null && isset($meta['server'])) {
@@ -127,6 +132,7 @@ class CliRunner
             'target_name' => $targetName,
             'project_id' => $projectId,
             'project_name' => $projectName,
+            'server_id' => $serverId,
             'environment' => $environment,
             'server_name' => $serverName,
             'context' => $context,

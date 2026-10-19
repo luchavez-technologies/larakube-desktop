@@ -342,32 +342,44 @@ class ServerController extends Controller
 
         $context = $stack['status'] === 'ready' ? $stack['context'] : null;
 
-        $projects = Project::query()->get()->filter(function (Project $p) use ($inspector, $stack): bool {
+        $serverModel = Server::where('name', $stack['name'])->first();
+
+        $allProjects = Project::query()->get();
+        $projects = [];
+
+        foreach ($allProjects as $p) {
+            if ($serverModel !== null && $p->server_id !== null) {
+                if ($p->server_id === $serverModel->id) {
+                    $projects[] = ['id' => $p->id] + $inspector->inspect($p->path);
+                }
+
+                continue;
+            }
+
             $inspection = $inspector->inspect($p->path);
+            $isMatch = false;
 
             if ($stack['ip'] !== null && $inspection['serverIp'] === $stack['ip']) {
-                return true;
-            }
-
-            if ($stack['context'] !== null && ($inspection['serverContext'] ?? null) === $stack['context']) {
-                return true;
-            }
-
-            foreach ($inspection['environments'] as $env) {
-                if ($stack['ip'] !== null && ($env['serverIp'] ?? null) === $stack['ip']) {
-                    return true;
+                $isMatch = true;
+            } elseif ($stack['context'] !== null && ($inspection['serverContext'] ?? null) === $stack['context']) {
+                $isMatch = true;
+            } else {
+                foreach ($inspection['environments'] as $env) {
+                    if ($stack['ip'] !== null && ($env['serverIp'] ?? null) === $stack['ip']) {
+                        $isMatch = true;
+                        break;
+                    }
+                    if ($stack['context'] !== null && ($env['serverContext'] ?? null) === $stack['context']) {
+                        $isMatch = true;
+                        break;
+                    }
                 }
-                if ($stack['context'] !== null && ($env['serverContext'] ?? null) === $stack['context']) {
-                    return true;
-                }
             }
 
-            return false;
-        })->values()->map(function (Project $p) use ($inspector): array {
-            $inspection = $inspector->inspect($p->path);
-
-            return ['id' => $p->id] + $inspection;
-        })->all();
+            if ($isMatch) {
+                $projects[] = ['id' => $p->id] + $inspection;
+            }
+        }
 
         $lastTools = $context !== null ? $toolCatalog->lastVerified($context) : null;
 

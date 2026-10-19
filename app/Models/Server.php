@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -43,6 +44,8 @@ use Illuminate\Support\Carbon;
  * @property-read CloudProvider|null $cloudProvider
  * @property-read CloudRegion|null $cloudRegion
  * @property-read CloudSize|null $cloudSize
+ * @property-read Collection<int, Project> $projects
+ * @property-read Collection<int, Run> $runs
  */
 class Server extends Model
 {
@@ -139,6 +142,22 @@ class Server extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(Activity::class);
+    }
+
+    /**
+     * @return HasMany<Project, $this>
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    /**
+     * @return HasMany<Run, $this>
+     */
+    public function runs(): HasMany
+    {
+        return $this->hasMany(Run::class);
     }
 
     /**

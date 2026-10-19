@@ -23,6 +23,7 @@ use InvalidArgumentException;
  * @property string|null $target_name
  * @property int|null $project_id
  * @property string|null $project_name
+ * @property int|null $server_id
  * @property string|null $environment
  * @property string|null $server_name
  * @property string|null $context
@@ -37,6 +38,7 @@ use InvalidArgumentException;
  * @property CarbonImmutable|null $finished_at
  * @property CarbonImmutable|null $created_at
  * @property Project|null $project
+ * @property-read Server|null $server
  */
 class Run extends Model
 {
@@ -48,6 +50,7 @@ class Run extends Model
         'target_name',
         'project_id',
         'project_name',
+        'server_id',
         'environment',
         'server_name',
         'context',
@@ -62,12 +65,34 @@ class Run extends Model
         'finished_at',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (Run $run): void {
+            if ($run->server_id === null) {
+                if ($run->server_name !== null) {
+                    $run->server_id = Server::where('name', $run->server_name)->value('id');
+                }
+                if ($run->server_id === null && $run->context !== null) {
+                    $run->server_id = Server::where('context', $run->context)->value('id');
+                }
+            }
+        });
+    }
+
     /**
      * @return BelongsTo<Project, $this>
      */
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * @return BelongsTo<Server, $this>
+     */
+    public function server(): BelongsTo
+    {
+        return $this->belongsTo(Server::class);
     }
 
     protected $attributes = [

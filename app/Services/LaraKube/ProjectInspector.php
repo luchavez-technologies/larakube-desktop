@@ -2,6 +2,8 @@
 
 namespace App\Services\LaraKube;
 
+use App\Models\Project;
+use App\Models\Server;
 use App\Services\Runtime\WslDistro;
 
 /**
@@ -60,7 +62,57 @@ class ProjectInspector
         $local = $this->readJson("{$hostPath}/.larakube.local.json");
         $git = $this->detectGit($path);
 
-        return $this->inspectBlueprint($blueprint, $local, $environment, $path, $git);
+        $result = $this->inspectBlueprint($blueprint, $local, $environment, $path, $git);
+
+        $this->syncToDatabase($path, $result, $blueprint);
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     * @param  array<string, mixed>|null  $blueprint
+     */
+    private function syncToDatabase(string $path, array $result, ?array $blueprint): void
+    {
+        try {
+            $project = Project::where('path', $path)->first();
+            if ($project) {
+                $serverId = null;
+                if (! empty($result['serverContext'])) {
+                    $serverId = Server::where('context', $result['serverContext'])->value('id');
+                }
+                if (! $serverId && ! empty($result['serverIp'])) {
+                    $serverId = Server::where('ip', $result['serverIp'])->value('id');
+                }
+                if (! $serverId && ! empty($result['environments']) && is_array($result['environments'])) {
+                    foreach ($result['environments'] as $env) {
+                        if (! empty($env['serverContext'])) {
+                            $serverId = Server::where('context', $env['serverContext'])->value('id');
+                            if ($serverId) {
+                                break;
+                            }
+                        }
+                        if (! empty($env['serverIp'])) {
+                            $serverId = Server::where('ip', $env['serverIp'])->value('id');
+                            if ($serverId) {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                $project->update([
+                    'name' => $result['name'] ?: basename($path),
+                    'framework' => $result['framework'],
+                    'server_id' => $serverId,
+                    'web_host' => $result['webHost'],
+                    'blueprint_cache' => $blueprint,
+                    'last_inspected_at' => now(),
+                ]);
+            }
+        } catch (\Throwable) {
+        }
     }
 
     /**
