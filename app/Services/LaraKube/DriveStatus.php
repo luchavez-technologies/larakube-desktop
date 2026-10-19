@@ -111,13 +111,16 @@ class DriveStatus
 
             if ($key === 'code' || str_contains($deployment, 'code') || str_contains($name, 'code')) {
                 $codeComponent = $comp;
-                if (! empty($comp['ready'])) {
+                $isCodeDeployed = ! empty($comp['deployed']) || ! empty($comp['ready']);
+                $isCodeReady = ! empty($comp['ready']);
+
+                if ($isCodeDeployed) {
                     $enrichedComponents[] = [
                         'key' => 'code',
                         'name' => $name,
                         'role' => $role,
-                        'ready' => true,
-                        'replicas' => (string) ($comp['replicas'] ?? '1/1'),
+                        'ready' => $isCodeReady,
+                        'replicas' => (string) ($comp['replicas'] ?? ($isCodeReady ? '1/1' : '0/1')),
                         'restartCount' => (int) ($comp['restartCount'] ?? 0),
                     ];
                 }
@@ -131,17 +134,18 @@ class DriveStatus
                 'name' => $name,
                 'role' => $role,
                 'ready' => $isAppReady,
-                'replicas' => (string) ($comp['replicas'] ?? '1/1'),
+                'replicas' => (string) ($comp['replicas'] ?? ($isAppReady ? '1/1' : '0/1')),
                 'restartCount' => (int) ($comp['restartCount'] ?? 0),
             ];
         }
 
-        $hasOffice = $codeComponent !== null && ($codeComponent['ready'] ?? false);
+        $isOfficeDeployed = $codeComponent !== null && (! empty($codeComponent['deployed']) || ! empty($codeComponent['ready']));
+        $isOfficeReady = $codeComponent !== null && ! empty($codeComponent['ready']);
 
         $host = isset($info['host']) && is_string($info['host']) ? $info['host'] : null;
         $info['office'] = [
-            'installed' => $codeComponent !== null && ! empty($codeComponent['ready']),
-            'ready' => $hasOffice,
+            'installed' => $isOfficeDeployed,
+            'ready' => $isOfficeReady,
             'host' => $host ? "office.{$host}" : null,
             'url' => $host ? "https://office.{$host}" : null,
         ];
@@ -263,7 +267,17 @@ class DriveStatus
         $driveFresh = $driveTool->last_synced_at !== null
             && $driveTool->last_synced_at->gt(now()->subSeconds(SyncDriveJob::FRESH_SECONDS));
 
-        if (! $everSynced || ! $driveFresh) {
+        $needsReadiness = false;
+        if (isset($driveTool->data['driveInfo']['components']) && is_array($driveTool->data['driveInfo']['components'])) {
+            foreach ($driveTool->data['driveInfo']['components'] as $c) {
+                if (is_array($c) && ! array_key_exists('ready', $c)) {
+                    $needsReadiness = true;
+                    break;
+                }
+            }
+        }
+
+        if (! $everSynced || ! $driveFresh || $needsReadiness) {
             SyncDriveJob::dispatch($server->id);
 
             return $driveTool->fresh();

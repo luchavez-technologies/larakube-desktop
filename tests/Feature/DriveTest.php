@@ -388,3 +388,81 @@ test('DriveStatus extensions detects installed extensions by id, short name, and
         ->and($drawio)->not->toBeNull()
         ->and($drawio['installed'])->toBeTrue();
 });
+
+test('DriveStatus serverInfo recognizes Collabora office as installed and ready when code component is ready', function () {
+    $server = Server::create([
+        'name' => 'office-ready-server',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'doks-office-context',
+        'status' => 'ready',
+    ]);
+
+    $server->clusterTools()->create([
+        'tool' => 'ocis',
+        'installed' => true,
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+        'data' => [
+            'driveInfo' => [
+                'installed' => true,
+                'host' => 'drive.example.com',
+                'components' => [
+                    ['key' => 'app', 'role' => 'PRIMARY', 'deployment' => 'ocis-drive-app', 'deployed' => true, 'ready' => true, 'replicas' => '1/1'],
+                    ['key' => 'code', 'role' => 'WORKER', 'deployment' => 'code-drive-app', 'deployed' => true, 'ready' => true, 'replicas' => '1/1'],
+                ],
+            ],
+        ],
+    ]);
+
+    $status = new DriveStatus;
+    $info = $status->serverInfo('doks-office-context');
+
+    expect($info)->not->toBeNull()
+        ->and($info['office']['installed'])->toBeTrue()
+        ->and($info['office']['ready'])->toBeTrue()
+        ->and($info['office']['host'])->toBe('office.drive.example.com')
+        ->and($info['office']['url'])->toBe('https://office.drive.example.com')
+        ->and($info['components'])->toHaveCount(2)
+        ->and($info['components'][1]['key'])->toBe('code')
+        ->and($info['components'][1]['ready'])->toBeTrue();
+});
+
+test('DriveStatus serverInfo recognizes Collabora office as initializing when deployed but not ready', function () {
+    $server = Server::create([
+        'name' => 'office-starting-server',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'doks-starting-context',
+        'status' => 'ready',
+    ]);
+
+    $server->clusterTools()->create([
+        'tool' => 'ocis',
+        'installed' => true,
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+        'data' => [
+            'driveInfo' => [
+                'installed' => true,
+                'host' => 'drive.example.com',
+                'components' => [
+                    ['key' => 'app', 'role' => 'PRIMARY', 'deployment' => 'ocis-drive-app', 'deployed' => true, 'ready' => true, 'replicas' => '1/1'],
+                    ['key' => 'code', 'role' => 'WORKER', 'deployment' => 'code-drive-app', 'deployed' => true, 'ready' => false, 'replicas' => '0/1'],
+                ],
+            ],
+        ],
+    ]);
+
+    $status = new DriveStatus;
+    $info = $status->serverInfo('doks-starting-context');
+
+    expect($info)->not->toBeNull()
+        ->and($info['office']['installed'])->toBeTrue()
+        ->and($info['office']['ready'])->toBeFalse()
+        ->and($info['office']['host'])->toBe('office.drive.example.com')
+        ->and($info['office']['url'])->toBe('https://office.drive.example.com')
+        ->and($info['components'])->toHaveCount(2)
+        ->and($info['components'][1]['key'])->toBe('code')
+        ->and($info['components'][1]['ready'])->toBeFalse();
+});
