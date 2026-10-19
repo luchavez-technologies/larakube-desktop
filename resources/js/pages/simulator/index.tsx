@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from '@inertiajs/react';
 import {
     Background,
     BackgroundVariant,
     Controls,
-    MiniMap,
     ReactFlow,
+    ReactFlowProvider,
+    useReactFlow,
     type Edge,
     type Node,
 } from '@xyflow/react';
-import { Network, Sparkles } from 'lucide-react';
+import { ArrowLeft, Network, PanelRight, Sparkles, X } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
+import Button, { buttonClass } from '@/components/button';
+import { cn } from '@/lib/utils';
 import { InfrastructureNode } from '@/components/simulator/nodes/infrastructure-node';
 import { PacketEdge } from '@/components/simulator/edges/packet-edge';
 import StepInspector from '@/components/simulator/step-inspector';
@@ -28,6 +32,54 @@ const EDGE_TYPES = {
     packet: PacketEdge,
 };
 
+/**
+ * Inner Flow Canvas with useReactFlow for auto-centering and viewport tracking.
+ */
+function SimulatorCanvas({
+    nodes,
+    edges,
+    showInspector,
+    currentScenarioKey,
+}: {
+    nodes: Node[];
+    edges: Edge[];
+    showInspector: boolean;
+    currentScenarioKey: string;
+}) {
+    const { fitView } = useReactFlow();
+
+    // Auto-center and fit all nodes whenever scenario changes or inspector toggles
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            void fitView({ padding: 0.25, duration: 350 });
+        }, 60);
+
+        return () => clearTimeout(timer);
+    }, [currentScenarioKey, showInspector, fitView, nodes.length]);
+
+    return (
+        <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            fitView
+            fitViewOptions={{ padding: 0.25 }}
+            minZoom={0.4}
+            maxZoom={1.5}
+            proOptions={{ hideAttribution: true }}
+        >
+            <Background
+                variant={BackgroundVariant.Dots}
+                gap={18}
+                size={1}
+                color="var(--color-line, #e4e4e8)"
+            />
+            <Controls className="!rounded-xl !border !border-line !bg-surface !shadow-md" />
+        </ReactFlow>
+    );
+}
+
 export default function SimulatorIndex({
     projects,
     servers,
@@ -45,6 +97,7 @@ export default function SimulatorIndex({
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const [speed, setSpeed] = useState<number>(1);
+    const [showInspector, setShowInspector] = useState<boolean>(true);
 
     // Resolve active target parameters
     const activeTarget = useMemo(() => {
@@ -53,6 +106,7 @@ export default function SimulatorIndex({
             const p = projects.find((proj) => proj.id === id);
             if (p) {
                 return {
+                    id: p.id,
                     name: p.name,
                     host: p.webHost || `${p.name}.dev.test`,
                     framework: p.framework || 'laravel',
@@ -66,6 +120,7 @@ export default function SimulatorIndex({
         const preset = presets.find((pr) => pr.id === presetId) || presets[0];
 
         return {
+            id: null,
             name: preset?.name || 'Laravel 12 (FrankenPHP)',
             host: preset?.webHost || 'laravel.dev.test',
             framework: preset?.framework || 'laravel',
@@ -73,6 +128,14 @@ export default function SimulatorIndex({
             databaseName: preset?.databaseName || 'tenant_laravel_db',
         };
     }, [selectedTargetId, projects, presets]);
+
+    // Back link target
+    const backHref = initialProjectId
+        ? `/projects/${initialProjectId}`
+        : '/dashboard';
+    const backLabel = initialProjectId
+        ? `Back to ${activeTarget.name}`
+        : 'Exit to Dashboard';
 
     // Generate dynamic scenarios for target
     const scenarios = useMemo(() => {
@@ -118,9 +181,9 @@ export default function SimulatorIndex({
         const generatedNodes: Node[] = [];
         const generatedEdges: Edge[] = [];
 
-        const xSpacing = 280;
+        const xSpacing = 240;
         const startX = 40;
-        const yPos = 160;
+        const yPos = 200;
 
         activeScenario.hops.forEach((hop, idx) => {
             const isHopActive = idx === currentStepIndex;
@@ -198,31 +261,48 @@ export default function SimulatorIndex({
     return (
         <AppLayout title="Request Simulator — LaraKube">
             <div className="flex h-[calc(100vh-4.5rem)] flex-col gap-3 p-4">
-                {/* Header bar */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                {/* Header bar with Prominent Exit / Back Navigation */}
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href={backHref}
+                            className={cn(
+                                buttonClass('secondary', 'sm'),
+                                'gap-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-brand/40',
+                            )}
+                            title="Exit Simulator and return"
+                        >
+                            <ArrowLeft className="size-3.5" />
+                            <span>{backLabel}</span>
+                        </Link>
+
+                        <div className="h-4 w-px bg-line" />
+
                         <div className="flex items-center gap-2">
                             <span className="flex size-7 items-center justify-center rounded-xl bg-brand/15 text-brand">
                                 <Network className="size-4" />
                             </span>
-                            <h1 className="text-xl font-bold tracking-tight text-ink">
-                                Life of a Request Simulator (Holo-Trace)
-                            </h1>
-                            <span className="flex items-center gap-1 rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-semibold text-ok">
-                                <Sparkles className="size-3" /> Interactive
-                                Classroom
-                            </span>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-base font-bold tracking-tight text-ink">
+                                        Life of a Request Simulator
+                                    </h1>
+                                    <span className="flex items-center gap-1 rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-semibold text-ok">
+                                        <Sparkles className="size-3" />{' '}
+                                        Interactive
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-soft">
+                                    Trace packets from browser through
+                                    Cloudflare, Ingress, Pods, and Databases.
+                                </p>
+                            </div>
                         </div>
-                        <p className="mt-0.5 text-xs text-soft">
-                            Trace HTTP requests in real time from client browser
-                            through Cloudflare, Traefik Ingress, K8s Services,
-                            application pods, and Plex Commons.
-                        </p>
                     </div>
 
                     <div className="flex items-center gap-2">
                         {servers.length > 0 && (
-                            <span className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-soft shadow-2xs">
+                            <span className="hidden rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-soft shadow-2xs md:inline-block">
                                 Cluster:{' '}
                                 <span className="font-semibold text-ink">
                                     {servers[0]?.name}
@@ -235,66 +315,75 @@ export default function SimulatorIndex({
                                 {activeTarget.host}
                             </span>
                         </span>
+
+                        <Button
+                            variant={showInspector ? 'primary' : 'secondary'}
+                            size="sm"
+                            onClick={() => setShowInspector(!showInspector)}
+                            className="gap-1.5 text-xs"
+                            title="Toggle technical inspector drawer"
+                        >
+                            <PanelRight className="size-3.5" />
+                            <span>
+                                {showInspector ? 'Hide Drawer' : 'Inspect'}
+                            </span>
+                        </Button>
+
+                        <Link
+                            href={backHref}
+                            className={cn(
+                                buttonClass('ghost', 'sm'),
+                                'hover:bg-hover size-8 p-0 text-soft hover:text-ink',
+                            )}
+                            title="Close Simulator"
+                        >
+                            <X className="size-4" />
+                        </Link>
                     </div>
                 </div>
 
-                {/* Main Workspace: Canvas + Inspector Sidebar */}
+                {/* Main Workspace: Full Canvas + Collapsible Inspector Drawer */}
                 <div className="relative flex flex-1 gap-3 overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
-                    {/* React Flow Canvas */}
-                    <div className="h-full flex-1">
-                        <ReactFlow
-                            nodes={nodes}
-                            edges={edges}
-                            nodeTypes={NODE_TYPES}
-                            edgeTypes={EDGE_TYPES}
-                            fitView
-                            fitViewOptions={{ padding: 0.2 }}
-                            minZoom={0.4}
-                            maxZoom={1.5}
-                            proOptions={{ hideAttribution: true }}
-                        >
-                            <Background
-                                variant={BackgroundVariant.Dots}
-                                gap={16}
-                                size={1}
-                                color="var(--color-line, #e4e4e8)"
+                    {/* React Flow Canvas (with Auto-centering Provider) */}
+                    <div className="h-full min-w-0 flex-1">
+                        <ReactFlowProvider>
+                            <SimulatorCanvas
+                                nodes={nodes}
+                                edges={edges}
+                                showInspector={showInspector}
+                                currentScenarioKey={currentScenarioKey}
                             />
-                            <Controls className="!rounded-xl !border !border-line !bg-surface !shadow-md" />
-                            <MiniMap
-                                className="!rounded-xl !border !border-line !bg-surface !shadow-md"
-                                nodeColor="#3b82f6"
-                                maskColor="rgba(0, 0, 0, 0.1)"
-                                zoomable
-                                pannable
-                            />
-                        </ReactFlow>
+                        </ReactFlowProvider>
                     </div>
 
-                    {/* Step Inspector Sidebar */}
-                    <div className="w-[360px] overflow-y-auto border-l border-line bg-paper/30 p-3">
-                        <StepInspector
-                            hop={activeHop}
-                            stepIndex={currentStepIndex}
-                            totalSteps={totalSteps}
-                            onNext={() =>
-                                setCurrentStepIndex((prev) =>
-                                    Math.min(totalSteps - 1, prev + 1),
-                                )
-                            }
-                            onPrev={() =>
-                                setCurrentStepIndex((prev) =>
-                                    Math.max(0, prev - 1),
-                                )
-                            }
-                            hasNext={currentStepIndex < totalSteps - 1}
-                            hasPrev={currentStepIndex > 0}
-                            isFailed={
-                                activeScenario.tone === 'bad' &&
-                                currentStepIndex ===
-                                    activeScenario.hops.length - 1
-                            }
-                        />
-                    </div>
+                    {/* Step Inspector Drawer (Clean, collapsible) */}
+                    {showInspector && (
+                        <div className="w-[350px] shrink-0 overflow-y-auto border-l border-line bg-paper/30 p-3">
+                            <StepInspector
+                                hop={activeHop}
+                                stepIndex={currentStepIndex}
+                                totalSteps={totalSteps}
+                                onNext={() =>
+                                    setCurrentStepIndex((prev) =>
+                                        Math.min(totalSteps - 1, prev + 1),
+                                    )
+                                }
+                                onPrev={() =>
+                                    setCurrentStepIndex((prev) =>
+                                        Math.max(0, prev - 1),
+                                    )
+                                }
+                                hasNext={currentStepIndex < totalSteps - 1}
+                                hasPrev={currentStepIndex > 0}
+                                isFailed={
+                                    activeScenario.tone === 'bad' &&
+                                    currentStepIndex ===
+                                        activeScenario.hops.length - 1
+                                }
+                                onClose={() => setShowInspector(false)}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Bottom Controls Bar */}
@@ -313,6 +402,16 @@ export default function SimulatorIndex({
                     presets={presets}
                     selectedTargetId={selectedTargetId}
                     onSelectTarget={(id) => setSelectedTargetId(id)}
+                    currentStepIndex={currentStepIndex}
+                    totalSteps={totalSteps}
+                    onNext={() =>
+                        setCurrentStepIndex((prev) =>
+                            Math.min(totalSteps - 1, prev + 1),
+                        )
+                    }
+                    onPrev={() =>
+                        setCurrentStepIndex((prev) => Math.max(0, prev - 1))
+                    }
                 />
             </div>
         </AppLayout>

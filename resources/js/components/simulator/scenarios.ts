@@ -21,16 +21,16 @@ export function getScenarios(
     const baseHops = {
         client: (path: string, method: string = 'GET'): SimulatorHop => ({
             id: 'client',
-            title: 'User Browser (Client)',
-            subtitle: 'Mac / Windows / Mobile Client',
-            layer: 'Layer 7 • Application Client',
+            title: 'User Browser',
+            subtitle: 'Client Request',
+            layer: 'Layer 7',
             icon: 'Laptop',
             badge: 'Origin',
             summary: `User initiates ${method} request to https://${host}${path}`,
             mechanics: [
-                `Browser resolves domain "${host}" via local DNS or hosts file (/etc/hosts).`,
-                'Initiates TCP three-way handshake (SYN -> SYN-ACK -> ACK).',
-                'Performs TLS 1.3 cryptographic handshake to negotiate cipher suite.',
+                `Browser resolves domain "${host}" via DNS or /etc/hosts.`,
+                'Initiates TCP three-way handshake (SYN → SYN-ACK → ACK).',
+                'Negotiates TLS 1.3 cryptographic session key.',
             ],
             technicalDetails: {
                 protocol: 'HTTPS / HTTP/2',
@@ -46,19 +46,19 @@ export function getScenarios(
             },
         }),
 
-        dns: (statusText: string = 'Active Proxy'): SimulatorHop => ({
+        dns: (statusText: string = 'Proxy Active'): SimulatorHop => ({
             id: 'dns',
-            title: 'Edge Proxy / Cloudflare',
-            subtitle: 'DNS, WAF, & Edge Caching',
-            layer: 'Layer 7 / CDN Edge',
+            title: 'Cloudflare Edge',
+            subtitle: 'DNS, TLS & WAF',
+            layer: 'Edge CDN',
             icon: 'Shield',
             badge: statusText,
             summary:
                 'Edge proxy inspects incoming packet, terminates public TLS, and enforces WAF security rules.',
             mechanics: [
-                'Validates SNI (Server Name Indication) matching incoming certificate.',
+                'Validates SNI matching certificate.',
                 'Checks IP reputation, DDoS flood limits, and bot mitigation rules.',
-                'Proxies traffic via HTTP/2 or HTTP/3 to the cluster public ingress IP.',
+                'Proxies traffic via HTTP/2 or HTTP/3 to cluster public ingress IP.',
             ],
             technicalDetails: {
                 protocol: 'TLS 1.3 / TCP',
@@ -74,16 +74,15 @@ export function getScenarios(
 
         ingress: (rule: string): SimulatorHop => ({
             id: 'ingress',
-            title: 'Traefik Ingress Controller',
-            subtitle: 'Cluster Gateway & Path Router',
-            layer: 'Layer 7 • Kubernetes Ingress',
+            title: 'Traefik Ingress',
+            subtitle: 'Gateway & Router',
+            layer: 'Ingress',
             icon: 'Network',
             badge: 'Traefik v3',
             summary: `Traefik evaluates IngressRoute rules for Host(\`${host}\`) and proxies to internal Service.`,
             mechanics: [
-                'Traefik daemonset pod receives packet on NodePort 80/443.',
+                'Traefik receives packet on NodePort 80/443.',
                 `Matches CRD IngressRoute rule: "${rule}".`,
-                'Applies middlewares (HTTPS redirect, compression, rate-limiting).',
                 'Forwards request internally to the Kubernetes ClusterIP virtual IP.',
             ],
             technicalDetails: {
@@ -103,16 +102,16 @@ export function getScenarios(
             targetPort: number = 80,
         ): SimulatorHop => ({
             id: 'service',
-            title: 'K8s Service (ClusterIP)',
-            subtitle: 'Internal Load Balancer',
-            layer: 'Layer 4 • Kubernetes Service',
+            title: 'K8s Service',
+            subtitle: 'ClusterIP Load Balancer',
+            layer: 'Service',
             icon: 'Layers',
-            badge: 'kube-proxy / CNI',
+            badge: 'ClusterIP',
             summary: `Virtual IP (${serviceName}) balances request across active healthy container pods.`,
             mechanics: [
-                'Kubernetes kube-proxy / eBPF resolves internal DNS service name.',
+                'Kube-proxy / eBPF resolves internal DNS service name.',
                 'Inspects active Endpoints slice for ready pod IPs.',
-                'Performs round-robin load distribution across available pod replicas.',
+                'Performs round-robin load distribution across pod replicas.',
             ],
             technicalDetails: {
                 protocol: 'TCP / iptables',
@@ -127,16 +126,15 @@ export function getScenarios(
             status: number = 200,
         ): SimulatorHop => ({
             id: 'pod',
-            title: `${framework === 'laravel' ? 'Laravel Workload' : 'Application Pod'} (${runtime})`,
-            subtitle: 'Containerized Worker Process',
-            layer: 'Layer 7 • Application Runtime',
+            title: framework === 'laravel' ? 'Laravel App' : 'App Workload',
+            subtitle: runtime,
+            layer: 'Pod',
             icon: 'Cpu',
             badge: `${status} OK`,
             summary: action,
             mechanics: [
                 `${runtime} worker thread receives request from socket.`,
-                'Bootstraps framework kernel (Service Providers, Config, Router).',
-                'Executes HTTP middleware pipeline (Auth, CSRF, Session, Throttle).',
+                'Bootstraps framework kernel (Service Providers, Routing, Middleware).',
                 'Invokes Controller action and serializes response payload.',
             ],
             technicalDetails: {
@@ -151,22 +149,18 @@ export function getScenarios(
             },
         }),
 
-        database: (
-            query: string,
-            status: string = 'Active Connection',
-        ): SimulatorHop => ({
+        database: (query: string, status: string = 'Active'): SimulatorHop => ({
             id: 'database',
-            title: `Plex Commons (${dbTitle})`,
-            subtitle: `Shared Database Engine (${databaseName})`,
-            layer: 'Layer 7 • Persistence Storage',
+            title: dbTitle,
+            subtitle: databaseName,
+            layer: 'Database',
             icon: 'Database',
             badge: status,
             summary: `Executes SQL query over TCP socket on database "${databaseName}".`,
             mechanics: [
                 `Connects to backing engine via PDO driver "${databaseDriver}".`,
                 'Authenticates via credentials injected from OpenBao Vault or .env.',
-                'Database engine scans B-Tree indexes and reads block storage from PersistentVolumeClaim (PVC).',
-                'Returns serializable record set to the application runtime.',
+                'Scans B-Tree indexes and reads block storage from PersistentVolumeClaim (PVC).',
             ],
             technicalDetails: {
                 protocol:

@@ -1,6 +1,8 @@
 import {
     AlertTriangle,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     Flame,
     Pause,
     Play,
@@ -23,6 +25,10 @@ export default function SimulatorControls({
     presets,
     selectedTargetId,
     onSelectTarget,
+    currentStepIndex,
+    totalSteps,
+    onNext,
+    onPrev,
 }: {
     currentScenarioKey: ScenarioKind;
     onSelectScenario: (key: ScenarioKind) => void;
@@ -35,46 +41,44 @@ export default function SimulatorControls({
     presets: ProjectPreset[];
     selectedTargetId: string;
     onSelectTarget: (id: string) => void;
+    currentStepIndex: number;
+    totalSteps: number;
+    onNext: () => void;
+    onPrev: () => void;
 }) {
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/90 p-3 shadow-lg backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/90 px-3.5 py-2.5 shadow-md backdrop-blur-md">
             {/* Left: Target App / Preset Selector */}
             <div className="flex items-center gap-2">
-                <div className="flex flex-col">
-                    <span className="text-[9px] font-semibold tracking-wider text-soft uppercase">
-                        Target Workload
-                    </span>
-                    <select
-                        value={selectedTargetId}
-                        onChange={(e) => onSelectTarget(e.target.value)}
-                        className="mt-0.5 rounded-lg border border-line bg-paper px-2.5 py-1 text-xs font-semibold text-ink transition focus:border-brand focus:outline-hidden"
-                    >
-                        <optgroup label="Educational Presets">
-                            {presets.map((p) => (
-                                <option key={p.id} value={`preset:${p.id}`}>
-                                    {p.name}
+                <span className="text-[10px] font-semibold tracking-wider text-soft uppercase">
+                    Workload:
+                </span>
+                <select
+                    value={selectedTargetId}
+                    onChange={(e) => onSelectTarget(e.target.value)}
+                    className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs font-semibold text-ink transition focus:border-brand focus:outline-hidden"
+                >
+                    <optgroup label="Educational Presets">
+                        {presets.map((p) => (
+                            <option key={p.id} value={`preset:${p.id}`}>
+                                {p.name}
+                            </option>
+                        ))}
+                    </optgroup>
+                    {projects.length > 0 && (
+                        <optgroup label="My Registered Projects">
+                            {projects.map((p) => (
+                                <option key={p.id} value={`project:${p.id}`}>
+                                    {p.name} (
+                                    {p.webHost || `${p.framework}.dev.test`})
                                 </option>
                             ))}
                         </optgroup>
-                        {projects.length > 0 && (
-                            <optgroup label="My Registered Projects">
-                                {projects.map((p) => (
-                                    <option
-                                        key={p.id}
-                                        value={`project:${p.id}`}
-                                    >
-                                        {p.name} (
-                                        {p.webHost || `${p.framework}.dev.test`}
-                                        )
-                                    </option>
-                                ))}
-                            </optgroup>
-                        )}
-                    </select>
-                </div>
+                    )}
+                </select>
             </div>
 
-            {/* Middle: Scenario Chooser (Healthy vs Fault Injection) */}
+            {/* Middle: Scenario Chooser */}
             <div className="flex items-center gap-1 rounded-xl bg-badge p-1">
                 <button
                     type="button"
@@ -133,16 +137,41 @@ export default function SimulatorControls({
                 </button>
             </div>
 
-            {/* Right: Playback & Speed Controls */}
+            {/* Right: Step Scrubbing & Playback */}
             <div className="flex items-center gap-2">
+                {/* Step controls */}
+                <div className="flex items-center rounded-xl border border-line bg-paper/60 p-0.5">
+                    <button
+                        type="button"
+                        onClick={onPrev}
+                        disabled={currentStepIndex <= 0}
+                        className="rounded-lg p-1 text-soft transition hover:text-ink disabled:opacity-30"
+                        title="Step Backward"
+                    >
+                        <ChevronLeft className="size-3.5" />
+                    </button>
+                    <span className="px-1.5 font-mono text-[11px] font-semibold text-ink">
+                        {currentStepIndex + 1}/{totalSteps}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={onNext}
+                        disabled={currentStepIndex >= totalSteps - 1}
+                        className="rounded-lg p-1 text-soft transition hover:text-ink disabled:opacity-30"
+                        title="Step Forward"
+                    >
+                        <ChevronRight className="size-3.5" />
+                    </button>
+                </div>
+
                 <Button
                     variant={isPlaying ? 'secondary' : 'primary'}
                     size="sm"
                     onClick={onTogglePlay}
                     title={
                         isPlaying
-                            ? 'Pause automated traffic'
-                            : 'Start ambient flow'
+                            ? 'Pause automatic trace'
+                            : 'Start automatic trace'
                     }
                 >
                     {isPlaying ? (
@@ -162,7 +191,7 @@ export default function SimulatorControls({
                     variant="secondary"
                     size="sm"
                     onClick={onReset}
-                    title="Reset to client origin"
+                    title="Reset to beginning"
                 >
                     <RotateCcw className="size-3.5" />
                     <span>Reset</span>
