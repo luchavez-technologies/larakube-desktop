@@ -38,7 +38,7 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureMaturityFlags(): void
     {
-        Feature::define('untested-tools', fn () => ['wordpress', 'metabase', 'glitchtip', 'chatwoot', 'planka']);
+        Feature::define('untested-tools', fn () => ['metabase', 'glitchtip', 'chatwoot', 'planka']);
 
         Feature::define('untested-frameworks', fn () => ['wordpress', 'django', 'fastapi', 'springboot', 'dotnet', 'gin', 'axum', 'nestjs', 'adonisjs']);
 

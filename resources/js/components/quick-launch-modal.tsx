@@ -100,7 +100,7 @@ const APPS: AppOption[] = [
         name: 'WordPress',
         tagline: "World's #1 CMS",
         description:
-            'Blazing fast ServerSideUp FrankenPHP pod with zero-RAM SQLite or shared Plex MySQL.',
+            'Lightweight ServerSideUp Apache + PHP-FPM pod with zero-RAM SQLite or shared Plex MySQL.',
         defaultSubdomain: 'blog',
         adminPath: '/wp-admin',
         capabilities: {
@@ -527,17 +527,6 @@ export default function QuickLaunchModal({
             setNeedsAdminEmail(Boolean(res.ok && res.data.needsAdminEmail));
 
             const answers = defaultAnswers(fetched);
-            // The one piece of cluster-aware "smart default" worth keeping:
-            // if a database choice exists and the Commons already runs
-            // MySQL/MariaDB, suggest that instead of each tool's own plain
-            // default — generalized by field key, not hardcoded to one app.
-            const activeSet = new Set(clusterServices);
-            if (
-                fetched.some((field) => field.key === 'db') &&
-                (activeSet.has('mysql') || activeSet.has('mariadb'))
-            ) {
-                answers.db = 'mysql';
-            }
             // For local clusters, proxied must always be false by default.
             // For cloud servers, default to true only when Cloudflare-managed.
             if (fetched.some((field) => field.key === 'proxied')) {
