@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -225,6 +226,17 @@ class Server extends Model
     public function isFresh(): bool
     {
         return $this->sync_status === 'fresh';
+    }
+
+    /**
+     * Scope a query to only include active servers (excluding dev boxes and missing/destroyed servers).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('role', '!=', 'dev')->where('status', '!=', 'missing');
     }
 
     public function isLocal(): bool

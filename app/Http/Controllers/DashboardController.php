@@ -56,14 +56,15 @@ class DashboardController extends Controller
             'stats' => Inertia::defer(function () use ($stacks, $readiness): array {
                 $projectsCount = Project::query()->count();
 
-                $dbServers = Server::where('role', '!=', 'dev')->get(['id', 'status']);
+                $dbServers = Server::active()->get(['id', 'status']);
                 if ($dbServers->isNotEmpty()) {
                     $serversCount = $dbServers->count();
                     $readyServersCount = $dbServers->where('status', 'ready')->count();
                 } else {
                     $allServers = $stacks->all() ?? [];
-                    $serversCount = count($allServers);
-                    $readyServersCount = count(array_filter($allServers, fn (array $s): bool => $s['status'] === 'ready'));
+                    $activeServers = array_filter($allServers, fn (array $s): bool => $s['status'] !== 'missing');
+                    $serversCount = count($activeServers);
+                    $readyServersCount = count(array_filter($activeServers, fn (array $s): bool => $s['status'] === 'ready'));
                 }
 
                 $tools = $readiness->tools();
@@ -110,7 +111,7 @@ class DashboardController extends Controller
 
             'servers' => Inertia::defer(function () use ($stacks, $domains): array {
                 $dbServers = Server::with(['domains' => fn ($q) => $q->where('external_dns', true)])
-                    ->where('role', '!=', 'dev')
+                    ->active()
                     ->take(4)
                     ->get();
 
@@ -130,18 +131,19 @@ class DashboardController extends Controller
                 }
 
                 $allServers = $stacks->all() ?? [];
-                $allServers = array_map(function (array $s) use ($domains): array {
+                $activeServers = array_values(array_filter($allServers, fn (array $s): bool => $s['status'] !== 'missing'));
+                $activeServers = array_map(function (array $s) use ($domains): array {
                     $s['hasExternalDns'] = is_string($s['context'] ?? null)
                         && collect($domains->forContext($s['context']) ?? [])->contains('externalDns', true);
 
                     return $s;
-                }, $allServers);
+                }, $activeServers);
 
-                return array_slice($allServers, 0, 4);
+                return array_slice($activeServers, 0, 4);
             }),
 
             'fleetMetrics' => Inertia::defer(function () use ($stacks, $fleetMetrics): array {
-                $dbServers = Server::where('role', '!=', 'dev')->get(['name', 'status', 'role']);
+                $dbServers = Server::active()->get(['name', 'status', 'role']);
                 if ($dbServers->isNotEmpty()) {
                     $servers = $dbServers->map(fn (Server $s): array => [
                         'name' => $s->name,
@@ -164,20 +166,19 @@ class DashboardController extends Controller
             }, 'fleetMetrics'),
 
             'backups' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
-                $dbServers = Server::where('role', '!=', 'dev')
-                    ->where('status', 'ready')
-                    ->whereNotNull('context')
-                    ->get();
-
-                if ($dbServers->isNotEmpty()) {
-                    $cloudServers = $dbServers->reject(fn (Server $s): bool => Server::isStackLocal([
-                        'name' => $s->name,
-                        'provider' => $s->provider,
-                        'kind' => $s->kind,
-                        'ip' => $s->ip,
-                        'context' => $s->context,
-                        'status' => $s->status,
-                    ]))->values();
+                if (Server::active()->exists()) {
+                    $cloudServers = Server::active()
+                        ->where('status', 'ready')
+                        ->whereNotNull('context')
+                        ->get()
+                        ->reject(fn (Server $s): bool => Server::isStackLocal([
+                            'name' => $s->name,
+                            'provider' => $s->provider,
+                            'kind' => $s->kind,
+                            'ip' => $s->ip,
+                            'context' => $s->context,
+                            'status' => $s->status,
+                        ]))->values();
 
                     $unprotected = [];
                     foreach ($cloudServers as $server) {
@@ -223,20 +224,19 @@ class DashboardController extends Controller
             }, 'backups'),
 
             'unprotectedServers' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
-                $dbServers = Server::where('role', '!=', 'dev')
-                    ->where('status', 'ready')
-                    ->whereNotNull('context')
-                    ->get();
-
-                if ($dbServers->isNotEmpty()) {
-                    return $dbServers->reject(fn (Server $s): bool => Server::isStackLocal([
-                        'name' => $s->name,
-                        'provider' => $s->provider,
-                        'kind' => $s->kind,
-                        'ip' => $s->ip,
-                        'context' => $s->context,
-                        'status' => $s->status,
-                    ]))
+                if (Server::active()->exists()) {
+                    return Server::active()
+                        ->where('status', 'ready')
+                        ->whereNotNull('context')
+                        ->get()
+                        ->reject(fn (Server $s): bool => Server::isStackLocal([
+                            'name' => $s->name,
+                            'provider' => $s->provider,
+                            'kind' => $s->kind,
+                            'ip' => $s->ip,
+                            'context' => $s->context,
+                            'status' => $s->status,
+                        ]))
                         ->filter(fn (Server $s): bool => $s->backup_configured === false)
                         ->pluck('name')
                         ->values()

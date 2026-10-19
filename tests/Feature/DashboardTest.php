@@ -340,3 +340,44 @@ test('SyncServerBackupJob updates server backup status', function () {
         ->and($server->backup_sync_status)->toBe('fresh')
         ->and($server->backup_last_synced_at)->not->toBeNull();
 });
+
+test('destroyed and missing servers are excluded from active fleet count and health score', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    // 2 active ready servers
+    Server::create(['name' => 'active-1', 'role' => 'deploy', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+    Server::create(['name' => 'active-2', 'role' => 'deploy', 'provider' => 'aws', 'kind' => 'vps', 'status' => 'ready']);
+
+    // 1 destroyed / missing server
+    Server::create(['name' => 'destroyed-cluster', 'role' => 'deploy', 'provider' => 'gcp', 'kind' => 'managed', 'status' => 'missing']);
+
+    // 1 dev box
+    Server::create(['name' => 'my-devbox', 'role' => 'dev', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldNotReceive('all');
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('stats.serversCount', 2)
+                ->where('stats.readyServersCount', 2)
+                ->where('fleetMetrics.totalServers', 2)
+                ->where('fleetMetrics.readyServers', 2)
+                ->where('fleetMetrics.fleetHealthScore', 100)
+            )
+        );
+
+    File::deleteDirectory($bin);
+});

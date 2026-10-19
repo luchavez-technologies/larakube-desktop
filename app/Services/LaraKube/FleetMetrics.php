@@ -19,8 +19,9 @@ class FleetMetrics
      */
     public function summary(array $servers, array $projects): array
     {
-        $totalServers = count($servers);
-        $readyServers = count(array_filter($servers, fn ($s) => ($s['status'] ?? '') === 'ready'));
+        $activeServers = array_values(array_filter($servers, fn ($s) => ($s['status'] ?? '') !== 'missing'));
+        $totalServers = count($activeServers);
+        $readyServers = count(array_filter($activeServers, fn ($s) => ($s['status'] ?? '') === 'ready'));
         $totalProjects = count($projects);
 
         // Fleet health score: weighted ratio of ready servers and non-failed runs
