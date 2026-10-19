@@ -6,11 +6,16 @@ import {
     Check,
     Cloud,
     ExternalLink,
+    Eye,
+    EyeOff,
+    FolderOpen,
     Globe,
     Key,
     Layers,
+    Lock,
     Plus,
     Server,
+    ShieldCheck,
     Users,
     X,
 } from 'lucide-react';
@@ -27,6 +32,7 @@ import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { readiness } from '@/routes';
+import { sendJson } from '@/lib/http';
 import { openExternalUrl } from '@/lib/open-external';
 import {
     index as devBoxesIndex,
@@ -37,16 +43,33 @@ import type { Provider, Untested } from '@/types/larakube';
 
 const tokenProviders = ['do', 'hetzner'];
 
+const existingProvider: Provider = {
+    slug: 'existing',
+    label: 'Existing VPS / Custom Server',
+    regions: [],
+    defaultRegion: '',
+    vpsSizes: [],
+    defaultVpsSize: '',
+    credentials: { ready: true, hint: null },
+};
+
 export default function CreateServer({
     providers,
     project,
     kind = 'server',
     defaultProvider,
+    detectedKeys = [],
 }: {
     providers?: Provider[] | null;
     project: { id: number; name: string } | null;
     kind?: 'server' | 'dev-box';
     defaultProvider?: string;
+    detectedKeys?: Array<{
+        path: string;
+        label: string;
+        encrypted: boolean;
+        in_agent: boolean;
+    }>;
 }) {
     const devBox = kind === 'dev-box';
 
@@ -78,6 +101,7 @@ export default function CreateServer({
                         projectId={project?.id ?? null}
                         devBox={devBox}
                         defaultProvider={defaultProvider}
+                        detectedKeys={detectedKeys}
                     />
                 ) : (
                     <p className="text-sm text-soft">
@@ -94,26 +118,36 @@ function ServerForm({
     projectId,
     devBox,
     defaultProvider,
+    detectedKeys = [],
 }: {
     providers: Provider[];
     projectId: number | null;
     devBox: boolean;
     defaultProvider?: string;
+    detectedKeys?: Array<{
+        path: string;
+        label: string;
+        encrypted: boolean;
+        in_agent: boolean;
+    }>;
 }) {
     const { untested } = usePage<{ untested: Untested }>().props;
+    const allProviders = devBox ? providers : [...providers, existingProvider];
     const startSize = (candidate: Provider, targetKind: 'vps' | 'managed') =>
-        targetKind === 'managed'
-            ? (candidate.defaultManagedSize ?? candidate.defaultVpsSize)
-            : devBox
-              ? (candidate.defaultDevBoxSize ?? candidate.defaultVpsSize)
-              : candidate.defaultVpsSize;
+        candidate.slug === 'existing'
+            ? ''
+            : targetKind === 'managed'
+              ? (candidate.defaultManagedSize ?? candidate.defaultVpsSize)
+              : devBox
+                ? (candidate.defaultDevBoxSize ?? candidate.defaultVpsSize)
+                : candidate.defaultVpsSize;
     const initial =
-        providers.find(
+        allProviders.find(
             (provider) =>
                 provider.slug === defaultProvider && provider.credentials.ready,
         ) ??
-        providers.find((provider) => provider.credentials.ready) ??
-        providers[0];
+        allProviders.find((provider) => provider.credentials.ready) ??
+        allProviders[0];
     const form = useForm('servers.create', {
         provider: initial.slug,
         stack_name: '',
@@ -138,6 +172,10 @@ function ServerForm({
         project_id: projectId,
         account: initial.activeAccount ?? initial.accounts?.[0]?.id ?? '',
         ssh_port: 22,
+        ip: '',
+        ssh_user: 'root',
+        ssh_key: detectedKeys[0]?.path ?? '',
+        ssh_passphrase: '',
     });
 
     const [currentStep, setCurrentStep] = useState(1);
@@ -145,9 +183,67 @@ function ServerForm({
     const [overrideAwsKeys, setOverrideAwsKeys] = useState(false);
     const [showAccountModal, setShowAccountModal] = useState(false);
 
+    const [inspectingKey, setInspectingKey] = useState(false);
+    const [keyInfo, setKeyInfo] = useState<{
+        valid?: boolean;
+        encrypted?: boolean;
+        in_agent?: boolean;
+    }>({
+        valid: detectedKeys.length > 0,
+        encrypted: detectedKeys[0]?.encrypted ?? false,
+        in_agent: detectedKeys[0]?.in_agent ?? false,
+    });
+    const [showPassphrase, setShowPassphrase] = useState(false);
+
+    async function inspectKeyPath(path: string) {
+        if (!path || path.trim() === '') {
+            setKeyInfo({});
+            return;
+        }
+        setInspectingKey(true);
+        try {
+            const { ok, data } = await sendJson<{
+                valid: boolean;
+                encrypted: boolean;
+                in_agent: boolean;
+            }>('/servers/inspect-key', 'POST', { path });
+            if (ok) {
+                setKeyInfo(data);
+            }
+        } catch (e) {
+            console.error('Failed to inspect SSH key', e);
+        } finally {
+            setInspectingKey(false);
+        }
+    }
+
+    async function handlePickKey() {
+        try {
+            const { ok, data } = await sendJson<{
+                path: string | null;
+                valid?: boolean;
+                encrypted?: boolean;
+                in_agent?: boolean;
+            }>('/servers/pick-key', 'POST');
+            if (ok && data.path) {
+                form.setData('ssh_key', data.path);
+                setKeyInfo({
+                    valid: data.valid ?? true,
+                    encrypted: data.encrypted ?? false,
+                    in_agent: data.in_agent ?? false,
+                });
+            }
+        } catch (e) {
+            console.error('Failed to pick SSH key', e);
+        }
+    }
+
     const provider =
-        providers.find((candidate) => candidate.slug === form.data.provider) ??
-        initial;
+        allProviders.find(
+            (candidate) => candidate.slug === form.data.provider,
+        ) ?? initial;
+
+    const isExisting = form.data.provider === 'existing';
 
     const needsToken =
         tokenProviders.includes(provider.slug) && !provider.credentials.ready;
@@ -156,9 +252,11 @@ function ServerForm({
         (!provider.credentials.ready || overrideAwsKeys);
     const needsGcpLogin =
         provider.slug === 'gcp' && !provider.credentials.ready;
-    const cliMissing = /not installed/i.test(provider.credentials.hint ?? '');
+    const cliMissing =
+        !isExisting && /not installed/i.test(provider.credentials.hint ?? '');
 
-    const canBeManaged = !devBox && (provider.managedSizes?.length ?? 0) > 0;
+    const canBeManaged =
+        !devBox && !isExisting && (provider.managedSizes?.length ?? 0) > 0;
     const isManaged = form.data.target_kind === 'managed' && canBeManaged;
     const sizeOptions =
         (isManaged ? provider.managedSizes : provider.vpsSizes) ?? [];
@@ -176,7 +274,11 @@ function ServerForm({
           ]
         : [
               { number: 1, title: 'Choose Provider', icon: Cloud },
-              { number: 2, title: 'Customize Server', icon: Server },
+              {
+                  number: 2,
+                  title: isExisting ? 'Server & SSH' : 'Customize Server',
+                  icon: Server,
+              },
               { number: 3, title: 'DNS & SSL Automation', icon: Globe },
           ];
 
@@ -196,8 +298,16 @@ function ServerForm({
             (form.data.aws_access_key_id.trim() !== '' &&
                 form.data.aws_secret_access_key.trim() !== ''));
 
+    const needsPassphrase =
+        isExisting && Boolean(keyInfo.encrypted && !keyInfo.in_agent);
+
     const canProceedToStep3 =
-        canProceedToStep2 && form.data.stack_name.trim() !== '';
+        canProceedToStep2 &&
+        form.data.stack_name.trim() !== '' &&
+        (!isExisting ||
+            (form.data.ip.trim() !== '' &&
+                form.data.ssh_key.trim() !== '' &&
+                (!needsPassphrase || form.data.ssh_passphrase.trim() !== '')));
 
     const hasValidDnsCredentials = (() => {
         if (!form.data.dns_provider) return true;
@@ -259,6 +369,11 @@ function ServerForm({
                     'size',
                     'node_count',
                     'ha',
+                    'ip',
+                    'ssh_user',
+                    'ssh_key',
+                    'ssh_passphrase',
+                    'ssh_port',
                 ].includes(k),
             )
         ) {
@@ -410,13 +525,15 @@ function ServerForm({
                             Cloud provider
                         </p>
                         <div className="grid grid-cols-2 gap-3">
-                            {providers.map((candidate) => (
+                            {allProviders.map((candidate) => (
                                 <button
                                     key={candidate.slug}
                                     type="button"
                                     onClick={() => selectProvider(candidate)}
                                     className={cn(
                                         'flex items-center justify-between rounded-xl bg-surface px-4 py-3.5 text-left transition',
+                                        candidate.slug === 'existing' &&
+                                            'col-span-2',
                                         candidate.slug === provider.slug
                                             ? 'ring-2 ring-servers'
                                             : 'ring-1 ring-line hover:ring-faint',
@@ -427,9 +544,18 @@ function ServerForm({
                                             provider={candidate.slug}
                                             size="sm"
                                         />
-                                        <span className="text-sm font-medium">
-                                            {candidate.label}
-                                        </span>
+                                        <div>
+                                            <span className="block text-sm font-medium">
+                                                {candidate.label}
+                                            </span>
+                                            {candidate.slug === 'existing' && (
+                                                <span className="block text-xs text-soft">
+                                                    Any fresh Ubuntu 24.04 or
+                                                    26.04 server with SSH root
+                                                    access
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <StatusPill
                                         tone={
@@ -639,8 +765,9 @@ function ServerForm({
 
                         <div className="mt-6 flex items-center justify-between gap-4">
                             <p className="text-[13px] text-soft">
-                                Billed directly by {provider.label}. You can
-                                destroy your servers at any time.
+                                {isExisting
+                                    ? 'No cloud API credentials required. Connects securely via SSH.'
+                                    : `Billed directly by ${provider.label}. You can destroy your servers at any time.`}
                             </p>
                             <div className="flex items-center gap-2.5">
                                 <Link
@@ -661,7 +788,9 @@ function ServerForm({
                                         Next:{' '}
                                         {devBox
                                             ? 'Customize Dev Box'
-                                            : 'Customize Server'}
+                                            : isExisting
+                                              ? 'Server & SSH Details'
+                                              : 'Customize Server'}
                                     </span>
                                     <ArrowRight className="size-4" />
                                 </Button>
@@ -674,518 +803,610 @@ function ServerForm({
                 {currentStep === 2 && (
                     <div>
                         <div className="space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
-                            <Field
-                                label={devBox ? 'Dev box name' : 'Server name'}
-                                hint="Lowercase letters, numbers and dashes."
-                                error={form.errors.stack_name}
-                            >
-                                <input
-                                    value={form.data.stack_name}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'stack_name',
-                                            event.target.value,
-                                        )
-                                    }
-                                    placeholder="workshop-demo"
-                                    autoFocus
-                                    spellCheck={false}
-                                    className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                            {isExisting ? (
+                                <ExistingServerFields
+                                    form={form}
+                                    detectedKeys={detectedKeys}
+                                    keyInfo={keyInfo}
+                                    setKeyInfo={setKeyInfo}
+                                    inspectingKey={inspectingKey}
+                                    inspectKeyPath={inspectKeyPath}
+                                    handlePickKey={handlePickKey}
+                                    needsPassphrase={needsPassphrase}
+                                    showPassphrase={showPassphrase}
+                                    setShowPassphrase={setShowPassphrase}
                                 />
-                            </Field>
-
-                            {canBeManaged && (
-                                <Field
-                                    label={
-                                        <span className="inline-flex items-center gap-1.5">
-                                            Server architecture
-                                            <InfoTooltip side="right">
-                                                <strong>
-                                                    Single server (VPS)
-                                                </strong>{' '}
-                                                runs both the Kubernetes control
-                                                plane and your apps on a single
-                                                virtual machine — ideal for
-                                                learning, workshops, and
-                                                low-cost staging.
-                                                <br />
-                                                <br />
-                                                <strong>
-                                                    Managed Kubernetes
-                                                </strong>{' '}
-                                                (
-                                                {provider.managedProvider?.toUpperCase()}
-                                                ) offloads the control plane to{' '}
-                                                {provider.label} for high
-                                                availability and multi-node
-                                                scaling, but costs more.
-                                            </InfoTooltip>
-                                        </span>
-                                    }
-                                    error={form.errors.target_kind}
-                                >
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                selectTargetKind('vps')
-                                            }
-                                            className={cn(
-                                                'relative flex flex-col justify-between rounded-xl p-3.5 text-left transition',
-                                                !isManaged
-                                                    ? 'bg-servers/10 ring-2 ring-servers'
-                                                    : 'bg-surface/50 ring-1 ring-line hover:ring-faint',
-                                            )}
-                                        >
-                                            <div>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <Server
-                                                            className={cn(
-                                                                'size-4',
-                                                                !isManaged
-                                                                    ? 'text-servers'
-                                                                    : 'text-soft',
-                                                            )}
-                                                        />
-                                                        <span className="text-sm font-semibold">
-                                                            Single server (VPS)
-                                                        </span>
-                                                    </div>
-                                                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
-                                                        Recommended for Learning
-                                                    </span>
-                                                </div>
-                                                <p className="mt-2 text-xs leading-relaxed text-soft">
-                                                    Lightweight{' '}
-                                                    <strong>k3s</strong> running
-                                                    on a single virtual server.
-                                                    Control plane and apps share
-                                                    one node.
-                                                </p>
-                                                <ul className="mt-2.5 space-y-1 text-[11px] text-soft">
-                                                    <li className="flex items-center gap-1.5">
-                                                        <Check className="size-3 shrink-0 text-emerald-500" />
-                                                        <span>
-                                                            <strong>
-                                                                Cheapest:
-                                                            </strong>{' '}
-                                                            Pay only for 1 VM
-                                                            (no cloud master
-                                                            fees)
-                                                        </span>
-                                                    </li>
-                                                    <li className="flex items-center gap-1.5">
-                                                        <Check className="size-3 shrink-0 text-emerald-500" />
-                                                        <span>
-                                                            <strong>
-                                                                Self-contained:
-                                                            </strong>{' '}
-                                                            Fast setup,
-                                                            all-in-one
-                                                            Kubernetes
-                                                        </span>
-                                                    </li>
-                                                    <li className="flex items-center gap-1.5">
-                                                        <Check className="size-3 shrink-0 text-emerald-500" />
-                                                        <span>
-                                                            <strong>
-                                                                Best for:
-                                                            </strong>{' '}
-                                                            Workshops, demos,
-                                                            side projects &amp;
-                                                            MVPs
-                                                        </span>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                            {untested.capabilities.includes(
-                                                'vps-to-managed',
-                                            ) && (
-                                                <span className="mt-3 block border-t border-line/60 pt-2 text-[10px] text-faint">
-                                                    Switching to Managed later
-                                                    is possible via the CLI
-                                                    (experimental).
-                                                </span>
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                selectTargetKind('managed')
-                                            }
-                                            className={cn(
-                                                'relative flex flex-col justify-between rounded-xl p-3.5 text-left transition',
-                                                isManaged
-                                                    ? 'bg-servers/10 ring-2 ring-servers'
-                                                    : 'bg-surface/50 ring-1 ring-line hover:ring-faint',
-                                            )}
-                                        >
-                                            <div>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <Layers
-                                                            className={cn(
-                                                                'size-4',
-                                                                isManaged
-                                                                    ? 'text-servers'
-                                                                    : 'text-soft',
-                                                            )}
-                                                        />
-                                                        <span className="text-sm font-semibold">
-                                                            Managed Kubernetes
-                                                        </span>
-                                                    </div>
-                                                    <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-600 ring-1 ring-indigo-500/20 dark:text-indigo-400">
-                                                        {provider.managedProvider?.toUpperCase()}{' '}
-                                                        · Production
-                                                    </span>
-                                                </div>
-                                                <p className="mt-2 text-xs leading-relaxed text-soft">
-                                                    <strong>
-                                                        {provider.label}
-                                                    </strong>{' '}
-                                                    manages master nodes, etcd,
-                                                    and control plane uptime
-                                                    behind an SLA.
-                                                </p>
-                                                <ul className="mt-2.5 space-y-1 text-[11px] text-soft">
-                                                    <li className="flex items-center gap-1.5">
-                                                        <Check className="size-3 shrink-0 text-indigo-500" />
-                                                        <span>
-                                                            <strong>
-                                                                Cloud-managed:
-                                                            </strong>{' '}
-                                                            Provider manages
-                                                            Kubernetes control
-                                                            plane
-                                                        </span>
-                                                    </li>
-                                                    <li className="flex items-center gap-1.5">
-                                                        <Check className="size-3 shrink-0 text-indigo-500" />
-                                                        <span>
-                                                            <strong>
-                                                                Multi-node:
-                                                            </strong>{' '}
-                                                            Worker nodes scale
-                                                            across multiple
-                                                            instances
-                                                        </span>
-                                                    </li>
-                                                    <li className="flex items-center gap-1.5">
-                                                        <Check className="size-3 shrink-0 text-indigo-500" />
-                                                        <span>
-                                                            <strong>
-                                                                Best for:
-                                                            </strong>{' '}
-                                                            Production workloads
-                                                            requiring high
-                                                            availability
-                                                        </span>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                            {provider.slug === 'aws' && (
-                                                <span className="mt-3 block border-t border-line/60 pt-2 text-[10px] text-amber-600 dark:text-amber-400">
-                                                    Note: AWS charges a flat
-                                                    ~$73/mo for the EKS control
-                                                    plane.
-                                                </span>
-                                            )}
-                                        </button>
-                                    </div>
-                                </Field>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <Field
-                                    label="Region"
-                                    error={form.errors.region}
-                                >
-                                    <Select
-                                        value={form.data.region}
-                                        onChange={(value) =>
-                                            form.setData('region', value)
-                                        }
-                                        options={provider.regions}
-                                        searchable={provider.regions.length > 8}
-                                    />
-                                </Field>
-                                <Field
-                                    label="Size"
-                                    error={form.errors.size}
-                                    hint={pricingNote(provider)}
-                                >
-                                    <Select
-                                        value={form.data.size}
-                                        onChange={(value) =>
-                                            form.setData('size', value)
-                                        }
-                                        options={sizeOptions}
-                                        searchable={sizeOptions.length > 8}
-                                    />
-                                </Field>
-                            </div>
-
-                            {!isManaged && (
-                                <Field
-                                    label={
-                                        <span className="inline-flex items-center gap-1.5">
-                                            SSH port
-                                            <InfoTooltip side="right">
-                                                Port the SSH daemon will listen
-                                                on. Default is{' '}
-                                                <strong>22</strong>.
-                                                <br />
-                                                <br />
-                                                If your local network,
-                                                university, or corporate
-                                                firewall blocks outbound port
-                                                22, choose an alternate port
-                                                such as <strong>
-                                                    8443
-                                                </strong> or{' '}
-                                                <strong>2200</strong>.
-                                            </InfoTooltip>
-                                        </span>
-                                    }
-                                    hint={
-                                        <span className="flex flex-wrap items-center gap-2 pt-1">
-                                            <span className="text-xs text-soft">
-                                                Firewall bypass presets:
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    form.setData(
-                                                        'ssh_port',
-                                                        8443,
-                                                    )
-                                                }
-                                                className={cn(
-                                                    'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
-                                                    Number(
-                                                        form.data.ssh_port,
-                                                    ) === 8443
-                                                        ? 'bg-servers/15 text-servers ring-servers'
-                                                        : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
-                                                )}
-                                            >
-                                                8443 (Recommended)
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    form.setData(
-                                                        'ssh_port',
-                                                        2200,
-                                                    )
-                                                }
-                                                className={cn(
-                                                    'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
-                                                    Number(
-                                                        form.data.ssh_port,
-                                                    ) === 2200
-                                                        ? 'bg-servers/15 text-servers ring-servers'
-                                                        : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
-                                                )}
-                                            >
-                                                2200
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    form.setData('ssh_port', 22)
-                                                }
-                                                className={cn(
-                                                    'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
-                                                    Number(
-                                                        form.data.ssh_port,
-                                                    ) === 22
-                                                        ? 'bg-servers/15 text-servers ring-servers'
-                                                        : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
-                                                )}
-                                            >
-                                                22 (Default)
-                                            </button>
-                                        </span>
-                                    }
-                                    error={form.errors.ssh_port}
-                                >
-                                    <div className="space-y-1.5">
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            max={65535}
-                                            value={form.data.ssh_port}
-                                            onChange={(event) =>
-                                                form.setData(
-                                                    'ssh_port',
-                                                    event.target.value === ''
-                                                        ? 22
-                                                        : parseInt(
-                                                              event.target
-                                                                  .value,
-                                                              10,
-                                                          ) || 22,
-                                                )
-                                            }
-                                            placeholder="22"
-                                            className="w-full max-w-xs rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                        />
-                                        {Number(form.data.ssh_port) === 443 && (
-                                            <p className="text-xs text-rose-500">
-                                                Port 443 is reserved for Traefik
-                                                HTTPS ingress on single-node
-                                                VPS. Choose an alternate like
-                                                8443.
-                                            </p>
-                                        )}
-                                        {Number(form.data.ssh_port) === 80 && (
-                                            <p className="text-xs text-rose-500">
-                                                Port 80 is reserved for Traefik
-                                                HTTP web ingress. Choose an
-                                                alternate like 8443.
-                                            </p>
-                                        )}
-                                        {Number(form.data.ssh_port) ===
-                                            2222 && (
-                                            <p className="text-xs text-rose-500">
-                                                Port 2222 is reserved for Git
-                                                (Forgejo) SSH service. Choose an
-                                                alternate like 8443 or 2200.
-                                            </p>
-                                        )}
-                                    </div>
-                                </Field>
-                            )}
-
-                            {isManaged && (
-                                <div className="grid grid-cols-2 gap-4">
+                            ) : (
+                                <>
                                     <Field
-                                        label="Node count"
-                                        error={form.errors.node_count}
+                                        label={
+                                            devBox
+                                                ? 'Dev box name'
+                                                : 'Server name'
+                                        }
+                                        hint="Lowercase letters, numbers and dashes."
+                                        error={form.errors.stack_name}
                                     >
                                         <input
-                                            type="number"
-                                            min={1}
-                                            max={20}
-                                            value={form.data.node_count}
+                                            value={form.data.stack_name}
                                             onChange={(event) =>
                                                 form.setData(
-                                                    'node_count',
+                                                    'stack_name',
                                                     event.target.value,
                                                 )
                                             }
-                                            className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                            placeholder="workshop-demo"
+                                            autoFocus
+                                            spellCheck={false}
+                                            className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
                                         />
                                     </Field>
-                                    {provider.haOption === 'boolean' ? (
+
+                                    {canBeManaged && (
                                         <Field
                                             label={
-                                                <span className="inline-flex items-center gap-1">
-                                                    Control plane
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    Server architecture
                                                     <InfoTooltip side="right">
-                                                        The control plane is
-                                                        what runs Kubernetes
-                                                        itself (the API server,
-                                                        scheduler, etcd) —
-                                                        separate from your
-                                                        worker node(s).
-                                                        Unchecked, it runs in a
-                                                        single zone for free:
-                                                        fine for learning or a
-                                                        demo, but an outage in
-                                                        that zone takes the
-                                                        whole cluster down with
-                                                        it. Checked, it spans
-                                                        multiple zones for{' '}
-                                                        {provider.haCost ??
-                                                            'an extra charge'}
-                                                        , so the cluster
-                                                        survives one zone going
-                                                        down — what most
-                                                        production setups
-                                                        choose.
+                                                        <strong>
+                                                            Single server (VPS)
+                                                        </strong>{' '}
+                                                        runs both the Kubernetes
+                                                        control plane and your
+                                                        apps on a single virtual
+                                                        machine — ideal for
+                                                        learning, workshops, and
+                                                        low-cost staging.
+                                                        <br />
+                                                        <br />
+                                                        <strong>
+                                                            Managed Kubernetes
+                                                        </strong>{' '}
+                                                        (
+                                                        {provider.managedProvider?.toUpperCase()}
+                                                        ) offloads the control
+                                                        plane to{' '}
+                                                        {provider.label} for
+                                                        high availability and
+                                                        multi-node scaling, but
+                                                        costs more.
                                                     </InfoTooltip>
                                                 </span>
                                             }
+                                            error={form.errors.target_kind}
                                         >
-                                            <label className="flex h-9 items-center gap-2 text-sm">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={form.data.ha}
-                                                    onChange={(event) =>
-                                                        form.setData(
-                                                            'ha',
-                                                            event.target
-                                                                .checked,
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        selectTargetKind('vps')
+                                                    }
+                                                    className={cn(
+                                                        'relative flex flex-col justify-between rounded-xl p-3.5 text-left transition',
+                                                        !isManaged
+                                                            ? 'bg-servers/10 ring-2 ring-servers'
+                                                            : 'bg-surface/50 ring-1 ring-line hover:ring-faint',
+                                                    )}
+                                                >
+                                                    <div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server
+                                                                    className={cn(
+                                                                        'size-4',
+                                                                        !isManaged
+                                                                            ? 'text-servers'
+                                                                            : 'text-soft',
+                                                                    )}
+                                                                />
+                                                                <span className="text-sm font-semibold">
+                                                                    Single
+                                                                    server (VPS)
+                                                                </span>
+                                                            </div>
+                                                            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                                                Recommended for
+                                                                Learning
+                                                            </span>
+                                                        </div>
+                                                        <p className="mt-2 text-xs leading-relaxed text-soft">
+                                                            Lightweight{' '}
+                                                            <strong>k3s</strong>{' '}
+                                                            running on a single
+                                                            virtual server.
+                                                            Control plane and
+                                                            apps share one node.
+                                                        </p>
+                                                        <ul className="mt-2.5 space-y-1 text-[11px] text-soft">
+                                                            <li className="flex items-center gap-1.5">
+                                                                <Check className="size-3 shrink-0 text-emerald-500" />
+                                                                <span>
+                                                                    <strong>
+                                                                        Cheapest:
+                                                                    </strong>{' '}
+                                                                    Pay only for
+                                                                    1 VM (no
+                                                                    cloud master
+                                                                    fees)
+                                                                </span>
+                                                            </li>
+                                                            <li className="flex items-center gap-1.5">
+                                                                <Check className="size-3 shrink-0 text-emerald-500" />
+                                                                <span>
+                                                                    <strong>
+                                                                        Self-contained:
+                                                                    </strong>{' '}
+                                                                    Fast setup,
+                                                                    all-in-one
+                                                                    Kubernetes
+                                                                </span>
+                                                            </li>
+                                                            <li className="flex items-center gap-1.5">
+                                                                <Check className="size-3 shrink-0 text-emerald-500" />
+                                                                <span>
+                                                                    <strong>
+                                                                        Best
+                                                                        for:
+                                                                    </strong>{' '}
+                                                                    Workshops,
+                                                                    demos, side
+                                                                    projects
+                                                                    &amp; MVPs
+                                                                </span>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                    {untested.capabilities.includes(
+                                                        'vps-to-managed',
+                                                    ) && (
+                                                        <span className="mt-3 block border-t border-line/60 pt-2 text-[10px] text-faint">
+                                                            Switching to Managed
+                                                            later is possible
+                                                            via the CLI
+                                                            (experimental).
+                                                        </span>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        selectTargetKind(
+                                                            'managed',
                                                         )
                                                     }
-                                                    className="size-4 rounded ring-1 ring-line"
-                                                />
-                                                <span>
-                                                    High availability
-                                                    {provider.haCost
-                                                        ? ` (${provider.haCost})`
-                                                        : ''}
-                                                </span>
-                                            </label>
+                                                    className={cn(
+                                                        'relative flex flex-col justify-between rounded-xl p-3.5 text-left transition',
+                                                        isManaged
+                                                            ? 'bg-servers/10 ring-2 ring-servers'
+                                                            : 'bg-surface/50 ring-1 ring-line hover:ring-faint',
+                                                    )}
+                                                >
+                                                    <div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Layers
+                                                                    className={cn(
+                                                                        'size-4',
+                                                                        isManaged
+                                                                            ? 'text-servers'
+                                                                            : 'text-soft',
+                                                                    )}
+                                                                />
+                                                                <span className="text-sm font-semibold">
+                                                                    Managed
+                                                                    Kubernetes
+                                                                </span>
+                                                            </div>
+                                                            <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-600 ring-1 ring-indigo-500/20 dark:text-indigo-400">
+                                                                {provider.managedProvider?.toUpperCase()}{' '}
+                                                                · Production
+                                                            </span>
+                                                        </div>
+                                                        <p className="mt-2 text-xs leading-relaxed text-soft">
+                                                            <strong>
+                                                                {provider.label}
+                                                            </strong>{' '}
+                                                            manages master
+                                                            nodes, etcd, and
+                                                            control plane uptime
+                                                            behind an SLA.
+                                                        </p>
+                                                        <ul className="mt-2.5 space-y-1 text-[11px] text-soft">
+                                                            <li className="flex items-center gap-1.5">
+                                                                <Check className="size-3 shrink-0 text-indigo-500" />
+                                                                <span>
+                                                                    <strong>
+                                                                        Cloud-managed:
+                                                                    </strong>{' '}
+                                                                    Provider
+                                                                    manages
+                                                                    Kubernetes
+                                                                    control
+                                                                    plane
+                                                                </span>
+                                                            </li>
+                                                            <li className="flex items-center gap-1.5">
+                                                                <Check className="size-3 shrink-0 text-indigo-500" />
+                                                                <span>
+                                                                    <strong>
+                                                                        Multi-node:
+                                                                    </strong>{' '}
+                                                                    Worker nodes
+                                                                    scale across
+                                                                    multiple
+                                                                    instances
+                                                                </span>
+                                                            </li>
+                                                            <li className="flex items-center gap-1.5">
+                                                                <Check className="size-3 shrink-0 text-indigo-500" />
+                                                                <span>
+                                                                    <strong>
+                                                                        Best
+                                                                        for:
+                                                                    </strong>{' '}
+                                                                    Production
+                                                                    workloads
+                                                                    requiring
+                                                                    high
+                                                                    availability
+                                                                </span>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                    {provider.slug ===
+                                                        'aws' && (
+                                                        <span className="mt-3 block border-t border-line/60 pt-2 text-[10px] text-amber-600 dark:text-amber-400">
+                                                            Note: AWS charges a
+                                                            flat ~$73/mo for the
+                                                            EKS control plane.
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </Field>
-                                    ) : (
-                                        provider.haOption === 'always' && (
-                                            <Field
-                                                label={
-                                                    <span className="inline-flex items-center gap-1">
-                                                        Control plane
-                                                        <InfoTooltip side="right">
-                                                            The control plane is
-                                                            what runs Kubernetes
-                                                            itself (the API
-                                                            server, scheduler,
-                                                            etcd) — separate
-                                                            from your node(s).{' '}
-                                                            {
-                                                                provider.label
-                                                            }{' '}
-                                                            always spans it
-                                                            across multiple
-                                                            availability zones —
-                                                            there's no cheaper,
-                                                            single-zone option
-                                                            to opt out of —
-                                                            which is why it
-                                                            isn't a checkbox
-                                                            here like it is for
-                                                            some other
-                                                            providers. It costs{' '}
-                                                            {provider.haCost ??
-                                                                'a flat hourly fee'}
-                                                            , billed on top of
-                                                            your node(s)
-                                                            regardless of
-                                                            cluster size.
-                                                        </InfoTooltip>
-                                                    </span>
-                                                }
-                                            >
-                                                <p className="flex h-9 items-center text-sm text-soft">
-                                                    High availability included
-                                                </p>
-                                            </Field>
-                                        )
                                     )}
-                                </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Field
+                                            label="Region"
+                                            error={form.errors.region}
+                                        >
+                                            <Select
+                                                value={form.data.region}
+                                                onChange={(value) =>
+                                                    form.setData(
+                                                        'region',
+                                                        value,
+                                                    )
+                                                }
+                                                options={provider.regions}
+                                                searchable={
+                                                    provider.regions.length > 8
+                                                }
+                                            />
+                                        </Field>
+                                        <Field
+                                            label="Size"
+                                            error={form.errors.size}
+                                            hint={pricingNote(provider)}
+                                        >
+                                            <Select
+                                                value={form.data.size}
+                                                onChange={(value) =>
+                                                    form.setData('size', value)
+                                                }
+                                                options={sizeOptions}
+                                                searchable={
+                                                    sizeOptions.length > 8
+                                                }
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    {!isManaged && (
+                                        <Field
+                                            label={
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    SSH port
+                                                    <InfoTooltip side="right">
+                                                        Port the SSH daemon will
+                                                        listen on. Default is{' '}
+                                                        <strong>22</strong>.
+                                                        <br />
+                                                        <br />
+                                                        If your local network,
+                                                        university, or corporate
+                                                        firewall blocks outbound
+                                                        port 22, choose an
+                                                        alternate port such as{' '}
+                                                        <strong>
+                                                            8443
+                                                        </strong> or{' '}
+                                                        <strong>2200</strong>.
+                                                    </InfoTooltip>
+                                                </span>
+                                            }
+                                            hint={
+                                                <span className="flex flex-wrap items-center gap-2 pt-1">
+                                                    <span className="text-xs text-soft">
+                                                        Firewall bypass presets:
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            form.setData(
+                                                                'ssh_port',
+                                                                8443,
+                                                            )
+                                                        }
+                                                        className={cn(
+                                                            'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
+                                                            Number(
+                                                                form.data
+                                                                    .ssh_port,
+                                                            ) === 8443
+                                                                ? 'bg-servers/15 text-servers ring-servers'
+                                                                : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                        )}
+                                                    >
+                                                        8443 (Recommended)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            form.setData(
+                                                                'ssh_port',
+                                                                2200,
+                                                            )
+                                                        }
+                                                        className={cn(
+                                                            'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
+                                                            Number(
+                                                                form.data
+                                                                    .ssh_port,
+                                                            ) === 2200
+                                                                ? 'bg-servers/15 text-servers ring-servers'
+                                                                : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                        )}
+                                                    >
+                                                        2200
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            form.setData(
+                                                                'ssh_port',
+                                                                22,
+                                                            )
+                                                        }
+                                                        className={cn(
+                                                            'rounded px-2 py-0.5 font-mono text-xs ring-1 transition',
+                                                            Number(
+                                                                form.data
+                                                                    .ssh_port,
+                                                            ) === 22
+                                                                ? 'bg-servers/15 text-servers ring-servers'
+                                                                : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                        )}
+                                                    >
+                                                        22 (Default)
+                                                    </button>
+                                                </span>
+                                            }
+                                            error={form.errors.ssh_port}
+                                        >
+                                            <div className="space-y-1.5">
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={65535}
+                                                    value={form.data.ssh_port}
+                                                    onChange={(event) =>
+                                                        form.setData(
+                                                            'ssh_port',
+                                                            event.target
+                                                                .value === ''
+                                                                ? 22
+                                                                : parseInt(
+                                                                      event
+                                                                          .target
+                                                                          .value,
+                                                                      10,
+                                                                  ) || 22,
+                                                        )
+                                                    }
+                                                    placeholder="22"
+                                                    className="w-full max-w-xs rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                                />
+                                                {Number(form.data.ssh_port) ===
+                                                    443 && (
+                                                    <p className="text-xs text-rose-500">
+                                                        Port 443 is reserved for
+                                                        Traefik HTTPS ingress on
+                                                        single-node VPS. Choose
+                                                        an alternate like 8443.
+                                                    </p>
+                                                )}
+                                                {Number(form.data.ssh_port) ===
+                                                    80 && (
+                                                    <p className="text-xs text-rose-500">
+                                                        Port 80 is reserved for
+                                                        Traefik HTTP web
+                                                        ingress. Choose an
+                                                        alternate like 8443.
+                                                    </p>
+                                                )}
+                                                {Number(form.data.ssh_port) ===
+                                                    2222 && (
+                                                    <p className="text-xs text-rose-500">
+                                                        Port 2222 is reserved
+                                                        for Git (Forgejo) SSH
+                                                        service. Choose an
+                                                        alternate like 8443 or
+                                                        2200.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </Field>
+                                    )}
+
+                                    {isManaged && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <Field
+                                                label="Node count"
+                                                error={form.errors.node_count}
+                                            >
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={20}
+                                                    value={form.data.node_count}
+                                                    onChange={(event) =>
+                                                        form.setData(
+                                                            'node_count',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                                />
+                                            </Field>
+                                            {provider.haOption === 'boolean' ? (
+                                                <Field
+                                                    label={
+                                                        <span className="inline-flex items-center gap-1">
+                                                            Control plane
+                                                            <InfoTooltip side="right">
+                                                                The control
+                                                                plane is what
+                                                                runs Kubernetes
+                                                                itself (the API
+                                                                server,
+                                                                scheduler, etcd)
+                                                                — separate from
+                                                                your worker
+                                                                node(s).
+                                                                Unchecked, it
+                                                                runs in a single
+                                                                zone for free:
+                                                                fine for
+                                                                learning or a
+                                                                demo, but an
+                                                                outage in that
+                                                                zone takes the
+                                                                whole cluster
+                                                                down with it.
+                                                                Checked, it
+                                                                spans multiple
+                                                                zones for{' '}
+                                                                {provider.haCost ??
+                                                                    'an extra charge'}
+                                                                , so the cluster
+                                                                survives one
+                                                                zone going down
+                                                                — what most
+                                                                production
+                                                                setups choose.
+                                                            </InfoTooltip>
+                                                        </span>
+                                                    }
+                                                >
+                                                    <label className="flex h-9 items-center gap-2 text-sm">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={
+                                                                form.data.ha
+                                                            }
+                                                            onChange={(event) =>
+                                                                form.setData(
+                                                                    'ha',
+                                                                    event.target
+                                                                        .checked,
+                                                                )
+                                                            }
+                                                            className="size-4 rounded ring-1 ring-line"
+                                                        />
+                                                        <span>
+                                                            High availability
+                                                            {provider.haCost
+                                                                ? ` (${provider.haCost})`
+                                                                : ''}
+                                                        </span>
+                                                    </label>
+                                                </Field>
+                                            ) : (
+                                                provider.haOption ===
+                                                    'always' && (
+                                                    <Field
+                                                        label={
+                                                            <span className="inline-flex items-center gap-1">
+                                                                Control plane
+                                                                <InfoTooltip side="right">
+                                                                    The control
+                                                                    plane is
+                                                                    what runs
+                                                                    Kubernetes
+                                                                    itself (the
+                                                                    API server,
+                                                                    scheduler,
+                                                                    etcd) —
+                                                                    separate
+                                                                    from your
+                                                                    node(s).{' '}
+                                                                    {
+                                                                        provider.label
+                                                                    }{' '}
+                                                                    always spans
+                                                                    it across
+                                                                    multiple
+                                                                    availability
+                                                                    zones —
+                                                                    there's no
+                                                                    cheaper,
+                                                                    single-zone
+                                                                    option to
+                                                                    opt out of —
+                                                                    which is why
+                                                                    it isn't a
+                                                                    checkbox
+                                                                    here like it
+                                                                    is for some
+                                                                    other
+                                                                    providers.
+                                                                    It costs{' '}
+                                                                    {provider.haCost ??
+                                                                        'a flat hourly fee'}
+                                                                    , billed on
+                                                                    top of your
+                                                                    node(s)
+                                                                    regardless
+                                                                    of cluster
+                                                                    size.
+                                                                </InfoTooltip>
+                                                            </span>
+                                                        }
+                                                    >
+                                                        <p className="flex h-9 items-center text-sm text-soft">
+                                                            High availability
+                                                            included
+                                                        </p>
+                                                    </Field>
+                                                )
+                                            )}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
                         <div className="mt-6 flex items-center justify-between gap-4">
                             <p className="text-[13px] text-soft">
-                                {isManaged && monthlyEstimate
-                                    ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                                    : price
-                                      ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                                      : `Billed by ${provider.label}. You can destroy it any time.`}
+                                {isExisting
+                                    ? 'Existing server will be initialized as a single-node K3s cluster.'
+                                    : isManaged && monthlyEstimate
+                                      ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                      : price
+                                        ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                        : `Billed by ${provider.label}. You can destroy it any time.`}
                             </p>
                             <div className="flex items-center gap-2.5">
                                 <Button
@@ -1217,10 +1438,14 @@ function ServerForm({
                                                 form.processing ||
                                                 !canProceedToStep3
                                             }
-                                            title="Create server immediately without configuring DNS or SSL automation"
+                                            title="Provision server immediately without configuring DNS or SSL automation"
                                         >
                                             <Plus className="size-4" />
-                                            <span>Create without DNS</span>
+                                            <span>
+                                                {isExisting
+                                                    ? 'Provision without DNS'
+                                                    : 'Create without DNS'}
+                                            </span>
                                         </Button>
                                         <Button
                                             type="button"
@@ -1244,11 +1469,13 @@ function ServerForm({
 
                         <div className="mt-6 flex items-center justify-between gap-4">
                             <p className="text-[13px] text-soft">
-                                {isManaged && monthlyEstimate
-                                    ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                                    : price
-                                      ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
-                                      : `Billed by ${provider.label}. You can destroy it any time.`}
+                                {isExisting
+                                    ? 'Existing server will be initialized as a single-node K3s cluster.'
+                                    : isManaged && monthlyEstimate
+                                      ? `${monthlyEstimate.replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                      : price
+                                        ? `${provider.pricing?.source === 'builtin' ? 'Roughly' : 'About'} ${price.replace(', Recommended', '').replace('~', '')}, billed by ${provider.label}. You can destroy it any time.`
+                                        : `Billed by ${provider.label}. You can destroy it any time.`}
                             </p>
                             <div className="flex items-center gap-2.5">
                                 <Button
@@ -1257,7 +1484,12 @@ function ServerForm({
                                     onClick={() => goToStep(2)}
                                 >
                                     <ArrowLeft className="size-4" />
-                                    <span>Back to Server Specs</span>
+                                    <span>
+                                        Back to{' '}
+                                        {isExisting
+                                            ? 'Server & SSH'
+                                            : 'Server Specs'}
+                                    </span>
                                 </Button>
                                 <Button
                                     type="submit"
@@ -1267,7 +1499,9 @@ function ServerForm({
                                     <span>
                                         {form.processing
                                             ? 'Starting…'
-                                            : 'Create server'}
+                                            : isExisting
+                                              ? 'Provision server'
+                                              : 'Create server'}
                                     </span>
                                 </Button>
                             </div>
@@ -1429,6 +1663,274 @@ function DnsAutomationStep({
                 }}
             />
         </div>
+    );
+}
+
+function ExistingServerFields({
+    form,
+    detectedKeys,
+    keyInfo,
+    setKeyInfo,
+    inspectingKey,
+    inspectKeyPath,
+    handlePickKey,
+    needsPassphrase,
+    showPassphrase,
+    setShowPassphrase,
+}: {
+    form: ReturnType<typeof useForm<any>>;
+    detectedKeys: Array<{
+        path: string;
+        label: string;
+        encrypted: boolean;
+        in_agent: boolean;
+    }>;
+    keyInfo: { valid?: boolean; encrypted?: boolean; in_agent?: boolean };
+    setKeyInfo: (info: {
+        valid?: boolean;
+        encrypted?: boolean;
+        in_agent?: boolean;
+    }) => void;
+    inspectingKey: boolean;
+    inspectKeyPath: (path: string) => Promise<void>;
+    handlePickKey: () => Promise<void>;
+    needsPassphrase: boolean;
+    showPassphrase: boolean;
+    setShowPassphrase: (show: boolean) => void;
+}) {
+    return (
+        <>
+            <div className="grid grid-cols-2 gap-4">
+                <Field
+                    label="Server / Stack name"
+                    hint="Lowercase letters, numbers and dashes."
+                    error={form.errors.stack_name}
+                >
+                    <input
+                        value={form.data.stack_name}
+                        onChange={(event) =>
+                            form.setData('stack_name', event.target.value)
+                        }
+                        placeholder="production-vps"
+                        autoFocus
+                        spellCheck={false}
+                        className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                    />
+                </Field>
+
+                <Field
+                    label="Server IP Address"
+                    hint="Public IPv4 address of your fresh Ubuntu server."
+                    error={form.errors.ip}
+                >
+                    <input
+                        value={form.data.ip}
+                        onChange={(event) => {
+                            const ip = event.target.value;
+                            form.setData('ip', ip);
+                            if (
+                                !form.data.stack_name ||
+                                form.data.stack_name.startsWith('vps-')
+                            ) {
+                                const cleanIp = ip.trim().replace(/\./g, '-');
+                                if (cleanIp) {
+                                    form.setData(
+                                        'stack_name',
+                                        `vps-${cleanIp}`,
+                                    );
+                                }
+                            }
+                        }}
+                        placeholder="123.45.67.89"
+                        spellCheck={false}
+                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                    />
+                </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <Field
+                    label="SSH User"
+                    hint="Initial user with sudo/root privileges."
+                    error={form.errors.ssh_user}
+                >
+                    <input
+                        value={form.data.ssh_user}
+                        onChange={(event) =>
+                            form.setData('ssh_user', event.target.value)
+                        }
+                        placeholder="root"
+                        spellCheck={false}
+                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                    />
+                </Field>
+
+                <Field
+                    label="SSH Port"
+                    hint="Standard SSH port is 22."
+                    error={form.errors.ssh_port}
+                >
+                    <input
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={form.data.ssh_port}
+                        onChange={(event) =>
+                            form.setData(
+                                'ssh_port',
+                                event.target.value === ''
+                                    ? 22
+                                    : parseInt(event.target.value, 10) || 22,
+                            )
+                        }
+                        placeholder="22"
+                        className="w-full rounded-lg border-0 px-3 py-2 font-mono text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                    />
+                </Field>
+            </div>
+
+            <Field
+                label="SSH Private Key"
+                hint="Private key on this computer used to connect to the server."
+                error={form.errors.ssh_key}
+            >
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                        <input
+                            value={form.data.ssh_key}
+                            onChange={(event) => {
+                                const path = event.target.value;
+                                form.setData('ssh_key', path);
+                                void inspectKeyPath(path);
+                            }}
+                            placeholder="~/.ssh/id_ed25519"
+                            spellCheck={false}
+                            className="flex-1 rounded-lg border-0 px-3 py-2 font-mono text-xs ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                        />
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void handlePickKey()}
+                        >
+                            <FolderOpen className="size-3.5" />
+                            <span>Browse…</span>
+                        </Button>
+                    </div>
+
+                    {detectedKeys.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[11px] text-soft">
+                                Detected keys:
+                            </span>
+                            {detectedKeys.map((dk) => (
+                                <button
+                                    key={dk.path}
+                                    type="button"
+                                    onClick={() => {
+                                        form.setData('ssh_key', dk.path);
+                                        setKeyInfo({
+                                            valid: true,
+                                            encrypted: dk.encrypted,
+                                            in_agent: dk.in_agent,
+                                        });
+                                    }}
+                                    className={cn(
+                                        'inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[11px] ring-1 transition',
+                                        form.data.ssh_key === dk.path
+                                            ? 'bg-servers/15 font-medium text-servers ring-servers'
+                                            : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                    )}
+                                >
+                                    <Key className="size-2.5" />
+                                    <span>{dk.label}</span>
+                                    {dk.encrypted && !dk.in_agent && (
+                                        <Lock className="size-2.5 text-warn" />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {form.data.ssh_key && (
+                        <div className="flex items-center gap-2 pt-1 text-xs">
+                            {inspectingKey ? (
+                                <span className="text-soft">
+                                    Inspecting key…
+                                </span>
+                            ) : keyInfo.valid === false ? (
+                                <span className="text-bad">
+                                    File does not exist or cannot be read.
+                                </span>
+                            ) : keyInfo.encrypted ? (
+                                keyInfo.in_agent ? (
+                                    <span className="inline-flex items-center gap-1 text-ok">
+                                        <ShieldCheck className="size-3.5" />
+                                        Passphrase loaded in SSH Agent
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 text-warn">
+                                        <Lock className="size-3.5" />
+                                        Key is passphrase-protected
+                                    </span>
+                                )
+                            ) : (
+                                <span className="inline-flex items-center gap-1 text-soft">
+                                    <Check className="size-3.5 text-ok" />
+                                    Unencrypted key ready
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </Field>
+
+            {needsPassphrase && (
+                <Field
+                    label="SSH Key Passphrase"
+                    hint="Used in-memory to unlock your key during provisioning. Never stored on disk."
+                    error={form.errors.ssh_passphrase}
+                >
+                    <div className="relative max-w-md">
+                        <input
+                            type={showPassphrase ? 'text' : 'password'}
+                            value={form.data.ssh_passphrase}
+                            onChange={(event) =>
+                                form.setData(
+                                    'ssh_passphrase',
+                                    event.target.value,
+                                )
+                            }
+                            placeholder="Enter private key passphrase"
+                            className="w-full rounded-lg border-0 px-3 py-2 pr-10 font-mono text-sm ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-servers"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassphrase(!showPassphrase)}
+                            className="absolute top-1/2 right-2.5 -translate-y-1/2 text-soft transition hover:text-ink"
+                        >
+                            {showPassphrase ? (
+                                <EyeOff className="size-4" />
+                            ) : (
+                                <Eye className="size-4" />
+                            )}
+                        </button>
+                    </div>
+                </Field>
+            )}
+
+            <div className="rounded-xl border border-line bg-surface/50 p-3.5 text-xs leading-relaxed text-soft">
+                <p>
+                    <strong>What happens next:</strong> LaraKube will connect to
+                    your server via SSH, install K3s, configure Traefik Ingress,
+                    create a dedicated passwordless{' '}
+                    <code className="text-foreground font-mono font-semibold">
+                        larakube
+                    </code>{' '}
+                    system user, and link your local context to the server.
+                </p>
+            </div>
+        </>
     );
 }
 

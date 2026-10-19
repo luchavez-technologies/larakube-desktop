@@ -40,10 +40,14 @@ class StoreServerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'provider' => ['required', Rule::in(['do', 'hetzner', 'gcp', 'aws'])],
+            'provider' => ['required', Rule::in(['do', 'hetzner', 'gcp', 'aws', 'existing', 'custom'])],
             'stack_name' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/'],
-            'region' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9-]+$/'],
-            'size' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9.-]+$/'],
+            'region' => ['required_unless:provider,existing,custom', 'nullable', 'string', 'max:40', 'regex:/^[a-z0-9-]+$/'],
+            'size' => ['required_unless:provider,existing,custom', 'nullable', 'string', 'max:40', 'regex:/^[a-z0-9.-]+$/'],
+            'ip' => ['required_if:provider,existing', 'required_if:provider,custom', 'nullable', 'ip'],
+            'ssh_user' => ['nullable', 'string', 'max:50'],
+            'ssh_key' => ['required_if:provider,existing', 'required_if:provider,custom', 'nullable', 'string', 'max:255'],
+            'ssh_passphrase' => ['nullable', 'string'],
             // Not "kind" — that already means 'server'|'dev-box' on this same form.
             'target_kind' => ['required', Rule::in(['vps', 'managed'])],
             'node_count' => ['required_if:target_kind,managed', 'nullable', 'integer', 'min:1', 'max:20'],

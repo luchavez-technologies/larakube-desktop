@@ -9,6 +9,7 @@ use App\Http\Requests\StoreServerRequest;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\ServerDomain;
+use App\Services\FilePicker;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\CloudAccount;
 use App\Services\LaraKube\ClusterMetrics;
@@ -19,6 +20,7 @@ use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
+use App\Services\SshKeyInspector;
 use App\Services\TerminalLauncher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -104,7 +106,7 @@ class ServerController extends Controller
         return array_values(array_filter($stacks, fn (array $stack): bool => ! in_array($stack['name'], $hidden, true)));
     }
 
-    public function create(Request $request, ReadinessCheck $readiness, GlobalSettings $settings): Response
+    public function create(Request $request, ReadinessCheck $readiness, GlobalSettings $settings, SshKeyInspector $inspector): Response
     {
         $project = $request->integer('project') > 0 ? Project::find($request->integer('project')) : null;
 
@@ -112,6 +114,43 @@ class ServerController extends Controller
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
             'project' => $project ? ['id' => $project->id, 'name' => basename($project->path)] : null,
             'defaultProvider' => $settings->get()['defaultCloudProvider'],
+            'detectedKeys' => $inspector->detectCommonKeys(),
+        ]);
+    }
+
+    public function pickKey(FilePicker $picker, SshKeyInspector $inspector): JsonResponse
+    {
+        $path = $picker->pick('Select SSH Private Key', [], 'SSH Keys / All Files');
+        if (! $path) {
+            return response()->json(['path' => null]);
+        }
+
+        return response()->json([
+            'path' => $path,
+            ...$inspector->inspect($path),
+        ]);
+    }
+
+    public function inspectKey(Request $request, SshKeyInspector $inspector): JsonResponse
+    {
+        $path = $request->string('path')->toString();
+        if ($path === '') {
+            return response()->json(['valid' => false]);
+        }
+
+        $passphrase = $request->string('passphrase')->toString();
+        $info = $inspector->inspect($path);
+
+        $validPassphrase = null;
+        if ($info['encrypted'] && $passphrase !== '') {
+            $validPassphrase = $inspector->verifyPassphrase($path, $passphrase);
+        }
+
+        return response()->json([
+            'valid' => file_exists($inspector->resolvePath($path)),
+            'encrypted' => $info['encrypted'],
+            'in_agent' => $info['in_agent'],
+            'valid_passphrase' => $validPassphrase,
         ]);
     }
 
@@ -120,6 +159,70 @@ class ServerController extends Controller
         $provider = $request->string('provider')->toString();
         $stackName = $request->string('stack_name')->toString();
         $project = $request->filled('project_id') ? Project::find($request->integer('project_id')) : null;
+
+        if ($provider === 'existing' || $provider === 'custom') {
+            $ip = $request->string('ip')->toString();
+            $sshUser = $request->string('ssh_user', 'root')->toString();
+            $sshKey = $request->string('ssh_key')->toString();
+            $sshPort = $request->integer('ssh_port', 22);
+            $sshPassphrase = $request->string('ssh_passphrase')->toString();
+
+            $dnsArgs = [];
+            if ($request->filled('cloudflare_token') || $request->connectsCloudflare()) {
+                $dnsArgs[] = '--cloudflare';
+            } else {
+                $dnsArgs[] = '--without-dns';
+                $dnsArgs[] = '--without-tls';
+            }
+
+            $secretEnv = $request->secretEnvironment();
+            if ($sshPassphrase !== '') {
+                $secretEnv['LARAKUBE_SSH_PASSPHRASE'] = $sshPassphrase;
+            }
+
+            $sshPortArg = ($sshPort > 0 && $sshPort !== 22) ? ["--ssh-port={$sshPort}"] : [];
+
+            $run = $runner->start(
+                label: "Provision existing server {$stackName} ({$ip})",
+                arguments: [
+                    'cloud:init',
+                    "--ip={$ip}",
+                    "--ssh-user={$sshUser}",
+                    "--ssh-key={$sshKey}",
+                    ...$sshPortArg,
+                    "--stack-name={$stackName}",
+                    '--json',
+                    ...$dnsArgs,
+                    ...($project !== null ? [ProjectController::ENVIRONMENT] : []),
+                ],
+                secretEnvironment: $secretEnv,
+                kind: RunKind::CreateServer,
+                subject: $stackName,
+                meta: ['targetKind' => 'vps', 'provider' => 'custom', ...($project !== null ? ['project' => (string) $project->id] : [])],
+                cwd: $project?->path,
+                targetType: 'server',
+                targetName: $stackName,
+                projectId: $project?->id,
+                projectName: $project !== null ? basename($project->path) : null,
+                environment: $project !== null ? ProjectController::ENVIRONMENT : 'production',
+                serverName: $stackName,
+            );
+
+            Server::updateOrCreate(
+                ['name' => $stackName],
+                [
+                    'provider' => 'custom',
+                    'kind' => 'vps',
+                    'ip' => $ip,
+                    'port' => $sshPort,
+                    'ssh_key' => $sshKey,
+                    'context' => "larakube-{$ip}",
+                    'status' => 'provisioning',
+                ]
+            );
+
+            return to_route('runs.show', $run);
+        }
 
         if ($provider === 'aws' && $request->filled('aws_access_key_id') && $request->filled('aws_secret_access_key')) {
             app(CloudAccount::class)->call(

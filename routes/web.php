@@ -68,6 +68,8 @@ Route::delete('/setup/cloud/accounts', [CloudAccountController::class, 'remove']
 Route::get('/servers', [ServerController::class, 'index'])->name('servers.index');
 Route::get('/servers/create', [ServerController::class, 'create'])->name('servers.create');
 Route::post('/servers', [ServerController::class, 'store'])->name('servers.store');
+Route::get('/servers/pick-key', [ServerController::class, 'pickKey'])->name('servers.pick_key');
+Route::post('/servers/inspect-key', [ServerController::class, 'inspectKey'])->name('servers.inspect_key');
 
 Route::pattern('server', '[a-z0-9][a-z0-9-]*');
 Route::pattern('tool', '[a-z][a-z0-9-]*');

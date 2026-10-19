@@ -353,3 +353,74 @@ test('Server::syncFromStack persists port from stack', function () {
 
     expect($server->port)->toBe(8443);
 });
+
+test('onboarding an existing server executes cloud:init with flags and records server in database', function () {
+    $bin = createServerFakeCli();
+    $fake = ChildProcess::fake();
+
+    $response = $this->post(route('servers.store'), [
+        'provider' => 'existing',
+        'stack_name' => 'bare-metal-box',
+        'ip' => '192.168.1.100',
+        'ssh_user' => 'ubuntu',
+        'ssh_key' => '/tmp/test_id_rsa',
+        'ssh_port' => 2200,
+        'ssh_passphrase' => 'unlock-secret-123',
+    ]);
+
+    $run = Run::sole();
+    $response->assertRedirect(route('runs.show', $run));
+
+    expect($run->status)->toBe(RunStatus::Running)
+        ->and($run->label)->toBe('Provision existing server bare-metal-box (192.168.1.100)')
+        ->and($run->kind)->toBe(RunKind::CreateServer)
+        ->and($run->subject)->toBe('bare-metal-box')
+        ->and(implode(' ', $run->command))->not->toContain('unlock-secret-123');
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => $alias === $run->alias()
+        && in_array('cloud:init', $cmd, true)
+        && in_array('--ip=192.168.1.100', $cmd, true)
+        && in_array('--ssh-user=ubuntu', $cmd, true)
+        && in_array('--ssh-key=/tmp/test_id_rsa', $cmd, true)
+        && in_array('--ssh-port=2200', $cmd, true)
+        && in_array('--stack-name=bare-metal-box', $cmd, true)
+        && in_array('--without-dns', $cmd, true)
+        && in_array('--without-tls', $cmd, true)
+        && ! str_contains(implode(' ', $cmd), 'unlock-secret-123')
+        && ($env['LARAKUBE_SSH_PASSPHRASE'] ?? null) === 'unlock-secret-123');
+
+    $server = Server::where('name', 'bare-metal-box')->first();
+    expect($server)->not->toBeNull()
+        ->and($server->provider)->toBe('custom')
+        ->and($server->ip)->toBe('192.168.1.100')
+        ->and($server->port)->toBe(2200)
+        ->and($server->status)->toBe('provisioning');
+
+    File::deleteDirectory($bin);
+});
+
+test('existing server onboarding validates required ip and ssh_key', function () {
+    $this->post(route('servers.store'), [
+        'provider' => 'existing',
+        'stack_name' => 'bare-metal-fail',
+    ])->assertSessionHasErrors(['ip', 'ssh_key']);
+});
+
+test('inspect key endpoint validates existence and detects passphrase', function () {
+    $tempDir = storage_path('framework/testing/keys-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($tempDir);
+    $keyPath = "{$tempDir}/id_ed25519";
+    File::put($keyPath, "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gt\n-----END OPENSSH PRIVATE KEY-----\n");
+
+    $response = $this->postJson('/servers/inspect-key', [
+        'path' => $keyPath,
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'valid' => true,
+            'encrypted' => false,
+        ]);
+
+    File::deleteDirectory($tempDir);
+});

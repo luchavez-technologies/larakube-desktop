@@ -183,6 +183,9 @@ function resolveVisual(id: string): Visual {
                 containerClass: 'border-line bg-surface',
             };
         case 'local':
+        case 'custom':
+        case 'existing':
+        case 'vps':
             return {
                 icon: <Server />,
                 containerClass:

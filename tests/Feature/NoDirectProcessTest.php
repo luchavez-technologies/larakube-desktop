@@ -15,6 +15,8 @@ test('processes are launched only through ToolLocator, apart from the few files 
         // Opens a new, visible OS terminal window (osascript/wt.exe/cmd) — not a managed
         // background tool invocation, so ToolLocator::isolate()'s run-and-capture shape doesn't fit.
         'app/Services/TerminalLauncher.php',
+        // Inspects local SSH keys on the host machine and queries host ssh-agent (SSH_AUTH_SOCK).
+        'app/Services/SshKeyInspector.php',
     ];
 
     $found = [];
