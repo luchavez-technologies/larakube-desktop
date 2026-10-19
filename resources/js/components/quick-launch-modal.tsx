@@ -102,7 +102,7 @@ const APPS: AppOption[] = [
         description:
             'Lightweight ServerSideUp Apache + PHP-FPM pod with zero-RAM SQLite or shared Plex MySQL.',
         defaultSubdomain: 'blog',
-        adminPath: '/wp-admin',
+        adminPath: '/wp-admin/',
         capabilities: {
             databases: ['sqlite', 'mysql', 'mariadb'],
             cache: [],
