@@ -14,13 +14,17 @@ class AppMenu
     public static function register(): void
     {
         try {
-            $recentProjects = Project::query()->latest('id')->take(5)->get();
+            $recentProjects = Project::query()
+                ->latest('id')
+                ->get()
+                ->filter(fn (Project $p): bool => $p->existsOnHost())
+                ->take(5);
         } catch (\Throwable) {
             $recentProjects = collect();
         }
 
         try {
-            $recentServers = Server::query()->latest('id')->take(5)->get();
+            $recentServers = Server::active()->latest('id')->take(5)->get();
         } catch (\Throwable) {
             $recentServers = collect();
         }

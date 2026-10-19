@@ -162,6 +162,38 @@ test('deploying Collabora Online starts a drive-office-deploy run', function () 
     expect($run->kind)->toBe(RunKind::DriveOfficeDeploy);
 });
 
+test('deploying Collabora Online passes known drive host when domain is omitted', function () {
+    $bin = driveTestServer();
+    $fake = ChildProcess::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'context' => 'larakube-do-ams3',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'status' => 'ready',
+    ]);
+    $server->clusterTools()->create([
+        'tool' => 'ocis',
+        'installed' => true,
+        'data' => [
+            'driveInfo' => [
+                'host' => 'drive.mycorp.org',
+            ],
+        ],
+    ]);
+
+    $this->post(route('servers.drive.office.deploy', 'prod-vps'), [])
+        ->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'drive:office:init', 'production', '--context=larakube-do-ams3',
+            '--force', '--domain=drive.mycorp.org', '--no-interaction',
+        ];
+    });
+});
+
 test('installing web extension starts a drive-install-extension run', function () {
     $bin = driveTestServer();
     $fake = ChildProcess::fake();
@@ -285,4 +317,74 @@ test('drive run completion triggers sync jobs and chains office if requested', f
             '--force', '--domain=drive.example.com', '--no-interaction',
         ];
     });
+});
+
+test('DriveStatus serverInfo enriches components with names and ready status', function () {
+    $server = Server::create([
+        'name' => 'ocis-server',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'doks-ocis-context',
+        'status' => 'ready',
+    ]);
+
+    $server->clusterTools()->create([
+        'tool' => 'ocis',
+        'installed' => true,
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+        'data' => [
+            'driveInfo' => [
+                'installed' => true,
+                'host' => 'drive.example.com',
+                'components' => [
+                    ['key' => 'app', 'role' => 'PRIMARY', 'deployment' => 'ocis-drive-app'],
+                    ['key' => 'code', 'role' => 'WORKER', 'deployment' => 'code-drive-app'],
+                ],
+            ],
+        ],
+    ]);
+
+    $status = new DriveStatus;
+    $info = $status->serverInfo('doks-ocis-context');
+
+    expect($info)->not->toBeNull()
+        ->and($info['components'])->toHaveCount(1)
+        ->and($info['components'][0]['name'])->toBe('ocis-drive-app')
+        ->and($info['components'][0]['ready'])->toBeTrue();
+});
+
+test('DriveStatus extensions detects installed extensions by id, short name, and clean slug', function () {
+    $server = Server::create([
+        'name' => 'ocis-ext-server',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'doks-ext-context',
+        'status' => 'ready',
+    ]);
+
+    $server->clusterTools()->create([
+        'tool' => 'ocis',
+        'installed' => true,
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+        'data' => [
+            'driveInfo' => ['installed' => true],
+            'extensions' => [
+                ['id' => 'com.github.lukashirt.excalidraw', 'installed' => true],
+                ['id' => 'draw-io', 'installed' => true],
+            ],
+        ],
+    ]);
+
+    $status = new DriveStatus;
+    $extensions = $status->extensions('doks-ext-context');
+
+    $excalidraw = collect($extensions)->firstWhere('name', 'Excalidraw');
+    $drawio = collect($extensions)->firstWhere('name', 'Draw.io');
+
+    expect($excalidraw)->not->toBeNull()
+        ->and($excalidraw['installed'])->toBeTrue()
+        ->and($drawio)->not->toBeNull()
+        ->and($drawio['installed'])->toBeTrue();
 });

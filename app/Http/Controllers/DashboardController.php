@@ -54,7 +54,7 @@ class DashboardController extends Controller
             'defaultProjectParent' => ToolLocator::home(),
 
             'stats' => Inertia::defer(function () use ($stacks, $readiness): array {
-                $projectsCount = Project::query()->count();
+                $projectsCount = Project::query()->get()->filter(fn (Project $p): bool => $p->existsOnHost())->count();
 
                 $dbServers = Server::active()->get(['id', 'status']);
                 if ($dbServers->isNotEmpty()) {
@@ -88,25 +88,30 @@ class DashboardController extends Controller
             }),
 
             'projects' => Inertia::defer(function () use ($inspector): array {
-                return Project::query()->latest('id')->take(4)->get()->map(function (Project $p) use ($inspector): array {
-                    if ($p->last_inspected_at !== null && $p->name !== null && $p->framework !== null) {
-                        return [
-                            'id' => $p->id,
-                            'name' => $p->name,
-                            'path' => $p->path,
-                            'framework' => $p->framework,
-                            'webHost' => $p->web_host,
-                            'serverIp' => null,
-                            'serverContext' => null,
-                            'exists' => true,
-                            'initialized' => true,
-                            'deployable' => true,
-                            'environments' => [],
-                        ];
-                    }
+                return Project::query()
+                    ->latest('id')
+                    ->get()
+                    ->filter(fn (Project $p): bool => $p->existsOnHost())
+                    ->take(4)
+                    ->map(function (Project $p) use ($inspector): array {
+                        if ($p->last_inspected_at !== null && $p->name !== null && $p->framework !== null) {
+                            return [
+                                'id' => $p->id,
+                                'name' => $p->name,
+                                'path' => $p->path,
+                                'framework' => $p->framework,
+                                'webHost' => $p->web_host,
+                                'serverIp' => null,
+                                'serverContext' => null,
+                                'exists' => true,
+                                'initialized' => true,
+                                'deployable' => true,
+                                'environments' => [],
+                            ];
+                        }
 
-                    return ['id' => $p->id] + $inspector->inspect($p->path);
-                })->all();
+                        return ['id' => $p->id] + $inspector->inspect($p->path);
+                    })->values()->all();
             }),
 
             'servers' => Inertia::defer(function () use ($stacks, $domains): array {
@@ -151,16 +156,21 @@ class DashboardController extends Controller
                         'role' => $s->role,
                     ])->all();
                 } else {
-                    $servers = $stacks->all() ?? [];
+                    $allServers = $stacks->all() ?? [];
+                    $servers = array_values(array_filter($allServers, fn (array $s): bool => $s['status'] !== 'missing'));
                 }
 
-                $projects = Project::query()->latest('id')->take(4)->get(['id', 'name', 'path', 'framework', 'web_host'])->map(fn (Project $p): array => [
-                    'id' => $p->id,
-                    'name' => $p->name ?: basename($p->path),
-                    'path' => $p->path,
-                    'framework' => $p->framework,
-                    'webHost' => $p->web_host,
-                ])->all();
+                $projects = Project::query()
+                    ->latest('id')
+                    ->get(['id', 'name', 'path', 'framework', 'web_host'])
+                    ->filter(fn (Project $p): bool => $p->existsOnHost())
+                    ->map(fn (Project $p): array => [
+                        'id' => $p->id,
+                        'name' => $p->name ?: basename($p->path),
+                        'path' => $p->path,
+                        'framework' => $p->framework,
+                        'webHost' => $p->web_host,
+                    ])->values()->all();
 
                 return $fleetMetrics->summary(array_values($servers), array_values($projects));
             }, 'fleetMetrics'),

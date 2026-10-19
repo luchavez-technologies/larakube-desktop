@@ -236,7 +236,7 @@ class Server extends Model
      */
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('role', '!=', 'dev')->where('status', '!=', 'missing');
+        return $query->where('role', '!=', 'dev')->whereNotIn('status', ['missing', 'destroyed']);
     }
 
     public function isLocal(): bool

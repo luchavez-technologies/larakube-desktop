@@ -278,8 +278,11 @@ test('dashboard reads servers and projects directly from database without invoki
         'external_dns' => true,
     ]);
 
+    $projectDir = storage_path('framework/testing/fast-api-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($projectDir);
+
     $project = Project::create([
-        'path' => '/home/apps/fast-api',
+        'path' => $projectDir,
         'name' => 'fast-api',
         'framework' => 'laravel',
         'web_host' => 'fast-api.dev.test',
@@ -314,6 +317,56 @@ test('dashboard reads servers and projects directly from database without invoki
         );
 
     File::deleteDirectory($bin);
+    File::deleteDirectory($projectDir);
+});
+
+test('missing project folders on disk are excluded from dashboard projects card', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $existingDir = storage_path('framework/testing/existing-app-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($existingDir);
+
+    Server::create(['name' => 'test-server', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+
+    Project::create([
+        'path' => $existingDir,
+        'name' => 'existing-app',
+        'framework' => 'laravel',
+        'last_inspected_at' => now(),
+    ]);
+
+    Project::create([
+        'path' => '/nonexistent/path/deleted-app-'.bin2hex(random_bytes(4)),
+        'name' => 'deleted-app',
+        'framework' => 'laravel',
+        'last_inspected_at' => now(),
+    ]);
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldNotReceive('all');
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('stats.projectsCount', 1)
+                ->where('projects.0.name', 'existing-app')
+                ->missing('projects.1')
+            )
+        );
+
+    File::deleteDirectory($bin);
+    File::deleteDirectory($existingDir);
 });
 
 test('SyncServerBackupJob updates server backup status', function () {

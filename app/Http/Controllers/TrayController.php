@@ -182,13 +182,13 @@ class TrayController extends Controller
         GlobalSettings $settings,
     ): array {
         try {
-            $servers = Server::query()
+            $servers = Server::active()
                 ->where('status', 'ready')
                 ->latest('updated_at')
                 ->get();
 
             if ($servers->isEmpty()) {
-                $servers = Server::query()->latest('updated_at')->get();
+                $servers = Server::active()->latest('updated_at')->get();
             }
         } catch (\Throwable) {
             $servers = collect();

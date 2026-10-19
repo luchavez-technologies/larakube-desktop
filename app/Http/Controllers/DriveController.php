@@ -132,15 +132,19 @@ class DriveController extends Controller
         $domain = $request->string('domain')->trim()->lower()->toString();
         $vpnOnly = $request->boolean('vpn_only');
 
+        $serverModel = Server::firstWhere('context', $context);
+        $knownDriveHost = $serverModel?->driveTool()?->data['driveInfo']['host'] ?? null;
+
         $args = ['drive:office:init', 'production', "--context={$context}", '--force'];
         if ($domain !== '') {
             $args[] = "--domain={$domain}";
+        } elseif (is_string($knownDriveHost) && $knownDriveHost !== '') {
+            $args[] = "--domain={$knownDriveHost}";
         }
         if ($vpnOnly) {
             $args[] = '--vpn-only';
         }
 
-        $serverModel = Server::firstWhere('context', $context);
         $serverModel?->driveTool()?->update(['sync_status' => 'syncing']);
 
         $run = $runner->start(

@@ -93,25 +93,59 @@ class DriveStatus
         /** @var array<string, mixed> $info */
         $info = $driveTool->data['driveInfo'] ?? ['installed' => $driveTool->installed];
 
-        // Augment with Collabora Office status based on components
-        /** @var list<mixed> $components */
-        $components = is_array($info['components'] ?? null) ? array_values($info['components']) : [];
+        // Augment with Collabora Office status and normalize components for UI
+        /** @var list<mixed> $rawComponents */
+        $rawComponents = is_array($info['components'] ?? null) ? array_values($info['components']) : [];
+        $enrichedComponents = [];
         $codeComponent = null;
-        foreach ($components as $comp) {
-            if (is_array($comp) && ($comp['name'] ?? null) === 'drive-code') {
-                $codeComponent = $comp;
-                break;
+
+        foreach ($rawComponents as $comp) {
+            if (! is_array($comp)) {
+                continue;
             }
+
+            $key = (string) ($comp['key'] ?? '');
+            $deployment = (string) ($comp['deployment'] ?? $comp['name'] ?? '');
+            $role = (string) ($comp['role'] ?? 'WORKER');
+            $name = $deployment !== '' ? $deployment : ($comp['name'] ?? ($key !== '' ? "drive-{$key}" : 'drive-ocis'));
+
+            if ($key === 'code' || str_contains($deployment, 'code') || str_contains($name, 'code')) {
+                $codeComponent = $comp;
+                if (! empty($comp['ready'])) {
+                    $enrichedComponents[] = [
+                        'key' => 'code',
+                        'name' => $name,
+                        'role' => $role,
+                        'ready' => true,
+                        'replicas' => (string) ($comp['replicas'] ?? '1/1'),
+                        'restartCount' => (int) ($comp['restartCount'] ?? 0),
+                    ];
+                }
+
+                continue;
+            }
+
+            $isAppReady = (bool) ($comp['ready'] ?? $driveTool->installed);
+            $enrichedComponents[] = [
+                'key' => $key ?: 'app',
+                'name' => $name,
+                'role' => $role,
+                'ready' => $isAppReady,
+                'replicas' => (string) ($comp['replicas'] ?? '1/1'),
+                'restartCount' => (int) ($comp['restartCount'] ?? 0),
+            ];
         }
+
         $hasOffice = $codeComponent !== null && ($codeComponent['ready'] ?? false);
 
         $host = isset($info['host']) && is_string($info['host']) ? $info['host'] : null;
         $info['office'] = [
-            'installed' => $codeComponent !== null,
+            'installed' => $codeComponent !== null && ! empty($codeComponent['ready']),
             'ready' => $hasOffice,
             'host' => $host ? "office.{$host}" : null,
             'url' => $host ? "https://office.{$host}" : null,
         ];
+        $info['components'] = $enrichedComponents;
 
         return $info;
     }
@@ -147,8 +181,12 @@ class DriveStatus
         $seen = [];
 
         foreach (self::CURATED_EXTENSIONS as $curated) {
+            $cleanShort = str_replace(['web-app-', 'web-extensions-'], '', $curated['id']);
+            $noDash = str_replace('-', '', $cleanShort);
             $isInstalled = in_array($curated['id'], $installedIds, true)
                 || in_array(basename(str_replace('.', '/', $curated['id'])), $installedIds, true)
+                || in_array($cleanShort, $installedIds, true)
+                || in_array($noDash, $installedIds, true)
                 || in_array(str_replace('web-extensions.', 'web-app-', $curated['id']), $installedIds, true)
                 || in_array(str_replace('web-app-', 'web-extensions.', $curated['id']), $installedIds, true);
 
@@ -156,6 +194,8 @@ class DriveStatus
             $seen[str_replace('web-extensions.', 'web-app-', $curated['id'])] = true;
             $seen[str_replace('web-app-', 'web-extensions.', $curated['id'])] = true;
             $seen[basename(str_replace('.', '/', $curated['id']))] = true;
+            $seen[$cleanShort] = true;
+            $seen[$noDash] = true;
 
             $result[] = [
                 ...$curated,

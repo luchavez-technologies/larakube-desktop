@@ -408,36 +408,54 @@ export default function OverviewTab({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-line">
-                                {components.map((comp) => (
-                                    <tr
-                                        key={comp.name}
-                                        className="transition hover:bg-paper/30"
-                                    >
-                                        <td className="flex items-center gap-2 px-4 py-3 font-mono font-medium text-ink">
-                                            <ServerIcon className="h-3.5 w-3.5 text-soft" />
-                                            {comp.name}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {comp.ready ? (
-                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20">
-                                                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
-                                                    Ready
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 ring-1 ring-amber-500/20">
-                                                    <span className="h-1 w-1 rounded-full bg-amber-500" />
-                                                    Pending
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 font-mono text-soft">
-                                            {comp.replicas || '1/1'}
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-mono text-soft">
-                                            {comp.restartCount ?? 0}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {components.map((comp) => {
+                                    const compName =
+                                        comp.name ||
+                                        (
+                                            comp as unknown as {
+                                                deployment?: string;
+                                                key?: string;
+                                            }
+                                        ).deployment ||
+                                        (
+                                            comp as unknown as {
+                                                deployment?: string;
+                                                key?: string;
+                                            }
+                                        ).key ||
+                                        'drive-ocis';
+
+                                    return (
+                                        <tr
+                                            key={compName}
+                                            className="transition hover:bg-paper/30"
+                                        >
+                                            <td className="flex items-center gap-2 px-4 py-3 font-mono font-medium text-ink">
+                                                <ServerIcon className="h-3.5 w-3.5 text-soft" />
+                                                {compName}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {comp.ready ? (
+                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20">
+                                                        <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                                                        Ready
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 ring-1 ring-amber-500/20">
+                                                        <span className="h-1 w-1 rounded-full bg-amber-500" />
+                                                        Pending
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-soft">
+                                                {comp.replicas || '1/1'}
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-mono text-soft">
+                                                {comp.restartCount ?? 0}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
