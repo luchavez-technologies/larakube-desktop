@@ -16,6 +16,7 @@ import {
     Heart,
     PanelLeftClose,
     PanelLeftOpen,
+    Network,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -100,6 +101,14 @@ const navigation: NavItem[] = [
             url.startsWith('/plex') || /^\/servers\/[^/]+\/plex/.test(url),
         accent: 'bg-violet-600',
         icon: Layers,
+    },
+    {
+        label: 'Simulator',
+        description: 'Life of a request',
+        href: '/simulator',
+        active: (url) => url.startsWith('/simulator'),
+        accent: 'bg-cyan-600',
+        icon: Network,
     },
     {
         label: 'Mail',

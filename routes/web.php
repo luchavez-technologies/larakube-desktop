@@ -27,6 +27,7 @@ use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SimulatorController;
 use App\Http\Controllers\ToolInstallController;
 use App\Http\Controllers\TrayController;
 use App\Http\Controllers\UninstallController;
@@ -230,6 +231,7 @@ Route::get('/updates', [UpdatesController::class, 'status'])->name('updates.stat
 Route::post('/updates/check', [UpdatesController::class, 'check'])->name('updates.check');
 Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');
 Route::get('/help', [HelpController::class, 'show'])->name('help.show');
+Route::get('/simulator', [SimulatorController::class, 'index'])->name('simulator.index');
 
 Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');

@@ -27,3 +27,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0013](0013-always-paginate-large-data-lists.md)                         | Always paginate high-cardinality data lists (Mail, Activity, Projects, Servers)                 | Accepted |
 | [0014](0014-nativephp-runtime-security-and-os-integration.md)            | NativePHP runtime configuration, security scrubbing, OS disks, and child processes              | Accepted |
 | [0015](0015-nativephp-settings-facade-over-browser-localstorage.md)      | Use NativePHP Settings facade over browser LocalStorage for persistent application state        | Accepted |
+| [0016](0016-interactive-simulation-engine-xyflow-motion.md)              | Interactive Request Simulation Engine via React Flow and Motion                                 | Accepted |

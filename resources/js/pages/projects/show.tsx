@@ -31,6 +31,7 @@ import {
     Square,
     PowerOff,
     Save,
+    Network,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
@@ -2551,6 +2552,18 @@ function LocalClusterCard({
                             <PowerOff className="size-3.5" />
                             <span>Down</span>
                         </Button>
+
+                        <Link
+                            href={`/simulator?project=${project.id}`}
+                            className={cn(
+                                buttonClass('secondary', 'sm'),
+                                'gap-1.5',
+                            )}
+                            title="Trace request flow through Cloudflare, Traefik, Pod, and Database"
+                        >
+                            <Network className="size-3.5 text-brand" />
+                            <span>Trace Request</span>
+                        </Link>
                     </div>
                 </div>
 
