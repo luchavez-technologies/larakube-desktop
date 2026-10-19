@@ -13,11 +13,13 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ProjectInspector;
+use App\Services\LaraKube\ProjectWorkloadStatus;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Native\Desktop\Facades\Settings;
 use Native\Desktop\Facades\Window;
 
 class TrayController extends Controller
@@ -28,8 +30,9 @@ class TrayController extends Controller
         ProjectInspector $inspector,
         ToolLocator $locator,
         GlobalSettings $settings,
+        ProjectWorkloadStatus $workloadStatus,
     ): Response {
-        return Inertia::render('tray/index', $this->payload($request, $metrics, $inspector, $locator, $settings));
+        return Inertia::render('tray/index', $this->payload($request, $metrics, $inspector, $locator, $settings, $workloadStatus));
     }
 
     public function data(
@@ -38,8 +41,9 @@ class TrayController extends Controller
         ProjectInspector $inspector,
         ToolLocator $locator,
         GlobalSettings $settings,
+        ProjectWorkloadStatus $workloadStatus,
     ): JsonResponse {
-        return response()->json($this->payload($request, $metrics, $inspector, $locator, $settings));
+        return response()->json($this->payload($request, $metrics, $inspector, $locator, $settings, $workloadStatus));
     }
 
     public function openMain(Request $request): JsonResponse
@@ -121,8 +125,14 @@ class TrayController extends Controller
         return response()->json(['success' => $success]);
     }
 
-    public function toggleProject(Project $project, CliRunner $runner): JsonResponse
-    {
+    public function toggleProject(
+        Request $request,
+        Project $project,
+        CliRunner $runner,
+        ProjectInspector $inspector,
+        ToolLocator $locator,
+        ProjectWorkloadStatus $workloadStatus,
+    ): JsonResponse {
         $name = basename($project->path) ?: "Project #{$project->id}";
         $activeRun = Run::query()
             ->where('project_id', $project->id)
@@ -133,23 +143,65 @@ class TrayController extends Controller
             return response()->json(['success' => false, 'message' => 'Project already has an active task running.'], 422);
         }
 
+        $action = $request->string('action')->toString();
+        if (! in_array($action, ['stop', 'start', 'up', 'down'], true)) {
+            $inspection = $inspector->inspect($project->path);
+            $workloads = $workloadStatus->localWorkloadStatuses($locator);
+            $status = $workloadStatus->resolveLocalStatus($project, $inspection, null, $workloads);
+
+            $action = match ($status['state']) {
+                'running' => 'stop',
+                'paused' => 'start',
+                default => 'up',
+            };
+        }
+
+        [$args, $kind, $label] = match ($action) {
+            'stop' => [['stop', 'local'], RunKind::StopProject, "Stop {$name}"],
+            'start' => [['start', 'local'], RunKind::StartProject, "Start {$name}"],
+            'down' => [['down', 'local', '--force'], RunKind::DownProject, "Down {$name}"],
+            default => [['up', 'local', '--fast', '--no-console', '--no-test'], RunKind::UpProject, "Start {$name}"],
+        };
+
         try {
             $run = $runner->start(
-                label: "Toggle {$name}",
-                arguments: ['up', '--fast'],
-                kind: RunKind::UpProject,
+                label: $label,
+                arguments: $args,
+                kind: $kind,
                 subject: "project:{$project->id}",
+                meta: [
+                    'project' => (string) $project->id,
+                    'environment' => 'local',
+                ],
                 targetType: 'project',
                 targetName: $name,
                 projectId: $project->id,
+                projectName: $name,
                 environment: 'local',
                 cwd: $project->path,
             );
 
-            return response()->json(['success' => true, 'run_id' => $run->id]);
+            return response()->json(['success' => true, 'run_id' => $run->id, 'action' => $action]);
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
+    }
+
+    public function saveSettings(Request $request): JsonResponse
+    {
+        $tab = $request->string('tab')->toString();
+        if (in_array($tab, ['projects', 'clusters'], true)) {
+            rescue(fn () => Settings::set('tray_tab', $tab), report: false);
+        }
+
+        if ($request->has('server_id')) {
+            $serverId = $request->integer('server_id');
+            if ($serverId > 0) {
+                rescue(fn () => Settings::set('tray_server_id', (string) $serverId), report: false);
+            }
+        }
+
+        return response()->json(['success' => true]);
     }
 
     public function stopAll(CliRunner $runner): JsonResponse
@@ -180,7 +232,14 @@ class TrayController extends Controller
         ProjectInspector $inspector,
         ToolLocator $locator,
         GlobalSettings $settings,
+        ProjectWorkloadStatus $workloadStatus,
     ): array {
+        $savedTab = rescue(fn () => (string) Settings::get('tray_tab'), 'projects', report: false);
+        $reqTab = $request->string('tab')->toString();
+        $activeTab = in_array($reqTab, ['projects', 'clusters'], true)
+            ? $reqTab
+            : (in_array($savedTab, ['projects', 'clusters'], true) ? $savedTab : 'projects');
+
         try {
             $servers = Server::active()
                 ->where('status', 'ready')
@@ -194,7 +253,12 @@ class TrayController extends Controller
             $servers = collect();
         }
 
+        $savedServerId = rescue(fn () => (int) Settings::get('tray_server_id'), null, report: false);
         $selectedServerId = $request->integer('server_id');
+        if ($selectedServerId <= 0 && $savedServerId) {
+            $selectedServerId = $savedServerId;
+        }
+
         $primaryServer = null;
         if ($selectedServerId > 0) {
             $primaryServer = $servers->firstWhere('id', $selectedServerId);
@@ -212,10 +276,66 @@ class TrayController extends Controller
         }
 
         try {
-            $allProjects = Project::query()->get();
+            $allProjects = Project::query()->latest('id')->get();
         } catch (\Throwable) {
             $allProjects = collect();
         }
+
+        $activeProjectRuns = Run::query()
+            ->where('status', RunStatus::Running)
+            ->whereIn('kind', [
+                RunKind::UpProject,
+                RunKind::DownProject,
+                RunKind::StartProject,
+                RunKind::StopProject,
+            ])
+            ->get()
+            ->keyBy(fn (Run $r) => (int) ($r->project_id ?: (str_starts_with((string) $r->subject, 'project:') ? substr((string) $r->subject, 8) : 0)));
+
+        $workloads = $workloadStatus->localWorkloadStatuses($locator);
+
+        $localProjects = $allProjects->map(function (Project $p) use ($inspector, $activeProjectRuns, $workloads, $workloadStatus): array {
+            $inspection = $inspector->inspect($p->path);
+            $activeRun = $activeProjectRuns->get($p->id);
+            $status = $workloadStatus->resolveLocalStatus($p, $inspection, $activeRun, $workloads);
+            $appName = $inspection['name'] ?: basename($p->path);
+            $webHost = $inspection['environments']['local']['webHost'] ?? $inspection['webHost'] ?? ($status['domain'] ?? null);
+
+            return [
+                'id' => $p->id,
+                'name' => $appName,
+                'path' => $p->path,
+                'exists' => $p->existsOnHost(),
+                'framework' => $inspection['framework'] ?? $inspection['detectedFramework'] ?? null,
+                'webHost' => $webHost,
+                'domain' => $status['domain'] ?? null,
+                'status' => $status['state'],
+                'statusLabel' => $status['label'],
+                'statusTone' => $status['tone'],
+                'replicas' => $status['replicas'] ?? 0,
+                'readyReplicas' => $status['readyReplicas'] ?? 0,
+                'activeRun' => $activeRun ? [
+                    'id' => $activeRun->id,
+                    'label' => $activeRun->label,
+                    'kind' => $activeRun->kind?->value,
+                    'status' => $activeRun->status->value,
+                ] : null,
+            ];
+        })
+            ->sortBy(function (array $p): int {
+                return match ($p['status']) {
+                    'running' => 0,
+                    'starting' => 1,
+                    'stopping' => 2,
+                    'paused' => 3,
+                    'down' => 4,
+                    default => 5,
+                };
+            })
+            ->values()
+            ->all();
+
+        $hasRunningLocal = collect($localProjects)->some(fn (array $p): bool => $p['status'] === 'running');
 
         $projects = [];
         if ($primaryServer) {
@@ -477,6 +597,7 @@ class TrayController extends Controller
         }
 
         return [
+            'activeTab' => $activeTab,
             'servers' => $servers->map(fn (Server $s): array => [
                 'id' => $s->id,
                 'name' => $s->name,
@@ -495,6 +616,8 @@ class TrayController extends Controller
                 'memoryUsage' => $nodeMetrics['memoryUsage'] ?? null,
             ] : null,
             'projects' => $projects,
+            'localProjects' => $localProjects,
+            'hasRunningLocal' => $hasRunningLocal,
             'tools' => $tools,
             'plex' => $plex,
             'activeRun' => $activeRun ? [

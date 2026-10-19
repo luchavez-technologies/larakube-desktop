@@ -1,10 +1,14 @@
 <?php
 
+use App\Enums\RunKind;
 use App\Models\ClusterTool;
 use App\Models\Project;
+use App\Models\Run;
 use App\Models\Server;
+use App\Services\LaraKube\ProjectWorkloadStatus;
 use App\Services\LaraKube\ToolLocator;
 use Native\Desktop\Facades\ChildProcess;
+use Native\Desktop\Facades\Settings;
 
 beforeEach(function () {
     ChildProcess::fake();
@@ -373,4 +377,127 @@ test('get /tray/data filters out inactive or disabled plex commons', function ()
 
     expect($drivers)->toContain('postgresql', 'redis', 'seaweedfs')
         ->and($drivers)->not->toContain('mysql', 'mariadb', 'minio', 'garage', 'meilisearch');
+});
+
+test('get /tray/data returns localProjects with real-time status, hasRunningLocal, and activeTab', function () {
+    $project = Project::create([
+        'path' => $this->tempHome.'/projects/my-local-app',
+    ]);
+    File::ensureDirectoryExists($this->tempHome.'/projects/my-local-app');
+
+    $response = $this->getJson(route('tray.data'));
+
+    $response->assertOk()
+        ->assertJsonStructure([
+            'activeTab',
+            'hasRunningLocal',
+            'localProjects' => [
+                '*' => [
+                    'id',
+                    'name',
+                    'path',
+                    'exists',
+                    'status',
+                    'statusLabel',
+                    'statusTone',
+                ],
+            ],
+        ])
+        ->assertJsonPath('activeTab', 'projects')
+        ->assertJsonPath('hasRunningLocal', false)
+        ->assertJsonPath('localProjects.0.id', $project->id);
+});
+
+test('get /tray/data respects activeTab from Settings facade', function () {
+    Settings::shouldReceive('get')->with('tray_tab')->andReturn('clusters');
+    Settings::shouldReceive('get')->with('tray_server_id')->andReturn(null);
+
+    $response = $this->getJson(route('tray.data'));
+
+    $response->assertOk()
+        ->assertJsonPath('activeTab', 'clusters');
+});
+
+test('post /tray/settings persists tab and server_id', function () {
+    Settings::shouldReceive('set')->with('tray_tab', 'clusters')->once();
+    Settings::shouldReceive('set')->with('tray_server_id', '42')->once();
+
+    $this->postJson(route('tray.settings'), [
+        'tab' => 'clusters',
+        'server_id' => 42,
+    ])->assertOk()->assertJson(['success' => true]);
+});
+
+test('post /tray/projects/{project}/toggle with action=stop starts stop run', function () {
+    $project = Project::create([
+        'path' => $this->tempHome.'/projects/running-app',
+    ]);
+
+    $response = $this->postJson(route('tray.project.toggle', $project), ['action' => 'stop']);
+
+    $response->assertOk()
+        ->assertJson(['success' => true, 'action' => 'stop']);
+
+    $run = Run::latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->kind)->toBe(RunKind::StopProject)
+        ->and($run->command)->toContain('stop', 'local');
+});
+
+test('post /tray/projects/{project}/toggle with action=start starts start run', function () {
+    $project = Project::create([
+        'path' => $this->tempHome.'/projects/paused-app',
+    ]);
+
+    $response = $this->postJson(route('tray.project.toggle', $project), ['action' => 'start']);
+
+    $response->assertOk()
+        ->assertJson(['success' => true, 'action' => 'start']);
+
+    $run = Run::latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->kind)->toBe(RunKind::StartProject)
+        ->and($run->command)->toContain('start', 'local');
+});
+
+test('post /tray/projects/{project}/toggle with action=up starts up run', function () {
+    $project = Project::create([
+        'path' => $this->tempHome.'/projects/down-app',
+    ]);
+
+    $response = $this->postJson(route('tray.project.toggle', $project), ['action' => 'up']);
+
+    $response->assertOk()
+        ->assertJson(['success' => true, 'action' => 'up']);
+
+    $run = Run::latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->kind)->toBe(RunKind::UpProject)
+        ->and($run->command)->toContain('up', 'local', '--fast');
+});
+
+test('post /tray/projects/{project}/toggle without action smartly toggles running project to stop', function () {
+    $project = Project::create([
+        'path' => $this->tempHome.'/projects/smart-running-app',
+    ]);
+
+    $mock = mock(ProjectWorkloadStatus::class);
+    $mock->shouldReceive('localWorkloadStatuses')->andReturn([]);
+    $mock->shouldReceive('resolveLocalStatus')->andReturn([
+        'state' => 'running',
+        'label' => 'Running',
+        'tone' => 'ok',
+        'domain' => 'smart-running-app.test',
+    ]);
+    app()->instance(ProjectWorkloadStatus::class, $mock);
+
+    $response = $this->postJson(route('tray.project.toggle', $project));
+
+    $response->assertOk()
+        ->assertJson(['success' => true, 'action' => 'stop']);
+
+    $run = Run::latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->kind)->toBe(RunKind::StopProject)
+        ->and($run->command)->toContain('stop', 'local');
 });

@@ -246,6 +246,7 @@ Route::post('/tray/open-server/{server}', [TrayController::class, 'openServer'])
 Route::post('/tray/open-editor/{project}', [TrayController::class, 'openEditor'])->name('tray.open-editor');
 Route::post('/tray/projects/{project}/toggle', [TrayController::class, 'toggleProject'])->name('tray.project.toggle');
 Route::post('/tray/stop-all', [TrayController::class, 'stopAll'])->name('tray.stop-all');
+Route::post('/tray/settings', [TrayController::class, 'saveSettings'])->name('tray.settings');
 
 Route::post('/open', OpenExternalController::class)->name('open');
 Route::get('/api/qr', [QrCodeController::class, 'show'])->name('api.qr');

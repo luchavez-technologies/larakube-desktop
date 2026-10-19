@@ -22,6 +22,7 @@ use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ProjectServices;
+use App\Services\LaraKube\ProjectWorkloadStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
@@ -29,7 +30,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -48,9 +48,15 @@ class ProjectController extends Controller
 
     private ToolLocator $locator;
 
-    public function __construct(private ProjectInspector $inspector, ?ToolLocator $locator = null)
-    {
+    private ProjectWorkloadStatus $workloadStatus;
+
+    public function __construct(
+        private ProjectInspector $inspector,
+        ?ToolLocator $locator = null,
+        ?ProjectWorkloadStatus $workloadStatus = null,
+    ) {
         $this->locator = $locator ?? app(ToolLocator::class);
+        $this->workloadStatus = $workloadStatus ?? app(ProjectWorkloadStatus::class);
     }
 
     private function hostPath(string $path): string
@@ -1182,43 +1188,7 @@ class ProjectController extends Controller
      */
     private function localWorkloadStatuses(ToolLocator $locator): array
     {
-        $cli = $locator->find('kubectl');
-        if ($cli === null) {
-            return [];
-        }
-
-        try {
-            $isolated = $locator->isolate([$cli, 'get', 'deployments,statefulsets', '-A', '-o', 'json']);
-            $result = Process::env($isolated['environment'])->timeout(2)->run($isolated['command']);
-            if (! $result->successful()) {
-                return [];
-            }
-
-            $items = json_decode($result->output(), true)['items'] ?? [];
-            if (! is_array($items)) {
-                return [];
-            }
-
-            $namespaces = [];
-            foreach ($items as $item) {
-                $ns = (string) ($item['metadata']['namespace'] ?? '');
-                if (! str_ends_with($ns, '-local')) {
-                    continue;
-                }
-
-                $replicas = (int) ($item['spec']['replicas'] ?? 0);
-                $readyReplicas = (int) ($item['status']['readyReplicas'] ?? 0);
-
-                $namespaces[$ns] ??= ['replicas' => 0, 'readyReplicas' => 0, 'deploymentsCount' => 0];
-                $namespaces[$ns]['replicas'] += $replicas;
-                $namespaces[$ns]['readyReplicas'] += $readyReplicas;
-                $namespaces[$ns]['deploymentsCount']++;
-            }
-
-            return $namespaces;
-        } catch (\Throwable) {
-            return [];
-        }
+        return $this->workloadStatus->localWorkloadStatuses($locator);
     }
 
     /**
@@ -1228,70 +1198,6 @@ class ProjectController extends Controller
      */
     private function resolveLocalStatus(Project $project, array $inspection, ?Run $activeRun, array $workloads): array
     {
-        if (! $inspection['exists'] || ! $inspection['initialized']) {
-            return [
-                'state' => 'uninitialized',
-                'label' => 'Not set up',
-                'tone' => 'muted',
-            ];
-        }
-
-        $appName = $inspection['name'];
-        $effectiveTld = (string) ($inspection['effectiveTld'] ?? 'test');
-        $domain = "{$appName}.{$effectiveTld}";
-
-        if ($activeRun !== null) {
-            $isStopping = in_array($activeRun->kind, [RunKind::StopProject, RunKind::DownProject], true);
-
-            return [
-                'state' => $isStopping ? 'stopping' : 'starting',
-                'label' => $isStopping ? 'Stopping…' : 'Starting…',
-                'tone' => 'busy',
-                'domain' => $domain,
-            ];
-        }
-
-        $ns = "{$appName}-local";
-        $workload = $workloads[$ns] ?? null;
-
-        if ($workload !== null) {
-            if ($workload['readyReplicas'] > 0) {
-                return [
-                    'state' => 'running',
-                    'label' => 'Running',
-                    'tone' => 'ok',
-                    'domain' => $domain,
-                    'replicas' => $workload['replicas'],
-                    'readyReplicas' => $workload['readyReplicas'],
-                ];
-            }
-
-            if ($workload['replicas'] === 0) {
-                return [
-                    'state' => 'paused',
-                    'label' => 'Paused',
-                    'tone' => 'warn',
-                    'domain' => $domain,
-                    'replicas' => 0,
-                    'readyReplicas' => 0,
-                ];
-            }
-
-            return [
-                'state' => 'starting',
-                'label' => 'Starting…',
-                'tone' => 'busy',
-                'domain' => $domain,
-                'replicas' => $workload['replicas'],
-                'readyReplicas' => $workload['readyReplicas'],
-            ];
-        }
-
-        return [
-            'state' => 'down',
-            'label' => 'Down',
-            'tone' => 'muted',
-            'domain' => $domain,
-        ];
+        return $this->workloadStatus->resolveLocalStatus($project, $inspection, $activeRun, $workloads);
     }
 }
