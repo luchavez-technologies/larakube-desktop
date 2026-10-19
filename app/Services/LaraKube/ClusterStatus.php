@@ -72,7 +72,7 @@ class ClusterStatus
     public function backup(string $context): ?array
     {
         return $this->remember("backup:{$context}", function () use ($context): ?array {
-            $report = $this->json(['backup:status', 'production', "--context={$context}", '--json'], 180);
+            $report = $this->json(['backup:status', 'production', "--context={$context}", '--json'], 15);
 
             return is_array($report) && ($report['success'] ?? false) === true ? $report : null;
         });

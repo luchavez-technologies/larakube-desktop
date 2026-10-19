@@ -41,6 +41,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $plex_last_synced_at
  * @property string|null $plex_last_sync_error
  * @property array<string, mixed>|null $plex_data
+ * @property string $backup_sync_status
+ * @property bool|null $backup_configured
+ * @property Carbon|null $backup_last_synced_at
+ * @property string|null $backup_last_sync_error
  * @property-read CloudProvider|null $cloudProvider
  * @property-read CloudRegion|null $cloudRegion
  * @property-read CloudSize|null $cloudSize
@@ -77,6 +81,10 @@ class Server extends Model
         'plex_last_synced_at',
         'plex_last_sync_error',
         'plex_data',
+        'backup_sync_status',
+        'backup_configured',
+        'backup_last_synced_at',
+        'backup_last_sync_error',
     ];
 
     protected static function booted(): void
@@ -117,6 +125,8 @@ class Server extends Model
             'domains_last_synced_at' => 'datetime',
             'plex_last_synced_at' => 'datetime',
             'plex_data' => 'array',
+            'backup_configured' => 'boolean',
+            'backup_last_synced_at' => 'datetime',
         ];
     }
 

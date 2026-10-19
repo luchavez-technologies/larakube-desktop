@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\Sync\SyncServerBackupJob;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
@@ -54,14 +55,23 @@ class DashboardController extends Controller
 
             'stats' => Inertia::defer(function () use ($stacks, $readiness): array {
                 $projectsCount = Project::query()->count();
-                $allServers = $stacks->all() ?? [];
-                $readyServersCount = count(array_filter($allServers, fn (array $s): bool => $s['status'] === 'ready'));
+
+                $dbServers = Server::where('role', '!=', 'dev')->get(['id', 'status']);
+                if ($dbServers->isNotEmpty()) {
+                    $serversCount = $dbServers->count();
+                    $readyServersCount = $dbServers->where('status', 'ready')->count();
+                } else {
+                    $allServers = $stacks->all() ?? [];
+                    $serversCount = count($allServers);
+                    $readyServersCount = count(array_filter($allServers, fn (array $s): bool => $s['status'] === 'ready'));
+                }
+
                 $tools = $readiness->tools();
                 $missingRequired = array_filter($tools, fn (array $t): bool => $t['required'] && ! $t['installed']);
 
                 return [
                     'projectsCount' => $projectsCount,
-                    'serversCount' => count($allServers),
+                    'serversCount' => $serversCount,
                     'readyServersCount' => $readyServersCount,
                     'missingToolsCount' => count($missingRequired),
                 ];
@@ -77,14 +87,48 @@ class DashboardController extends Controller
             }),
 
             'projects' => Inertia::defer(function () use ($inspector): array {
-                return Project::query()->latest('id')->take(4)->get()->map(fn (Project $p): array => [
-                    'id' => $p->id,
-                    'name' => basename($p->path),
-                    'path' => $p->path,
-                ] + $inspector->inspect($p->path))->all();
+                return Project::query()->latest('id')->take(4)->get()->map(function (Project $p) use ($inspector): array {
+                    if ($p->last_inspected_at !== null && $p->name !== null && $p->framework !== null) {
+                        return [
+                            'id' => $p->id,
+                            'name' => $p->name,
+                            'path' => $p->path,
+                            'framework' => $p->framework,
+                            'webHost' => $p->web_host,
+                            'serverIp' => null,
+                            'serverContext' => null,
+                            'exists' => true,
+                            'initialized' => true,
+                            'deployable' => true,
+                            'environments' => [],
+                        ];
+                    }
+
+                    return ['id' => $p->id] + $inspector->inspect($p->path);
+                })->all();
             }),
 
             'servers' => Inertia::defer(function () use ($stacks, $domains): array {
+                $dbServers = Server::with(['domains' => fn ($q) => $q->where('external_dns', true)])
+                    ->where('role', '!=', 'dev')
+                    ->take(4)
+                    ->get();
+
+                if ($dbServers->isNotEmpty()) {
+                    return $dbServers->map(fn (Server $s): array => [
+                        'name' => $s->name,
+                        'provider' => $s->provider,
+                        'kind' => $s->kind,
+                        'region' => $s->region,
+                        'ip' => $s->ip,
+                        'port' => $s->port,
+                        'context' => $s->context,
+                        'status' => $s->status,
+                        'role' => $s->role,
+                        'hasExternalDns' => $s->domains->isNotEmpty(),
+                    ])->all();
+                }
+
                 $allServers = $stacks->all() ?? [];
                 $allServers = array_map(function (array $s) use ($domains): array {
                     $s['hasExternalDns'] = is_string($s['context'] ?? null)
@@ -96,18 +140,66 @@ class DashboardController extends Controller
                 return array_slice($allServers, 0, 4);
             }),
 
-            'fleetMetrics' => Inertia::defer(function () use ($stacks, $inspector, $fleetMetrics): array {
-                $allServers = $stacks->all() ?? [];
-                $recentProjects = Project::query()->latest('id')->take(4)->get()->map(fn (Project $p): array => [
-                    'id' => $p->id,
-                    'name' => basename($p->path),
-                    'path' => $p->path,
-                ] + $inspector->inspect($p->path))->all();
+            'fleetMetrics' => Inertia::defer(function () use ($stacks, $fleetMetrics): array {
+                $dbServers = Server::where('role', '!=', 'dev')->get(['name', 'status', 'role']);
+                if ($dbServers->isNotEmpty()) {
+                    $servers = $dbServers->map(fn (Server $s): array => [
+                        'name' => $s->name,
+                        'status' => $s->status,
+                        'role' => $s->role,
+                    ])->all();
+                } else {
+                    $servers = $stacks->all() ?? [];
+                }
 
-                return $fleetMetrics->summary($allServers, array_values($recentProjects));
+                $projects = Project::query()->latest('id')->take(4)->get(['id', 'name', 'path', 'framework', 'web_host'])->map(fn (Project $p): array => [
+                    'id' => $p->id,
+                    'name' => $p->name ?: basename($p->path),
+                    'path' => $p->path,
+                    'framework' => $p->framework,
+                    'webHost' => $p->web_host,
+                ])->all();
+
+                return $fleetMetrics->summary(array_values($servers), array_values($projects));
             }, 'fleetMetrics'),
 
             'backups' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
+                $dbServers = Server::where('role', '!=', 'dev')
+                    ->where('status', 'ready')
+                    ->whereNotNull('context')
+                    ->get();
+
+                if ($dbServers->isNotEmpty()) {
+                    $cloudServers = $dbServers->reject(fn (Server $s): bool => Server::isStackLocal([
+                        'name' => $s->name,
+                        'provider' => $s->provider,
+                        'kind' => $s->kind,
+                        'ip' => $s->ip,
+                        'context' => $s->context,
+                        'status' => $s->status,
+                    ]))->values();
+
+                    $unprotected = [];
+                    foreach ($cloudServers as $server) {
+                        if ($server->backup_last_synced_at === null || $server->backup_last_synced_at->diffInMinutes(now()) > 30) {
+                            SyncServerBackupJob::dispatch($server->id);
+                        }
+
+                        if ($server->backup_configured === false) {
+                            $unprotected[] = $server->name;
+                        }
+                    }
+
+                    $total = $cloudServers->count();
+                    $protected = max(0, $total - count($unprotected));
+
+                    return [
+                        'total' => $total,
+                        'protected' => $protected,
+                        'unprotected' => $unprotected,
+                    ];
+                }
+
                 $allServers = $stacks->all() ?? [];
                 $cloudServers = collect($allServers)
                     ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context'] ?? null))
@@ -131,6 +223,26 @@ class DashboardController extends Controller
             }, 'backups'),
 
             'unprotectedServers' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
+                $dbServers = Server::where('role', '!=', 'dev')
+                    ->where('status', 'ready')
+                    ->whereNotNull('context')
+                    ->get();
+
+                if ($dbServers->isNotEmpty()) {
+                    return $dbServers->reject(fn (Server $s): bool => Server::isStackLocal([
+                        'name' => $s->name,
+                        'provider' => $s->provider,
+                        'kind' => $s->kind,
+                        'ip' => $s->ip,
+                        'context' => $s->context,
+                        'status' => $s->status,
+                    ]))
+                        ->filter(fn (Server $s): bool => $s->backup_configured === false)
+                        ->pluck('name')
+                        ->values()
+                        ->all();
+                }
+
                 $allServers = $stacks->all() ?? [];
 
                 return collect($allServers)

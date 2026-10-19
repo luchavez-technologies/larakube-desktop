@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\Sync\SyncServerBackupJob;
 use App\Models\Project;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
@@ -253,4 +254,89 @@ test('the dashboard defers the project catalog, dev boxes, and default parent fo
             ));
 
     File::deleteDirectory($bin);
+});
+
+test('dashboard reads servers and projects directly from database without invoking CLI or disk inspect', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $server = Server::create([
+        'name' => 'db-cluster',
+        'provider' => 'digitalocean',
+        'kind' => 'doks',
+        'region' => 'nyc1',
+        'ip' => '157.245.1.1',
+        'context' => 'doks-nyc1-db',
+        'status' => 'ready',
+    ]);
+    $server->domains()->create([
+        'domain' => 'api.example.com',
+        'external_dns' => true,
+    ]);
+
+    $project = Project::create([
+        'path' => '/home/apps/fast-api',
+        'name' => 'fast-api',
+        'framework' => 'laravel',
+        'web_host' => 'fast-api.dev.test',
+        'last_inspected_at' => now(),
+    ]);
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldNotReceive('all');
+    app()->instance(StackCatalog::class, $stacks);
+
+    $inspector = mock(ProjectInspector::class);
+    $inspector->shouldNotReceive('inspect');
+    app()->instance(ProjectInspector::class, $inspector);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('stats.projectsCount', 1)
+                ->where('stats.serversCount', 1)
+                ->where('stats.readyServersCount', 1)
+                ->where('projects.0.name', 'fast-api')
+                ->where('projects.0.framework', 'laravel')
+                ->where('projects.0.webHost', 'fast-api.dev.test')
+                ->where('servers.0.name', 'db-cluster')
+                ->where('servers.0.hasExternalDns', true)
+            )
+        );
+
+    File::deleteDirectory($bin);
+});
+
+test('SyncServerBackupJob updates server backup status', function () {
+    $server = Server::create([
+        'name' => 'cloud-prod',
+        'role' => 'deploy',
+        'provider' => 'digitalocean',
+        'kind' => 'doks',
+        'context' => 'doks-lon1-prod',
+        'status' => 'ready',
+    ]);
+
+    $status = mock(ClusterStatus::class);
+    $status->shouldReceive('backup')
+        ->with('doks-lon1-prod')
+        ->once()
+        ->andReturn(['success' => true, 'configured' => true]);
+
+    $job = new SyncServerBackupJob($server->id);
+    $job->handle($status);
+
+    $server->refresh();
+    expect($server->backup_configured)->toBeTrue()
+        ->and($server->backup_sync_status)->toBe('fresh')
+        ->and($server->backup_last_synced_at)->not->toBeNull();
 });
