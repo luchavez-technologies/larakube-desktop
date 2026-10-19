@@ -111,7 +111,7 @@ class ServerController extends Controller
         $project = $request->integer('project') > 0 ? Project::find($request->integer('project')) : null;
 
         return Inertia::render('servers/create', [
-            'providers' => Inertia::defer(fn (): ?array => $readiness->providers()),
+            'providers' => $readiness->providers(statusOnly: true),
             'project' => $project ? ['id' => $project->id, 'name' => basename($project->path)] : null,
             'defaultProvider' => $settings->get()['defaultCloudProvider'],
             'detectedKeys' => $inspector->detectCommonKeys(),
@@ -298,7 +298,30 @@ class ServerController extends Controller
             serverName: $stackName,
         );
 
+        Server::updateOrCreate(
+            ['name' => $stackName],
+            [
+                'provider' => $provider,
+                'kind' => $targetKind,
+                'region' => $request->string('region')->toString() ?: null,
+                'size' => $request->string('size')->toString() ?: null,
+                'account' => $account !== '' ? $account : null,
+                'status' => 'provisioning',
+            ]
+        );
+
         return to_route('runs.show', $run);
+    }
+
+    public function providerCatalog(string $provider, ReadinessCheck $readiness): JsonResponse
+    {
+        $data = $readiness->providerCatalog($provider);
+
+        if ($data === null) {
+            return response()->json(['message' => 'Provider catalog unavailable'], 404);
+        }
+
+        return response()->json($data);
     }
 
     public function show(
@@ -370,7 +393,7 @@ class ServerController extends Controller
                 ? Inertia::defer(fn (): ?array => $context !== null ? $status->diagnose($context) : null, 'diagnosis')
                 : null,
             'providers' => $stack['kind'] === 'vps'
-                ? Inertia::defer(fn (): ?array => $readiness->providers(), 'providers')
+                ? Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true), 'providers')
                 : null,
             'k9sInstalled' => $readiness->status('k9s')['installed'],
         ]);

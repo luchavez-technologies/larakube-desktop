@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -17,6 +18,10 @@ use Illuminate\Support\Carbon;
  * @property string $provider
  * @property string $kind
  * @property string|null $region
+ * @property string|null $size
+ * @property int|null $cloud_provider_id
+ * @property int|null $cloud_region_id
+ * @property int|null $cloud_size_id
  * @property string|null $ip
  * @property int $port
  * @property string|null $context
@@ -35,6 +40,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $plex_last_synced_at
  * @property string|null $plex_last_sync_error
  * @property array<string, mixed>|null $plex_data
+ * @property-read CloudProvider|null $cloudProvider
+ * @property-read CloudRegion|null $cloudRegion
+ * @property-read CloudSize|null $cloudSize
  */
 class Server extends Model
 {
@@ -44,6 +52,10 @@ class Server extends Model
         'provider',
         'kind',
         'region',
+        'size',
+        'cloud_provider_id',
+        'cloud_region_id',
+        'cloud_size_id',
         'ip',
         'port',
         'context',
@@ -63,6 +75,32 @@ class Server extends Model
         'plex_last_sync_error',
         'plex_data',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Server $server): void {
+            if ($server->provider && ! in_array($server->provider, ['custom', 'existing', 'local'], true)) {
+                $server->cloud_provider_id ??= CloudProvider::where('slug', $server->provider)->value('id');
+
+                if ($server->cloud_provider_id && $server->region && ! $server->cloud_region_id) {
+                    $server->cloud_region_id = CloudRegion::where('cloud_provider_id', $server->cloud_provider_id)
+                        ->where('slug', $server->region)
+                        ->value('id');
+                }
+
+                if ($server->cloud_provider_id && $server->size && ! $server->cloud_size_id) {
+                    $targetKind = in_array($server->kind, ['managed', 'cluster'], true) ? 'managed' : 'vps';
+                    $server->cloud_size_id = CloudSize::where('cloud_provider_id', $server->cloud_provider_id)
+                        ->where('slug', $server->size)
+                        ->whereIn('target_kind', [$targetKind, 'both'])
+                        ->value('id')
+                        ?? CloudSize::where('cloud_provider_id', $server->cloud_provider_id)
+                            ->where('slug', $server->size)
+                            ->value('id');
+                }
+            }
+        });
+    }
 
     /**
      * @return array<string, string>
@@ -117,6 +155,30 @@ class Server extends Model
     public function mailDomains(): HasMany
     {
         return $this->hasMany(MailDomain::class);
+    }
+
+    /**
+     * @return BelongsTo<CloudProvider, $this>
+     */
+    public function cloudProvider(): BelongsTo
+    {
+        return $this->belongsTo(CloudProvider::class, 'cloud_provider_id');
+    }
+
+    /**
+     * @return BelongsTo<CloudRegion, $this>
+     */
+    public function cloudRegion(): BelongsTo
+    {
+        return $this->belongsTo(CloudRegion::class, 'cloud_region_id');
+    }
+
+    /**
+     * @return BelongsTo<CloudSize, $this>
+     */
+    public function cloudSize(): BelongsTo
+    {
+        return $this->belongsTo(CloudSize::class, 'cloud_size_id');
     }
 
     /** The cluster tool row for Stalwart mail, under either slug the CLI has used. */

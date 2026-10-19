@@ -1,4 +1,4 @@
-import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { useState, useEffect, type FormEvent, type ReactNode } from 'react';
 import {
     ArrowLeft,
@@ -14,6 +14,7 @@ import {
     Layers,
     Lock,
     Plus,
+    RotateCw,
     Server,
     ShieldCheck,
     Users,
@@ -89,26 +90,19 @@ export default function CreateServer({
                     be linked to this new server.
                 </p>
             )}
-            <Deferred
-                data="providers"
-                fallback={
-                    <div className="h-72 max-w-3xl animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
-                }
-            >
-                {providers && providers.length > 0 ? (
-                    <ServerForm
-                        providers={providers}
-                        projectId={project?.id ?? null}
-                        devBox={devBox}
-                        defaultProvider={defaultProvider}
-                        detectedKeys={detectedKeys}
-                    />
-                ) : (
-                    <p className="text-sm text-soft">
-                        The LaraKube CLI isn't ready yet. Finish Setup first.
-                    </p>
-                )}
-            </Deferred>
+            {providers && providers.length > 0 ? (
+                <ServerForm
+                    providers={providers}
+                    projectId={project?.id ?? null}
+                    devBox={devBox}
+                    defaultProvider={defaultProvider}
+                    detectedKeys={detectedKeys}
+                />
+            ) : (
+                <p className="text-sm text-soft">
+                    The LaraKube CLI isn't ready yet. Finish Setup first.
+                </p>
+            )}
         </AppLayout>
     );
 }
@@ -132,7 +126,35 @@ function ServerForm({
     }>;
 }) {
     const { untested } = usePage<{ untested: Untested }>().props;
-    const allProviders = devBox ? providers : [...providers, existingProvider];
+    const [providerList, setProviderList] = useState<Provider[]>(providers);
+    const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
+    const [refreshedProviders, setRefreshedProviders] = useState<Set<string>>(
+        new Set(),
+    );
+
+    async function refreshCatalog(slug: string) {
+        setIsRefreshingCatalog(true);
+        try {
+            const { ok, data } = await sendJson<Provider>(
+                `/servers/provider-catalog/${slug}`,
+                'GET',
+            );
+            if (ok && data) {
+                setProviderList((prev) =>
+                    prev.map((p) => (p.slug === slug ? data : p)),
+                );
+                setRefreshedProviders((prev) => new Set(prev).add(slug));
+            }
+        } catch (e) {
+            console.error('Failed to refresh provider catalog', e);
+        } finally {
+            setIsRefreshingCatalog(false);
+        }
+    }
+
+    const allProviders = devBox
+        ? providerList
+        : [...providerList, existingProvider];
     const startSize = (candidate: Provider, targetKind: 'vps' | 'managed') =>
         candidate.slug === 'existing'
             ? ''
@@ -288,6 +310,15 @@ function ServerForm({
             setHighestReachedStep(step);
         }
         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        if (
+            step === 2 &&
+            ['aws', 'gcp'].includes(provider.slug) &&
+            !refreshedProviders.has(provider.slug) &&
+            provider.pricing?.source !== 'live'
+        ) {
+            void refreshCatalog(provider.slug);
+        }
     }
 
     const canProceedToStep2 =
@@ -1086,7 +1117,17 @@ function ServerForm({
                                             />
                                         </Field>
                                         <Field
-                                            label="Size"
+                                            label={
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    Size
+                                                    {isRefreshingCatalog && (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-normal text-soft">
+                                                            <RotateCw className="h-3 w-3 animate-spin text-accent" />
+                                                            Refreshing types...
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            }
                                             error={form.errors.size}
                                             hint={pricingNote(provider)}
                                         >

@@ -2,8 +2,12 @@
 
 namespace App\Services\LaraKube;
 
+use App\Models\CloudProvider;
+use App\Models\CloudRegion;
+use App\Models\CloudSize;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -171,7 +175,213 @@ class ReadinessCheck
         $providers = array_values($decoded['providers']);
         Cache::put($key, $providers, now()->addMinutes(5));
 
+        $this->syncCredentialsToDatabase($providers);
+
         return $providers;
+    }
+
+    /**
+     * Discovers live instance types and regions for a single provider in the background,
+     * updates the local SQLite tables, and returns the Inertia-formatted provider array.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function providerCatalog(string $providerSlug): ?array
+    {
+        $cli = $this->locator->find('larakube');
+
+        if ($cli === null) {
+            $provider = CloudProvider::with(['regions', 'sizes'])->where('slug', $providerSlug)->first();
+
+            return $provider?->toInertiaProvider();
+        }
+
+        $commandArgs = [$cli, 'cloud:providers', "--provider={$providerSlug}", '--json', '--no-interaction'];
+        $isolated = $this->locator->isolate($commandArgs);
+
+        try {
+            $result = Process::env($isolated['environment'])
+                ->timeout(90)
+                ->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            $provider = CloudProvider::with(['regions', 'sizes'])->where('slug', $providerSlug)->first();
+
+            return $provider?->toInertiaProvider();
+        }
+
+        $decoded = json_decode($this->lastLine($result->output()), true);
+
+        if (! $result->successful() || ! is_array($decoded) || ! is_array($decoded['providers'] ?? null)) {
+            $provider = CloudProvider::with(['regions', 'sizes'])->where('slug', $providerSlug)->first();
+
+            return $provider?->toInertiaProvider();
+        }
+
+        /** @var array<string, mixed>|null $pData */
+        $pData = collect($decoded['providers'])->first(fn (mixed $item): bool => is_array($item) && ($item['slug'] ?? null) === $providerSlug);
+
+        if (! is_array($pData)) {
+            $provider = CloudProvider::with(['regions', 'sizes'])->where('slug', $providerSlug)->first();
+
+            return $provider?->toInertiaProvider();
+        }
+
+        DB::transaction(function () use ($pData, $providerSlug): void {
+            $credentials = is_array($pData['credentials'] ?? null) ? $pData['credentials'] : [];
+            $pricing = is_array($pData['pricing'] ?? null) ? $pData['pricing'] : [];
+
+            $provider = CloudProvider::updateOrCreate(['slug' => $providerSlug], [
+                'label' => (string) ($pData['label'] ?? $providerSlug),
+                'default_region' => (string) ($pData['defaultRegion'] ?? ''),
+                'default_vps_size' => (string) ($pData['defaultVpsSize'] ?? ''),
+                'default_managed_size' => is_string($pData['defaultManagedSize'] ?? null) ? $pData['defaultManagedSize'] : null,
+                'managed_provider' => is_string($pData['managedProvider'] ?? null) ? $pData['managedProvider'] : null,
+                'ha_option' => is_string($pData['haOption'] ?? null) ? $pData['haOption'] : null,
+                'ha_cost' => is_string($pData['haCost'] ?? null) ? $pData['haCost'] : null,
+                'pricing_url' => is_string($pricing['officialPricingUrl'] ?? null) ? $pricing['officialPricingUrl'] : null,
+                'credentials_ready' => (bool) ($credentials['ready'] ?? false),
+                'credentials_hint' => is_string($credentials['hint'] ?? null) ? $credentials['hint'] : null,
+                'active_account' => is_string($pData['activeAccount'] ?? null) ? $pData['activeAccount'] : null,
+                'accounts' => is_array($pData['accounts'] ?? null) ? $pData['accounts'] : null,
+                'source' => (string) ($pricing['source'] ?? 'live'),
+                'last_synced_at' => now(),
+            ]);
+
+            if (is_array($pData['regions'] ?? null)) {
+                foreach ($pData['regions'] as $reg) {
+                    if (! is_array($reg)) {
+                        continue;
+                    }
+                    $val = (string) ($reg['value'] ?? $reg['slug'] ?? '');
+                    $lbl = (string) ($reg['label'] ?? $val);
+                    if ($val !== '') {
+                        CloudRegion::updateOrCreate(
+                            ['cloud_provider_id' => $provider->id, 'slug' => $val],
+                            ['label' => $lbl, 'is_recommended' => str_contains($lbl, 'Recommended')]
+                        );
+                    }
+                }
+            }
+
+            if (is_array($pData['vpsSizes'] ?? null)) {
+                foreach ($pData['vpsSizes'] as $s) {
+                    if (! is_array($s)) {
+                        continue;
+                    }
+                    $val = (string) ($s['value'] ?? $s['slug'] ?? '');
+                    $lbl = (string) ($s['label'] ?? $val);
+                    if ($val !== '') {
+                        $parsed = $this->parseSizeLabel($lbl);
+                        CloudSize::updateOrCreate(
+                            ['cloud_provider_id' => $provider->id, 'slug' => $val, 'target_kind' => 'vps'],
+                            [
+                                'label' => $lbl,
+                                'vcpu' => $parsed['vcpu'],
+                                'memory_mb' => $parsed['memory_mb'],
+                                'monthly_price' => $parsed['monthly_price'],
+                                'currency' => $parsed['currency'],
+                                'is_recommended' => $parsed['is_recommended'],
+                            ]
+                        );
+                    }
+                }
+            }
+
+            if (is_array($pData['managedSizes'] ?? null)) {
+                foreach ($pData['managedSizes'] as $s) {
+                    if (! is_array($s)) {
+                        continue;
+                    }
+                    $val = (string) ($s['value'] ?? $s['slug'] ?? '');
+                    $lbl = (string) ($s['label'] ?? $val);
+                    if ($val !== '') {
+                        $parsed = $this->parseSizeLabel($lbl);
+                        CloudSize::updateOrCreate(
+                            ['cloud_provider_id' => $provider->id, 'slug' => $val, 'target_kind' => 'managed'],
+                            [
+                                'label' => $lbl,
+                                'vcpu' => $parsed['vcpu'],
+                                'memory_mb' => $parsed['memory_mb'],
+                                'monthly_price' => $parsed['monthly_price'],
+                                'currency' => $parsed['currency'],
+                                'is_recommended' => $parsed['is_recommended'],
+                            ]
+                        );
+                    }
+                }
+            }
+        });
+
+        Cache::forget('readiness.providers.status');
+        Cache::forget('readiness.providers.full');
+
+        $provider = CloudProvider::with(['regions', 'sizes'])->where('slug', $providerSlug)->first();
+
+        return $provider?->toInertiaProvider();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $providers
+     */
+    private function syncCredentialsToDatabase(array $providers): void
+    {
+        foreach ($providers as $pData) {
+            $slug = $pData['slug'] ?? null;
+            if (! is_string($slug)) {
+                continue;
+            }
+
+            $provider = CloudProvider::where('slug', $slug)->first();
+            if ($provider) {
+                $credentials = is_array($pData['credentials'] ?? null) ? $pData['credentials'] : [];
+                $provider->update([
+                    'credentials_ready' => (bool) ($credentials['ready'] ?? false),
+                    'credentials_hint' => is_string($credentials['hint'] ?? null) ? $credentials['hint'] : null,
+                    'active_account' => is_string($pData['activeAccount'] ?? null) ? $pData['activeAccount'] : null,
+                    'accounts' => is_array($pData['accounts'] ?? null) ? $pData['accounts'] : null,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @return array{vcpu: int, memory_mb: int, monthly_price: ?float, currency: string, is_recommended: bool}
+     */
+    private function parseSizeLabel(string $label): array
+    {
+        $vcpu = 2;
+        if (preg_match('/(\d+)\s*vCPU/i', $label, $m)) {
+            $vcpu = (int) $m[1];
+        }
+
+        $memoryMb = 2048;
+        if (preg_match('/([\d\.]+)\s*(GB|MB)\s*RAM/i', $label, $m)) {
+            $val = (float) $m[1];
+            $unit = strtoupper($m[2]);
+            $memoryMb = $unit === 'GB' ? (int) ($val * 1024) : (int) $val;
+        }
+
+        $monthlyPrice = null;
+        if (preg_match('/~?[\$€£]([\d\.]+)\s*\/mo/i', $label, $m)) {
+            $monthlyPrice = (float) $m[1];
+        }
+
+        $currency = 'USD';
+        if (str_contains($label, '€')) {
+            $currency = 'EUR';
+        } elseif (str_contains($label, '£')) {
+            $currency = 'GBP';
+        }
+
+        $isRecommended = str_contains($label, 'Recommended');
+
+        return [
+            'vcpu' => $vcpu,
+            'memory_mb' => $memoryMb,
+            'monthly_price' => $monthlyPrice,
+            'currency' => $currency,
+            'is_recommended' => $isRecommended,
+        ];
     }
 
     /**

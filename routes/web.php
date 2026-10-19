@@ -70,6 +70,7 @@ Route::get('/servers/create', [ServerController::class, 'create'])->name('server
 Route::post('/servers', [ServerController::class, 'store'])->name('servers.store');
 Route::get('/servers/pick-key', [ServerController::class, 'pickKey'])->name('servers.pick_key');
 Route::post('/servers/inspect-key', [ServerController::class, 'inspectKey'])->name('servers.inspect_key');
+Route::get('/servers/provider-catalog/{provider}', [ServerController::class, 'providerCatalog'])->name('servers.provider_catalog');
 
 Route::pattern('server', '[a-z0-9][a-z0-9-]*');
 Route::pattern('tool', '[a-z][a-z0-9-]*');
