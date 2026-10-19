@@ -4,7 +4,6 @@ import {
     ChevronRight,
     Code2,
     Database,
-    X,
     Zap,
 } from 'lucide-react';
 import Button from '@/components/button';
@@ -20,7 +19,6 @@ export default function StepInspector({
     hasNext,
     hasPrev,
     isFailed,
-    onClose,
 }: {
     hop: SimulatorHop;
     stepIndex: number;
@@ -30,7 +28,6 @@ export default function StepInspector({
     hasNext: boolean;
     hasPrev: boolean;
     isFailed?: boolean;
-    onClose?: () => void;
 }) {
     return (
         <div className="flex h-full flex-col bg-surface select-text">
@@ -71,16 +68,6 @@ export default function StepInspector({
                         <span>Next</span>
                         <ChevronRight className="size-3.5" />
                     </Button>
-                    {onClose && (
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="hover:bg-hover ml-1 rounded-lg p-1 text-soft transition hover:text-ink"
-                            title="Close drawer"
-                        >
-                            <X className="size-4" />
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -132,28 +119,28 @@ export default function StepInspector({
                 </div>
 
                 {/* Technical Parameters Grid */}
-                <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-lg border border-line bg-paper/40 p-2 text-center">
+                <div className="grid grid-cols-5 gap-2">
+                    <div className="col-span-3 rounded-lg border border-line bg-paper/40 p-2 text-center">
                         <span className="text-[9px] font-semibold tracking-wider text-faint uppercase">
                             Protocol
                         </span>
-                        <div className="truncate font-mono text-[10.5px] font-medium text-ink">
+                        <div className="mt-0.5 font-mono text-[11px] font-medium text-ink">
                             {hop.technicalDetails.protocol}
                         </div>
                     </div>
-                    <div className="rounded-lg border border-line bg-paper/40 p-2 text-center">
+                    <div className="col-span-1 rounded-lg border border-line bg-paper/40 p-2 text-center">
                         <span className="text-[9px] font-semibold tracking-wider text-faint uppercase">
                             Port
                         </span>
-                        <div className="truncate font-mono text-[10.5px] font-medium text-ink">
+                        <div className="mt-0.5 font-mono text-[11px] font-medium text-ink">
                             {hop.technicalDetails.port}
                         </div>
                     </div>
-                    <div className="rounded-lg border border-line bg-paper/40 p-2 text-center">
+                    <div className="col-span-1 rounded-lg border border-line bg-paper/40 p-2 text-center">
                         <span className="text-[9px] font-semibold tracking-wider text-faint uppercase">
                             Latency
                         </span>
-                        <div className="truncate font-mono text-[10.5px] font-medium text-ink">
+                        <div className="mt-0.5 font-mono text-[11px] font-medium text-ink">
                             {hop.technicalDetails.latencyMs} ms
                         </div>
                     </div>

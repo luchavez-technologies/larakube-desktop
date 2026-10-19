@@ -10,7 +10,7 @@ import {
     type Edge,
     type Node,
 } from '@xyflow/react';
-import { ArrowLeft, Network, PanelRight, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Network, PanelRight, Sparkles } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
 import Button, { buttonClass } from '@/components/button';
 import { cn } from '@/lib/utils';
@@ -323,17 +323,6 @@ export default function SimulatorIndex({
                                 {showInspector ? 'Hide Drawer' : 'Inspect'}
                             </span>
                         </Button>
-
-                        <Link
-                            href={backHref}
-                            className={cn(
-                                buttonClass('ghost', 'sm'),
-                                'hover:bg-hover size-8 p-0 text-soft hover:text-ink',
-                            )}
-                            title="Close Simulator"
-                        >
-                            <X className="size-4" />
-                        </Link>
                     </div>
                 </div>
 
@@ -375,7 +364,6 @@ export default function SimulatorIndex({
                                     currentStepIndex ===
                                         activeScenario.hops.length - 1
                                 }
-                                onClose={() => setShowInspector(false)}
                             />
                         </aside>
                     )}

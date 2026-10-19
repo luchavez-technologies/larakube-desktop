@@ -61,7 +61,7 @@ export function getScenarios(
                 'Negotiates TLS 1.3 cryptographic session key.',
             ],
             technicalDetails: {
-                protocol: 'HTTPS / HTTP/2',
+                protocol: 'HTTP/2 (TLS)',
                 port: '443',
                 headers: {
                     Host: host,
@@ -90,7 +90,7 @@ export function getScenarios(
                 'Proxies traffic via HTTP/2 or HTTP/3 to cluster public ingress IP.',
             ],
             technicalDetails: {
-                protocol: 'TLS 1.3 / TCP',
+                protocol: 'TLS 1.3',
                 port: '443',
                 headers: {
                     'CF-Ray': '8d4f2910a7bc-SIN',
@@ -115,7 +115,7 @@ export function getScenarios(
                 'Forwards request internally to the Kubernetes ClusterIP virtual IP.',
             ],
             technicalDetails: {
-                protocol: 'HTTP/1.1 (Internal CNI)',
+                protocol: 'HTTP/1.1',
                 port: '80',
                 headers: {
                     'X-Forwarded-For': '203.0.113.195',
@@ -143,7 +143,7 @@ export function getScenarios(
                 'Performs round-robin load distribution across pod replicas.',
             ],
             technicalDetails: {
-                protocol: 'TCP / iptables',
+                protocol: 'TCP',
                 port: String(targetPort),
                 latencyMs: 1,
             },
@@ -173,7 +173,7 @@ export function getScenarios(
                       'Executes Controller action and serializes response payload.',
                   ],
             technicalDetails: {
-                protocol: isStatic ? 'HTTP/1.1' : 'FastCGI / HTTP',
+                protocol: isStatic ? 'HTTP/1.1' : 'FastCGI',
                 port: '80',
                 payload:
                     status === 200
@@ -330,7 +330,7 @@ export function getScenarios(
                   'Scans B-Tree indexes and reads block storage from PersistentVolumeClaim (PVC).',
               ],
         technicalDetails: {
-            protocol: isSqlite ? 'POSIX File IO' : `${dbTitle} Wire / TCP`,
+            protocol: isSqlite ? 'SQLite File' : `${dbTitle} TCP`,
             port: dbPort,
             query: query,
             latencyMs: isSqlite ? 1 : 4,
