@@ -35,8 +35,8 @@ class SimulatorController extends Controller
                     'webHost' => $webHost,
                     'path' => $project->path,
                     'exists' => $project->existsOnHost(),
-                    'database' => $inspection['database'] ?? 'pgsql',
-                    'cache' => $inspection['cacheDriver'] ?? 'redis',
+                    'database' => $inspection['database'] ?? null,
+                    'cache' => $inspection['cacheDriver'] ?? null,
                 ];
             })
             ->values()

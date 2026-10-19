@@ -4,16 +4,52 @@ import {
     ChevronLeft,
     ChevronRight,
     Flame,
+    HelpCircle,
     Pause,
     Play,
     RotateCcw,
+    RotateCw,
     Zap,
 } from 'lucide-react';
 import Button from '@/components/button';
 import { cn } from '@/lib/utils';
-import type { ProjectPreset, ScenarioKind, SimulatorProject } from './types';
+import type {
+    ProjectPreset,
+    ScenarioKind,
+    SimulatorProject,
+    SimulatorScenario,
+} from './types';
+
+const SCENARIO_LABELS: Record<string, string> = {
+    healthy_web: 'Web 200',
+    healthy_api: 'API JSON',
+    cached_asset: 'Cache 304',
+    fault_database: 'DB Crash (500)',
+    fault_pod: 'Pod Down (502)',
+    not_found: '404 Missing',
+};
+
+function getScenarioIcon(scenario: SimulatorScenario) {
+    if (scenario.id === 'cached_asset') {
+        return <RotateCw className="size-3 text-brand" />;
+    }
+    if (scenario.id === 'healthy_api') {
+        return <Zap className="size-3 text-brand" />;
+    }
+    if (scenario.id === 'fault_database') {
+        return <Flame className="size-3 text-rose-500" />;
+    }
+    if (scenario.id === 'fault_pod') {
+        return <AlertTriangle className="size-3 text-amber-500" />;
+    }
+    if (scenario.id === 'not_found') {
+        return <HelpCircle className="size-3 text-amber-500" />;
+    }
+    return <CheckCircle2 className="size-3 text-ok" />;
+}
 
 export default function SimulatorControls({
+    scenarios,
     currentScenarioKey,
     onSelectScenario,
     isPlaying,
@@ -30,7 +66,8 @@ export default function SimulatorControls({
     onNext,
     onPrev,
 }: {
-    currentScenarioKey: ScenarioKind;
+    scenarios: SimulatorScenario[];
+    currentScenarioKey: string;
     onSelectScenario: (key: ScenarioKind) => void;
     isPlaying: boolean;
     onTogglePlay: () => void;
@@ -78,63 +115,36 @@ export default function SimulatorControls({
                 </select>
             </div>
 
-            {/* Middle: Scenario Chooser */}
+            {/* Middle: Dynamic Scenarios for Active Workload */}
             <div className="flex items-center gap-1 rounded-xl bg-badge p-1">
-                <button
-                    type="button"
-                    onClick={() => onSelectScenario('healthy_web')}
-                    className={cn(
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        currentScenarioKey === 'healthy_web'
-                            ? 'bg-surface font-semibold text-ink shadow-2xs'
-                            : 'text-soft hover:text-ink',
-                    )}
-                >
-                    <CheckCircle2 className="size-3 text-ok" />
-                    <span>Web 200</span>
-                </button>
+                {scenarios.map((sc) => {
+                    const isSelected = currentScenarioKey === sc.id;
+                    const label = SCENARIO_LABELS[sc.id] ?? sc.name;
 
-                <button
-                    type="button"
-                    onClick={() => onSelectScenario('healthy_api')}
-                    className={cn(
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        currentScenarioKey === 'healthy_api'
-                            ? 'bg-surface font-semibold text-ink shadow-2xs'
-                            : 'text-soft hover:text-ink',
-                    )}
-                >
-                    <Zap className="size-3 text-brand" />
-                    <span>API JSON</span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => onSelectScenario('fault_database')}
-                    className={cn(
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        currentScenarioKey === 'fault_database'
-                            ? 'bg-rose-500/15 font-semibold text-rose-600 shadow-2xs dark:text-rose-400'
-                            : 'text-soft hover:text-rose-600',
-                    )}
-                >
-                    <Flame className="size-3 text-rose-500" />
-                    <span>DB Crash (500)</span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => onSelectScenario('fault_pod')}
-                    className={cn(
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        currentScenarioKey === 'fault_pod'
-                            ? 'bg-amber-500/15 font-semibold text-amber-600 shadow-2xs dark:text-amber-400'
-                            : 'text-soft hover:text-amber-600',
-                    )}
-                >
-                    <AlertTriangle className="size-3 text-amber-500" />
-                    <span>Pod Down (502)</span>
-                </button>
+                    return (
+                        <button
+                            key={sc.id}
+                            type="button"
+                            onClick={() =>
+                                onSelectScenario(sc.id as ScenarioKind)
+                            }
+                            className={cn(
+                                'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                                isSelected
+                                    ? sc.tone === 'bad'
+                                        ? 'bg-rose-500/15 font-semibold text-rose-600 shadow-2xs dark:text-rose-400'
+                                        : sc.tone === 'warn'
+                                          ? 'bg-amber-500/15 font-semibold text-amber-600 shadow-2xs dark:text-amber-400'
+                                          : 'bg-surface font-semibold text-ink shadow-2xs'
+                                    : 'text-soft hover:text-ink',
+                            )}
+                            title={sc.description}
+                        >
+                            {getScenarioIcon(sc)}
+                            <span>{label}</span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Right: Step Scrubbing & Playback */}

@@ -29,6 +29,7 @@ export type SimulatorHop = {
 export type ScenarioKind =
     | 'healthy_web'
     | 'healthy_api'
+    | 'cached_asset'
     | 'fault_database'
     | 'fault_pod'
     | 'not_found';
@@ -47,9 +48,9 @@ export type ProjectPreset = {
     name: string;
     framework: string;
     webHost: string;
-    database: string;
-    databaseName: string;
-    cache: string;
+    database?: string | null;
+    databaseName?: string | null;
+    cache?: string | null;
     description: string;
 };
 
@@ -60,8 +61,8 @@ export type SimulatorProject = {
     webHost?: string | null;
     path: string;
     exists: boolean;
-    database: string;
-    cache: string;
+    database?: string | null;
+    cache?: string | null;
 };
 
 export type SimulatorServer = {

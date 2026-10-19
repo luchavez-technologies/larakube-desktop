@@ -19,10 +19,7 @@ import { PacketEdge } from '@/components/simulator/edges/packet-edge';
 import StepInspector from '@/components/simulator/step-inspector';
 import SimulatorControls from '@/components/simulator/simulator-controls';
 import { getScenarios } from '@/components/simulator/scenarios';
-import type {
-    ScenarioKind,
-    SimulatorPageProps,
-} from '@/components/simulator/types';
+import type { SimulatorPageProps } from '@/components/simulator/types';
 
 const NODE_TYPES = {
     infrastructure: InfrastructureNode,
@@ -93,7 +90,7 @@ export default function SimulatorIndex({
     const [selectedTargetId, setSelectedTargetId] =
         useState<string>(initialTargetId);
     const [currentScenarioKey, setCurrentScenarioKey] =
-        useState<ScenarioKind>('healthy_web');
+        useState<string>('healthy_web');
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const [speed, setSpeed] = useState<number>(1);
@@ -110,8 +107,8 @@ export default function SimulatorIndex({
                     name: p.name,
                     host: p.webHost || `${p.name}.dev.test`,
                     framework: p.framework || 'laravel',
-                    databaseDriver: p.database || 'pgsql',
-                    databaseName: `${p.name}_db`,
+                    databaseDriver: p.database || null,
+                    databaseName: p.database ? `${p.name}_db` : null,
                 };
             }
         }
@@ -124,8 +121,8 @@ export default function SimulatorIndex({
             name: preset?.name || 'Laravel 12 (FrankenPHP)',
             host: preset?.webHost || 'laravel.dev.test',
             framework: preset?.framework || 'laravel',
-            databaseDriver: preset?.database || 'pgsql',
-            databaseName: preset?.databaseName || 'tenant_laravel_db',
+            databaseDriver: preset?.database || null,
+            databaseName: preset?.databaseName || null,
         };
     }, [selectedTargetId, projects, presets]);
 
@@ -138,7 +135,7 @@ export default function SimulatorIndex({
         : 'Exit to Dashboard';
 
     // Generate dynamic scenarios for target
-    const scenarios = useMemo(() => {
+    const scenariosMap = useMemo(() => {
         return getScenarios(
             activeTarget.host,
             activeTarget.framework,
@@ -147,7 +144,28 @@ export default function SimulatorIndex({
         );
     }, [activeTarget]);
 
-    const activeScenario = scenarios[currentScenarioKey];
+    const scenariosList = useMemo(
+        () => Object.values(scenariosMap),
+        [scenariosMap],
+    );
+
+    // Ensure active scenario is valid for this workload
+    useEffect(() => {
+        if (!scenariosMap[currentScenarioKey]) {
+            setCurrentScenarioKey(scenariosList[0]?.id ?? 'healthy_web');
+        }
+    }, [scenariosMap, scenariosList, currentScenarioKey]);
+
+    const activeScenario = scenariosMap[currentScenarioKey] ??
+        scenariosList[0] ?? {
+            id: 'healthy_web',
+            name: 'Web Request',
+            description: '',
+            statusCode: 200,
+            tone: 'ok',
+            hops: [],
+        };
+
     const totalSteps = activeScenario.hops.length;
     const activeHop =
         activeScenario.hops[currentStepIndex] ?? activeScenario.hops[0];
@@ -231,29 +249,6 @@ export default function SimulatorIndex({
                 });
             }
         });
-
-        // Add return edge back to client if completed and healthy
-        if (
-            currentStepIndex === totalSteps - 1 &&
-            activeScenario.tone === 'ok' &&
-            totalSteps >= 2
-        ) {
-            const lastHop = activeScenario.hops[totalSteps - 1];
-            generatedEdges.push({
-                id: `return-edge-${lastHop.id}-client`,
-                type: 'packet',
-                source: lastHop.id,
-                target: 'client',
-                data: {
-                    isActive: true,
-                    isReturn: true,
-                    label: '200 OK (Stream)',
-                },
-                style: {
-                    strokeDasharray: '4,4',
-                },
-            });
-        }
 
         return { nodes: generatedNodes, edges: generatedEdges };
     }, [activeScenario, currentStepIndex]);
@@ -342,8 +337,8 @@ export default function SimulatorIndex({
                     </div>
                 </div>
 
-                {/* Main Workspace: Full Canvas + Collapsible Inspector Drawer */}
-                <div className="relative flex flex-1 gap-3 overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
+                {/* Main Workspace: Full Canvas + Flush Inspector Sidebar */}
+                <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
                     {/* React Flow Canvas (with Auto-centering Provider) */}
                     <div className="h-full min-w-0 flex-1">
                         <ReactFlowProvider>
@@ -356,9 +351,9 @@ export default function SimulatorIndex({
                         </ReactFlowProvider>
                     </div>
 
-                    {/* Step Inspector Drawer (Clean, collapsible) */}
-                    {showInspector && (
-                        <div className="w-[350px] shrink-0 overflow-y-auto border-l border-line bg-paper/30 p-3">
+                    {/* Step Inspector Sidebar (Flush, native panel) */}
+                    {showInspector && activeHop && (
+                        <aside className="w-[340px] shrink-0 border-l border-line bg-surface">
                             <StepInspector
                                 hop={activeHop}
                                 stepIndex={currentStepIndex}
@@ -382,12 +377,13 @@ export default function SimulatorIndex({
                                 }
                                 onClose={() => setShowInspector(false)}
                             />
-                        </div>
+                        </aside>
                     )}
                 </div>
 
                 {/* Bottom Controls Bar */}
                 <SimulatorControls
+                    scenarios={scenariosList}
                     currentScenarioKey={currentScenarioKey}
                     onSelectScenario={(key) => setCurrentScenarioKey(key)}
                     isPlaying={isPlaying}
