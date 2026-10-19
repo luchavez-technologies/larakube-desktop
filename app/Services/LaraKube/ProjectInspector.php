@@ -148,7 +148,7 @@ class ProjectInspector
             : ($path !== '' ? basename($path) : 'app');
 
         $projectLocalTld = is_string($blueprint['localTld'] ?? null) ? $blueprint['localTld'] : null;
-        $globalTld = $this->globalSettings?->getLocalTld() ?? 'kube';
+        $globalTld = $this->globalSettings?->getLocalTld() ?? 'test';
         $effectiveTld = ($projectLocalTld !== null && $projectLocalTld !== '') ? $projectLocalTld : $globalTld;
 
         if (! isset($environments['local'])) {

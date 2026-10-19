@@ -152,3 +152,64 @@ test('ToolLocator resolves default projects path and host profile', function ():
         ->and(ToolLocator::defaultProjectsPath(false))->toBe(ToolLocator::home())
         ->and(windowsLocator()->defaultProjectsDirectory())->toBe('/home/larakube/projects');
 });
+
+test('on Windows find(larakube) resolves to the native host larakube.exe when present, while non-larakube tools stay in WSL', function (): void {
+    $tempProfile = sys_get_temp_dir().'/larakube-win-profile-'.bin2hex(random_bytes(4));
+    mkdir($tempProfile.'/.larakube/bin', 0777, true);
+    $nativeExe = $tempProfile.'/.larakube/bin/larakube.exe';
+    file_put_contents($nativeExe, 'MZ-fake-exe');
+
+    $prevEnv = getenv('USERPROFILE');
+    $prevServer = $_SERVER['USERPROFILE'] ?? null;
+    putenv('USERPROFILE='.$tempProfile);
+    $_SERVER['USERPROFILE'] = $tempProfile;
+
+    Process::fake([
+        '*which*kubectl*' => Process::result(output: "/usr/local/bin/kubectl\n"),
+    ]);
+
+    try {
+        $locator = windowsLocator();
+
+        expect($locator->find('larakube'))->toBe($nativeExe);
+        Process::assertNotRan(fn ($p) => str_contains(implode(' ', (array) $p->command), 'which') && str_contains(implode(' ', (array) $p->command), 'larakube'));
+
+        expect($locator->find('kubectl'))->toBe('/usr/local/bin/kubectl');
+        Process::assertRan(fn ($p) => str_contains(implode(' ', (array) $p->command), 'kubectl'));
+    } finally {
+        @unlink($nativeExe);
+        @rmdir($tempProfile.'/.larakube/bin');
+        @rmdir($tempProfile.'/.larakube');
+        @rmdir($tempProfile);
+        if ($prevEnv === false) {
+            putenv('USERPROFILE');
+        } else {
+            putenv('USERPROFILE='.$prevEnv);
+        }
+        if ($prevServer === null) {
+            unset($_SERVER['USERPROFILE']);
+        } else {
+            $_SERVER['USERPROFILE'] = $prevServer;
+        }
+    }
+});
+
+test('on Windows isolate() runs native larakube.exe directly without wsl.exe wrapper, bridges secrets via WSLENV, scrubs Desktop cache vars, and translates cwd to Windows UNC', function (): void {
+    $nativeExe = 'C:\\Users\\Mia\\.larakube\\bin\\larakube.exe';
+
+    $isolated = windowsLocator()->isolate(
+        [$nativeExe, 'up', '--no-test'],
+        ['TF_VAR_do_token' => 'dop_v1_secret'],
+        '/home/larakube/projects/shop',
+    );
+
+    expect($isolated['command'])->toBe([$nativeExe, 'up', '--no-test'])
+        ->and($isolated['cwd'])->toBe('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\shop')
+        ->and($isolated['environment']['TF_VAR_do_token'])->toBe('dop_v1_secret')
+        ->and($isolated['environment']['WSLENV'])->toBe('TF_VAR_do_token')
+        ->and($isolated['environment']['CACHE_STORE'])->toBe('file')
+        ->and($isolated['environment']['CACHE_DRIVER'])->toBe('file')
+        ->and($isolated['environment']['APP_CONFIG_CACHE'])->toBe('')
+        ->and(implode(' ', $isolated['command']))->not->toContain('dop_v1_secret')
+        ->and(implode(' ', $isolated['command']))->not->toContain('wsl.exe');
+});

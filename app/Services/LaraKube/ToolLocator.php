@@ -102,8 +102,20 @@ class ToolLocator
 
     public function find(string $binary): ?string
     {
-        if ($this->isWindows() && $this->directories === null) {
-            return $this->inDistro[$binary] ??= $this->findInDistro($binary);
+        if ($this->isWindows()) {
+            if ($binary === 'larakube') {
+                $native = $this->nativeWindowsLaraKubePath();
+
+                if ($native !== null) {
+                    $this->failure = null;
+
+                    return $native;
+                }
+            }
+
+            if ($this->directories === null) {
+                return $this->inDistro[$binary] ??= $this->findInDistro($binary);
+            }
         }
 
         $candidates = [];
@@ -133,6 +145,37 @@ class ToolLocator
         }
 
         return $candidates[0];
+    }
+
+    /**
+     * Resolves the native Windows `larakube.exe` binary on the host (`%USERPROFILE%\.larakube\bin\larakube.exe`),
+     * or returns null when not yet installed so `find('larakube')` can fall back to the WSL distro binary.
+     */
+    public function nativeWindowsLaraKubePath(): ?string
+    {
+        if (! $this->isWindows()) {
+            return null;
+        }
+
+        if ($this->directories !== null) {
+            foreach ($this->directories as $directory) {
+                $candidate = rtrim($directory, '\\/').'/larakube.exe';
+                if (is_file($candidate)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        }
+
+        $profile = self::hostProfile(true);
+        if ($profile === '') {
+            return null;
+        }
+
+        $candidate = rtrim($profile, '\\/').'/.larakube/bin/larakube.exe';
+
+        return is_file($candidate) ? $candidate : null;
     }
 
     /**
@@ -216,6 +259,10 @@ class ToolLocator
         }
 
         if ($this->isWindows()) {
+            if ($this->isNativeWindowsLaraKubeCommand($command)) {
+                return $this->isolateForNativeWindows($command, $extraEnvironment, $cwd);
+            }
+
             return $this->isolateForWsl($command, $extraEnvironment, $cwd);
         }
 
@@ -232,6 +279,59 @@ class ToolLocator
             'command' => ['/bin/sh', '-c', 'exec /usr/bin/env -i '.implode(' ', $assignments).' "$@"', 'larakube-desktop', ...$command],
             'environment' => $environment,
             'cwd' => $cwd,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $command
+     */
+    private function isNativeWindowsLaraKubeCommand(array $command): bool
+    {
+        $binary = strtolower((string) ($command[0] ?? ''));
+
+        return $binary === 'larakube.exe'
+            || str_ends_with($binary, '/larakube.exe')
+            || str_ends_with($binary, '\\larakube.exe');
+    }
+
+    /**
+     * Runs the native Windows `larakube.exe` binary directly on the host without a `wsl.exe` wrapper,
+     * letting the CLI's own `WslBridge` decide per-command whether to stay on Windows (`setup`, `update`,
+     * `wsl:*`, 1-hop UAC prompts) or dispatch into `larakube-ubuntu`.
+     *
+     * Because Symfony Process and Electron ChildProcess merge child env vars with Desktop's own process
+     * environment on Windows (where `/usr/bin/env -i` does not exist), we explicitly override the Laravel
+     * framework variables that `cli/config/*.php` and `Illuminate\Foundation\Application` read so Desktop's
+     * `CACHE_STORE=database` or bootstrap cache paths never pollute the CLI child process.
+     *
+     * @param  list<string>  $command
+     * @param  array<string, string>  $extraEnvironment
+     * @return array{command: list<string>, environment: array<string, string>, cwd: string|null}
+     */
+    private function isolateForNativeWindows(array $command, array $extraEnvironment, ?string $cwd): array
+    {
+        $environment = [
+            'NO_COLOR' => '1',
+            'APP_ENV' => 'development',
+            'CACHE_STORE' => 'file',
+            'CACHE_DRIVER' => 'file',
+            'VIEW_COMPILED_PATH' => '',
+            'APP_CONFIG_CACHE' => '',
+            'APP_SERVICES_CACHE' => '',
+            'APP_PACKAGES_CACHE' => '',
+            'APP_ROUTES_CACHE' => '',
+            'APP_EVENTS_CACHE' => '',
+            ...$extraEnvironment,
+        ];
+
+        if ($extraEnvironment !== []) {
+            $environment['WSLENV'] = implode(':', array_keys($extraEnvironment));
+        }
+
+        return [
+            'command' => $command,
+            'environment' => $environment,
+            'cwd' => $cwd !== null ? WslDistro::toWindows($cwd) : null,
         ];
     }
 

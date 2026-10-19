@@ -234,6 +234,33 @@ test('importing creates the distro once and restarts it, and a second run does n
     Process::assertRanTimes(fn ($process) => in_array('--terminate', (array) $process->command, true), 2);
 });
 
+test('importing injects the host-cached larakube-linux-x64 binary into the distro when present on Windows', function () {
+    $home = wslHome();
+    mkdir($home.'/LaraKube/wsl', 0777, true);
+    file_put_contents($home.'/LaraKube/wsl/larakube-ubuntu.tar.gz', 'x');
+
+    $profile = sys_get_temp_dir().'/wsl-import-profile-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    file_put_contents($profile.'/.larakube/bin/larakube-linux-x64', 'linux-elf-payload');
+    putenv('USERPROFILE='.$profile);
+
+    Process::fake([
+        '*--list*' => Process::result(output: wslListing()),
+        '*' => Process::result(),
+    ]);
+
+    try {
+        expect((new Wsl(windows: true))->import()['ok'])->toBeTrue();
+
+        Process::assertRan(fn ($process) => in_array('install', (array) $process->command, true)
+            && in_array('/usr/local/bin/larakube', (array) $process->command, true));
+    } finally {
+        File::deleteDirectory($home);
+        File::deleteDirectory($profile);
+        putenv('USERPROFILE');
+    }
+});
+
 test('resetting removes only the LaraKube distro, and is harmless when it is already gone', function () {
     Process::fake([
         '*--list*' => Process::sequence()
@@ -299,7 +326,6 @@ test('updating runs larakube update --yes inside the distro without touching pro
 test('updating falls back to root if larakube user update fails', function () {
     Process::fake([
         '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
-        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
         '*' => Process::sequence()
             ->push(Process::result(errorOutput: 'permission denied', exitCode: 1))
             ->push(Process::result(output: "✅ LaraKube updated successfully!\n")),
@@ -395,28 +421,6 @@ test('restoreUserHome refuses a path outside the LaraKube backups directory', fu
     Process::assertNotRan(fn ($process) => in_array('tar', (array) $process->command, true));
 
     File::deleteDirectory($home);
-});
-
-test('ensureDnsmasq succeeds immediately if dnsmasq is already on path', function () {
-    Process::fake([
-        '*which*dnsmasq*' => Process::result(output: "/usr/sbin/dnsmasq\n"),
-    ]);
-
-    $wsl = new Wsl(windows: true);
-    expect($wsl->ensureDnsmasq())->toBeTrue();
-    Process::assertNotRan(fn ($process) => in_array('apt-get', (array) $process->command, true));
-});
-
-test('ensureDnsmasq installs dnsmasq via apt if missing', function () {
-    Process::fake([
-        '*which*dnsmasq*' => Process::result(output: '', exitCode: 1),
-        '*apt-get*install*' => Process::result(output: "Setting up dnsmasq...\n"),
-    ]);
-
-    $wsl = new Wsl(windows: true);
-    expect($wsl->ensureDnsmasq())->toBeTrue();
-    Process::assertRan(fn ($process) => in_array('apt-get', (array) $process->command, true)
-        && in_array('dnsmasq', (array) $process->command, true));
 });
 
 test('ensureMirroredNetworking creates .wslconfig if missing', function () {

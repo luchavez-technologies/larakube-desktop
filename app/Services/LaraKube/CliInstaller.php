@@ -101,6 +101,18 @@ class CliInstaller
         return self::REPO."/latest/download/{$binary}";
     }
 
+    public function linuxCacheDownloadUrl(?string $channel = null): string
+    {
+        $channel = $channel ?? $this->channel();
+        $binary = "larakube-linux-{$this->arch()}";
+
+        if ($channel === 'canary') {
+            return self::REPO."/download/canary/{$binary}";
+        }
+
+        return self::REPO."/latest/download/{$binary}";
+    }
+
     /**
      * @return array{success: bool, path: ?string, error: ?string}
      */
@@ -151,6 +163,12 @@ class CliInstaller
             File::move($tempFile, $target);
             chmod($target, 0755);
 
+            // On Windows, also cache the matching Linux binary (`larakube-linux-x64`) alongside `larakube.exe`
+            // so WSL2 stays in lockstep and self-heals immediately across "LaraKube Linux Reset".
+            if ($this->os() === 'windows') {
+                $this->downloadWindowsLinuxCacheBinary($binDir, $channel);
+            }
+
             // Initialize global config if not already created
             $configDir = dirname($binDir);
             $configPath = "{$configDir}/config.json";
@@ -169,6 +187,44 @@ class CliInstaller
                 'path' => null,
                 'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    private function downloadWindowsLinuxCacheBinary(string $binDir, string $channel): void
+    {
+        $linuxTarget = "{$binDir}/larakube-linux-{$this->arch()}";
+        $linuxTemp = storage_path('framework/temp/larakube-linux-download-'.bin2hex(random_bytes(4)));
+
+        try {
+            File::ensureDirectoryExists(dirname($linuxTemp));
+            $response = Http::withOptions([
+                'follow_redirects' => true,
+                'verify' => true,
+            ])->timeout(120)->sink($linuxTemp)->get($this->linuxCacheDownloadUrl($channel));
+
+            if ($response->successful() && (! file_exists($linuxTemp) || filesize($linuxTemp) === 0)) {
+                $body = $response->body();
+                if ($body !== '') {
+                    file_put_contents($linuxTemp, $body);
+                }
+            }
+
+            if ($response->successful() && file_exists($linuxTemp) && filesize($linuxTemp) >= 1024) {
+                if (file_exists($linuxTarget)) {
+                    @unlink($linuxTarget);
+                }
+
+                File::move($linuxTemp, $linuxTarget);
+                @chmod($linuxTarget, 0755);
+
+                return;
+            }
+        } catch (Throwable) {
+            // Best-effort cache download
+        }
+
+        if (file_exists($linuxTemp)) {
+            @unlink($linuxTemp);
         }
     }
 }

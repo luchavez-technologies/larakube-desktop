@@ -102,8 +102,9 @@ class ToolInstallController extends Controller
     }
 
     /**
-     * Brings the LaraKube CLI up to date. Inside the Windows distro that is the CLI's own `update` (its user can sudo without a
-     * password); on a Mac or Linux it is the same download that installed it, which replaces the file in place.
+     * Brings the LaraKube CLI up to date. On Windows `larakube update` runs via the native `larakube.exe` binary
+     * (which updates both the Windows `.exe` and the WSL Linux binary in lockstep, or falls back to the in-distro
+     * binary when `larakube.exe` is not yet installed); on a Mac or Linux it is the same download that installed it.
      */
     public function updateCli(CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, ToolLocator $locator, Request $request): RedirectResponse
     {
@@ -113,8 +114,6 @@ class ToolInstallController extends Controller
 
         $channel = in_array($request->input('channel'), CliInstaller::CHANNELS, true) ? (string) $request->input('channel') : $installer->channel();
 
-        // Update native Windows binary outside WSL
-        $installer->install($channel);
         $readiness->forget('larakube');
 
         $run = $runner->start(

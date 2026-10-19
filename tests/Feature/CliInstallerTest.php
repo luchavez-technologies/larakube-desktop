@@ -59,14 +59,15 @@ test('cli installer resolves windows binary name and download url on windows', f
         ->and($installer->downloadUrl('stable'))->toContain('/latest/download/larakube-windows-x64.exe');
 });
 
-test('cli installer installs larakube.exe on windows', function () {
+test('cli installer installs larakube.exe and caches larakube-linux-x64 in lockstep on windows', function () {
     Http::fake([
-        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response('fake binary content longer than 1024 bytes '.str_repeat('A', 2048), 200),
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => fn () => Http::response('fake binary content longer than 1024 bytes '.str_repeat('A', 2048), 200),
     ]);
 
     $installer = new CliInstaller(app(GlobalSettings::class), binDir: $this->tempBin, os: 'windows');
     $result = $installer->install('canary');
 
     expect($result['success'])->toBeTrue()
-        ->and(file_exists("{$this->tempBin}/larakube.exe"))->toBeTrue();
+        ->and(file_exists("{$this->tempBin}/larakube.exe"))->toBeTrue()
+        ->and(file_exists("{$this->tempBin}/larakube-linux-x64"))->toBeTrue();
 });

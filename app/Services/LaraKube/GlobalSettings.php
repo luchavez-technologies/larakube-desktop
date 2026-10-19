@@ -9,7 +9,7 @@ use Native\Desktop\Facades\System;
 
 class GlobalSettings
 {
-    public const ALLOWED_TLDS = ['kube', 'localhost', 'test', 'local', 'internal'];
+    public const ALLOWED_TLDS = ['test', 'kube', 'localhost', 'local', 'internal'];
 
     /** What this computer is for: `tools` installs Cluster Tools on servers, `apps` also builds and runs apps locally. */
     public const USAGES = ['tools', 'apps'];
@@ -67,7 +67,7 @@ class GlobalSettings
 
         return [
             'theme' => $this->getTheme(),
-            'localTld' => (string) ($config['localTld'] ?? 'kube'),
+            'localTld' => (string) ($config['localTld'] ?? 'test'),
             'email' => is_string($config['email'] ?? null) ? $config['email'] : null,
             'defaultCloudProvider' => (string) ($config['defaultCloudProvider'] ?? 'do'),
             'shareToken' => is_string($config['shareToken'] ?? null) ? $config['shareToken'] : null,
@@ -227,7 +227,7 @@ class GlobalSettings
     {
         $config = $this->readConfig();
 
-        return (string) ($config['localTld'] ?? 'kube');
+        return (string) ($config['localTld'] ?? 'test');
     }
 
     /**

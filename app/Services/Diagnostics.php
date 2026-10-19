@@ -36,7 +36,7 @@ class Diagnostics
                 }
             }
             /** @var string $localTld */
-            $localTld = rescue(fn (): string => app(GlobalSettings::class)->getLocalTld(), 'kube', report: false);
+            $localTld = rescue(fn (): string => app(GlobalSettings::class)->getLocalTld(), 'test', report: false);
             $sections[] = "WSL Networking Mode: {$networking}".($networking === 'mirrored' ? " (optimal for *.{$localTld})" : ' (mirrored recommended)');
 
             $hostsFile = (string) (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\drivers\\etc\\hosts';

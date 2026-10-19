@@ -79,7 +79,7 @@ class HandleInertiaRequests extends Middleware
                     ]), [], report: false),
                 ];
             },
-            'localTld' => fn () => rescue(fn () => app(GlobalSettings::class)->getLocalTld(), 'kube', report: false),
+            'localTld' => fn () => rescue(fn () => app(GlobalSettings::class)->getLocalTld(), 'test', report: false),
             'auth' => [
                 'user' => $request->user(),
             ],

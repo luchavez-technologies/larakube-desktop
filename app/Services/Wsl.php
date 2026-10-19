@@ -62,8 +62,8 @@ class Wsl
      * Whether the imported distro is behind the latest published image —
      * compares the checksum recorded at import() time against a fresh
      * expectedChecksum() (the same check download() uses, just persisted).
-     * A generalized replacement for the old per-tool dnsmasq probe, which
-     * only ever caught that one specific past change.
+     * A generalized replacement for per-tool probes, which
+     * only ever caught one specific past change.
      */
     public function isStale(): bool
     {
@@ -246,6 +246,7 @@ class Wsl
         }
 
         $this->ensureMirroredNetworking();
+        $this->syncCachedLinuxBinaryToDistro();
         $this->terminate();
 
         $checksum = hash_file('sha256', $this->imagePath());
@@ -254,6 +255,35 @@ class Wsl
         }
 
         return ['ok' => true, 'message' => 'LaraKube Linux is installed.'];
+    }
+
+    /**
+     * When the Windows host has a cached `larakube-linux-x64` binary in `%USERPROFILE%\.larakube\bin`,
+     * inject it into `/usr/local/bin/larakube` inside the freshly imported distro so "LaraKube Linux Reset"
+     * immediately has the exact matching CLI version without redownloading from GitHub.
+     */
+    public function syncCachedLinuxBinaryToDistro(): bool
+    {
+        if (! $this->isWindows()) {
+            return false;
+        }
+
+        $userProfile = (string) (getenv('USERPROFILE') ?: '');
+        if ($userProfile === '') {
+            return false;
+        }
+
+        $cachedPath = rtrim($userProfile, '\\/').DIRECTORY_SEPARATOR.'.larakube'.DIRECTORY_SEPARATOR.'bin'.DIRECTORY_SEPARATOR.'larakube-linux-x64';
+        if (! is_file($cachedPath)) {
+            return false;
+        }
+
+        $linuxSourcePath = WslDistro::toLinux($cachedPath);
+
+        return Process::timeout(60)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', 'root',
+            '--', 'install', '-m', '0755', $linuxSourcePath, '/usr/local/bin/larakube',
+        ])->successful();
     }
 
     /** Where safety backups of student projects are stored before any destructive action. */
@@ -369,8 +399,6 @@ class Wsl
             return ['ok' => false, 'message' => 'LaraKube Linux is not installed yet.'];
         }
 
-        $this->ensureDnsmasq();
-
         $updateArgs = $channel === 'canary' ? ['update', '--canary', '--yes'] : ['update', '--yes'];
 
         $updateCli = Process::timeout(300)->run([
@@ -392,24 +420,6 @@ class Wsl
         }
 
         return ['ok' => true, 'message' => 'LaraKube Linux updated successfully.'];
-    }
-
-    /**
-     * Auto-installs dnsmasq in-place if missing, without resetting or re-downloading the distro.
-     */
-    public function ensureDnsmasq(): bool
-    {
-        $check = Process::timeout(10)->run([
-            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--', 'which', 'dnsmasq',
-        ]);
-
-        if ($check->successful()) {
-            return true;
-        }
-
-        return Process::timeout(120)->run([
-            'wsl.exe', '-d', WslDistro::NAME, '--user', 'root', '--', 'apt-get', 'install', '-y', '--no-install-recommends', 'dnsmasq',
-        ])->successful();
     }
 
     /**
