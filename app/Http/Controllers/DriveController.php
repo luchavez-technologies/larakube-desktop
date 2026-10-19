@@ -59,14 +59,21 @@ class DriveController extends Controller
             'domains' => $serverDomains,
             'isLocal' => $isLocal,
             'localTld' => $localTld,
-            'serverInfo' => $isInstalled
-                ? Inertia::defer(fn (): ?array => $status->serverInfo($context), 'serverInfo')
-                : null,
-            'extensions' => $isInstalled
-                ? Inertia::defer(fn (): array => $status->extensions($context), 'extensions')
-                : [],
+            'serverInfo' => $isInstalled ? $status->serverInfo($context) : null,
+            'extensions' => $isInstalled ? $status->extensions($context) : [],
             'driveSync' => $status->syncState($context),
         ]);
+    }
+
+    /**
+     * Refresh Drive status and extensions from the cluster.
+     */
+    public function refresh(string $server, DriveStatus $status): RedirectResponse
+    {
+        $context = (string) $this->readyServer($server)['context'];
+        $status->forget($context);
+
+        return back();
     }
 
     /**

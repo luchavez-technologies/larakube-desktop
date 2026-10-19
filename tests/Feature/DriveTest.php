@@ -466,3 +466,50 @@ test('DriveStatus serverInfo recognizes Collabora office as initializing when de
         ->and($info['components'][1]['key'])->toBe('code')
         ->and($info['components'][1]['ready'])->toBeFalse();
 });
+
+test('refreshing drive marks status syncing and dispatches SyncDriveJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'context' => 'larakube-do-ams3',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'ocis',
+        'installed' => true,
+        'sync_status' => 'fresh',
+        'data' => [],
+    ]);
+
+    driveTestServer();
+
+    $this->post(route('servers.drive.refresh', 'prod-vps'))
+        ->assertRedirect();
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('syncing');
+
+    Queue::assertPushed(SyncDriveJob::class, fn (SyncDriveJob $job) => $job->serverId === $server->id);
+});
+
+test('refreshing drive dispatches SyncClusterToolsJob when driveTool is not yet recorded', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'context' => 'larakube-do-ams3',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'status' => 'ready',
+    ]);
+
+    driveTestServer();
+
+    $this->post(route('servers.drive.refresh', 'prod-vps'))
+        ->assertRedirect();
+
+    Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $job) => $job->serverId === $server->id);
+});

@@ -191,6 +191,7 @@ Route::get('/servers/{server}/mail/check-dns', [MailController::class, 'checkDns
 
 Route::get('/drive', [DriveController::class, 'entry'])->name('drive');
 Route::get('/servers/{server}/drive', [DriveController::class, 'index'])->name('servers.drive.index');
+Route::post('/servers/{server}/drive/refresh', [DriveController::class, 'refresh'])->name('servers.drive.refresh');
 Route::post('/servers/{server}/drive/deploy', [DriveController::class, 'deploy'])->name('servers.drive.deploy');
 Route::post('/servers/{server}/drive/office/deploy', [DriveController::class, 'deployOffice'])->name('servers.drive.office.deploy');
 Route::post('/servers/{server}/drive/extensions/install', [DriveController::class, 'installExtension'])->name('servers.drive.extensions.install');

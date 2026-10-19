@@ -1,4 +1,4 @@
-import { Head, usePage, usePoll } from '@inertiajs/react';
+import { Head, Link, usePage, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
     HardDrive,
@@ -6,6 +6,7 @@ import {
     Sparkles,
     Settings,
     ExternalLink,
+    RotateCw,
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
@@ -203,6 +204,19 @@ export default function DriveIndex({
                             value={server.name}
                             buildHref={(name) => `/servers/${name}/drive`}
                         />
+
+                        <Link
+                            href={`/servers/${server.name}/drive/refresh`}
+                            method="post"
+                            as="button"
+                            className={buttonClass('secondary', 'sm')}
+                            title="Refresh status from cluster"
+                        >
+                            <RotateCw
+                                className={`size-3.5 ${driveSync.status === 'syncing' ? 'animate-spin' : ''}`}
+                            />
+                            <span>Refresh</span>
+                        </Link>
 
                         {isInstalled && (
                             <ExternalLinkButton

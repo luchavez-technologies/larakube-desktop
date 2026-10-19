@@ -245,6 +245,27 @@ class DriveStatus
         ];
     }
 
+    /**
+     * Marks the Drive tool stale and re-syncs it in the background.
+     */
+    public function forget(string $context): void
+    {
+        $server = Server::firstWhere('context', $context);
+
+        if ($server === null) {
+            return;
+        }
+
+        $driveTool = $server->driveTool();
+
+        if ($driveTool !== null) {
+            $driveTool->update(['sync_status' => 'syncing']);
+            SyncDriveJob::dispatch($server->id);
+        } else {
+            SyncClusterToolsJob::dispatch($server->id);
+        }
+    }
+
     private function syncIfNeeded(Server $server): ?ClusterTool
     {
         $driveTool = $server->driveTool();
