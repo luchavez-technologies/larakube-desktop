@@ -254,7 +254,7 @@ export default function LocalDevCompanionsCard({
                                                     {companion.installed ? (
                                                         companion.running ? (
                                                             <StatusPill tone="ok">
-                                                                ● Running
+                                                                Running
                                                             </StatusPill>
                                                         ) : (
                                                             <StatusPill tone="warn">
