@@ -124,7 +124,11 @@ class CompanionController extends Controller
             environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        // Stay on the page the click came from (the floating RunDrawer picks up
+        // the new run from the shared activeRuns prop) — only hop to the full
+        // Activity page for a non-Inertia request, where there's no "current
+        // page" to stay on. Same pattern as ProjectController's lifecycle actions.
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function remove(Request $request, CliRunner $runner): RedirectResponse
@@ -148,7 +152,11 @@ class CompanionController extends Controller
             environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        // Stay on the page the click came from (the floating RunDrawer picks up
+        // the new run from the shared activeRuns prop) — only hop to the full
+        // Activity page for a non-Inertia request, where there's no "current
+        // page" to stay on. Same pattern as ProjectController's lifecycle actions.
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function start(Request $request, CliRunner $runner): RedirectResponse
@@ -172,7 +180,11 @@ class CompanionController extends Controller
             environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        // Stay on the page the click came from (the floating RunDrawer picks up
+        // the new run from the shared activeRuns prop) — only hop to the full
+        // Activity page for a non-Inertia request, where there's no "current
+        // page" to stay on. Same pattern as ProjectController's lifecycle actions.
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function stop(Request $request, CliRunner $runner): RedirectResponse
@@ -196,6 +208,10 @@ class CompanionController extends Controller
             environment: 'local',
         );
 
-        return to_route('runs.show', $run);
+        // Stay on the page the click came from (the floating RunDrawer picks up
+        // the new run from the shared activeRuns prop) — only hop to the full
+        // Activity page for a non-Inertia request, where there's no "current
+        // page" to stay on. Same pattern as ProjectController's lifecycle actions.
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 }

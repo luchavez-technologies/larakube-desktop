@@ -85,6 +85,7 @@ import { providerLabels } from '@/types/larakube';
 import type {
     BackingServices,
     CompanionApp,
+    CompanionCredential,
     DeployMetrics,
     HealthMetrics,
     NewAppAnswers,
@@ -142,6 +143,7 @@ export default function ShowProject({
     deployMetrics,
     domains,
     companions,
+    companionCredentials,
     localTld,
 }: {
     project: Project;
@@ -161,6 +163,7 @@ export default function ShowProject({
     deployMetrics?: Record<string, DeployMetrics | null> | null;
     domains?: Record<string, ServerDomain[]> | null;
     companions?: CompanionApp[] | null;
+    companionCredentials?: CompanionCredential[] | null;
     localTld?: string;
 }) {
     const isRunning =
@@ -462,6 +465,9 @@ export default function ShowProject({
                                         <LocalDevCompanionsCard
                                             project={project}
                                             companions={companions}
+                                            companionCredentials={
+                                                companionCredentials
+                                            }
                                             localTld={localTld}
                                         />
                                     </Deferred>

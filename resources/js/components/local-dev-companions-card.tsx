@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import {
+    Eye,
+    EyeOff,
     ExternalLink,
+    KeyRound,
     Laptop,
     Pause,
     Play,
@@ -10,12 +14,17 @@ import {
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import CopyButton from '@/components/copy-button';
 import { ExternalLinkButton } from '@/lib/open-external';
 import QrCodePopover from '@/components/qr-code-popover';
 import StatusPill from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import { cn } from '@/lib/utils';
-import type { CompanionApp, Project } from '@/types/larakube';
+import type {
+    CompanionApp,
+    CompanionCredential,
+    Project,
+} from '@/types/larakube';
 
 const DEFAULT_COMPANIONS: CompanionApp[] = [
     {
@@ -74,17 +83,85 @@ const DEFAULT_COMPANIONS: CompanionApp[] = [
     },
 ];
 
+/** Host/user/password/database for a running companion, masked until clicked. */
+function ConnectionDetails({
+    credential,
+}: {
+    credential: CompanionCredential;
+}) {
+    const [revealed, setRevealed] = useState(false);
+    const fields: { label: string; value: string | null }[] = [
+        { label: 'Host', value: credential.host },
+        { label: 'User', value: credential.user },
+        { label: 'Password', value: credential.password },
+        { label: 'Database', value: credential.database },
+    ].filter((f) => f.value !== null);
+
+    if (fields.length === 0) return null;
+
+    return (
+        <div className="mt-3 space-y-1 rounded-lg bg-paper/70 p-2.5 text-[11px]">
+            <div className="mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1 font-medium text-faint">
+                    <KeyRound className="size-3" />
+                    <span>Connect using</span>
+                </span>
+                <button
+                    type="button"
+                    onClick={() => setRevealed((v) => !v)}
+                    className="flex items-center gap-1 text-faint hover:text-ink"
+                    title={revealed ? 'Hide password' : 'Reveal password'}
+                >
+                    {revealed ? (
+                        <EyeOff className="size-3" />
+                    ) : (
+                        <Eye className="size-3" />
+                    )}
+                </button>
+            </div>
+            {fields.map(({ label, value }) => (
+                <div
+                    key={label}
+                    className="flex items-center justify-between gap-2"
+                >
+                    <span className="shrink-0 text-faint">{label}</span>
+                    <div className="flex min-w-0 items-center gap-1">
+                        <span className="truncate font-mono text-ink">
+                            {label === 'Password' && !revealed
+                                ? '••••••••'
+                                : value}
+                        </span>
+                        <CopyButton
+                            value={value ?? ''}
+                            label=""
+                            copiedLabel=""
+                            size="xs"
+                            variant="ghost"
+                            className="h-4 w-4 shrink-0 p-0 text-faint hover:text-ink"
+                            title={`Copy ${label.toLowerCase()}`}
+                        />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function LocalDevCompanionsCard({
     project,
     companions,
+    companionCredentials,
     localTld = 'test',
 }: {
     project: Project;
     companions?: CompanionApp[] | null;
+    companionCredentials?: CompanionCredential[] | null;
     localTld?: string;
 }) {
     const list = companions ?? DEFAULT_COMPANIONS;
     const runningCount = list.filter((c) => c.installed && c.running).length;
+    const credentialFor = (name: string): CompanionCredential | undefined =>
+        (companionCredentials ?? []).find((c) => c.companion === name);
 
     // Detect matched companions based on project database / cache
     const db = (project.database ?? '').toLowerCase();
@@ -326,6 +403,20 @@ export default function LocalDevCompanionsCard({
                                         )}
                                     </div>
                                 </div>
+
+                                {companion.installed &&
+                                    companion.running &&
+                                    (() => {
+                                        const credential = credentialFor(
+                                            companion.name,
+                                        );
+
+                                        return credential ? (
+                                            <ConnectionDetails
+                                                credential={credential}
+                                            />
+                                        ) : null;
+                                    })()}
                             </div>
                         );
                     })}
