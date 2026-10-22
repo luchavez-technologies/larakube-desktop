@@ -257,22 +257,28 @@ export default function WorkloadScalingCard({
                                         </div>
                                     ) : null}
 
-                                    {/* Autoscale Toggle / Config Button */}
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                            setAutoscaleModalComp(comp)
-                                        }
-                                        className="gap-1.5"
-                                    >
-                                        <Sliders className="size-3.5" />
-                                        <span>
-                                            {isAutoscaled
-                                                ? 'HPA Config'
-                                                : 'Autoscale'}
-                                        </span>
-                                    </Button>
+                                    {/* Autoscale Toggle / Config Button — the CLI
+                                    itself only accepts cloud environments for
+                                    autoscale:configure (local dev traffic has
+                                    nothing worth scaling against), so this
+                                    button has nowhere to go on local. */}
+                                    {activeEnv !== 'local' && (
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                setAutoscaleModalComp(comp)
+                                            }
+                                            className="gap-1.5"
+                                        >
+                                            <Sliders className="size-3.5" />
+                                            <span>
+                                                {isAutoscaled
+                                                    ? 'HPA Config'
+                                                    : 'Autoscale'}
+                                            </span>
+                                        </Button>
+                                    )}
 
                                     {/* Resource Sizing Button */}
                                     <Button
