@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { router } from '@inertiajs/react';
 import {
     ArrowUpCircle,
@@ -6,6 +6,7 @@ import {
     Copy,
     Edit2,
     FolderTree,
+    Palette,
     Play,
     PowerOff,
     RotateCw,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import { cn } from '@/lib/utils';
+import { GROUP_COLORS, groupColorClasses } from '@/lib/group-colors';
 import type { Project } from '@/types/larakube';
 
 type GroupAction = 'up' | 'start' | 'stop' | 'down';
@@ -21,23 +23,47 @@ type GroupAction = 'up' | 'start' | 'stop' | 'down';
 export default function ProjectGroupSection({
     group,
     projects,
+    color = null,
     onRenameGroup,
+    onColorChange,
     onDropProject,
     renderCard,
 }: {
     group: string;
     projects: Project[];
+    color?: string | null;
     onRenameGroup: (oldName: string, newName: string) => void;
+    onColorChange: (group: string, color: string | null) => void;
     onDropProject: (projectId: number, targetGroup: string) => void;
     renderCard: (project: Project) => ReactNode;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState(group);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [isPickingColor, setIsPickingColor] = useState(false);
     const [copiedHost, setCopiedHost] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<GroupAction | null>(
         null,
     );
+    const classes = groupColorClasses(color);
+    const colorPickerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isPickingColor) return;
+
+        function handleClickOutside(event: MouseEvent) {
+            if (
+                colorPickerRef.current &&
+                !colorPickerRef.current.contains(event.target as Node)
+            ) {
+                setIsPickingColor(false);
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () =>
+            document.removeEventListener('mousedown', handleClickOutside);
+    }, [isPickingColor]);
 
     const handleSaveName = () => {
         const trimmed = name.trim();
@@ -148,7 +174,12 @@ export default function ProjectGroupSection({
             {/* Header: Title, Controls, and Partner Domain Chips */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-4 border-b border-line/60 pb-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand/10 text-brand ring-1 ring-brand/20">
+                    <div
+                        className={cn(
+                            'flex size-10 shrink-0 items-center justify-center rounded-2xl ring-1',
+                            classes.icon,
+                        )}
+                    >
                         <FolderTree className="size-5" />
                     </div>
 
@@ -189,7 +220,10 @@ export default function ProjectGroupSection({
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2">
+                        <div
+                            ref={colorPickerRef}
+                            className="relative flex items-center gap-2"
+                        >
                             <h2 className="text-lg font-semibold tracking-[-0.015em] text-ink">
                                 {group}
                             </h2>
@@ -201,6 +235,46 @@ export default function ProjectGroupSection({
                             >
                                 <Edit2 className="size-3.5" />
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsPickingColor((v) => !v)}
+                                className="rounded p-1 text-faint opacity-0 transition group-hover/section:opacity-100 hover:bg-surface hover:text-ink"
+                                title="Set group color"
+                            >
+                                <Palette className="size-3.5" />
+                            </button>
+                            {isPickingColor && (
+                                <div className="absolute top-full left-0 z-10 mt-1.5 flex items-center gap-1.5 rounded-xl bg-surface p-2 shadow-xl ring-1 ring-line">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            onColorChange(group, null);
+                                            setIsPickingColor(false);
+                                        }}
+                                        className="flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-line text-faint hover:border-brand/40 hover:text-brand"
+                                        title="No color"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                    {GROUP_COLORS.map((c) => (
+                                        <button
+                                            key={c.key}
+                                            type="button"
+                                            onClick={() => {
+                                                onColorChange(group, c.key);
+                                                setIsPickingColor(false);
+                                            }}
+                                            className={cn(
+                                                'size-5 shrink-0 rounded-full transition hover:scale-110',
+                                                groupColorClasses(c.key).dot,
+                                                color === c.key &&
+                                                    'ring-2 ring-ink ring-offset-1 ring-offset-surface',
+                                            )}
+                                            title={c.label}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                             <span className="rounded-full bg-badge px-2 py-0.5 text-xs font-medium text-soft ring-1 ring-line/50">
                                 {projects.length}{' '}
                                 {projects.length === 1

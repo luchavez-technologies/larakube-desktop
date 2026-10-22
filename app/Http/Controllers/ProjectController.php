@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Project;
+use App\Models\ProjectGroup;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\EditorLauncher;
@@ -31,6 +32,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -138,6 +140,7 @@ class ProjectController extends Controller
 
         return Inertia::render('projects/index', [
             'projects' => $projects,
+            'groupColors' => ProjectGroup::query()->whereNotNull('color')->pluck('color', 'name'),
             'hasActiveRuns' => $activeRuns->isNotEmpty(),
             // Dev boxes to switch to (experimental), and the apps on the chosen one, asked of the box itself.
             'devBoxes' => Inertia::defer(fn (): array => $this->readyDevBoxNames(), 'devBoxes'),
@@ -1016,7 +1019,57 @@ class ProjectController extends Controller
 
         $project->update(['group' => $group]);
 
+        if ($group !== null) {
+            ProjectGroup::firstOrCreate(['name' => $group]);
+        }
+
         // Inertia visits (router.post) need a redirect, not JSON.
+        return back();
+    }
+
+    /** Rename a group and every member's Project::group in one atomic move; merges into an existing group of the new name if one exists. */
+    public function renameGroup(Request $request, string $group): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+        ]);
+
+        $newName = trim($validated['name']);
+
+        if ($newName === '' || $newName === $group) {
+            return back();
+        }
+
+        DB::transaction(function () use ($group, $newName): void {
+            Project::query()->where('group', $group)->update(['group' => $newName]);
+
+            $source = ProjectGroup::where('name', $group)->first();
+            $destination = ProjectGroup::where('name', $newName)->first();
+
+            if ($destination === null) {
+                if ($source !== null) {
+                    $source->update(['name' => $newName]);
+                } else {
+                    ProjectGroup::create(['name' => $newName]);
+                }
+            } elseif ($source !== null) {
+                // Renaming into an existing group merges into it; keep the destination's color.
+                $source->delete();
+            }
+        });
+
+        return back();
+    }
+
+    /** Set or clear a group's display color. */
+    public function updateGroupColor(Request $request, string $group): RedirectResponse
+    {
+        $validated = $request->validate([
+            'color' => ['nullable', 'string', 'in:'.implode(',', ProjectGroup::COLORS)],
+        ]);
+
+        ProjectGroup::updateOrCreate(['name' => $group], ['color' => $validated['color'] ?? null]);
+
         return back();
     }
 

@@ -46,6 +46,7 @@ import type { DevBoxProject, Editor, Project } from '@/types/larakube';
 
 export default function ProjectsIndex({
     projects,
+    groupColors = {},
     hasActiveRuns = false,
     devBoxes,
     box = null,
@@ -55,6 +56,7 @@ export default function ProjectsIndex({
     defaultEditor,
 }: {
     projects: Project[];
+    groupColors?: Record<string, string | null>;
     hasActiveRuns?: boolean;
     devBoxes?: string[];
     box?: string | null;
@@ -99,14 +101,19 @@ export default function ProjectsIndex({
     };
 
     const handleRenameGroup = (oldName: string, newName: string) => {
-        const inGroup = projects.filter((p) => p.group === oldName);
-        for (const p of inGroup) {
-            router.post(
-                `/projects/${p.id}/group`,
-                { group: newName },
-                { preserveScroll: true },
-            );
-        }
+        router.post(
+            `/projects/groups/${encodeURIComponent(oldName)}/rename`,
+            { name: newName },
+            { preserveScroll: true },
+        );
+    };
+
+    const handleGroupColorChange = (group: string, color: string | null) => {
+        router.post(
+            `/projects/groups/${encodeURIComponent(group)}/color`,
+            { color },
+            { preserveScroll: true },
+        );
     };
 
     const handleDropOnCard = (draggedId: number, targetProject: Project) => {
@@ -248,7 +255,9 @@ export default function ProjectsIndex({
                                 key={groupName}
                                 group={groupName}
                                 projects={groupProjects}
+                                color={groupColors[groupName] ?? null}
                                 onRenameGroup={handleRenameGroup}
+                                onColorChange={handleGroupColorChange}
                                 onDropProject={handleUpdateProjectGroup}
                                 renderCard={(project) => (
                                     <ProjectCard

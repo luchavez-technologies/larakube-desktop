@@ -155,6 +155,8 @@ Route::post('/projects/groups/{group}/up', [ProjectController::class, 'upGroup']
 Route::post('/projects/groups/{group}/start', [ProjectController::class, 'startGroup'])->name('projects.groups.start');
 Route::post('/projects/groups/{group}/stop', [ProjectController::class, 'stopGroup'])->name('projects.groups.stop');
 Route::post('/projects/groups/{group}/down', [ProjectController::class, 'downGroup'])->name('projects.groups.down');
+Route::post('/projects/groups/{group}/rename', [ProjectController::class, 'renameGroup'])->name('projects.groups.rename');
+Route::post('/projects/groups/{group}/color', [ProjectController::class, 'updateGroupColor'])->name('projects.groups.color');
 Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
 Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 Route::post('/projects/{project}/group', [ProjectController::class, 'updateGroup'])->name('projects.group');
