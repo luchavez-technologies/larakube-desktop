@@ -32,6 +32,19 @@ class ProjectDotenvController extends Controller
         ]);
     }
 
+    public function update(Request $request, Project $project): JsonResponse
+    {
+        abort_unless($project->existsOnHost(), 404);
+
+        $environment = (string) $request->input('environment', 'production');
+        $variables = (array) $request->input('variables', []);
+        $redeploy = $request->boolean('redeploy');
+
+        $result = $this->dotenv->update($project->path, $environment, $variables, $redeploy);
+
+        return response()->json($result);
+    }
+
     public function push(Request $request, Project $project): RedirectResponse
     {
         $environment = (string) $request->input('environment', 'production');
