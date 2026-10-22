@@ -191,6 +191,46 @@ test('the Plex Commons page loads plex, services, and pod-metrics deferred props
     File::deleteDirectory($sandbox['home']);
 });
 
+test('a remote Plex Commons server gets an empty companions list — never a kubectl round-trip for a namespace that is never there', function () {
+    $sandbox = plexSandbox();
+    File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/kubectl", 0755);
+    Process::fake(plexPageFakes());
+
+    $this->get(route('servers.plex.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('plex/index')
+            ->where('companions', []));
+
+    Process::assertNotRan(fn ($process) => str_contains((string) (is_array($process->command) ? implode(' ', $process->command) : $process->command), 'larakube-companions'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('a local Plex Commons server loads the installed companions deferred prop', function () {
+    $sandbox = plexSandbox();
+    File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/kubectl", 0755);
+    Process::fake([
+        ...plexPageFakes(),
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'orbstack', 'provider' => 'orbstack', 'kind' => 'local', 'region' => 'local', 'ip' => null, 'context' => 'orbstack', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*deployment*' => Process::result(output: json_encode(['items' => [
+            ['metadata' => ['name' => 'pgadmin'], 'spec' => ['replicas' => 1], 'status' => ['readyReplicas' => 1]],
+        ]])),
+    ]);
+
+    $this->get(route('servers.plex.index', 'orbstack'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('plex/index')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('companions.2.slug', 'pgadmin')
+                ->where('companions.2.installed', true)));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('adding a ready, inactive driver unions it with whatever is already active and runs plex:init', function () {
     $sandbox = plexSandbox();
     Process::fake(plexPageFakes());

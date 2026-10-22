@@ -19,10 +19,12 @@ import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
 import AppLayout from '@/layouts/app-layout';
+import { isLocalServer } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import { show as showServer } from '@/routes/servers';
 import { index as plexIndex, refresh } from '@/routes/servers/plex';
 import type {
+    CompanionApp,
     NodeMetrics,
     PlexCommonsServicesReport,
     PlexServiceCategoryDetail,
@@ -148,6 +150,7 @@ export default function PlexIndex({
     services,
     podMetrics,
     nodeMetrics,
+    companions,
 }: {
     server: Server;
     servers: Server[];
@@ -161,8 +164,10 @@ export default function PlexIndex({
     services?: PlexCommonsServicesReport | null;
     podMetrics?: PodMetrics | null;
     nodeMetrics?: NodeMetrics | null;
+    companions?: CompanionApp[] | null;
 }) {
     const awaitingFirstSync = plex === null && plexSync.status !== 'error';
+    const isLocal = isLocalServer(server);
 
     usePoll(
         2000,
@@ -429,6 +434,11 @@ export default function PlexIndex({
                                                     }
                                                     onQuickConnect={
                                                         handleOpenQuickConnectForDriver
+                                                    }
+                                                    companions={
+                                                        isLocal
+                                                            ? companions
+                                                            : null
                                                     }
                                                 />
                                             ),

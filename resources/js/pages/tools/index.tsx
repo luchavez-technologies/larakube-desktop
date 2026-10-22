@@ -39,6 +39,7 @@ import {
     show as showTool,
     store,
 } from '@/routes/servers/tools';
+import { isLocalServer as isLocalServerCheck } from '@/lib/servers';
 import {
     describeTool,
     toolName,
@@ -1564,32 +1565,7 @@ function InstallDialog({
         return `admin@${cleanDomain}`;
     }, [server.account, domain, selectedBaseDomain]);
 
-    const isLocalServer = useMemo(() => {
-        const provider = (server.provider ?? '').toLowerCase();
-        const localProviders = [
-            'local',
-            'k3d',
-            'kind',
-            'orbstack',
-            'minikube',
-            'docker',
-        ];
-        if (localProviders.includes(provider)) return true;
-        if (server.region === 'local') return true;
-        if (
-            server.ip &&
-            ['127.0.0.1', 'localhost', 'local'].includes(server.ip)
-        ) {
-            return true;
-        }
-        if (
-            !server.ip &&
-            !['gcp', 'aws', 'do', 'hetzner', 'vps', 'cloud'].includes(provider)
-        ) {
-            return true;
-        }
-        return false;
-    }, [server]);
+    const isLocalServer = useMemo(() => isLocalServerCheck(server), [server]);
 
     // The tool's own choices, as the CLI describes them (an app name, whether
     // to share the Commons, "Proxied", "VPN only"...) — everything except

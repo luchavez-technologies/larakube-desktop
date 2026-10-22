@@ -37,7 +37,7 @@ import ExperimentalBadge from '@/components/experimental-badge';
 import { sendJson } from '@/lib/http';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
-import { runStatus } from '@/lib/servers';
+import { isLocalServer as isLocalServerCheck, runStatus } from '@/lib/servers';
 import { create as createServer } from '@/routes/servers';
 import { show as showRunRoute } from '@/routes/runs';
 import { cn } from '@/lib/utils';
@@ -243,33 +243,10 @@ export default function QuickLaunchModal({
         [readyServers, selectedServerName],
     );
 
-    const isLocalServer = useMemo(() => {
-        if (!currentServer) return true;
-        const provider = (currentServer.provider ?? '').toLowerCase();
-        const localProviders = [
-            'local',
-            'k3d',
-            'kind',
-            'orbstack',
-            'minikube',
-            'docker',
-        ];
-        if (localProviders.includes(provider)) return true;
-        if (currentServer.region === 'local') return true;
-        if (
-            currentServer.ip &&
-            ['127.0.0.1', 'localhost', 'local'].includes(currentServer.ip)
-        ) {
-            return true;
-        }
-        if (
-            !currentServer.ip &&
-            !['gcp', 'aws', 'do', 'hetzner', 'vps', 'cloud'].includes(provider)
-        ) {
-            return true;
-        }
-        return false;
-    }, [currentServer]);
+    const isLocalServer = useMemo(
+        () => isLocalServerCheck(currentServer),
+        [currentServer],
+    );
 
     const handleCopyDns = () => {
         if (!currentServer?.ip) return;

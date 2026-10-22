@@ -8,10 +8,12 @@ use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterMetrics;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\PlexCatalog;
 use App\Services\LaraKube\PlexCommonsServices;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
+use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -128,6 +130,11 @@ class PlexController extends Controller
             }, 'services'),
             'podMetrics' => Inertia::defer(fn (): ?array => $metrics->podMetrics($context, 'larakube-plex'), 'podMetrics'),
             'nodeMetrics' => Inertia::defer(fn (): ?array => $metrics->nodeMetrics($context), 'nodeMetrics'),
+            // Companions only ever run on the local cluster's larakube-companions
+            // namespace — skip the kubectl round-trip entirely for a remote stack.
+            'companions' => Server::isStackLocal($stack)
+                ? Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions')
+                : [],
         ]);
     }
 

@@ -4,12 +4,42 @@ import Button from '@/components/button';
 import Card from '@/components/card';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import { brandIcon } from '@/components/tool-logo';
+import { ExternalLinkButton } from '@/lib/open-external';
 import type {
+    CompanionApp,
     PlexServiceCategoryDetail,
     PlexServiceOptionDetail,
     PlexTenant,
     PodMetrics,
 } from '@/types/larakube';
+
+/**
+ * The companion GUI that makes sense for this engine's driver, if it's
+ * installed and running — mirrors the CLI's own driver → companion mapping
+ * (ensureProjectCompanions()/companionAccessRows()), so "Open in pgAdmin"
+ * only appears where the CLI itself would wire that companion up.
+ */
+function companionForDriver(
+    driver: string,
+    companions?: CompanionApp[] | null,
+): CompanionApp | null {
+    if (!companions || companions.length === 0) return null;
+
+    const d = driver.toLowerCase();
+    const find = (slug: string) =>
+        companions.find((c) => c.slug === slug && c.installed && c.running) ??
+        null;
+
+    if (d.includes('postgres')) return find('pgadmin') ?? find('adminer');
+    if (d.includes('mysql') || d.includes('maria')) {
+        return find('phpmyadmin') ?? find('adminer');
+    }
+    if (d.includes('sqlite')) return find('adminer');
+    if (d.includes('redis')) return find('redisinsight');
+    if (d.includes('mongo')) return find('mongo-express');
+
+    return null;
+}
 
 function parseMemoryToMiB(str?: string | null): number {
     if (!str) return 0;
@@ -110,6 +140,7 @@ export default function PlexServiceEngineCard({
     tenants,
     onFilterByEngine,
     onQuickConnect,
+    companions,
 }: {
     category: PlexServiceCategoryDetail;
     option: PlexServiceOptionDetail;
@@ -117,8 +148,10 @@ export default function PlexServiceEngineCard({
     tenants: PlexTenant[];
     onFilterByEngine: (driver: string) => void;
     onQuickConnect: (driver: string) => void;
+    companions?: CompanionApp[] | null;
 }) {
     const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+    const companion = companionForDriver(option.driver, companions);
 
     const mark = brandIcon(option.driver);
 
@@ -366,16 +399,29 @@ export default function PlexServiceEngineCard({
             </div>
 
             {/* Bottom Actions Bar */}
-            <div className="mt-5 flex items-center justify-between gap-2 border-t border-line/60 pt-3.5">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onQuickConnect(option.driver)}
-                    className="text-soft hover:text-ink"
-                >
-                    <Code2 className="size-3.5" />
-                    <span>Quick Connect</span>
-                </Button>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-3.5">
+                <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onQuickConnect(option.driver)}
+                        className="text-soft hover:text-ink"
+                    >
+                        <Code2 className="size-3.5" />
+                        <span>Quick Connect</span>
+                    </Button>
+
+                    {companion?.url && (
+                        <ExternalLinkButton
+                            url={companion.url}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-soft transition hover:bg-paper hover:text-brand"
+                            title={`Open ${companion.name} for this engine`}
+                        >
+                            <ExternalLink className="size-3.5" />
+                            <span>Open in {companion.name}</span>
+                        </ExternalLinkButton>
+                    )}
+                </div>
 
                 {allocationCount > 0 && (
                     <Button
