@@ -4,6 +4,7 @@ namespace App\Services\LaraKube;
 
 use App\Enums\RunKind;
 use App\Models\Run;
+use App\Services\Elevation;
 use Native\Desktop\Facades\ChildProcess;
 use RuntimeException;
 
@@ -14,7 +15,7 @@ use RuntimeException;
  */
 class CliRunner
 {
-    public function __construct(private ToolLocator $locator) {}
+    public function __construct(private ToolLocator $locator, private Elevation $elevation) {}
 
     /**
      * @param  list<string>  $arguments  CLI arguments after the binary, without secrets
@@ -78,6 +79,16 @@ class CliRunner
 
         if ($environment === null && isset($meta['environment'])) {
             $environment = (string) $meta['environment'];
+        }
+
+        // `up` against the local cluster may need to sync /etc/hosts, which needs
+        // root — and this process has no terminal to type a password into. Grant
+        // the same temporary passwordless sudo `larakube setup` uses (revoked in
+        // RecordRunOutput once the run ends) best-effort: if it fails, the CLI's
+        // own hosts-sync step already degrades gracefully (prints a warning,
+        // keeps going) rather than aborting the run.
+        if ($kind === RunKind::UpProject && $environment === 'local') {
+            $this->elevation->grant();
         }
 
         if ($serverId === null && isset($meta['server_id']) && is_numeric($meta['server_id'])) {

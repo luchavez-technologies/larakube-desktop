@@ -4,6 +4,7 @@ use App\Enums\RunKind;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
+use App\Services\Elevation;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ToolLocator;
@@ -62,7 +63,7 @@ test('Run auto-links server_id by server_name or context', function () {
 
 test('CliRunner accepts explicit server_id and resolves it in start()', function () {
     ChildProcess::fake();
-    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]));
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), new Elevation);
 
     $server = Server::create([
         'name' => 'vps-staging',

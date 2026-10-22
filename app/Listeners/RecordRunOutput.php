@@ -97,8 +97,10 @@ class RecordRunOutput
             app(ReadinessCheck::class)->forget($run->kind === RunKind::InstallTool ? $run->tool : null);
         }
 
-        // Passwordless sudo exists only while the local setup runs.
-        if ($run->kind === RunKind::SetupLocal) {
+        // Passwordless sudo exists only for the length of the run that requested
+        // it — local setup always, and a local `up` only when CliRunner granted
+        // it (see its docblock there).
+        if ($run->kind === RunKind::SetupLocal || ($run->kind === RunKind::UpProject && $run->environment === 'local')) {
             app(Elevation::class)->revoke();
         }
 

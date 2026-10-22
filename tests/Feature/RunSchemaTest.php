@@ -4,10 +4,12 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Project;
 use App\Models\Run;
+use App\Services\Elevation;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Native\Desktop\Facades\ChildProcess;
 
 beforeEach(function () {
@@ -26,7 +28,7 @@ afterEach(function () {
 
 test('CliRunner::start stores explicit structured columns', function () {
     ChildProcess::fake();
-    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]));
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), new Elevation);
 
     $project = Project::create(['path' => '/home/user/apps/my-app']);
 
@@ -57,7 +59,8 @@ test('CliRunner::start stores explicit structured columns', function () {
 
 test('CliRunner::start infers structured fields from legacy metadata as fallback', function () {
     ChildProcess::fake();
-    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]));
+    Process::fake(); // a local `up` run probes for an elevation method (Elevation::grant())
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), new Elevation);
 
     $project = Project::create(['path' => '/home/user/apps/legacy-app']);
 
@@ -79,6 +82,44 @@ test('CliRunner::start infers structured fields from legacy metadata as fallback
         ->and($run->environment)->toBe('local')
         ->and($run->server_name)->toBe('local-k3d')
         ->and($run->context)->toBe('k3d-larakube');
+});
+
+test('a local up run asks Elevation for passwordless sudo before starting, so /etc/hosts syncing does not hit a password prompt with no terminal', function () {
+    ChildProcess::fake();
+    $elevation = mock(Elevation::class);
+    $elevation->shouldReceive('grant')->once()->andReturn(true);
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), $elevation);
+
+    $runner->start(
+        label: 'Up shop (local)',
+        arguments: ['up', 'local'],
+        kind: RunKind::UpProject,
+        subject: 'project:1',
+        environment: 'local',
+    );
+});
+
+test('a cloud up/deploy run never requests elevation, since there is no local /etc/hosts to sync', function () {
+    ChildProcess::fake();
+    $elevation = mock(Elevation::class);
+    $elevation->shouldNotReceive('grant');
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), $elevation);
+
+    $runner->start(
+        label: 'Deploy shop (production)',
+        arguments: ['deploy', 'production'],
+        kind: RunKind::DeployApp,
+        subject: 'project:1',
+        environment: 'production',
+    );
+
+    $runner->start(
+        label: 'Up shop (production)',
+        arguments: ['up', 'production'],
+        kind: RunKind::UpProject,
+        subject: 'project:1',
+        environment: 'production',
+    );
 });
 
 test('RunController::index formats structured targets and environment correctly', function () {
