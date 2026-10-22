@@ -6,9 +6,6 @@ import {
     Search,
     ArrowDownToLine,
     ArrowUpCircle,
-    Play,
-    Pause,
-    Trash2,
     Plus,
     ArrowRight,
     Check,
@@ -54,7 +51,6 @@ import type {
     ClusterTool,
     NewAppAnswers,
     Server,
-    CompanionApp,
     ServerDomain,
     Untested,
 } from '@/types/larakube';
@@ -67,67 +63,9 @@ type Props = {
     checkedAt: string | null;
     tools?: ClusterTool[] | null;
     installing: Record<string, number>;
-    companions?: CompanionApp[] | null;
     domains?: ServerDomain[] | null;
     activeCommonsServices?: string[] | null;
 };
-
-const DEFAULT_COMPANIONS: CompanionApp[] = [
-    {
-        slug: 'adminer',
-        name: 'Adminer',
-        description:
-            'Universal lightweight manager for MySQL, MariaDB, PostgreSQL, and SQLite.',
-        icon: '🗄️',
-        installed: false,
-        running: false,
-        paused: false,
-        url: null,
-    },
-    {
-        slug: 'phpmyadmin',
-        name: 'phpMyAdmin',
-        description: 'Dedicated web interface for MySQL and MariaDB servers.',
-        icon: '🐬',
-        installed: false,
-        running: false,
-        paused: false,
-        url: null,
-    },
-    {
-        slug: 'pgadmin',
-        name: 'pgAdmin',
-        description:
-            'Full-featured web administration platform for PostgreSQL.',
-        icon: '🐘',
-        installed: false,
-        running: false,
-        paused: false,
-        url: null,
-    },
-    {
-        slug: 'redisinsight',
-        name: 'RedisInsight',
-        description:
-            'Visual GUI for Redis keys, streams, memory, and pub/sub metrics.',
-        icon: '⚡',
-        installed: false,
-        running: false,
-        paused: false,
-        url: null,
-    },
-    {
-        slug: 'mongo-express',
-        name: 'Mongo Express',
-        description:
-            'Web-based admin interface for MongoDB databases and documents.',
-        icon: '🍃',
-        installed: false,
-        running: false,
-        paused: false,
-        url: null,
-    },
-];
 
 type Filter = 'all' | 'installed' | 'available';
 
@@ -198,7 +136,6 @@ export default function ToolsIndex({
     checkedAt,
     tools: verifiedTools,
     installing,
-    companions,
     domains,
     activeCommonsServices,
 }: Props) {
@@ -241,10 +178,6 @@ export default function ToolsIndex({
         setIsNewInstance(true);
     };
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
-    const [category, setCategory] = useState<'cluster' | 'companions'>(
-        'cluster',
-    );
-    const companionList = companions ?? DEFAULT_COMPANIONS;
 
     useEffect(() => {
         const saved = localStorage.getItem('larakube_view_mode_tools');
@@ -363,15 +296,16 @@ export default function ToolsIndex({
     );
 
     return (
-        <AppLayout title="Tools">
+        <AppLayout title="Apps">
             <header className="mb-6 flex items-center justify-between gap-6">
                 <div>
                     <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
-                        Tools
+                        Apps
                     </h1>
                     <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        Cluster Tools install straight onto one of your servers.
-                        Each one gets its own address and sign-in.
+                        Turnkey server applications ready to install with one
+                        click. Automatic HTTPS, custom domains, and single
+                        sign-on.
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -405,101 +339,7 @@ export default function ToolsIndex({
                 </div>
             </header>
 
-            <div className="mb-6 flex items-center gap-2 border-b border-line">
-                <button
-                    type="button"
-                    onClick={() => setCategory('cluster')}
-                    className={`flex items-center gap-2 border-b-2 px-3 pb-3 text-[13px] font-medium transition ${
-                        category === 'cluster'
-                            ? 'border-tools text-ink'
-                            : 'border-transparent text-soft hover:text-ink'
-                    }`}
-                >
-                    <span>Cluster Tools</span>
-                    <span className="rounded-full bg-badge px-2 py-0.5 text-xs text-soft">
-                        {tools ? tools.length : '…'}
-                    </span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setCategory('companions')}
-                    className={`flex items-center gap-2 border-b-2 px-3 pb-3 text-[13px] font-medium transition ${
-                        category === 'companions'
-                            ? 'border-tools text-ink'
-                            : 'border-transparent text-soft hover:text-ink'
-                    }`}
-                >
-                    <span>Local Dev Companions</span>
-                    <span className="rounded-full bg-badge px-2 py-0.5 text-xs text-soft">
-                        {companionList.length}
-                    </span>
-                </button>
-            </div>
-
-            {category === 'companions' ? (
-                <div className="space-y-6">
-                    <div className="rounded-xl bg-surface p-4 ring-1 ring-line">
-                        <h2 className="text-sm font-semibold text-ink">
-                            Local Dev Companions
-                        </h2>
-                        <p className="mt-1 text-xs leading-relaxed text-soft">
-                            Zero-configuration database & cache GUIs running
-                            directly in{' '}
-                            <code className="font-mono text-ink">
-                                larakube-companions
-                            </code>{' '}
-                            on your local cluster. Available over secure local
-                            domains (e.g.{' '}
-                            <code className="font-mono text-ink">
-                                https://adminer.kube
-                            </code>
-                            ).
-                        </p>
-                    </div>
-                    {viewMode === 'cards' ? (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {companionList.map((companion) => (
-                                <CompanionCard
-                                    key={companion.slug}
-                                    companion={companion}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-line ring-inset">
-                            <table className="w-full text-left text-sm">
-                                <thead className="border-b border-line text-xs text-soft">
-                                    <tr>
-                                        <th className="py-3 pr-3 pl-4 font-medium">
-                                            Companion
-                                        </th>
-                                        <th className="px-3 py-3 font-medium">
-                                            Description
-                                        </th>
-                                        <th className="px-3 py-3 font-medium">
-                                            Status
-                                        </th>
-                                        <th className="px-3 py-3 font-medium">
-                                            Local Address
-                                        </th>
-                                        <th className="py-3 pr-4 pl-3 text-right font-medium">
-                                            Actions
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-line">
-                                    {companionList.map((companion) => (
-                                        <CompanionTableRow
-                                            key={companion.slug}
-                                            companion={companion}
-                                        />
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-            ) : tools === undefined ? (
+            {tools === undefined ? (
                 <Loading server={server.name} />
             ) : tools ? (
                 <>
@@ -513,7 +353,7 @@ export default function ToolsIndex({
                                     onChange={(event) =>
                                         setQuery(event.target.value)
                                     }
-                                    placeholder="Search tools or services…"
+                                    placeholder="Search 30+ apps (wiki, s3, chat, analytics…)"
                                     className="h-9.5 w-72 rounded-xl border-0 bg-surface pr-3 pl-9 text-[13px] ring-1 ring-line transition outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
                                 />
                             </div>
@@ -525,19 +365,19 @@ export default function ToolsIndex({
                                     [
                                         [
                                             'all',
-                                            'All',
+                                            'All Apps',
                                             installedAll.length +
                                                 availableAll.length,
+                                        ],
+                                        [
+                                            'available',
+                                            'Explore',
+                                            availableAll.length,
                                         ],
                                         [
                                             'installed',
                                             'Installed',
                                             installedAll.length,
-                                        ],
-                                        [
-                                            'available',
-                                            'Available',
-                                            availableAll.length,
                                         ],
                                     ] as const
                                 ).map(([value, label, count]) => (
@@ -1130,7 +970,7 @@ export default function ToolsIndex({
                 </>
             ) : (
                 <p className="text-sm text-soft">
-                    Couldn't read Cluster Tools from {server.name}. Check that
+                    Couldn't read Cluster Apps from {server.name}. Check that
                     the server is reachable, then Refresh.
                 </p>
             )}
@@ -1535,7 +1375,7 @@ function AvailableCard({
                         </div>
                     ) : (
                         <span className="text-[11px] text-faint">
-                            Cluster Tool
+                            Cluster App
                         </span>
                     )}
                 </div>
@@ -1563,244 +1403,6 @@ function AvailableCard({
                 </div>
             </div>
         </article>
-    );
-}
-
-function CompanionCard({ companion }: { companion: CompanionApp }) {
-    return (
-        <article className="group relative flex flex-col justify-between gap-3.5 rounded-2xl bg-surface p-5 shadow-2xs ring-1 ring-line transition-all duration-150 hover:shadow-md hover:ring-line/80">
-            <div>
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3.5">
-                        <ToolLogo slug={companion.slug} size="lg" />
-                        <div>
-                            <h3 className="text-[15px] font-semibold text-ink">
-                                {companion.name}
-                            </h3>
-                            <div className="mt-0.5">
-                                {companion.installed ? (
-                                    companion.running ? (
-                                        <StatusPill tone="ok">
-                                            ● Running
-                                        </StatusPill>
-                                    ) : (
-                                        <StatusPill tone="warn">
-                                            ⏸ Paused
-                                        </StatusPill>
-                                    )
-                                ) : (
-                                    <StatusPill tone="muted">
-                                        Available
-                                    </StatusPill>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <p className="mt-2.5 text-xs leading-relaxed text-soft">
-                    {companion.description}
-                </p>
-            </div>
-            <div className="flex items-center justify-between border-t border-line/60 pt-3">
-                <span className="font-mono text-[11px] text-faint">
-                    {companion.url ?? `*.${companion.slug}`}
-                </span>
-                <div className="flex items-center gap-2">
-                    {companion.installed ? (
-                        <>
-                            {companion.url && companion.running && (
-                                <div className="flex items-center gap-1">
-                                    <QrCodePopover
-                                        url={companion.url}
-                                        title={companion.name}
-                                        description={`Scan to open ${companion.name} on your phone`}
-                                    />
-                                    <ExternalLinkButton
-                                        url={companion.url}
-                                        className={buttonClass(
-                                            'secondary',
-                                            'sm',
-                                            'gap-1',
-                                        )}
-                                    >
-                                        <span>Open</span>
-                                        <ExternalLink className="size-3" />
-                                    </ExternalLinkButton>
-                                </div>
-                            )}
-                            {companion.running ? (
-                                <Link
-                                    href="/companions/stop"
-                                    method="post"
-                                    data={{ companion: companion.slug }}
-                                    as="button"
-                                    className={buttonClass(
-                                        'ghost',
-                                        'sm',
-                                        'gap-1 text-soft',
-                                    )}
-                                    title="Pause companion to free RAM"
-                                >
-                                    <Pause className="size-3" />
-                                    <span>Pause</span>
-                                </Link>
-                            ) : (
-                                <Link
-                                    href="/companions/start"
-                                    method="post"
-                                    data={{ companion: companion.slug }}
-                                    as="button"
-                                    className={buttonClass(
-                                        'secondary',
-                                        'sm',
-                                        'gap-1',
-                                    )}
-                                    title="Resume companion"
-                                >
-                                    <Play className="size-3" />
-                                    <span>Resume</span>
-                                </Link>
-                            )}
-                            <Link
-                                href="/companions/remove"
-                                method="post"
-                                data={{ companion: companion.slug }}
-                                as="button"
-                                className={buttonClass('danger', 'sm', 'p-1.5')}
-                                title="Remove companion"
-                            >
-                                <Trash2 className="size-3.5" />
-                            </Link>
-                        </>
-                    ) : (
-                        <Link
-                            href="/companions/add"
-                            method="post"
-                            data={{ companion: companion.slug }}
-                            as="button"
-                            className={buttonClass('tools', 'sm', 'gap-1.5')}
-                        >
-                            <ArrowDownToLine className="size-3.5" />
-                            <span>Install</span>
-                        </Link>
-                    )}
-                </div>
-            </div>
-        </article>
-    );
-}
-
-function CompanionTableRow({ companion }: { companion: CompanionApp }) {
-    return (
-        <tr className="transition-colors hover:bg-paper/50">
-            <td className="py-3 pr-3 pl-4 font-medium">
-                <div className="flex items-center gap-3">
-                    <ToolLogo slug={companion.slug} size="sm" />
-                    <span className="font-semibold text-ink">
-                        {companion.name}
-                    </span>
-                </div>
-            </td>
-            <td className="max-w-sm px-3 py-3 text-xs text-soft">
-                {companion.description}
-            </td>
-            <td className="px-3 py-3">
-                {companion.installed ? (
-                    companion.running ? (
-                        <StatusPill tone="ok">● Running</StatusPill>
-                    ) : (
-                        <StatusPill tone="warn">⏸ Paused</StatusPill>
-                    )
-                ) : (
-                    <StatusPill tone="muted">Available</StatusPill>
-                )}
-            </td>
-            <td className="px-3 py-3 font-mono text-[12px] text-soft">
-                {companion.url ?? '—'}
-            </td>
-            <td className="py-3 pr-4 pl-3 text-right">
-                <div className="flex items-center justify-end gap-2">
-                    {companion.installed ? (
-                        <>
-                            {companion.url && companion.running && (
-                                <div className="flex items-center gap-1">
-                                    <QrCodePopover
-                                        url={companion.url}
-                                        title={companion.name}
-                                        description={`Scan to open ${companion.name} on your phone`}
-                                    />
-                                    <ExternalLinkButton
-                                        url={companion.url}
-                                        className={buttonClass(
-                                            'secondary',
-                                            'sm',
-                                            'gap-1',
-                                        )}
-                                    >
-                                        <span>Open</span>
-                                        <ExternalLink className="size-3" />
-                                    </ExternalLinkButton>
-                                </div>
-                            )}
-                            {companion.running ? (
-                                <Link
-                                    href="/companions/stop"
-                                    method="post"
-                                    data={{ companion: companion.slug }}
-                                    as="button"
-                                    className={buttonClass(
-                                        'ghost',
-                                        'sm',
-                                        'gap-1 text-soft',
-                                    )}
-                                    title="Pause companion"
-                                >
-                                    <Pause className="size-3" />
-                                    <span>Pause</span>
-                                </Link>
-                            ) : (
-                                <Link
-                                    href="/companions/start"
-                                    method="post"
-                                    data={{ companion: companion.slug }}
-                                    as="button"
-                                    className={buttonClass(
-                                        'secondary',
-                                        'sm',
-                                        'gap-1',
-                                    )}
-                                    title="Resume companion"
-                                >
-                                    <Play className="size-3" />
-                                    <span>Resume</span>
-                                </Link>
-                            )}
-                            <Link
-                                href="/companions/remove"
-                                method="post"
-                                data={{ companion: companion.slug }}
-                                as="button"
-                                className={buttonClass('danger', 'sm', 'p-1.5')}
-                                title="Remove companion"
-                            >
-                                <Trash2 className="size-3.5" />
-                            </Link>
-                        </>
-                    ) : (
-                        <Link
-                            href="/companions/add"
-                            method="post"
-                            data={{ companion: companion.slug }}
-                            as="button"
-                            className={buttonClass('tools', 'sm', 'gap-1.5')}
-                        >
-                            <ArrowDownToLine className="size-3.5" />
-                            <span>Install</span>
-                        </Link>
-                    )}
-                </div>
-            </td>
-        </tr>
     );
 }
 

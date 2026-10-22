@@ -7,6 +7,7 @@ import {
     FolderGit2,
     Globe,
     HardDrive,
+    LayoutGrid,
     Plus,
     RotateCw,
     ShieldCheck,
@@ -419,15 +420,15 @@ export default function ShowServer({
                     </Card>
 
                     <Card
-                        label={`Cluster Tools${installedTools && installedTools.length > 0 ? ` · ${installedTools.length}` : ''}`}
+                        label={`Apps${installedTools && installedTools.length > 0 ? ` · ${installedTools.length}` : ''}`}
                         action={
                             ready ? (
                                 <Link
                                     href={toolsIndex(server.name).url}
                                     className={buttonClass('ghost', 'sm')}
                                 >
-                                    <Wrench className="size-3.5" />
-                                    <span>Browse catalog</span>
+                                    <LayoutGrid className="size-3.5" />
+                                    <span>Browse apps</span>
                                 </Link>
                             ) : null
                         }

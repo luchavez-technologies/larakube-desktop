@@ -89,7 +89,8 @@ test('Tools in the sidebar opens the first ready server', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
 
-    $this->get(route('tools'))->assertRedirect(route('servers.tools.index', 'workshop-demo'));
+    $this->get(route('apps'))->assertRedirect(route('servers.apps.index', 'workshop-demo'));
+    $this->get(route('tools'))->assertRedirect(route('servers.apps.index', 'workshop-demo'));
 
     File::deleteDirectory($bin);
 });
@@ -369,9 +370,11 @@ test('Tools in the sidebar returns to the server last browsed', function () {
         '*tool:list*' => Process::result(output: json_encode(clusterToolsRows())),
     ]);
 
-    $this->get(route('tools'))->assertRedirect(route('servers.tools.index', 'production'));
+    $this->get(route('apps'))->assertRedirect(route('servers.apps.index', 'production'));
+    $this->get(route('tools'))->assertRedirect(route('servers.apps.index', 'production'));
     $this->get(route('servers.tools.index', 'workshop-demo'))->assertOk();
-    $this->get(route('tools'))->assertRedirect(route('servers.tools.index', 'workshop-demo'));
+    $this->get(route('apps'))->assertRedirect(route('servers.apps.index', 'workshop-demo'));
+    $this->get(route('tools'))->assertRedirect(route('servers.apps.index', 'workshop-demo'));
 
     File::deleteDirectory($bin);
 });

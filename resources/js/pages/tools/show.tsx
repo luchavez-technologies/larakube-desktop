@@ -75,7 +75,7 @@ export default function ShowTool({
                 href={toolsIndex(server.name).url}
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
-                ← Tools on {server.name}
+                ← Apps on {server.name}
             </Link>
             <PageHeader
                 title={
@@ -247,7 +247,7 @@ export default function ShowTool({
                             href={toolsIndex(server.name).url}
                             className="text-ink underline"
                         >
-                            Tools list
+                            Apps list
                         </Link>
                         .
                     </p>

@@ -19,7 +19,6 @@ use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
 use App\Services\LaraKube\ToolCommons;
 use App\Services\LaraKube\ToolCredentials;
-use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,14 +29,14 @@ class ClusterToolController extends Controller
 {
     public function __construct(private StackCatalog $stacks, private ToolCatalog $tools) {}
 
-    /** The sidebar's Tools entry: the server last browsed (shared with Mail), else the first ready one, else Servers. */
+    /** The sidebar's Apps entry: the server last browsed (shared with Mail), else the first ready one, else Servers. */
     public function entry(CurrentServer $current): RedirectResponse
     {
         $ready = array_values(array_filter($this->stacks->all() ?? [], fn (array $stack): bool => $stack['status'] === 'ready' && $stack['context'] !== null));
         $names = array_column($ready, 'name');
         $resolved = $current->resolve($names);
 
-        return $resolved === null ? to_route('servers.index') : to_route('servers.tools.index', $resolved);
+        return $resolved === null ? to_route('servers.index') : to_route('servers.apps.index', $resolved);
     }
 
     public function index(string $server, ClusterStatus $status, DomainCatalog $domains, CurrentServer $current): Response
@@ -60,7 +59,6 @@ class ClusterToolController extends Controller
                 ? $last['tools']
                 : Inertia::defer(fn (): ?array => $this->tools->forContext($context), 'tools'),
             'installing' => $this->installingTools($server),
-            'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
             // An instant DB read — domains used to block on a live CLI
             // round-trip (ExternalDNS + TLS + kubectl) the first time a
             // server's cache went cold, same class of problem the rest of

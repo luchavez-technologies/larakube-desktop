@@ -2,9 +2,9 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import {
     LayoutDashboard,
+    LayoutGrid,
     FolderGit2,
     Server,
-    Wrench,
     Activity,
     Terminal,
     Settings,
@@ -68,7 +68,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Projects',
-        description: 'Deploy your apps',
+        description: 'Deploy your code',
         href: projectsIndex().url,
         active: (url) => url.startsWith('/projects'),
         accent: 'bg-brand',
@@ -85,13 +85,16 @@ const navigation: NavItem[] = [
         experimental: true,
     },
     {
-        label: 'Tools',
-        description: 'Cluster Tools',
+        label: 'Apps',
+        description: 'App store & services',
         href: tools().url,
         active: (url) =>
-            url.startsWith('/tools') || /^\/servers\/[^/]+\/tools/.test(url),
+            url.startsWith('/apps') ||
+            /^\/servers\/[^/]+\/apps/.test(url) ||
+            url.startsWith('/tools') ||
+            /^\/servers\/[^/]+\/tools/.test(url),
         accent: 'bg-tools',
-        icon: Wrench,
+        icon: LayoutGrid,
     },
     {
         label: 'Plex Commons',

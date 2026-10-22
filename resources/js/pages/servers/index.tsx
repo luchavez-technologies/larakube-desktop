@@ -89,8 +89,8 @@ export default function ServersIndex({
                     </h1>
                     <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
                         Kubernetes clusters and VPS servers you manage with
-                        LaraKube. Host Cluster Tools and deploy your apps across
-                        managed Kubernetes or lightweight k3s nodes.
+                        LaraKube. Host Cluster Apps and deploy your projects
+                        across managed Kubernetes or lightweight k3s nodes.
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5">

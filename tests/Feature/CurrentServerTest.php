@@ -33,13 +33,13 @@ test('a server picked on Tools is the one Mail opens to', function () {
     currentServerFakes();
 
     // Both start out defaulting to the first ready server.
-    $this->get(route('tools'))->assertRedirect(route('servers.tools.index', 'alpha'));
+    $this->get(route('apps'))->assertRedirect(route('servers.apps.index', 'alpha'));
     $this->get(route('mail'))->assertRedirect(route('servers.mail.index', 'alpha'));
 
-    // Picking "beta" on Tools...
-    $this->get(route('servers.tools.index', 'beta'))->assertOk();
+    // Picking "beta" on Apps...
+    $this->get(route('servers.apps.index', 'beta'))->assertOk();
 
-    // ...carries over to Mail, not just back to Tools.
+    // ...carries over to Mail, not just back to Apps.
     $this->get(route('mail'))->assertRedirect(route('servers.mail.index', 'beta'));
 
     File::deleteDirectory($bin);
