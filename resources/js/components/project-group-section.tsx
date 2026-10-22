@@ -165,10 +165,10 @@ export default function ProjectGroupSection({
             }}
             className={cn(
                 // backdrop-blur creates a stacking context; lift the section while a card menu inside is open.
-                'group/section relative mb-8 rounded-3xl bg-surface/70 p-5 ring-1 ring-line/80 backdrop-blur-xs transition-all duration-200 has-[[data-open=true]]:z-40 has-[details[open]]:z-40',
+                'group/section relative mb-8 rounded-3xl p-5 ring-1 backdrop-blur-xs transition-all duration-200 has-[[data-open=true]]:z-40 has-[details[open]]:z-40',
                 isDragOver
                     ? 'bg-brand/5 shadow-md ring-2 ring-brand'
-                    : 'hover:ring-faint',
+                    : [classes.wash, 'hover:ring-faint'],
             )}
         >
             {/* Header: Title, Controls, and Partner Domain Chips */}
