@@ -527,10 +527,12 @@ export default function QuickLaunchModal({
             setNeedsAdminEmail(Boolean(res.ok && res.data.needsAdminEmail));
 
             const answers = defaultAnswers(fetched);
-            // For local clusters, proxied must always be false by default.
-            // For cloud servers, default to true only when Cloudflare-managed.
+            // Local clusters never get a `proxied` field back at all
+            // (QuickActionController::optionFields() drops it, along with
+            // vpnOnly — neither means anything on a local-TLD host) — for
+            // cloud servers, default to true only when Cloudflare-managed.
             if (fetched.some((field) => field.key === 'proxied')) {
-                answers.proxied = isLocalServer ? false : isCloudflareManaged;
+                answers.proxied = isCloudflareManaged;
             }
             setOptions(answers);
         })();
@@ -544,7 +546,6 @@ export default function QuickLaunchModal({
         isOpen,
         clusterServices,
         isCloudflareManaged,
-        isLocalServer,
     ]);
 
     // Initial server selection and email

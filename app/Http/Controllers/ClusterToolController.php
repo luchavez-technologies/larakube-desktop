@@ -216,7 +216,7 @@ class ClusterToolController extends Controller
         // The CLI's own options for this tool (an app name, whether to share the
         // Commons...), turned into flags the way a new app's answers are.
         $resolved = app(FrameworkForm::class)->resolve(
-            $this->optionFields($row),
+            $this->optionFields($row, Server::isStackLocal($stack)),
             (array) $request->input('options', []),
         );
 
@@ -401,17 +401,27 @@ class ClusterToolController extends Controller
      * choice this generic form can resolve on its own, same as
      * QuickActionController::optionFields().
      *
+     * Cloudflare Proxy and NetBird VPN IP whitelisting are both meaningless on a
+     * local cluster (see QuickActionController::optionFields()) — drop them
+     * entirely rather than let a local install resolve a flag that can't work.
+     *
      * @param  array<string, mixed>  $row
      * @return list<array<string, mixed>>
      */
-    private function optionFields(array $row): array
+    private function optionFields(array $row, bool $isLocal = false): array
     {
         $fields = [];
 
         foreach (is_array($row['initFields'] ?? null) ? $row['initFields'] : [] as $field) {
-            if (is_array($field) && ! in_array($field['role'] ?? 'option', ['host', 'account'], true)) {
-                $fields[] = $field;
+            if (! is_array($field) || in_array($field['role'] ?? 'option', ['host', 'account'], true)) {
+                continue;
             }
+
+            if ($isLocal && in_array($field['key'] ?? '', ['proxied', 'vpnOnly'], true)) {
+                continue;
+            }
+
+            $fields[] = $field;
         }
 
         return $fields;

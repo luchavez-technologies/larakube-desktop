@@ -318,7 +318,7 @@ test('cluster tool index provides activeCommonsServices prop', function () {
     );
 });
 
-test('quick actions fields defaults proxied to 0 on local clusters', function () {
+test('quick actions fields drops proxied and vpnOnly entirely on local clusters — neither can work on a local-TLD host', function () {
     Process::fake([
         '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
             ['name' => 'local-cluster', 'provider' => 'k3d', 'kind' => 'local', 'region' => 'local', 'ip' => '127.0.0.1', 'context' => 'k3d-local', 'account' => null, 'projectId' => null, 'status' => 'ready'],
@@ -333,6 +333,7 @@ test('quick actions fields defaults proxied to 0 on local clusters', function ()
                     ['key' => 'domain', 'label' => 'Domain', 'type' => 'text', 'role' => 'host', 'flag' => '--domain='],
                     ['key' => 'adminEmail', 'label' => 'Admin Email', 'type' => 'text', 'role' => 'account'],
                     ['key' => 'proxied', 'label' => 'Proxied', 'type' => 'confirm', 'role' => 'access', 'flag' => '--proxied=', 'default' => '1'],
+                    ['key' => 'vpnOnly', 'label' => 'VPN only', 'type' => 'confirm', 'role' => 'access', 'flag' => '--vpn-only'],
                 ],
             ],
         ])),
@@ -344,7 +345,7 @@ test('quick actions fields defaults proxied to 0 on local clusters', function ()
     ]));
 
     $response->assertOk();
-    $proxiedField = collect($response->json('fields'))->firstWhere('key', 'proxied');
-    expect($proxiedField)->not->toBeNull()
-        ->and($proxiedField['default'])->toBe('0');
+    $keys = collect($response->json('fields'))->pluck('key');
+    expect($keys)->not->toContain('proxied')
+        ->and($keys)->not->toContain('vpnOnly');
 });

@@ -1564,17 +1564,6 @@ function InstallDialog({
         return `admin@${cleanDomain}`;
     }, [server.account, domain, selectedBaseDomain]);
 
-    // The tool's own choices, as the CLI describes them (an app name, whether
-    // to share the Commons, "Proxied", "VPN only"...) — everything except
-    // `host`/`account`, which this dialog already asks for itself above.
-    const optionFields = useMemo(
-        () =>
-            (tool.initFields ?? []).filter(
-                (field) =>
-                    !['host', 'account'].includes(field.role ?? 'option'),
-            ),
-        [tool.initFields],
-    );
     const isLocalServer = useMemo(() => {
         const provider = (server.provider ?? '').toLowerCase();
         const localProviders = [
@@ -1602,6 +1591,26 @@ function InstallDialog({
         return false;
     }, [server]);
 
+    // The tool's own choices, as the CLI describes them (an app name, whether
+    // to share the Commons, "Proxied", "VPN only"...) — everything except
+    // `host`/`account`, which this dialog already asks for itself above.
+    // Proxied (Cloudflare) and VPN-only (NetBird) are both meaningless on a
+    // local server — its host is a local-TLD domain, never a real DNS zone or
+    // an internet-exposed ingress — so drop them entirely rather than offer a
+    // toggle that can't work.
+    const optionFields = useMemo(
+        () =>
+            (tool.initFields ?? []).filter(
+                (field) =>
+                    !['host', 'account'].includes(field.role ?? 'option') &&
+                    !(
+                        isLocalServer &&
+                        ['proxied', 'vpnOnly'].includes(field.key)
+                    ),
+            ),
+        [tool.initFields, isLocalServer],
+    );
+
     const [options, setOptions] = useState<NewAppAnswers>(() => {
         const answers = defaultAnswers(optionFields);
 
@@ -1624,12 +1633,11 @@ function InstallDialog({
                   (d) => d.domain === selectedBaseDomain && d.externalDns,
               );
 
-        // For local clusters, proxied must always be false by default.
-        // For cloud servers, default to true only when Cloudflare-managed.
+        // Local clusters never offer a `proxied` field at all (see
+        // optionFields above) — for cloud servers, default to true only when
+        // Cloudflare-managed.
         if (optionFields.some((field) => field.key === 'proxied')) {
-            answers.proxied = isLocalServer
-                ? false
-                : matched?.dnsProvider === 'cloudflare';
+            answers.proxied = matched?.dnsProvider === 'cloudflare';
         }
 
         return answers;

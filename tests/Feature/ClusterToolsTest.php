@@ -612,6 +612,37 @@ test('a tool\'s own options reach the install as flags, the way the CLI describe
     File::deleteDirectory($bin);
 });
 
+test('vpnOnly and proxied are dropped on a local server, even when submitted, because neither can work on a local-TLD host', function () {
+    $bin = clusterToolsFakeCli();
+    $field = fn (string $key, string $flag, string $type, string $role = 'option'): array => ['key' => $key, 'type' => $type, 'role' => $role, 'label' => $key, 'flag' => $flag, 'required' => false];
+    $row = [
+        'tool' => 'grafana', 'instance' => '', 'icon' => '*', 'brand' => 'Grafana', 'label' => 'Grafana', 'installed' => false,
+        'initFields' => [$field('domain', '--domain=', 'text', 'host'), $field('appName', '--app-name=', 'text'), $field('vpnOnly', '--vpn-only', 'confirm', 'access'), $field('proxied', '--proxied', 'confirm', 'access')],
+        'namespace' => 'larakube-shared', 'host' => null, 'aliases' => [], 'url' => null,
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'orbstack', 'provider' => 'orbstack', 'kind' => 'local', 'region' => 'local', 'ip' => null, 'context' => 'orbstack', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.store', ['server' => 'orbstack', 'tool' => 'grafana']), [
+        'domain' => 'grafana.test',
+        'options' => ['appName' => 'Metrics', 'vpnOnly' => '1', 'proxied' => '1'],
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest): bool {
+        $cmd = (array) $cmd;
+
+        return ! in_array('--vpn-only', $cmd, true) && ! in_array('--proxied', $cmd, true);
+    });
+
+    File::deleteDirectory($bin);
+});
+
 test('removing a tool passes --domain only when the CLI says the tool can run more than once', function (bool $multi, bool $expectsDomain) {
     $bin = clusterToolsFakeCli();
     $row = [

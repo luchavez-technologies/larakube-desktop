@@ -163,13 +163,18 @@ class QuickActionController extends Controller
 
         $filtered = array_values(array_filter($fields, fn (array $field): bool => ! in_array($field['role'] ?? 'option', ['host', 'account'], true)));
 
+        // Cloudflare Proxy and NetBird VPN IP whitelisting are both meaningless on
+        // a local cluster: the host is a local-TLD domain dnsmasq resolves to
+        // 127.0.0.1, never a real DNS zone Cloudflare manages, and the ingress
+        // was never exposed to the internet for a VPN allowlist to gate in the
+        // first place. Drop them entirely instead of merely defaulting proxied
+        // off — a local install that checks either box deploys a middleware/DNS
+        // config that can't work and may lock the student out of their own app.
         if ($isLocal) {
-            foreach ($filtered as &$field) {
-                if (($field['key'] ?? '') === 'proxied') {
-                    $field['default'] = '0';
-                }
-            }
-            unset($field);
+            $filtered = array_values(array_filter(
+                $filtered,
+                fn (array $field): bool => ! in_array($field['key'] ?? '', ['proxied', 'vpnOnly'], true),
+            ));
         }
 
         return $filtered;
