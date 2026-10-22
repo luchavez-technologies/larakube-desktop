@@ -77,9 +77,11 @@ const DEFAULT_COMPANIONS: CompanionApp[] = [
 export default function LocalDevCompanionsCard({
     project,
     companions,
+    localTld = 'test',
 }: {
     project: Project;
     companions?: CompanionApp[] | null;
+    localTld?: string;
 }) {
     const list = companions ?? DEFAULT_COMPANIONS;
     const runningCount = list.filter((c) => c.installed && c.running).length;
@@ -139,7 +141,7 @@ export default function LocalDevCompanionsCard({
                     on your local cluster. Accessible over secure local domains
                     (e.g.{' '}
                     <code className="font-mono text-ink">
-                        https://adminer.kube
+                        https://adminer.{localTld}
                     </code>
                     ).
                 </div>
@@ -206,7 +208,8 @@ export default function LocalDevCompanionsCard({
 
                                 <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
                                     <span className="font-mono text-[11px] text-faint">
-                                        {companion.url ?? `*.${companion.slug}`}
+                                        {companion.url ??
+                                            `${companion.slug}.${localTld}`}
                                     </span>
 
                                     <div className="flex items-center gap-1.5">

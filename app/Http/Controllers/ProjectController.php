@@ -697,6 +697,7 @@ class ProjectController extends Controller
                 return $result;
             }, 'domains'),
             'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
+            'localTld' => app(GlobalSettings::class)->getLocalTld(),
         ]);
     }
 

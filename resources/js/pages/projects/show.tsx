@@ -142,6 +142,7 @@ export default function ShowProject({
     deployMetrics,
     domains,
     companions,
+    localTld,
 }: {
     project: Project;
     server: Server | null;
@@ -160,6 +161,7 @@ export default function ShowProject({
     deployMetrics?: Record<string, DeployMetrics | null> | null;
     domains?: Record<string, ServerDomain[]> | null;
     companions?: CompanionApp[] | null;
+    localTld?: string;
 }) {
     const isRunning =
         runs.some((r) => r.status === 'running') ||
@@ -460,6 +462,7 @@ export default function ShowProject({
                                         <LocalDevCompanionsCard
                                             project={project}
                                             companions={companions}
+                                            localTld={localTld}
                                         />
                                     </Deferred>
 
