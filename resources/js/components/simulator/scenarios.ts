@@ -61,7 +61,7 @@ export function getScenarios(
                 'Negotiates TLS 1.3 cryptographic session key.',
             ],
             technicalDetails: {
-                protocol: 'HTTP/2 (TLS)',
+                protocol: 'HTTP/2',
                 port: '443',
                 headers: {
                     Host: host,
@@ -297,7 +297,7 @@ export function getScenarios(
     // Backend application with Database (Laravel, WordPress, PocketBase)
     const isPostgres = databaseDriver === 'pgsql';
     const isSqlite = databaseDriver === 'sqlite';
-    const dbPort = isPostgres ? '5432' : isSqlite ? 'Local PVC' : '3306';
+    const dbPort = isPostgres ? '5432' : isSqlite ? 'Local' : '3306';
     const dbTitle = isPostgres
         ? 'PostgreSQL 16'
         : isSqlite
@@ -330,7 +330,7 @@ export function getScenarios(
                   'Scans B-Tree indexes and reads block storage from PersistentVolumeClaim (PVC).',
               ],
         technicalDetails: {
-            protocol: isSqlite ? 'SQLite File' : `${dbTitle} TCP`,
+            protocol: isSqlite ? 'SQLite' : isPostgres ? 'PostgreSQL' : 'MySQL',
             port: dbPort,
             query: query,
             latencyMs: isSqlite ? 1 : 4,

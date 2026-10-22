@@ -119,28 +119,28 @@ export default function StepInspector({
                 </div>
 
                 {/* Technical Parameters Grid */}
-                <div className="grid grid-cols-5 gap-2">
-                    <div className="col-span-3 rounded-lg border border-line bg-paper/40 p-2 text-center">
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-line bg-paper/40 p-2.5 text-center">
                         <span className="text-[9px] font-semibold tracking-wider text-faint uppercase">
                             Protocol
                         </span>
-                        <div className="mt-0.5 font-mono text-[11px] font-medium text-ink">
+                        <div className="mt-1 font-mono text-[11px] font-medium text-ink">
                             {hop.technicalDetails.protocol}
                         </div>
                     </div>
-                    <div className="col-span-1 rounded-lg border border-line bg-paper/40 p-2 text-center">
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-line bg-paper/40 p-2.5 text-center">
                         <span className="text-[9px] font-semibold tracking-wider text-faint uppercase">
                             Port
                         </span>
-                        <div className="mt-0.5 font-mono text-[11px] font-medium text-ink">
+                        <div className="mt-1 font-mono text-[11px] font-medium text-ink">
                             {hop.technicalDetails.port}
                         </div>
                     </div>
-                    <div className="col-span-1 rounded-lg border border-line bg-paper/40 p-2 text-center">
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-line bg-paper/40 p-2.5 text-center">
                         <span className="text-[9px] font-semibold tracking-wider text-faint uppercase">
                             Latency
                         </span>
-                        <div className="mt-0.5 font-mono text-[11px] font-medium text-ink">
+                        <div className="mt-1 font-mono text-[11px] font-medium text-ink">
                             {hop.technicalDetails.latencyMs} ms
                         </div>
                     </div>

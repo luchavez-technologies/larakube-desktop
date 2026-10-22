@@ -107,7 +107,7 @@ function PacketEdgeComponent({
                     width={100}
                     height={24}
                     x={labelX - 50}
-                    y={labelY - 12}
+                    y={labelY - 26}
                     className="pointer-events-none overflow-visible"
                 >
                     <div className="flex items-center justify-center">

@@ -126,12 +126,15 @@ export default function SimulatorIndex({
         };
     }, [selectedTargetId, projects, presets]);
 
-    // Back link target
-    const backHref = initialProjectId
-        ? `/projects/${initialProjectId}`
+    // Back link target (fixed to the originating project if launched from one)
+    const originatingProject = initialProjectId
+        ? projects.find((p) => p.id === initialProjectId)
+        : null;
+    const backHref = originatingProject
+        ? `/projects/${originatingProject.id}`
         : '/dashboard';
-    const backLabel = initialProjectId
-        ? `Back to ${activeTarget.name}`
+    const backLabel = originatingProject
+        ? `Back to ${originatingProject.name}`
         : 'Exit to Dashboard';
 
     // Generate dynamic scenarios for target
@@ -199,7 +202,7 @@ export default function SimulatorIndex({
         const generatedNodes: Node[] = [];
         const generatedEdges: Edge[] = [];
 
-        const xSpacing = 240;
+        const xSpacing = 270;
         const startX = 40;
         const yPos = 200;
 
