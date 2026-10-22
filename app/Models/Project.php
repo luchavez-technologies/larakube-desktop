@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $path
  * @property string|null $name
+ * @property string|null $group
  * @property string|null $framework
  * @property int|null $server_id
  * @property string $environment
@@ -32,6 +33,7 @@ class Project extends Model
     protected $fillable = [
         'path',
         'name',
+        'group',
         'framework',
         'server_id',
         'environment',

@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { ArrowDownToLine, Pause, Play, Rocket } from 'lucide-react';
+import { ArrowUpCircle, Play, PowerOff, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { down, start, stop, up } from '@/routes/projects';
 import type { Project } from '@/types/larakube';
@@ -7,7 +7,7 @@ import type { Project } from '@/types/larakube';
 /**
  * The four things done to a project's local cluster, as quick buttons for a
  * list: Up builds and starts it, Start resumes a stopped one, Stop pauses it,
- * Down takes it down (its data is kept). Each is what the project page runs.
+ * Down takes it down (its data is kept). Each mirrors what the project page runs.
  */
 export default function ProjectActions({
     project,
@@ -24,42 +24,68 @@ export default function ProjectActions({
 
     const state = project.localStatus?.state;
     const busy = project.activeRun?.status === 'running';
+
+    const canUp = !busy;
+    const canStart =
+        !busy &&
+        (state === undefined || state === 'paused' || state === 'down');
+    const canStop =
+        !busy &&
+        (state === undefined || state === 'running' || state === 'starting');
+    const canDown = !busy && state !== 'down';
+
     const actions = [
         {
             key: 'up',
-            label: 'Up',
-            hint: 'Build and start it on your local cluster',
-            icon: Rocket,
+            label: state === 'running' ? 'Rebuild' : 'Up',
+            hint:
+                state === 'running'
+                    ? 'Re-orchestrate and restart containers on local cluster (larakube up)'
+                    : 'Build and start local cluster workloads (larakube up)',
+            icon: ArrowUpCircle,
             url: up(project.id).url,
-            enabled: true,
+            enabled: canUp,
+            hoverClass: 'hover:text-brand',
         },
         {
             key: 'start',
             label: 'Start',
-            hint: 'Start it again after a stop',
+            hint:
+                state === 'running'
+                    ? 'Workloads are already running'
+                    : state === 'down'
+                      ? 'Project is down. Run Up first.'
+                      : 'Resume paused workloads (larakube start)',
             icon: Play,
             url: start(project.id).url,
-            enabled:
-                state === undefined || state === 'paused' || state === 'down',
+            enabled: canStart,
+            hoverClass: 'hover:text-emerald-500',
         },
         {
             key: 'stop',
             label: 'Stop',
-            hint: 'Stop it but keep it ready to start',
-            icon: Pause,
+            hint:
+                state === 'paused'
+                    ? 'Workloads are already stopped'
+                    : state === 'down'
+                      ? 'Project is down'
+                      : 'Pause workloads to save CPU & RAM (larakube stop)',
+            icon: Square,
             url: stop(project.id).url,
-            enabled:
-                state === undefined ||
-                state === 'running' ||
-                state === 'starting',
+            enabled: canStop,
+            hoverClass: 'hover:text-amber-500',
         },
         {
             key: 'down',
             label: 'Down',
-            hint: 'Take it down. Its data is kept.',
-            icon: ArrowDownToLine,
+            hint:
+                state === 'down'
+                    ? 'Local cluster environment is already down'
+                    : 'Tear down local Kubernetes pods and services (larakube down)',
+            icon: PowerOff,
             url: down(project.id).url,
-            enabled: state !== 'down',
+            enabled: canDown,
+            hoverClass: 'hover:text-rose-500',
         },
     ];
 
@@ -69,34 +95,47 @@ export default function ProjectActions({
             role="group"
             aria-label={`Quick actions for ${project.name}`}
         >
-            {actions.map(({ key, label, hint, icon: Icon, url, enabled }) => (
-                <button
-                    key={key}
-                    type="button"
-                    disabled={busy || !enabled}
-                    title={
-                        busy
-                            ? 'Another action is still running'
-                            : `${label}: ${hint}`
-                    }
-                    aria-label={`${label} ${project.name}`}
-                    onClick={() =>
-                        router.post(
-                            url,
-                            { environment: 'local' },
-                            { preserveScroll: true, preserveState: true },
-                        )
-                    }
-                    className={cn(
-                        'inline-flex h-7 items-center rounded-md text-[11px] font-medium text-soft ring-1 ring-line transition ring-inset',
-                        'hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-40',
-                        compact ? 'size-7 justify-center p-0' : 'gap-1 px-2',
-                    )}
-                >
-                    <Icon className="size-3.5" />
-                    {!compact && <span>{label}</span>}
-                </button>
-            ))}
+            {actions.map(
+                ({
+                    key,
+                    label,
+                    hint,
+                    icon: Icon,
+                    url,
+                    enabled,
+                    hoverClass,
+                }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        disabled={busy || !enabled}
+                        title={
+                            busy
+                                ? 'Another action is still running'
+                                : `${label}: ${hint}`
+                        }
+                        aria-label={`${label} ${project.name}`}
+                        onClick={() =>
+                            router.post(
+                                url,
+                                { environment: 'local' },
+                                { preserveScroll: true, preserveState: true },
+                            )
+                        }
+                        className={cn(
+                            'inline-flex h-7 items-center rounded-md text-[11px] font-medium text-soft ring-1 ring-line transition ring-inset',
+                            'hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-40',
+                            enabled && hoverClass,
+                            compact
+                                ? 'size-7 justify-center p-0'
+                                : 'gap-1 px-2',
+                        )}
+                    >
+                        <Icon className="size-3.5" />
+                        {!compact && <span>{label}</span>}
+                    </button>
+                ),
+            )}
         </div>
     );
 }

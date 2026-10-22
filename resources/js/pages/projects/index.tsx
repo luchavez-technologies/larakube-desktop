@@ -1,17 +1,28 @@
 import { useState, useEffect } from 'react';
 import { Deferred, Link, router, usePage, usePoll } from '@inertiajs/react';
 import {
-    ArrowRight,
+    ChevronRight,
+    Database,
+    ExternalLink,
     Folder,
     FolderPlus,
+    FolderTree,
     GitBranch,
     Globe,
+    HardDrive,
     Laptop,
     Plus,
+    RotateCw,
     Server,
+    Zap,
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
+import CopyButton from '@/components/copy-button';
+import AssignGroupModal from '@/components/assign-group-modal';
+import ProjectGroupCombobox from '@/components/project-group-combobox';
+import ProjectGroupSection from '@/components/project-group-section';
 import CloneModal from '@/components/clone-modal';
+import ProviderLogo from '@/components/provider-logo';
 import FrameworkLogo, {
     FrameworkBadge,
     resolveFrameworkLabel,
@@ -28,8 +39,10 @@ import { cn } from '@/lib/utils';
 import { show as showDevBox } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
 import { create, index, show, store } from '@/routes/projects';
+import { show as showServer } from '@/routes/servers';
+import EditorMenu from '@/components/editor-menu';
 import BoxProjectActions from '@/components/box-project-actions';
-import type { DevBoxProject, Project } from '@/types/larakube';
+import type { DevBoxProject, Editor, Project } from '@/types/larakube';
 
 export default function ProjectsIndex({
     projects,
@@ -38,6 +51,8 @@ export default function ProjectsIndex({
     box = null,
     boxProjects,
     defaultParent = '',
+    editors = [],
+    defaultEditor,
 }: {
     projects: Project[];
     hasActiveRuns?: boolean;
@@ -45,6 +60,8 @@ export default function ProjectsIndex({
     box?: string | null;
     boxProjects?: DevBoxProject[] | null;
     defaultParent?: string;
+    editors?: Editor[];
+    defaultEditor?: string;
 }) {
     const { errors } = usePage().props as { errors: Record<string, string> };
 
@@ -57,6 +74,65 @@ export default function ProjectsIndex({
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
     const [isCloneOpen, setIsCloneOpen] = useState(false);
     const [isAddingFolder, setIsAddingFolder] = useState(false);
+    const [selectedProjectForGroup, setSelectedProjectForGroup] =
+        useState<Project | null>(null);
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
+    // Extract unique existing groups
+    const existingGroups = Array.from(
+        new Set(
+            projects
+                .map((p) => p.group)
+                .filter((g): g is string => Boolean(g && g.trim() !== '')),
+        ),
+    );
+
+    const handleUpdateProjectGroup = (
+        projectId: number,
+        group: string | null,
+    ) => {
+        router.post(
+            `/projects/${projectId}/group`,
+            { group },
+            { preserveScroll: true },
+        );
+    };
+
+    const handleRenameGroup = (oldName: string, newName: string) => {
+        const inGroup = projects.filter((p) => p.group === oldName);
+        for (const p of inGroup) {
+            router.post(
+                `/projects/${p.id}/group`,
+                { group: newName },
+                { preserveScroll: true },
+            );
+        }
+    };
+
+    const handleDropOnCard = (draggedId: number, targetProject: Project) => {
+        if (draggedId === targetProject.id) return;
+        if (targetProject.group) {
+            handleUpdateProjectGroup(draggedId, targetProject.group);
+        } else {
+            const newGroup = targetProject.name;
+            handleUpdateProjectGroup(targetProject.id, newGroup);
+            handleUpdateProjectGroup(draggedId, newGroup);
+        }
+    };
+
+    // Grouping
+    const grouped = new Map<string, Project[]>();
+    const ungrouped: Project[] = [];
+
+    for (const project of projects) {
+        if (project.group && project.group.trim() !== '') {
+            const list = grouped.get(project.group) ?? [];
+            list.push(project);
+            grouped.set(project.group, list);
+        } else {
+            ungrouped.push(project);
+        }
+    }
 
     const handleAddFolder = () => {
         if (isAddingFolder) return;
@@ -163,123 +239,92 @@ export default function ProjectsIndex({
                     </p>
                 </div>
             ) : viewMode === 'cards' ? (
-                /* Card Grid View */
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
-                    {projects.map((project) => {
-                        const [statusLabel, statusTone] =
-                            projectStatus(project);
-                        const frameworkSlug =
-                            project.framework ??
-                            project.detectedFramework ??
-                            'code';
+                /* Card View: Groups + Standalone */
+                <div className="space-y-6">
+                    {/* Render Group Sections */}
+                    {Array.from(grouped.entries()).map(
+                        ([groupName, groupProjects]) => (
+                            <ProjectGroupSection
+                                key={groupName}
+                                group={groupName}
+                                projects={groupProjects}
+                                onRenameGroup={handleRenameGroup}
+                                onDropProject={handleUpdateProjectGroup}
+                                renderCard={(project) => (
+                                    <ProjectCard
+                                        key={project.id}
+                                        project={project}
+                                        editors={editors}
+                                        defaultEditor={defaultEditor}
+                                        existingGroups={existingGroups}
+                                        onDropOnCard={handleDropOnCard}
+                                        onUpdateGroup={handleUpdateProjectGroup}
+                                        onOpenGroupModal={(p) => {
+                                            setSelectedProjectForGroup(p);
+                                            setIsGroupModalOpen(true);
+                                        }}
+                                    />
+                                )}
+                            />
+                        ),
+                    )}
 
-                        return (
-                            <div
-                                key={project.id}
-                                className="group flex flex-col justify-between rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:shadow-2xs hover:ring-faint"
-                            >
-                                <Link
-                                    href={show(project.id).url}
-                                    className="block"
-                                >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <FrameworkLogo
-                                                slug={frameworkSlug}
-                                                size="md"
-                                            />
-                                            <div className="min-w-0">
-                                                <span className="block truncate text-sm font-semibold text-ink transition-colors group-hover:text-brand">
-                                                    {project.name}
-                                                </span>
-                                                <span className="block truncate text-xs text-soft">
-                                                    {resolveFrameworkLabel(
-                                                        frameworkSlug,
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <StatusPill
-                                            tone={statusTone}
-                                            className="shrink-0"
-                                        >
-                                            {statusLabel}
-                                        </StatusPill>
-                                    </div>
-
-                                    <div className="mt-3.5 space-y-1">
-                                        {project.webHost ? (
-                                            <div className="flex items-center justify-between gap-1.5 font-mono text-xs font-medium text-ink">
-                                                <div className="flex min-w-0 items-center gap-1.5 truncate">
-                                                    <Globe className="size-3.5 shrink-0 text-brand" />
-                                                    <span className="truncate">
-                                                        https://
-                                                        {project.webHost}
-                                                    </span>
-                                                </div>
-                                                <QrCodePopover
-                                                    url={`https://${project.webHost}`}
-                                                    title={project.name}
-                                                    description="Scan with your phone to preview your project"
-                                                />
-                                            </div>
-                                        ) : null}
-                                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-faint">
-                                            <Folder className="size-3.5 shrink-0 text-faint" />
-                                            <span
-                                                className="truncate"
-                                                title={project.path}
-                                            >
-                                                {project.path}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </Link>
-
-                                <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
-                                    {project.exists && project.initialized ? (
-                                        <ProjectActions
-                                            project={project}
-                                            compact
-                                        />
-                                    ) : (
-                                        <span className="text-[11px] text-soft">
-                                            {!project.exists
-                                                ? 'Folder missing'
-                                                : 'Setup needed'}
-                                        </span>
-                                    )}
-                                    <Link
-                                        href={show(project.id).url}
-                                        className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
-                                        aria-label={`Manage ${project.name}`}
-                                    >
-                                        <span>Manage</span>
-                                        <ArrowRight className="size-3" />
-                                    </Link>
+                    {/* Standalone Codebases Grid */}
+                    {ungrouped.length > 0 && (
+                        <div>
+                            {grouped.size > 0 && (
+                                <div className="mb-3 flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold tracking-[-0.01em] text-soft">
+                                        Standalone Codebases
+                                    </h3>
+                                    <span className="text-xs text-faint">
+                                        Drag onto another card or group to link
+                                        them
+                                    </span>
                                 </div>
+                            )}
+                            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+                                {ungrouped.map((project) => (
+                                    <ProjectCard
+                                        key={project.id}
+                                        project={project}
+                                        editors={editors}
+                                        defaultEditor={defaultEditor}
+                                        existingGroups={existingGroups}
+                                        onDropOnCard={handleDropOnCard}
+                                        onUpdateGroup={handleUpdateProjectGroup}
+                                        onOpenGroupModal={(p) => {
+                                            setSelectedProjectForGroup(p);
+                                            setIsGroupModalOpen(true);
+                                        }}
+                                    />
+                                ))}
                             </div>
-                        );
-                    })}
+                        </div>
+                    )}
                 </div>
             ) : (
                 /* Table View */
-                <div className="overflow-hidden rounded-2xl bg-surface px-5.5 ring-1 ring-line ring-inset">
+                <div className="overflow-x-auto rounded-2xl bg-surface px-5.5 ring-1 ring-line ring-inset">
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="text-[11px] tracking-[0.06em] text-soft uppercase">
                                 {[
                                     'Name',
+                                    'Group',
                                     'Framework',
-                                    'Host / Path',
-                                    'Server',
-                                    'Status',
-                                    'Quick actions',
+                                    'Host',
+                                    'IDE / Agent',
                                     '',
-                                ].map((heading) => (
+                                ].map((heading, i) => (
                                     <th
                                         key={heading}
-                                        className="py-3 font-medium"
+                                        className={cn(
+                                            'py-3 font-medium whitespace-nowrap',
+                                            i === 0 ? 'pr-3 pl-0' : 'px-3',
+                                            heading === '' &&
+                                                'pr-0 pl-3 text-right',
+                                        )}
                                     >
                                         {heading}
                                     </th>
@@ -294,61 +339,196 @@ export default function ProjectsIndex({
                                     project.framework ??
                                     project.detectedFramework ??
                                     (project.exists ? 'Unknown' : '—');
+                                const serverTarget =
+                                    project.serverName ?? project.serverIp;
+                                const serverDisplay =
+                                    project.serverName ?? project.serverIp;
 
                                 return (
                                     <tr
                                         key={project.id}
                                         className="border-t border-line"
                                     >
-                                        <td className="py-3.5 font-medium">
-                                            <Link
-                                                href={show(project.id).url}
-                                                className="font-semibold hover:underline"
-                                            >
-                                                {project.name}
-                                            </Link>
-                                        </td>
-                                        <td>
-                                            <FrameworkBadge slug={framework} />
-                                        </td>
-                                        <td className="max-w-[240px] font-mono text-[12px] text-soft">
-                                            {project.webHost ? (
-                                                <div className="flex items-center gap-1.5 truncate">
-                                                    <span className="truncate">
-                                                        https://
-                                                        {project.webHost}
-                                                    </span>
-                                                    <QrCodePopover
-                                                        url={`https://${project.webHost}`}
+                                        <td className="py-3.5 pr-3 pl-0 font-medium">
+                                            <div className="flex max-w-[320px] min-w-0 flex-col gap-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <Link
+                                                        href={
+                                                            show(project.id).url
+                                                        }
+                                                        className="truncate font-semibold hover:underline"
                                                         title={project.name}
-                                                        description="Scan with your phone to preview your project"
+                                                    >
+                                                        {project.name}
+                                                    </Link>
+                                                    {statusLabel ===
+                                                    'Running' ? (
+                                                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                                            <span className="relative flex size-1.5">
+                                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                                                <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                                                            </span>
+                                                            Running
+                                                        </span>
+                                                    ) : statusTone ===
+                                                      'busy' ? (
+                                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 ring-1 ring-amber-500/20 dark:text-amber-400">
+                                                            <RotateCw className="size-2.5 animate-spin" />
+                                                            {statusLabel}
+                                                        </span>
+                                                    ) : (
+                                                        <StatusPill
+                                                            tone={statusTone}
+                                                            className="shrink-0 px-2 py-0.5 text-[11px]"
+                                                        >
+                                                            {statusLabel}
+                                                        </StatusPill>
+                                                    )}
+                                                </div>
+                                                <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-faint">
+                                                    <Folder className="size-3 shrink-0 text-faint" />
+                                                    <span
+                                                        className="truncate font-mono"
+                                                        title={project.path}
+                                                    >
+                                                        {project.path}
+                                                    </span>
+                                                    <CopyButton
+                                                        value={project.path}
+                                                        label=""
+                                                        copiedLabel=""
+                                                        size="xs"
+                                                        variant="ghost"
+                                                        className="h-5 w-5 shrink-0 p-0 text-faint hover:text-ink"
+                                                        title="Copy path"
                                                     />
                                                 </div>
+                                                {project.exists &&
+                                                    project.initialized && (
+                                                        <div className="pt-1">
+                                                            <ProjectActions
+                                                                project={
+                                                                    project
+                                                                }
+                                                            />
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-3.5 whitespace-nowrap">
+                                            <ProjectGroupCombobox
+                                                project={project}
+                                                existingGroups={existingGroups}
+                                                onAssign={
+                                                    handleUpdateProjectGroup
+                                                }
+                                            />
+                                        </td>
+                                        <td className="px-3 py-3.5 whitespace-nowrap">
+                                            <FrameworkBadge slug={framework} />
+                                        </td>
+                                        <td className="max-w-[260px] px-3 py-3.5 font-mono text-[12px] text-soft">
+                                            {project.webHost ||
+                                            serverDisplay ? (
+                                                <div className="flex max-w-[240px] min-w-0 flex-col gap-0.5">
+                                                    {project.webHost ? (
+                                                        <div className="flex min-w-0 items-center justify-between gap-1.5">
+                                                            <div className="flex min-w-0 items-center gap-1.5 truncate">
+                                                                <Globe className="size-3 shrink-0 text-brand" />
+                                                                <a
+                                                                    href={`https://${project.webHost}`}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="truncate hover:text-brand hover:underline"
+                                                                    title={`https://${project.webHost}`}
+                                                                >
+                                                                    https://
+                                                                    {
+                                                                        project.webHost
+                                                                    }
+                                                                </a>
+                                                            </div>
+                                                            <QrCodePopover
+                                                                url={`https://${project.webHost}`}
+                                                                title={
+                                                                    project.name
+                                                                }
+                                                                description="Scan with your phone to preview your project"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-faint">
+                                                            —
+                                                        </span>
+                                                    )}
+                                                    {serverDisplay ? (
+                                                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-soft">
+                                                            <ProviderLogo
+                                                                provider={
+                                                                    project.serverProvider
+                                                                }
+                                                                size="xs"
+                                                                className="size-4.5 shrink-0 rounded p-0.5 [&_svg]:size-3"
+                                                            />
+                                                            {serverTarget ? (
+                                                                <Link
+                                                                    href={
+                                                                        showServer(
+                                                                            serverTarget,
+                                                                        ).url
+                                                                    }
+                                                                    className="truncate text-soft hover:text-brand hover:underline"
+                                                                    title={
+                                                                        project.serverName
+                                                                            ? `Server: ${project.serverName}`
+                                                                            : `Server: ${project.serverIp}`
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        serverDisplay
+                                                                    }
+                                                                </Link>
+                                                            ) : (
+                                                                <span className="truncate">
+                                                                    {
+                                                                        serverDisplay
+                                                                    }
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
                                             ) : (
-                                                <span className="truncate">
-                                                    {project.path}
+                                                <span className="text-xs text-faint">
+                                                    —
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="font-mono text-[12px] text-soft">
-                                            {project.serverIp ?? '—'}
+
+                                        <td className="px-3 py-2 whitespace-nowrap">
+                                            {project.exists ? (
+                                                <EditorMenu
+                                                    project={project}
+                                                    editors={editors}
+                                                    defaultEditor={
+                                                        defaultEditor
+                                                    }
+                                                    compact
+                                                    showFullLabel
+                                                />
+                                            ) : (
+                                                <span className="text-xs text-faint">
+                                                    —
+                                                </span>
+                                            )}
                                         </td>
-                                        <td>
-                                            <StatusPill tone={statusTone}>
-                                                {statusLabel}
-                                            </StatusPill>
-                                        </td>
-                                        <td className="py-2">
-                                            <ProjectActions project={project} />
-                                        </td>
-                                        <td className="text-right">
+                                        <td className="py-3.5 pr-0 pl-3 text-right whitespace-nowrap">
                                             <Link
                                                 href={show(project.id).url}
-                                                className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+                                                className="inline-flex p-1 text-faint transition-colors hover:text-ink"
                                                 aria-label={`Open ${project.name}`}
                                             >
-                                                <span>Manage</span>
-                                                <ArrowRight className="size-3.5" />
+                                                <ChevronRight className="size-4" />
                                             </Link>
                                         </td>
                                     </tr>
@@ -364,6 +544,16 @@ export default function ProjectsIndex({
                 devBoxes={devBoxes}
                 initialBox={box}
                 defaultParent={defaultParent}
+            />
+            <AssignGroupModal
+                project={selectedProjectForGroup}
+                isOpen={isGroupModalOpen}
+                onClose={() => {
+                    setIsGroupModalOpen(false);
+                    setSelectedProjectForGroup(null);
+                }}
+                existingGroups={existingGroups}
+                onAssign={handleUpdateProjectGroup}
             />
         </AppLayout>
     );
@@ -473,95 +663,16 @@ function BoxProjectList({
         );
     }
 
-    const status = (project: DevBoxProject): [string, Tone] =>
-        project.local === 'running' ? ['Running', 'ok'] : ['Stopped', 'muted'];
-
     if (viewMode === 'cards') {
         return (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
-                {projects.map((project) => {
-                    const [statusLabel, statusTone] = status(project);
-                    const frameworkSlug = project.framework ?? 'code';
-
-                    return (
-                        <div
-                            key={project.path}
-                            className="group flex flex-col justify-between rounded-xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:shadow-2xs hover:ring-faint"
-                        >
-                            <Link
-                                href={showDevBox({ box }).url}
-                                className="block"
-                            >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <FrameworkLogo
-                                            slug={frameworkSlug}
-                                            size="md"
-                                        />
-                                        <div className="min-w-0">
-                                            <span className="block truncate text-sm font-semibold text-ink transition-colors group-hover:text-brand">
-                                                {project.name}
-                                            </span>
-                                            <span className="block truncate text-xs text-soft">
-                                                {resolveFrameworkLabel(
-                                                    frameworkSlug,
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <StatusPill
-                                        tone={statusTone}
-                                        className="shrink-0"
-                                    >
-                                        {statusLabel}
-                                    </StatusPill>
-                                </div>
-
-                                <div className="mt-3.5 space-y-1">
-                                    {project.environments?.[0]?.host ? (
-                                        <div className="flex items-center gap-1.5 font-mono text-xs font-medium text-ink">
-                                            <Globe className="size-3.5 shrink-0 text-brand" />
-                                            <span className="truncate">
-                                                https://
-                                                {project.environments[0].host}
-                                            </span>
-                                        </div>
-                                    ) : null}
-                                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-faint">
-                                        <Folder className="size-3.5 shrink-0 text-faint" />
-                                        <span
-                                            className="truncate"
-                                            title={project.path}
-                                        >
-                                            {project.path}
-                                        </span>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
-                                <BoxProjectActions
-                                    box={box}
-                                    project={project}
-                                    compact
-                                />
-                                <Link
-                                    href={
-                                        showBoxProject({
-                                            box,
-                                            project: project.name,
-                                        }).url
-                                    }
-                                    className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
-                                    aria-label={`Manage ${project.name}`}
-                                >
-                                    <span>Manage</span>
-                                    <ArrowRight className="size-3" />
-                                </Link>
-                            </div>
-                        </div>
-                    );
-                })}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+                {projects.map((project) => (
+                    <BoxProjectCard
+                        key={project.path}
+                        box={box}
+                        project={project}
+                    />
+                ))}
             </div>
         );
     }
@@ -571,79 +682,134 @@ function BoxProjectList({
             <table className="w-full text-left text-sm">
                 <thead>
                     <tr className="text-[11px] tracking-[0.06em] text-soft uppercase">
-                        {[
-                            'Name',
-                            'Framework',
-                            'Host / Path',
-                            'Server',
-                            'Status',
-                            'Quick actions',
-                            '',
-                        ].map((heading) => (
-                            <th key={heading} className="py-3 font-medium">
-                                {heading}
-                            </th>
-                        ))}
+                        {['Name', 'Framework', 'Host', 'Quick actions', ''].map(
+                            (heading, i) => (
+                                <th
+                                    key={heading}
+                                    className={cn(
+                                        'py-3 font-medium whitespace-nowrap',
+                                        i === 0 ? 'pr-3 pl-0' : 'px-3',
+                                        heading === '' &&
+                                            'pr-0 pl-3 text-right',
+                                    )}
+                                >
+                                    {heading}
+                                </th>
+                            ),
+                        )}
                     </tr>
                 </thead>
                 <tbody>
-                    {projects.map((project) => (
-                        <tr key={project.path} className="border-t border-line">
-                            <td className="py-3.5 font-medium">
-                                <Link
-                                    href={
-                                        showBoxProject({
-                                            box,
-                                            project: project.name,
-                                        }).url
-                                    }
-                                    className="font-semibold hover:underline"
-                                >
-                                    {project.name}
-                                </Link>
-                            </td>
-                            <td>
-                                <FrameworkBadge slug={project.framework} />
-                            </td>
-                            <td className="max-w-[220px] truncate font-mono text-[12px] text-soft">
-                                {project.environments[0]?.host ?? project.path}
-                            </td>
-                            <td className="font-mono text-[12px] text-soft">
-                                <Link
-                                    href={showDevBox({ box }).url}
-                                    className="hover:text-ink hover:underline"
-                                >
-                                    {box}
-                                </Link>
-                            </td>
-                            <td>
-                                <StatusPill tone={status(project)[1]}>
-                                    {status(project)[0]}
-                                </StatusPill>
-                            </td>
-                            <td className="py-2">
-                                <BoxProjectActions
-                                    box={box}
-                                    project={project}
-                                />
-                            </td>
-                            <td className="text-right">
-                                <Link
-                                    href={
-                                        showBoxProject({
-                                            box,
-                                            project: project.name,
-                                        }).url
-                                    }
-                                    className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
-                                    aria-label={`Open ${project.name}`}
-                                >
-                                    <span>Manage</span>
-                                    <ArrowRight className="size-3.5" />
-                                </Link>
-                            </td>
-                        </tr>
-                    ))}
+                    {projects.map((project) => {
+                        const host = project.environments[0]?.host;
+                        return (
+                            <tr
+                                key={project.path}
+                                className="border-t border-line"
+                            >
+                                <td className="py-3.5 pr-3 pl-0 font-medium">
+                                    <div className="flex max-w-[280px] min-w-0 flex-col gap-0.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <Link
+                                                href={
+                                                    showBoxProject({
+                                                        box,
+                                                        project: project.name,
+                                                    }).url
+                                                }
+                                                className="truncate font-semibold hover:underline"
+                                                title={project.name}
+                                            >
+                                                {project.name}
+                                            </Link>
+                                            <StatusPill
+                                                tone={
+                                                    boxProjectStatus(project)[1]
+                                                }
+                                                className="shrink-0 px-2 py-0.5 text-[11px]"
+                                            >
+                                                {boxProjectStatus(project)[0]}
+                                            </StatusPill>
+                                        </div>
+                                        <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-faint">
+                                            <Folder className="size-3 shrink-0 text-faint" />
+                                            <span
+                                                className="truncate font-mono"
+                                                title={project.path}
+                                            >
+                                                {project.path}
+                                            </span>
+                                            <CopyButton
+                                                value={project.path}
+                                                label=""
+                                                copiedLabel=""
+                                                size="xs"
+                                                variant="ghost"
+                                                className="h-5 w-5 shrink-0 p-0 text-faint hover:text-ink"
+                                                title="Copy path"
+                                            />
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-3 py-3.5 whitespace-nowrap">
+                                    <FrameworkBadge slug={project.framework} />
+                                </td>
+                                <td className="max-w-[260px] px-3 py-3.5 font-mono text-[12px] text-soft">
+                                    <div className="flex max-w-[240px] min-w-0 flex-col gap-0.5">
+                                        {host ? (
+                                            <div className="flex min-w-0 items-center gap-1.5">
+                                                <Globe className="size-3 shrink-0 text-brand" />
+                                                <span
+                                                    className="truncate font-mono"
+                                                    title={host}
+                                                >
+                                                    {host}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-faint">
+                                                —
+                                            </span>
+                                        )}
+                                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-soft">
+                                            <ProviderLogo
+                                                provider="vps"
+                                                size="xs"
+                                                className="size-4.5 shrink-0 rounded p-0.5 [&_svg]:size-3"
+                                            />
+                                            <Link
+                                                href={showDevBox({ box }).url}
+                                                className="truncate text-soft hover:text-brand hover:underline"
+                                                title={`Dev Box: ${box}`}
+                                            >
+                                                {box}
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                    <BoxProjectActions
+                                        box={box}
+                                        project={project}
+                                    />
+                                </td>
+                                <td className="py-3.5 pr-0 pl-3 text-right whitespace-nowrap">
+                                    <Link
+                                        href={
+                                            showBoxProject({
+                                                box,
+                                                project: project.name,
+                                            }).url
+                                        }
+                                        className="inline-flex p-1 text-faint transition-colors hover:text-ink"
+                                        aria-label={`Open ${project.name}`}
+                                    >
+                                        <ChevronRight className="size-4" />
+                                    </Link>
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
@@ -659,10 +825,458 @@ function projectStatus(project: Project): [string, Tone] {
             project.scaffoldStatus === 'cancelled'
         )
             return ["Couldn't be created", 'bad'];
-        return ['Folder missing', 'bad'];
+        return ['Missing', 'bad'];
     }
 
-    if (project.webHost && project.serverIp) return ['Ready to deploy', 'ok'];
-    if (project.initialized) return ['Needs a server', 'warn'];
-    return ['Not set up', 'muted'];
+    if (project.localStatus) {
+        if (project.localStatus.state === 'running') return ['Running', 'ok'];
+        if (
+            project.localStatus.state === 'starting' ||
+            project.localStatus.state === 'stopping'
+        ) {
+            return [project.localStatus.label, 'busy'];
+        }
+        if (
+            project.localStatus.state === 'paused' ||
+            project.localStatus.state === 'down' ||
+            project.localStatus.state === 'uninitialized'
+        ) {
+            return ['Paused', 'muted'];
+        }
+    }
+
+    return ['Paused', 'muted'];
+}
+
+function boxProjectStatus(project: DevBoxProject): [string, Tone] {
+    return project.local === 'running'
+        ? ['Running', 'ok']
+        : ['Paused', 'muted'];
+}
+
+function ProjectCard({
+    project,
+    editors,
+    defaultEditor,
+    existingGroups = [],
+    onDropOnCard,
+    onUpdateGroup,
+    onOpenGroupModal,
+}: {
+    project: Project;
+    editors?: Editor[];
+    defaultEditor?: string;
+    existingGroups?: string[];
+    onDropOnCard?: (draggedId: number, targetProject: Project) => void;
+    onUpdateGroup?: (projectId: number, group: string | null) => void;
+    onOpenGroupModal?: (project: Project) => void;
+}) {
+    const [statusLabel, statusTone] = projectStatus(project);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const frameworkSlug =
+        project.framework ?? project.detectedFramework ?? 'code';
+    const effectiveHost =
+        project.webHost ||
+        project.localStatus?.domain ||
+        project.environments?.local?.webHost;
+    const isRunning =
+        project.localStatus?.state === 'running' || statusLabel === 'Running';
+    const isBusy = statusTone === 'busy';
+
+    return (
+        <div
+            draggable={true}
+            onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', String(project.id));
+                e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragOver(false);
+                const rawId = e.dataTransfer.getData('text/plain');
+                if (rawId && Number(rawId) !== project.id) {
+                    onDropOnCard?.(Number(rawId), project);
+                }
+            }}
+            className={cn(
+                // An open IDE menu (<details open>) or group combobox (data-open) lifts the
+                // whole card above its neighbours: the hover transform makes each card its
+                // own stacking context, so a z-index on the dropdown alone can't escape it.
+                'group relative flex cursor-grab flex-col justify-between rounded-2xl bg-surface p-5 shadow-2xs ring-1 ring-line transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-faint active:cursor-grabbing has-[[data-open=true]]:z-40 has-[details[open]]:z-40',
+                isDragOver &&
+                    'bg-brand/5 shadow-md ring-2 ring-brand ring-offset-2',
+            )}
+        >
+            <div>
+                {/* Header: Framework Logo, Project Name, and Status */}
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-paper/60 p-2 shadow-2xs ring-1 ring-line/60 transition-transform group-hover:scale-105">
+                            <FrameworkLogo slug={frameworkSlug} size="md" />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 truncate">
+                                <Link
+                                    href={show(project.id).url}
+                                    className="block truncate text-base font-semibold text-ink transition-colors group-hover:text-brand"
+                                >
+                                    {project.name}
+                                </Link>
+                                {project.group && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand ring-1 ring-brand/20">
+                                        <FolderTree className="size-2.5" />
+                                        <span className="max-w-[80px] truncate">
+                                            {project.group}
+                                        </span>
+                                    </span>
+                                )}
+                            </div>
+                            <span className="block truncate text-xs text-soft">
+                                {resolveFrameworkLabel(frameworkSlug)}
+                            </span>
+                        </div>
+                    </div>
+
+                    {isRunning ? (
+                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                            <span className="relative flex size-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                            </span>
+                            Running
+                        </span>
+                    ) : isBusy ? (
+                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 ring-1 ring-amber-500/20 dark:text-amber-400">
+                            <RotateCw className="size-3 animate-spin" />
+                            {statusLabel}
+                        </span>
+                    ) : (
+                        <StatusPill tone={statusTone} className="shrink-0">
+                            {statusLabel}
+                        </StatusPill>
+                    )}
+                </div>
+
+                {/* Host Preview Strip */}
+                {effectiveHost ? (
+                    <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-line/60 transition group-hover:bg-paper/80">
+                        <div className="flex min-w-0 items-center gap-2 truncate font-mono text-xs font-medium text-ink">
+                            <Globe className="size-3.5 shrink-0 text-brand" />
+                            <a
+                                href={`https://${effectiveHost}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="truncate hover:text-brand hover:underline"
+                                title={`Open https://${effectiveHost}`}
+                            >
+                                https://{effectiveHost}
+                            </a>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <QrCodePopover
+                                url={`https://${effectiveHost}`}
+                                title={project.name}
+                                description="Scan with your phone to preview your project"
+                            />
+                            <a
+                                href={`https://${effectiveHost}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded p-1 text-soft transition hover:bg-surface hover:text-ink"
+                                title="Open in browser"
+                            >
+                                <ExternalLink className="size-3.5" />
+                            </a>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* Path and Git Repo */}
+                <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                    <div className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[11px] text-faint">
+                        <Folder className="size-3.5 shrink-0 text-faint" />
+                        <span className="truncate" title={project.path}>
+                            {project.path}
+                        </span>
+                        <CopyButton
+                            value={project.path}
+                            label=""
+                            copiedLabel=""
+                            size="xs"
+                            variant="ghost"
+                            className="h-5 w-5 shrink-0 p-0 text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink"
+                            title="Copy path"
+                        />
+                    </div>
+                    {project.git?.repoSlug && (
+                        <span
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft ring-1 ring-line/50"
+                            title={`Repository: ${project.git.repoSlug}`}
+                        >
+                            <GitBranch className="size-2.5 text-soft" />
+                            <span className="max-w-[110px] truncate">
+                                {project.git.repoSlug}
+                            </span>
+                        </span>
+                    )}
+                </div>
+
+                {/* Server info if assigned */}
+                {(project.serverName || project.serverIp) && (
+                    <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-soft">
+                        <ProviderLogo
+                            provider={project.serverProvider}
+                            size="xs"
+                            className="size-4 shrink-0 rounded p-0.5 [&_svg]:size-2.5"
+                        />
+                        <Link
+                            href={
+                                showServer(
+                                    project.serverName ??
+                                        project.serverIp ??
+                                        '',
+                                ).url
+                            }
+                            className="truncate font-mono text-[11px] text-soft hover:text-brand hover:underline"
+                            title={
+                                project.serverName
+                                    ? `Server: ${project.serverName}`
+                                    : `Server: ${project.serverIp}`
+                            }
+                        >
+                            {project.serverName ?? project.serverIp}
+                        </Link>
+                    </div>
+                )}
+
+                {/* Backing Services Chips */}
+                {(project.database ||
+                    project.cacheDriver ||
+                    project.objectStorage) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        {project.database && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize ring-1 ring-line/50"
+                                title={`Database: ${project.database}`}
+                            >
+                                <Database className="size-3 text-faint" />
+                                {project.database}
+                            </span>
+                        )}
+                        {project.cacheDriver && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize ring-1 ring-line/50"
+                                title={`Cache: ${project.cacheDriver}`}
+                            >
+                                <Zap className="size-3 text-faint" />
+                                {project.cacheDriver}
+                            </span>
+                        )}
+                        {project.objectStorage && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize ring-1 ring-line/50"
+                                title={`Storage: ${project.objectStorage}`}
+                            >
+                                <HardDrive className="size-3 text-faint" />
+                                {project.objectStorage}
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Footer: Quick Actions + Group Button + Manage Link */}
+            <div className="mt-4 flex items-center justify-between border-t border-line/70 pt-3">
+                <div className="flex items-center gap-1.5">
+                    {project.exists && project.initialized ? (
+                        <ProjectActions project={project} compact />
+                    ) : (
+                        <span className="text-[11px] text-soft">
+                            {!project.exists
+                                ? 'Folder missing'
+                                : 'Setup needed'}
+                        </span>
+                    )}
+                    {project.exists && (
+                        <EditorMenu
+                            project={project}
+                            editors={editors}
+                            defaultEditor={defaultEditor}
+                            compact
+                            align="left"
+                        />
+                    )}
+                    {onUpdateGroup ? (
+                        <ProjectGroupCombobox
+                            project={project}
+                            existingGroups={existingGroups}
+                            onAssign={onUpdateGroup}
+                            variant="icon"
+                            align="left"
+                        />
+                    ) : onOpenGroupModal ? (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenGroupModal(project);
+                            }}
+                            className="rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
+                            title={
+                                project.group
+                                    ? `Group: ${project.group} (Click to change)`
+                                    : 'Assign to project group'
+                            }
+                        >
+                            <FolderTree className="size-3.5" />
+                        </button>
+                    ) : null}
+                </div>
+                <Link
+                    href={show(project.id).url}
+                    className="ml-auto inline-flex shrink-0 rounded-lg p-1 text-faint transition-colors hover:bg-paper hover:text-ink"
+                    aria-label={`Open ${project.name}`}
+                >
+                    <ChevronRight className="size-4" />
+                </Link>
+            </div>
+        </div>
+    );
+}
+
+function BoxProjectCard({
+    box,
+    project,
+}: {
+    box: string;
+    project: DevBoxProject;
+}) {
+    const isRunning = project.local === 'running';
+    const frameworkSlug = project.framework ?? 'code';
+    const host = project.environments?.[0]?.host;
+
+    return (
+        <div className="group relative flex flex-col justify-between rounded-2xl bg-surface p-5 shadow-2xs ring-1 ring-line transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-faint">
+            <div>
+                {/* Header: Framework Logo, Project Name, and Status */}
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-paper/60 p-2 shadow-2xs ring-1 ring-line/60 transition-transform group-hover:scale-105">
+                            <FrameworkLogo slug={frameworkSlug} size="md" />
+                        </div>
+                        <div className="min-w-0">
+                            <Link
+                                href={
+                                    showBoxProject({
+                                        box,
+                                        project: project.name,
+                                    }).url
+                                }
+                                className="block truncate text-base font-semibold text-ink transition-colors group-hover:text-brand"
+                            >
+                                {project.name}
+                            </Link>
+                            <span className="block truncate text-xs text-soft">
+                                {resolveFrameworkLabel(frameworkSlug)}
+                            </span>
+                        </div>
+                    </div>
+
+                    {isRunning ? (
+                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                            <span className="relative flex size-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                            </span>
+                            Running
+                        </span>
+                    ) : (
+                        <StatusPill tone="muted" className="shrink-0">
+                            Stopped
+                        </StatusPill>
+                    )}
+                </div>
+
+                {/* Host Preview Strip */}
+                {host ? (
+                    <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-paper/60 px-3 py-2 ring-1 ring-line/60 transition group-hover:bg-paper/80">
+                        <div className="flex min-w-0 items-center gap-2 truncate font-mono text-xs font-medium text-ink">
+                            <Globe className="size-3.5 shrink-0 text-brand" />
+                            <a
+                                href={`https://${host}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="truncate hover:text-brand hover:underline"
+                                title={`Open https://${host}`}
+                            >
+                                https://{host}
+                            </a>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <QrCodePopover
+                                url={`https://${host}`}
+                                title={project.name}
+                                description="Scan with your phone to preview your project"
+                            />
+                            <a
+                                href={`https://${host}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded p-1 text-soft transition hover:bg-surface hover:text-ink"
+                                title="Open in browser"
+                            >
+                                <ExternalLink className="size-3.5" />
+                            </a>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* Path and Dev Box info */}
+                <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                    <div className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[11px] text-faint">
+                        <Folder className="size-3.5 shrink-0 text-faint" />
+                        <span className="truncate" title={project.path}>
+                            {project.path}
+                        </span>
+                        <CopyButton
+                            value={project.path}
+                            label=""
+                            copiedLabel=""
+                            size="xs"
+                            variant="ghost"
+                            className="h-5 w-5 shrink-0 p-0 text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink"
+                            title="Copy path"
+                        />
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft ring-1 ring-line/50">
+                        <Server className="size-2.5 text-soft" />
+                        <span>{box}</span>
+                    </span>
+                </div>
+            </div>
+
+            {/* Footer: Quick Actions + Manage Link */}
+            <div className="mt-4 flex items-center justify-between border-t border-line/70 pt-3">
+                <BoxProjectActions box={box} project={project} compact />
+                <Link
+                    href={
+                        showBoxProject({
+                            box,
+                            project: project.name,
+                        }).url
+                    }
+                    className="ml-auto inline-flex shrink-0 rounded-lg p-1 text-faint transition-colors hover:bg-paper hover:text-ink"
+                    aria-label={`Open ${project.name}`}
+                >
+                    <ChevronRight className="size-4" />
+                </Link>
+            </div>
+        </div>
+    );
 }

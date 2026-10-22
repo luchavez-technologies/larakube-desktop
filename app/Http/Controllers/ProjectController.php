@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Project;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\EditorLauncher;
 use App\Services\FolderPicker;
 use App\Services\LaraKube\CliRunner;
@@ -91,12 +92,39 @@ class ProjectController extends Controller
 
         $workloads = $this->localWorkloadStatuses($locator);
 
-        $projects = Project::query()->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads): array {
+        $servers = Server::query()->get(['id', 'name', 'ip', 'context', 'provider']);
+        $serverByIp = $servers->whereNotNull('ip')->keyBy('ip');
+        $serverByContext = $servers->whereNotNull('context')->keyBy('context');
+
+        $stacks = app(StackCatalog::class)->all() ?? [];
+        $stackByIp = collect($stacks)->filter(fn (array $s): bool => ! empty($s['ip']))->keyBy('ip');
+        $stackByContext = collect($stacks)->filter(fn (array $s): bool => ! empty($s['context']))->keyBy('context');
+
+        $projects = Project::query()->with('server')->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads, $serverByIp, $serverByContext, $stackByIp, $stackByContext): array {
             $inspection = $this->inspector->inspect($project->path);
             $activeRun = $activeRuns->get($project->id);
 
+            $matchedServer = $project->server !== null
+                ? $project->server
+                : (($inspection['serverIp'] ? $serverByIp->get($inspection['serverIp']) : null)
+                    ?? ($inspection['serverContext'] ? $serverByContext->get($inspection['serverContext']) : null));
+
+            $matchedStack = ($inspection['serverIp'] ? $stackByIp->get($inspection['serverIp']) : null)
+                ?? ($inspection['serverContext'] ? $stackByContext->get($inspection['serverContext']) : null);
+
+            $serverName = $matchedServer !== null
+                ? $matchedServer->name
+                : ($matchedStack !== null ? $matchedStack['name'] : null);
+
+            $serverProvider = $matchedServer !== null
+                ? $matchedServer->provider
+                : ($matchedStack !== null ? $matchedStack['provider'] : null);
+
             return [
                 'id' => $project->id,
+                'group' => $project->group,
+                'serverName' => $serverName,
+                'serverProvider' => $serverProvider,
                 'scaffoldStatus' => $scaffolds->get("project:{$project->id}")?->status,
                 'localStatus' => $this->resolveLocalStatus($project, $inspection, $activeRun, $workloads),
                 'activeRun' => $activeRun ? [
@@ -128,6 +156,8 @@ class ProjectController extends Controller
             }, 'boxProjects'),
             'hasRunningLocal' => collect($projects)->some(fn (array $p): bool => $p['localStatus']['state'] === 'running'),
             'defaultParent' => $this->locator->defaultProjectsDirectory(),
+            'editors' => app(EditorLauncher::class)->available(),
+            'defaultEditor' => rescue(fn () => app(GlobalSettings::class)->getDefaultEditor(), 'vscode', false),
         ]);
     }
 
@@ -579,7 +609,7 @@ class ProjectController extends Controller
             ->first();
 
         return Inertia::render('projects/show', [
-            'project' => ['id' => $project->id, 'localStatus' => $this->resolveLocalStatus($project, $inspection, $latestRun, $this->localWorkloadStatuses($locator))] + $inspection,
+            'project' => ['id' => $project->id, 'group' => $project->group, 'localStatus' => $this->resolveLocalStatus($project, $inspection, $latestRun, $this->localWorkloadStatuses($locator))] + $inspection,
             'server' => $server,
             'frameworks' => $this->inspector->deployableFrameworks(),
             'runs' => Run::query()
@@ -663,6 +693,7 @@ class ProjectController extends Controller
 
                 return $result;
             }, 'domains'),
+            'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
         ]);
     }
 
@@ -971,6 +1002,70 @@ class ProjectController extends Controller
         $args = ['stop', $environment];
 
         return $this->run($runner, $project, RunKind::StopProject, "Stop {$this->name($project)} ({$environment})", $args, $environment);
+    }
+
+    public function updateGroup(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'group' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $group = isset($validated['group']) && is_string($validated['group']) && trim($validated['group']) !== ''
+            ? trim($validated['group'])
+            : null;
+
+        $project->update(['group' => $group]);
+
+        // Inertia visits (router.post) need a redirect, not JSON.
+        return back();
+    }
+
+    /** Up (build & start, or rebuild if already running) every codebase in a group. */
+    public function upGroup(Request $request, string $group, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+
+        foreach (Project::query()->where('group', $group)->get() as $project) {
+            $this->run($runner, $project, RunKind::UpProject, "Up {$this->name($project)} ({$environment})", ['up', $environment, '--no-console', '--no-test'], $environment);
+        }
+
+        return back();
+    }
+
+    /** Take every codebase in a group down (data volumes are kept). */
+    public function downGroup(Request $request, string $group, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+
+        foreach (Project::query()->where('group', $group)->get() as $project) {
+            $this->run($runner, $project, RunKind::DownProject, "Down {$this->name($project)} ({$environment})", ['down', $environment, '--force'], $environment);
+        }
+
+        return back();
+    }
+
+    public function startGroup(Request $request, string $group, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $projects = Project::query()->where('group', $group)->get();
+
+        foreach ($projects as $project) {
+            $this->run($runner, $project, RunKind::StartProject, "Start {$this->name($project)} ({$environment})", ['start', $environment], $environment);
+        }
+
+        return back();
+    }
+
+    public function stopGroup(Request $request, string $group, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $projects = Project::query()->where('group', $group)->get();
+
+        foreach ($projects as $project) {
+            $this->run($runner, $project, RunKind::StopProject, "Stop {$this->name($project)} ({$environment})", ['stop', $environment], $environment);
+        }
+
+        return back();
     }
 
     public function tld(Request $request, Project $project): RedirectResponse

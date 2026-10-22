@@ -49,6 +49,12 @@ export type Provider = {
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 
+export type Editor = {
+    slug: string;
+    label: string;
+    category?: 'editor' | 'agent';
+};
+
 export type ActiveRunSummary = {
     id: number;
     label: string;
@@ -190,6 +196,7 @@ export type Run = {
     projectName?: string | null;
     environment?: string | null;
     serverName?: string | null;
+    serverProvider?: string | null;
     context?: string | null;
     tool?: string | null;
     meta: {
@@ -491,6 +498,7 @@ export type PlexTenantClusterTool = {
     tagline: string;
     logo: string;
     icon: string;
+    requiresRender?: boolean;
 };
 
 export type PlexTenant = {
@@ -562,6 +570,7 @@ export type LocalProjectStatus = {
 export type Project = {
     id: number;
     path: string;
+    group?: string | null;
     exists: boolean;
     initialized: boolean;
     name: string;
@@ -570,6 +579,8 @@ export type Project = {
     webHost: string | null;
     serverIp: string | null;
     serverContext?: string | null;
+    serverName?: string | null;
+    serverProvider?: string | null;
     deployable: boolean;
     localTld?: string | null;
     globalTld?: string;

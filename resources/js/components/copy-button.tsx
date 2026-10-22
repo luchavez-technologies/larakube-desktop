@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ButtonHTMLAttributes } from 'react';
 import { Check, Copy } from 'lucide-react';
 import Button, {
     type ButtonSize,
@@ -12,6 +13,8 @@ export default function CopyButton({
     variant = 'ghost',
     size = 'sm',
     className,
+    title = 'Copy',
+    ...props
 }: {
     value: string;
     label?: string;
@@ -19,29 +22,36 @@ export default function CopyButton({
     variant?: ButtonVariant;
     size?: ButtonSize;
     className?: string;
-}) {
+    title?: string;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'value'>) {
     const [copied, setCopied] = useState(false);
+
+    const activeTitle = copied ? copiedLabel || 'Copied' : title;
 
     return (
         <Button
             variant={variant}
             size={size}
             className={className}
-            onClick={() => {
+            title={activeTitle}
+            aria-label={activeTitle}
+            onClick={(e) => {
+                e.stopPropagation();
                 void navigator.clipboard.writeText(value);
                 setCopied(true);
                 window.setTimeout(() => setCopied(false), 2000);
             }}
+            {...props}
         >
             {copied ? (
                 <>
-                    <Check className="size-3.5 text-emerald-500" />
-                    <span>{copiedLabel}</span>
+                    <Check className="size-3.5 shrink-0 text-emerald-500" />
+                    {copiedLabel ? <span>{copiedLabel}</span> : null}
                 </>
             ) : (
                 <>
-                    <Copy className="size-3.5" />
-                    <span>{label}</span>
+                    <Copy className="size-3.5 shrink-0" />
+                    {label ? <span>{label}</span> : null}
                 </>
             )}
         </Button>

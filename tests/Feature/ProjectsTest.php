@@ -1118,3 +1118,34 @@ test('folder picker and project paths adapt seamlessly on Windows WSL', function
     $res->assertOk()
         ->assertJsonPath('path', '/home/larakube/projects/shop');
 });
+
+test('projects index returns available editors, default editor, and matches serverName and serverProvider', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    $server = Server::create([
+        'name' => 'prod-doks',
+        'provider' => 'doks',
+        'kind' => 'kubernetes',
+        'status' => 'ready',
+        'ip' => '203.0.113.21',
+    ]);
+
+    $project = Project::create([
+        'path' => $sandbox['app'],
+        'server_id' => $server->id,
+    ]);
+
+    $this->get(route('projects.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/index')
+            ->has('editors')
+            ->has('defaultEditor')
+            ->where('projects.0.serverName', 'prod-doks')
+            ->where('projects.0.serverProvider', 'doks')
+        );
+
+    File::deleteDirectory($sandbox['home']);
+});

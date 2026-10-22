@@ -28,6 +28,7 @@ function devBoxProjectsExperimental(bool $on): void
     $settings->shouldReceive('hideProjects')->andReturnFalse();
     $settings->shouldReceive('experimental')->andReturn($on);
     $settings->shouldReceive('demoMode')->andReturnFalse();
+    $settings->shouldReceive('getDefaultEditor')->byDefault()->andReturn('vscode');
     $settings->shouldReceive('get')->andReturn(['cliChannel' => 'canary']);
     app()->instance(GlobalSettings::class, $settings);
 }
