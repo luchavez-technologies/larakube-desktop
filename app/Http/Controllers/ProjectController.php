@@ -22,6 +22,7 @@ use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\HealthPing;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
+use App\Services\LaraKube\ProjectCompanions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ProjectServices;
 use App\Services\LaraKube\ProjectWorkloadStatus;
@@ -697,6 +698,7 @@ class ProjectController extends Controller
                 return $result;
             }, 'domains'),
             'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
+            'companionCredentials' => Inertia::defer(fn (): array => app(ProjectCompanions::class)->credentials($project->path), 'companions'),
             'localTld' => app(GlobalSettings::class)->getLocalTld(),
         ]);
     }

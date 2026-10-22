@@ -550,6 +550,15 @@ export type CompanionApp = {
     url: string | null;
 };
 
+export type CompanionCredential = {
+    companion: string;
+    url: string;
+    host: string | null;
+    user: string | null;
+    password: string | null;
+    database: string | null;
+};
+
 export type LocalProjectState =
     | 'running'
     | 'paused'
