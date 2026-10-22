@@ -30,6 +30,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SimulatorController;
 use App\Http\Controllers\ToolInstallController;
 use App\Http\Controllers\TrayController;
+use App\Http\Controllers\TunnelController;
 use App\Http\Controllers\UninstallController;
 use App\Http\Controllers\UpdatesController;
 use App\Http\Controllers\WorkspaceController;
@@ -150,8 +151,13 @@ Route::post('/projects/create', [ProjectController::class, 'scaffold'])->name('p
 Route::post('/projects/create/dev-box', [ProjectController::class, 'scaffoldOnDevBox'])->name('projects.scaffold-dev-box');
 Route::post('/projects/local/stop-all', [ProjectController::class, 'stopAll'])->name('projects.stop-all');
 Route::post('/projects/local/down-all', [ProjectController::class, 'downAll'])->name('projects.down-all');
+Route::post('/projects/groups/{group}/up', [ProjectController::class, 'upGroup'])->name('projects.groups.up');
+Route::post('/projects/groups/{group}/start', [ProjectController::class, 'startGroup'])->name('projects.groups.start');
+Route::post('/projects/groups/{group}/stop', [ProjectController::class, 'stopGroup'])->name('projects.groups.stop');
+Route::post('/projects/groups/{group}/down', [ProjectController::class, 'downGroup'])->name('projects.groups.down');
 Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
 Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
+Route::post('/projects/{project}/group', [ProjectController::class, 'updateGroup'])->name('projects.group');
 Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');
 Route::post('/projects/{project}/link', [ProjectController::class, 'link'])->name('projects.link');
 Route::post('/projects/{project}/host', [ProjectController::class, 'host'])->name('projects.host');
@@ -172,6 +178,7 @@ Route::post('/projects/{project}/scaling/replicas', [ProjectScalingController::c
 Route::post('/projects/{project}/scaling/autoscale', [ProjectScalingController::class, 'updateAutoscale'])->name('projects.scaling.autoscale');
 Route::post('/projects/{project}/scaling/resources', [ProjectScalingController::class, 'updateResources'])->name('projects.scaling.resources');
 Route::get('/projects/{project}/dotenv/status', [ProjectDotenvController::class, 'status'])->name('projects.dotenv.status');
+Route::post('/projects/{project}/dotenv/update', [ProjectDotenvController::class, 'update'])->name('projects.dotenv.update');
 Route::post('/projects/{project}/dotenv/push', [ProjectDotenvController::class, 'push'])->name('projects.dotenv.push');
 Route::post('/projects/{project}/dotenv/pull', [ProjectDotenvController::class, 'pull'])->name('projects.dotenv.pull');
 
@@ -200,6 +207,17 @@ Route::post('/servers/{server}/drive/extensions/uninstall', [DriveController::cl
 Route::post('/servers/{server}/drive/restart', [DriveController::class, 'restart'])->name('servers.drive.restart');
 Route::delete('/servers/{server}/drive', [DriveController::class, 'destroy'])->name('servers.drive.destroy');
 
+// Apps (App Store & Cluster Apps)
+Route::get('/apps', [ClusterToolController::class, 'entry'])->name('apps');
+Route::get('/servers/{server}/apps', [ClusterToolController::class, 'index'])->name('servers.apps.index');
+Route::post('/servers/{server}/apps/refresh', [ClusterToolController::class, 'refresh'])->name('servers.apps.refresh');
+Route::get('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'show'])->name('servers.apps.show');
+Route::get('/servers/{server}/apps/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.apps.credentials');
+Route::post('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'store'])->name('servers.apps.store');
+Route::post('/servers/{server}/apps/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.apps.rebind');
+Route::delete('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.apps.destroy');
+
+// Legacy routes preserved for backward compatibility
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
 Route::get('/servers/{server}/tools', [ClusterToolController::class, 'index'])->name('servers.tools.index');
 Route::get('/servers/{server}/check-dns', [ClusterToolController::class, 'checkDns'])->name('servers.tools.check-dns');
@@ -217,6 +235,10 @@ Route::post('/companions/add', [CompanionController::class, 'add'])->name('compa
 Route::post('/companions/remove', [CompanionController::class, 'remove'])->name('companions.remove');
 Route::post('/companions/start', [CompanionController::class, 'start'])->name('companions.start');
 Route::post('/companions/stop', [CompanionController::class, 'stop'])->name('companions.stop');
+
+Route::get('/tunnels', [TunnelController::class, 'index'])->name('tunnels.index');
+Route::post('/tunnels/start', [TunnelController::class, 'start'])->name('tunnels.start');
+Route::post('/tunnels/stop', [TunnelController::class, 'stop'])->name('tunnels.stop');
 
 Route::match(['get', 'post'], '/context/pick-file', [ContextController::class, 'pickFile'])->name('context.pick-file');
 Route::post('/context/import', [ContextController::class, 'import'])->name('context.import');
