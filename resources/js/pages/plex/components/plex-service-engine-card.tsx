@@ -415,7 +415,7 @@ export default function PlexServiceEngineCard({
                         <ExternalLinkButton
                             url={companion.url}
                             className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-soft transition hover:bg-paper hover:text-brand"
-                            title={`Open ${companion.name} for this engine`}
+                            title={`Opens the shared ${companion.name} tool — it has no connection preset. Add one using your project's own host/user/password, shown on your project's page under "Local Dev Companions".`}
                         >
                             <ExternalLink className="size-3.5" />
                             <span>Open in {companion.name}</span>
@@ -435,6 +435,18 @@ export default function PlexServiceEngineCard({
                     </Button>
                 )}
             </div>
+
+            {companion?.url && (
+                <p className="mt-2 text-[10px] leading-snug text-faint">
+                    {companion.name} opens with no connection set up — each
+                    tenant has its own credentials. Find yours on your
+                    project&apos;s page, under{' '}
+                    <span className="font-medium text-soft">
+                        Local Dev Companions
+                    </span>
+                    .
+                </p>
+            )}
         </Card>
     );
 }
