@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Check, Code2, Copy, Database, Terminal, X } from 'lucide-react';
 import Button from '@/components/button';
+import LocalGuiTunnelRunner, {
+    type TunnelServiceItem,
+} from '@/components/local-gui-tunnel-runner';
 import type { PlexCommonsServicesReport, PlexTenant } from '@/types/larakube';
 
 export default function PlexQuickConnectModal({
@@ -115,17 +118,42 @@ export default function PlexQuickConnectModal({
         uriSnippet += `# S3 Endpoint\nhttp://${s3Internal}\n`;
     }
 
-    let tunnelSnippet = `# Port-forward Plex Commons to localhost for TablePlus, DBeaver, or RedisInsight:\n\n`;
-    tunnelSnippet += `# Database (port 5432 or 3306):\nkubectl port-forward -n larakube-plex svc/${dbOption?.driver ?? 'postgres'} ${dbPort}:${dbPort}\n\n`;
-    tunnelSnippet += `# Valkey / Redis (port 6379):\nkubectl port-forward -n larakube-plex svc/redis ${redisPort}:${redisPort}\n\n`;
-    tunnelSnippet += `# S3 Object Storage (port 8333 / 8888):\nkubectl port-forward -n larakube-plex svc/${s3Option?.driver ?? 'seaweedfs'} 8333:8333\n`;
+    const tunnelItems: TunnelServiceItem[] = [
+        {
+            key: 'database',
+            label: `${dbOption?.driver === 'mysql' ? 'MySQL' : 'PostgreSQL'} Database`,
+            service: dbOption?.driver ?? 'postgres',
+            namespace: 'larakube-plex',
+            localPort: Number(dbPort) || 5432,
+            remotePort: Number(dbPort) || 5432,
+            kind: 'database',
+            clientUri: `${dbDriverName}://${dbName}:@127.0.0.1:${dbPort}/${dbName}`,
+            rawCommand: `kubectl port-forward -n larakube-plex svc/${dbOption?.driver ?? 'postgres'} ${dbPort}:${dbPort}`,
+        },
+        {
+            key: 'cache',
+            label: 'Valkey / Redis',
+            service: 'redis',
+            namespace: 'larakube-plex',
+            localPort: Number(redisPort) || 6379,
+            remotePort: Number(redisPort) || 6379,
+            kind: 'cache',
+            clientUri: `redis://127.0.0.1:${redisPort}/${redisIndex}`,
+            rawCommand: `kubectl port-forward -n larakube-plex svc/redis ${redisPort}:${redisPort}`,
+        },
+        {
+            key: 'storage',
+            label: 'S3 Object Storage (SeaweedFS)',
+            service: s3Option?.driver ?? 'seaweedfs',
+            namespace: 'larakube-plex',
+            localPort: 8333,
+            remotePort: 8333,
+            kind: 'storage',
+            rawCommand: `kubectl port-forward -n larakube-plex svc/${s3Option?.driver ?? 'seaweedfs'} 8333:8333`,
+        },
+    ];
 
-    const activeContent =
-        tab === 'laravel'
-            ? laravelSnippet
-            : tab === 'uri'
-              ? uriSnippet
-              : tunnelSnippet;
+    const activeContent = tab === 'laravel' ? laravelSnippet : uriSnippet;
 
     const copySnippet = () => {
         void navigator.clipboard.writeText(activeContent);
@@ -223,41 +251,56 @@ export default function PlexQuickConnectModal({
                     </button>
                 </div>
 
-                {/* Code Block */}
-                <div className="relative mt-4">
-                    <pre className="custom-scrollbar max-h-72 overflow-x-auto rounded-xl border border-term-line bg-term p-4 font-mono text-xs leading-relaxed text-term-bright">
-                        {activeContent}
-                    </pre>
+                {/* Tab Content */}
+                {tab === 'tunnel' ? (
+                    <div className="mt-4">
+                        <LocalGuiTunnelRunner
+                            items={tunnelItems}
+                            namespace="larakube-plex"
+                        />
+                    </div>
+                ) : (
+                    <>
+                        {/* Code Block */}
+                        <div className="relative mt-4">
+                            <pre className="custom-scrollbar max-h-72 overflow-x-auto rounded-xl border border-term-line bg-term p-4 font-mono text-xs leading-relaxed text-term-bright">
+                                {activeContent}
+                            </pre>
 
-                    <button
-                        type="button"
-                        onClick={copySnippet}
-                        className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-lg border border-term-line bg-term/90 px-2.5 py-1 text-xs text-term-text transition hover:border-brand hover:text-white"
-                        title="Copy to clipboard"
-                    >
-                        {copied ? (
-                            <>
-                                <Check className="size-3.5 text-emerald-400" />
-                                <span className="text-emerald-400">Copied</span>
-                            </>
-                        ) : (
-                            <>
-                                <Copy className="size-3.5" />
-                                <span>Copy</span>
-                            </>
-                        )}
-                    </button>
-                </div>
+                            <button
+                                type="button"
+                                onClick={copySnippet}
+                                className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-lg border border-term-line bg-term/90 px-2.5 py-1 text-xs text-term-text transition hover:border-brand hover:text-white"
+                                title="Copy to clipboard"
+                            >
+                                {copied ? (
+                                    <>
+                                        <Check className="size-3.5 text-emerald-400" />
+                                        <span className="text-emerald-400">
+                                            Copied
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="size-3.5" />
+                                        <span>Copy</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
 
-                {/* Callout */}
-                <div className="mt-4 rounded-xl border border-line bg-paper/60 p-3 text-xs text-soft">
-                    <p>
-                        💡 <strong>In-Cluster Networking:</strong> These
-                        addresses resolve automatically from inside pods on this
-                        cluster. For external GUI access from your Mac, use the
-                        commands under <strong>Local GUI Tunnel</strong>.
-                    </p>
-                </div>
+                        {/* Callout */}
+                        <div className="mt-4 rounded-xl border border-line bg-paper/60 p-3 text-xs text-soft">
+                            <p>
+                                💡 <strong>In-Cluster Networking:</strong> These
+                                addresses resolve automatically from inside pods
+                                on this cluster. For external GUI access from
+                                your Mac, use the commands under{' '}
+                                <strong>Local GUI Tunnel</strong>.
+                            </p>
+                        </div>
+                    </>
+                )}
 
                 {/* Footer */}
                 <div className="mt-6 flex justify-end">
