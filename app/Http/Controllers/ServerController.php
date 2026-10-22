@@ -337,12 +337,19 @@ class ServerController extends Controller
     ): Response {
         $stack = $catalog->find($server);
 
+        if ($stack === null) {
+            $serverModel = Server::where('name', $server)->orWhere('ip', $server)->first();
+            if ($serverModel !== null) {
+                $stack = $catalog->find($serverModel->name);
+            }
+        }
+
         abort_if($stack === null || ($stack['role'] ?? 'deploy') === 'dev', 404);
         abort_if($settings->demoMode() && in_array($stack['name'], $settings->demoHiddenServers(), true), 404);
 
         $context = $stack['status'] === 'ready' ? $stack['context'] : null;
 
-        $serverModel = Server::where('name', $stack['name'])->first();
+        $serverModel ??= Server::where('name', $stack['name'])->first();
 
         $allProjects = Project::query()->get();
         $projects = [];

@@ -139,7 +139,7 @@ class StackCatalog
     public function find(string $name): ?array
     {
         foreach ($this->everything() ?? [] as $stack) {
-            if ($stack['name'] === $name) {
+            if ($stack['name'] === $name || (($stack['ip'] ?? null) !== null && $stack['ip'] === $name)) {
                 return $stack;
             }
         }
