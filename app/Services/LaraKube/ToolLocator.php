@@ -97,6 +97,11 @@ class ToolLocator
             '/bin',
             '/usr/sbin',
             '/sbin',
+            // Homebrew's sbin, not bin — dnsmasq (a system daemon, like most
+            // *sbin* formulae) installs there, on both Apple Silicon and Intel.
+            '/opt/homebrew/sbin',
+            '/usr/local/sbin',
+            '/home/linuxbrew/.linuxbrew/sbin',
         ]));
     }
 

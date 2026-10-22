@@ -32,6 +32,7 @@ class ReadinessCheck
         'git' => ['label' => 'Git', 'purpose' => 'Needed to deploy Laravel apps.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false, 'localOnly' => true],
         'docker' => ['label' => 'Docker', 'purpose' => 'Builds your apps to deploy them. OrbStack or Docker Desktop provide it; Podman works too.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false, 'localOnly' => true],
         'podman' => ['label' => 'Podman', 'purpose' => 'Builds your apps to deploy them, instead of Docker.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
+        'dnsmasq' => ['label' => 'dnsmasq', 'purpose' => 'Wildcard local-domain DNS so project hosts resolve automatically, without a sudo prompt on every `up`.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
     ];
 
     public const CLI_INSTALL_COMMAND = 'curl -fsSL https://docs.larakube.app/install.sh | bash -s -- --canary';
@@ -64,7 +65,13 @@ class ReadinessCheck
                 'required' => $tool['required'],
                 'localOnly' => $tool['localOnly'] ?? false,
                 // Podman installs through apt, so only Linux (and WSL) can offer it.
-                'installable' => $tool['installable'] && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux'),
+                'installable' => $tool['installable']
+                    && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux')
+                    // dnsmasq wildcards local DNS via the host's own resolver — Windows
+                    // has no such mechanism (it resolves via the Windows hosts file
+                    // instead, see InteractsWithHosts::ensureWindowsHostsAreSet() in the
+                    // CLI), so `larakube trust` is a no-op for it there.
+                    && ($slug !== 'dnsmasq' || PHP_OS_FAMILY !== 'Windows'),
             ];
         }
 

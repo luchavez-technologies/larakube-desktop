@@ -25,6 +25,17 @@ test('isolated commands see only the allowlisted environment, not the parent app
     }
 });
 
+test('the default directory list covers Homebrew sbin, where dnsmasq actually installs', function () {
+    // Homebrew installs daemon-style formulae like dnsmasq into *sbin*, not
+    // *bin* — bin-only coverage left a correctly-installed dnsmasq permanently
+    // reported as "Missing" on the Setup page.
+    $directories = (new ToolLocator(windows: false))->directories();
+
+    expect($directories)->toContain('/opt/homebrew/sbin')
+        ->toContain('/usr/local/sbin')
+        ->toContain('/home/linuxbrew/.linuxbrew/sbin');
+});
+
 test('invalid variable names are rejected before reaching the shell', function () {
     (new ToolLocator(['/usr/bin']))->isolate(['/usr/bin/true'], ['BAD;NAME' => 'x']);
 })->throws(InvalidArgumentException::class);

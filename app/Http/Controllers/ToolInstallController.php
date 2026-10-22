@@ -59,7 +59,7 @@ class ToolInstallController extends Controller
 
         $run = $runner->start(
             label: "Install {$definition['label']}",
-            arguments: $tool === 'podman' ? ['runtime:install', '--runtime=podman'] : ['setup', "--tools={$tool}"],
+            arguments: $this->installArguments($tool),
             kind: RunKind::InstallTool,
             subject: $tool,
             targetType: 'tool',
@@ -89,7 +89,10 @@ class ToolInstallController extends Controller
 
         $run = $runner->start(
             label: "Update {$definition['label']}",
-            arguments: $tool === 'podman' ? ['runtime:install', '--runtime=podman', '--update'] : ['setup', "--tools={$tool}", '--update'],
+            // dnsmasq's install (`trust`) is already idempotent — re-running
+            // the exact same command is the update, same as every other
+            // `larakube trust` call.
+            arguments: $tool === 'dnsmasq' ? $this->installArguments($tool) : ($tool === 'podman' ? ['runtime:install', '--runtime=podman', '--update'] : ['setup', "--tools={$tool}", '--update']),
             kind: RunKind::InstallTool,
             subject: $tool,
             targetType: 'tool',
@@ -99,6 +102,22 @@ class ToolInstallController extends Controller
         );
 
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function installArguments(string $tool): array
+    {
+        return match ($tool) {
+            'podman' => ['runtime:install', '--runtime=podman'],
+            // dnsmasq has no standalone `setup --tools=dnsmasq` flag — `trust`
+            // is the CLI's existing, idempotent "generate the local CA, trust
+            // it, and set up dnsmasq for wildcard DNS" command (see
+            // InteractsWithTrust::setupDnsmasq()).
+            'dnsmasq' => ['trust'],
+            default => ['setup', "--tools={$tool}"],
+        };
     }
 
     /**

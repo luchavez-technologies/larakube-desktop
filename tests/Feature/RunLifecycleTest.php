@@ -149,6 +149,36 @@ test('installing Podman runs the runtime installer, not the tool setup', functio
     File::deleteDirectory($directory);
 });
 
+test('installing dnsmasq runs the CLI trust command, since there is no standalone setup --tools=dnsmasq flag', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/larakube", "#!/bin/sh\n");
+    chmod("{$directory}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
+    $fake = ChildProcess::fake();
+
+    $this->post(route('setup.tools.install', 'dnsmasq'))->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'trust', '--no-interaction']);
+
+    File::deleteDirectory($directory);
+});
+
+test('updating dnsmasq re-runs the same idempotent trust command, not setup --update', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/larakube", "#!/bin/sh\n");
+    chmod("{$directory}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$directory]));
+    $fake = ChildProcess::fake();
+
+    $this->post(route('setup.tools.update', 'dnsmasq'))->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$directory}/larakube", 'trust', '--no-interaction']);
+
+    File::deleteDirectory($directory);
+});
+
 test('output posted back by NativePHP keeps its newlines', function () {
     $run = runLifecycleRun();
     $secret = 'test-secret';
