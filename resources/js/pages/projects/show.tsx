@@ -416,39 +416,6 @@ export default function ShowProject({
                                         />
                                     )}
 
-                                    {project.initialized && (
-                                        <Deferred
-                                            data={[
-                                                'healthMetrics',
-                                                'deployMetrics',
-                                            ]}
-                                            fallback={
-                                                <Card label="App Health & Telemetry">
-                                                    <div className="animate-pulse p-4 text-xs text-soft">
-                                                        Loading workload
-                                                        telemetry…
-                                                    </div>
-                                                </Card>
-                                            }
-                                        >
-                                            <AppPerformanceMetricsCard
-                                                projectId={project.id}
-                                                activeEnv={activeEnv}
-                                                healthMetrics={healthMetrics}
-                                                podMetrics={podMetrics}
-                                                deployMetrics={deployMetrics}
-                                            />
-                                        </Deferred>
-                                    )}
-
-                                    {project.initialized && (
-                                        <WorkloadScalingCard
-                                            project={project}
-                                            activeEnv={activeEnv}
-                                            activeEnvConfig={activeEnvConfig}
-                                        />
-                                    )}
-
                                     <EnvironmentBackingServicesCard
                                         key={activeEnv}
                                         project={project}
@@ -1138,12 +1105,7 @@ function AppPerformanceMetricsCard({
                 ) : undefined
             }
         >
-            <div
-                className={cn(
-                    'grid grid-cols-1 divide-y divide-line lg:divide-x lg:divide-y-0',
-                    activeEnv === 'local' ? 'lg:grid-cols-2' : 'lg:grid-cols-3',
-                )}
-            >
+            <div className="grid grid-cols-1 divide-y divide-line lg:grid-cols-3 lg:divide-x lg:divide-y-0">
                 {/* 1. Endpoint Latency */}
                 <div className="flex flex-col justify-between p-3.5">
                     <div>
@@ -1266,64 +1228,58 @@ function AppPerformanceMetricsCard({
                     </div>
                 </div>
 
-                {/* 3. Deployment Health — a CI/CD cadence stat; `larakube up`
-                runs locally aren't "deploys" in that sense, so this column
-                only applies to a real cloud environment. */}
-                {activeEnv !== 'local' && (
-                    <div className="flex flex-col justify-between p-3.5">
-                        <div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold tracking-wider text-soft uppercase">
-                                    Deploy Health
-                                </span>
-                                <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-ink">
-                                    {envDeploy
-                                        ? `${envDeploy.successRate}%`
-                                        : '—'}{' '}
-                                    success
-                                </span>
-                            </div>
-
-                            <div className="mt-2 flex items-baseline gap-2">
-                                <span className="font-mono text-2xl font-bold tracking-tight text-ink">
-                                    {envDeploy?.totalDeploys ?? 0}
-                                </span>
-                                <span className="text-xs text-soft">
-                                    {envDeploy?.totalDeploys === 1
-                                        ? 'total deploy'
-                                        : 'total deploys'}
-                                </span>
-                            </div>
+                {/* 3. Deployment Health */}
+                <div className="flex flex-col justify-between p-3.5">
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold tracking-wider text-soft uppercase">
+                                Deploy Health
+                            </span>
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-ink">
+                                {envDeploy ? `${envDeploy.successRate}%` : '—'}{' '}
+                                success
+                            </span>
                         </div>
 
-                        <div className="mt-3 flex items-end justify-between">
-                            <div>
-                                <span className="font-mono text-[10px] text-faint">
-                                    14-day cadence
-                                </span>
-                                <p className="text-[10px] text-soft">
-                                    Avg duration:{' '}
-                                    {envDeploy?.avgDurationSeconds
-                                        ? `${envDeploy.avgDurationSeconds}s`
-                                        : '—'}
-                                </p>
-                            </div>
-                            {envDeploy && envDeploy.activity14d.length > 0 ? (
-                                <Sparkline
-                                    data={envDeploy.activity14d}
-                                    type="bar"
-                                    height={24}
-                                    width={85}
-                                    unit=" deploys"
-                                />
-                            ) : (
-                                <span className="font-mono text-[10px] text-faint">
-                                    No deploy activity
-                                </span>
-                            )}
+                        <div className="mt-2 flex items-baseline gap-2">
+                            <span className="font-mono text-2xl font-bold tracking-tight text-ink">
+                                {envDeploy?.totalDeploys ?? 0}
+                            </span>
+                            <span className="text-xs text-soft">
+                                {envDeploy?.totalDeploys === 1
+                                    ? 'total deploy'
+                                    : 'total deploys'}
+                            </span>
                         </div>
                     </div>
-                )}
+
+                    <div className="mt-3 flex items-end justify-between">
+                        <div>
+                            <span className="font-mono text-[10px] text-faint">
+                                14-day cadence
+                            </span>
+                            <p className="text-[10px] text-soft">
+                                Avg duration:{' '}
+                                {envDeploy?.avgDurationSeconds
+                                    ? `${envDeploy.avgDurationSeconds}s`
+                                    : '—'}
+                            </p>
+                        </div>
+                        {envDeploy && envDeploy.activity14d.length > 0 ? (
+                            <Sparkline
+                                data={envDeploy.activity14d}
+                                type="bar"
+                                height={24}
+                                width={85}
+                                unit=" deploys"
+                            />
+                        ) : (
+                            <span className="font-mono text-[10px] text-faint">
+                                No deploy activity
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
         </Card>
     );
