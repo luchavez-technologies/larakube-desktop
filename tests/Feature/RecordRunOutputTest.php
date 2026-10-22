@@ -38,6 +38,40 @@ test('elevation is left alone for a cloud up run, which never requested it', fun
     (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
 });
 
+test('elevation is revoked once a dnsmasq install/update finishes', function () {
+    $run = Run::create([
+        'label' => 'Install dnsmasq',
+        'kind' => RunKind::InstallTool,
+        'subject' => 'dnsmasq',
+        'tool' => 'dnsmasq',
+        'environment' => 'local',
+        'command' => ['larakube', 'trust'],
+    ]);
+
+    $elevation = mock(Elevation::class);
+    $elevation->shouldReceive('revoke')->once();
+    app()->instance(Elevation::class, $elevation);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
+});
+
+test('elevation is left alone for installing a non-dnsmasq tool, which never requested it', function () {
+    $run = Run::create([
+        'label' => 'Install Podman',
+        'kind' => RunKind::InstallTool,
+        'subject' => 'podman',
+        'tool' => 'podman',
+        'environment' => 'local',
+        'command' => ['larakube', 'runtime:install', '--runtime=podman'],
+    ]);
+
+    $elevation = mock(Elevation::class);
+    $elevation->shouldNotReceive('revoke');
+    app()->instance(Elevation::class, $elevation);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
+});
+
 test('elevation is revoked once local setup finishes', function () {
     $run = Run::create([
         'label' => 'Set up local development',

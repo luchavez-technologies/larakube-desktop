@@ -81,12 +81,14 @@ class CliRunner
             $environment = (string) $meta['environment'];
         }
 
-        // `up` against the local cluster may need to sync /etc/hosts, which needs
-        // root — and this process has no terminal to type a password into. Grant
-        // the same temporary passwordless sudo `larakube setup` uses (revoked in
-        // RecordRunOutput once the run ends) best-effort: if it fails, the CLI's
-        // own hosts-sync step already degrades gracefully (prints a warning,
-        // keeps going) rather than aborting the run.
+        // `up` against the local cluster may need to sync /etc/hosts, and `trust`
+        // (dnsmasq's install/update — see ToolInstallController::installArguments())
+        // needs root to install the CA into the System Keychain and to install
+        // dnsmasq itself. This process has no terminal to type a password into, so
+        // grant the same temporary passwordless sudo `larakube setup` uses (revoked
+        // in RecordRunOutput once the run ends) best-effort: if it fails, the CLI's
+        // own steps already degrade gracefully (print a warning, keep going) rather
+        // than aborting the run.
         //
         // runningUnitTests() is not belt-and-braces here, it is load-bearing: on
         // real macOS, Elevation::method() finds a real `osascript` on PATH even
@@ -96,7 +98,7 @@ class CliRunner
         // actual passwordless sudo on the machine running the suite. Confirmed
         // live: this fired from the ordinary test suite the day this guard was
         // added, through a route test that never touched Elevation at all.
-        if (! app()->runningUnitTests() && $kind === RunKind::UpProject && $environment === 'local') {
+        if (! app()->runningUnitTests() && $this->needsElevation($kind, $environment, $tool)) {
             $this->elevation->grant();
         }
 
@@ -169,5 +171,18 @@ class CliRunner
     public function cancel(Run $run): void
     {
         ChildProcess::stop($run->alias());
+    }
+
+    /**
+     * Whether this run needs the temporary passwordless sudo `larakube setup`
+     * grants: a local `up` (may sync /etc/hosts) or installing/updating dnsmasq
+     * (`trust` installs the CA into the System Keychain and installs dnsmasq
+     * itself). Pulled out so it can be unit-tested on its own, without ever
+     * exercising the real Elevation::grant() call it gates.
+     */
+    public function needsElevation(?RunKind $kind, ?string $environment, ?string $tool): bool
+    {
+        return ($kind === RunKind::UpProject && $environment === 'local')
+            || ($kind === RunKind::InstallTool && $tool === 'dnsmasq');
     }
 }

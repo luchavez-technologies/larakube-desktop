@@ -84,6 +84,16 @@ test('CliRunner::start infers structured fields from legacy metadata as fallback
         ->and($run->context)->toBe('k3d-larakube');
 });
 
+test('needsElevation covers a local up run and a dnsmasq install/update, nothing else', function () {
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), new Elevation);
+
+    expect($runner->needsElevation(RunKind::UpProject, 'local', null))->toBeTrue()
+        ->and($runner->needsElevation(RunKind::InstallTool, 'local', 'dnsmasq'))->toBeTrue()
+        ->and($runner->needsElevation(RunKind::UpProject, 'production', null))->toBeFalse()
+        ->and($runner->needsElevation(RunKind::InstallTool, 'local', 'podman'))->toBeFalse()
+        ->and($runner->needsElevation(RunKind::DeployApp, 'production', null))->toBeFalse();
+});
+
 test('elevation is never requested while the test suite is running, no matter the run kind', function () {
     // CRITICAL safety test — do not weaken or remove this guard. Without the
     // runningUnitTests() check in CliRunner::start(), a local `up` run (here
@@ -112,6 +122,15 @@ test('elevation is never requested while the test suite is running, no matter th
         kind: RunKind::DeployApp,
         subject: 'project:1',
         environment: 'production',
+    );
+
+    $runner->start(
+        label: 'Install dnsmasq',
+        arguments: ['trust'],
+        kind: RunKind::InstallTool,
+        subject: 'dnsmasq',
+        tool: 'dnsmasq',
+        environment: 'local',
     );
 });
 
