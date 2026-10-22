@@ -84,10 +84,18 @@ test('CliRunner::start infers structured fields from legacy metadata as fallback
         ->and($run->context)->toBe('k3d-larakube');
 });
 
-test('a local up run asks Elevation for passwordless sudo before starting, so /etc/hosts syncing does not hit a password prompt with no terminal', function () {
+test('elevation is never requested while the test suite is running, no matter the run kind', function () {
+    // CRITICAL safety test — do not weaken or remove this guard. Without the
+    // runningUnitTests() check in CliRunner::start(), a local `up` run (here
+    // or in any other test that exercises the real `projects.up`/tray/group
+    // routes without faking Process or mocking Elevation) reaches a REAL
+    // `osascript` on a real Mac and pops a REAL native "administrator
+    // privileges" password dialog — confirmed live: it happened from the
+    // ordinary suite before this guard existed, and on answering it actually
+    // grants real passwordless sudo on the machine running the tests.
     ChildProcess::fake();
     $elevation = mock(Elevation::class);
-    $elevation->shouldReceive('grant')->once()->andReturn(true);
+    $elevation->shouldNotReceive('grant');
     $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), $elevation);
 
     $runner->start(
@@ -97,26 +105,11 @@ test('a local up run asks Elevation for passwordless sudo before starting, so /e
         subject: 'project:1',
         environment: 'local',
     );
-});
-
-test('a cloud up/deploy run never requests elevation, since there is no local /etc/hosts to sync', function () {
-    ChildProcess::fake();
-    $elevation = mock(Elevation::class);
-    $elevation->shouldNotReceive('grant');
-    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), $elevation);
 
     $runner->start(
         label: 'Deploy shop (production)',
         arguments: ['deploy', 'production'],
         kind: RunKind::DeployApp,
-        subject: 'project:1',
-        environment: 'production',
-    );
-
-    $runner->start(
-        label: 'Up shop (production)',
-        arguments: ['up', 'production'],
-        kind: RunKind::UpProject,
         subject: 'project:1',
         environment: 'production',
     );

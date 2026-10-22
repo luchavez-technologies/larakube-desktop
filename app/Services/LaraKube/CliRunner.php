@@ -87,7 +87,16 @@ class CliRunner
         // RecordRunOutput once the run ends) best-effort: if it fails, the CLI's
         // own hosts-sync step already degrades gracefully (prints a warning,
         // keeps going) rather than aborting the run.
-        if ($kind === RunKind::UpProject && $environment === 'local') {
+        //
+        // runningUnitTests() is not belt-and-braces here, it is load-bearing: on
+        // real macOS, Elevation::method() finds a real `osascript` on PATH even
+        // when nothing faked Process, so an un-mocked Elevation in a test that
+        // merely forgot Process::fake() does not fail loudly — it pops a REAL
+        // native "administrator privileges" dialog and, if answered, grants
+        // actual passwordless sudo on the machine running the suite. Confirmed
+        // live: this fired from the ordinary test suite the day this guard was
+        // added, through a route test that never touched Elevation at all.
+        if (! app()->runningUnitTests() && $kind === RunKind::UpProject && $environment === 'local') {
             $this->elevation->grant();
         }
 
