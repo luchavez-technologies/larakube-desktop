@@ -10,6 +10,7 @@ use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\PlexCatalog;
 use App\Services\LaraKube\PlexCommonsServices;
+use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,7 +32,7 @@ class PlexController extends Controller
     }
 
     /** Plex Commons overview for the selected server. */
-    public function index(string $server, PlexCatalog $plex, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, CurrentServer $current): Response
+    public function index(string $server, PlexCatalog $plex, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, CurrentServer $current, ProjectInspector $inspector): Response
     {
         $stack = $this->readyServer($server);
         $current->remember($server);
@@ -39,9 +40,83 @@ class PlexController extends Controller
         $context = (string) $stack['context'];
         $servers = array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready'));
 
+        $serverModel = Server::where('name', $stack['name'])->first();
+
+        $allProjects = Project::query()->orderBy('name')->get();
+        $projects = [];
+
+        foreach ($allProjects as $project) {
+            $isMatch = false;
+
+            if ($serverModel !== null && $project->server_id !== null) {
+                if ($project->server_id === $serverModel->id) {
+                    $isMatch = true;
+                } else {
+                    continue;
+                }
+            }
+
+            $inspection = $inspector->inspect($project->path);
+
+            if (! $isMatch) {
+                if ($stack['ip'] !== null && ($inspection['serverIp'] ?? null) === $stack['ip']) {
+                    $isMatch = true;
+                } elseif ($stack['context'] !== null && ($inspection['serverContext'] ?? null) === $stack['context']) {
+                    $isMatch = true;
+                } else {
+                    foreach ($inspection['environments'] as $env) {
+                        if ($stack['ip'] !== null && ($env['serverIp'] ?? null) === $stack['ip']) {
+                            $isMatch = true;
+                            break;
+                        }
+                        if ($stack['context'] !== null && ($env['serverContext'] ?? null) === $stack['context']) {
+                            $isMatch = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (! $isMatch) {
+                continue;
+            }
+
+            $matchingEnv = null;
+            foreach ($inspection['environments'] as $env) {
+                if (($stack['ip'] !== null && ($env['serverIp'] ?? null) === $stack['ip']) ||
+                    ($stack['context'] !== null && ($env['serverContext'] ?? null) === $stack['context'])) {
+                    $matchingEnv = $env;
+                    break;
+                }
+            }
+
+            $webHost = $matchingEnv['webHost']
+                ?? $inspection['environments']['local']['webHost']
+                ?? $inspection['webHost']
+                ?? ($project->name ? "{$project->name}.dev.test" : null);
+
+            $plexConfig = $matchingEnv['plex']
+                ?? $inspection['environments']['local']['plex']
+                ?? [];
+
+            $projects[] = [
+                'id' => $project->id,
+                'name' => $project->name ?: basename($project->path),
+                'framework' => $project->framework ?? $inspection['framework'] ?? 'laravel',
+                'webHost' => $webHost,
+                'path' => $project->path,
+                'exists' => $project->existsOnHost(),
+                'database' => $inspection['database'] ?? null,
+                'cache' => $inspection['cacheDriver'] ?? null,
+                'objectStorage' => $inspection['objectStorage'] ?? null,
+                'plex' => $plexConfig,
+            ];
+        }
+
         return Inertia::render('plex/index', [
             'server' => $stack,
             'servers' => $servers,
+            'projects' => $projects,
             'plex' => Inertia::defer(fn (): ?array => $plex->forContext($context), 'plex'),
             'plexSync' => $plex->syncState($context),
             'services' => Inertia::defer(function () use ($plex, $context, $commonsServices): ?array {

@@ -5,6 +5,8 @@ import {
     Code2,
     ExternalLink,
     KeyRound,
+    LayoutGrid,
+    Network,
     Plus,
     RotateCw,
     Server as ServerIcon,
@@ -17,6 +19,7 @@ import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { show as showServer } from '@/routes/servers';
 import { index as plexIndex, refresh } from '@/routes/servers/plex';
 import type {
@@ -35,6 +38,8 @@ import PlexProvisionModal from './components/plex-provision-modal';
 import PlexQuickConnectModal from './components/plex-quick-connect-modal';
 import PlexServiceEngineCard from './components/plex-service-engine-card';
 import PlexTenantHub from './components/plex-tenant-hub';
+import PlexTopologyCanvas from './components/topology/plex-topology-canvas';
+import type { TopologyProject } from './components/topology/types';
 import PlexEmptyState from './plex-empty-state';
 
 function PlexPageHeader({
@@ -137,6 +142,7 @@ function PlexPageHeader({
 export default function PlexIndex({
     server,
     servers,
+    projects = [],
     plex,
     plexSync,
     services,
@@ -145,6 +151,7 @@ export default function PlexIndex({
 }: {
     server: Server;
     servers: Server[];
+    projects?: TopologyProject[];
     plex?: PlexStatus | null;
     plexSync: {
         status: SyncStatus;
@@ -162,6 +169,9 @@ export default function PlexIndex({
         { only: ['plex', 'services', 'plexSync', 'podMetrics', 'nodeMetrics'] },
         { autoStart: plexSync.status === 'syncing' || awaitingFirstSync },
     );
+
+    // View mode: Grid vs Topology Map
+    const [viewMode, setViewMode] = useState<'grid' | 'topology'>('grid');
 
     // Modal and filter states
     const [activeEngineFilter, setActiveEngineFilter] = useState<string | null>(
@@ -335,71 +345,118 @@ export default function PlexIndex({
                         nodeMetrics={nodeMetrics}
                     />
 
-                    {/* 2. Backing Service Engine Deck (Dedicated Cards Grid) */}
-                    <div>
-                        <div className="mb-3.5 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <h2 className="text-xs font-semibold tracking-wider text-soft uppercase">
-                                    Active Backing Engines (
-                                    {activeServiceEntries.length})
-                                </h2>
-                            </div>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setIsAddEngineOpen(true)}
-                                className="text-xs text-soft hover:text-ink"
+                    {/* View Switcher: Services Deck vs Topology Map */}
+                    <div className="flex items-center justify-between border-b border-line pb-2">
+                        <div className="flex items-center gap-1.5 rounded-xl border border-line bg-paper/60 p-1 shadow-2xs">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('grid')}
+                                className={cn(
+                                    'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                                    viewMode === 'grid'
+                                        ? 'bg-surface text-ink shadow-xs ring-1 ring-line'
+                                        : 'text-soft hover:text-ink',
+                                )}
                             >
-                                <Plus className="size-3.5" />
-                                <span>Add Engine</span>
-                            </Button>
-                        </div>
+                                <LayoutGrid className="size-3.5" />
+                                <span>Services & Tenants</span>
+                            </button>
 
-                        {activeServiceEntries.length === 0 ? (
-                            <Card className="p-8 text-center text-xs text-soft">
-                                <ServerIcon className="mx-auto mb-2 size-8 text-faint" />
-                                No shared service engines are active on this
-                                Commons yet.
-                            </Card>
-                        ) : (
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {activeServiceEntries.map(
-                                    ({ category, option }) => (
-                                        <PlexServiceEngineCard
-                                            key={option.driver}
-                                            category={category}
-                                            option={option}
-                                            podMetrics={podMetrics}
-                                            tenants={allTenants}
-                                            onFilterByEngine={
-                                                handleFilterByEngine
-                                            }
-                                            onQuickConnect={
-                                                handleOpenQuickConnectForDriver
-                                            }
-                                        />
-                                    ),
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('topology')}
+                                className={cn(
+                                    'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                                    viewMode === 'topology'
+                                        ? 'bg-surface text-brand shadow-xs ring-1 ring-line'
+                                        : 'text-soft hover:text-ink',
+                                )}
+                            >
+                                <Network className="size-3.5" />
+                                <span>Cluster Topology Map</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {viewMode === 'topology' ? (
+                        <PlexTopologyCanvas
+                            server={server}
+                            projects={projects}
+                            plex={plex}
+                            services={services}
+                            podMetrics={podMetrics}
+                        />
+                    ) : (
+                        <>
+                            {/* 2. Backing Service Engine Deck (Dedicated Cards Grid) */}
+                            <div>
+                                <div className="mb-3.5 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-xs font-semibold tracking-wider text-soft uppercase">
+                                            Active Backing Engines (
+                                            {activeServiceEntries.length})
+                                        </h2>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setIsAddEngineOpen(true)}
+                                        className="text-xs text-soft hover:text-ink"
+                                    >
+                                        <Plus className="size-3.5" />
+                                        <span>Add Engine</span>
+                                    </Button>
+                                </div>
+
+                                {activeServiceEntries.length === 0 ? (
+                                    <Card className="p-8 text-center text-xs text-soft">
+                                        <ServerIcon className="mx-auto mb-2 size-8 text-faint" />
+                                        No shared service engines are active on
+                                        this Commons yet.
+                                    </Card>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                        {activeServiceEntries.map(
+                                            ({ category, option }) => (
+                                                <PlexServiceEngineCard
+                                                    key={option.driver}
+                                                    category={category}
+                                                    option={option}
+                                                    podMetrics={podMetrics}
+                                                    tenants={allTenants}
+                                                    onFilterByEngine={
+                                                        handleFilterByEngine
+                                                    }
+                                                    onQuickConnect={
+                                                        handleOpenQuickConnectForDriver
+                                                    }
+                                                />
+                                            ),
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* 3. Unified Tenant Ecosystem Hub */}
-                    <div id="tenant-hub">
-                        <PlexTenantHub
-                            server={server}
-                            toolTenants={toolTenants}
-                            projectTenants={projectTenants}
-                            customTenants={customTenants}
-                            services={services}
-                            activeEngineFilter={activeEngineFilter}
-                            onSelectEngineFilter={setActiveEngineFilter}
-                            onOpenProvisionModal={() =>
-                                setIsProvisionOpen(true)
-                            }
-                            onQuickConnect={handleOpenQuickConnectForTenant}
-                        />
-                    </div>
+                            {/* 3. Unified Tenant Ecosystem Hub */}
+                            <div id="tenant-hub">
+                                <PlexTenantHub
+                                    server={server}
+                                    toolTenants={toolTenants}
+                                    projectTenants={projectTenants}
+                                    customTenants={customTenants}
+                                    services={services}
+                                    activeEngineFilter={activeEngineFilter}
+                                    onSelectEngineFilter={setActiveEngineFilter}
+                                    onOpenProvisionModal={() =>
+                                        setIsProvisionOpen(true)
+                                    }
+                                    onQuickConnect={
+                                        handleOpenQuickConnectForTenant
+                                    }
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
