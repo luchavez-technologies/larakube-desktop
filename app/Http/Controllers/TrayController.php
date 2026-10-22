@@ -626,6 +626,7 @@ class TrayController extends Controller
                 'kind' => $activeRun->kind?->value,
                 'status' => $activeRun->status->value,
             ] : null,
+            'defaultEditor' => $settings->getDefaultEditor(),
             'windows' => $locator->isWindows(),
         ];
     }

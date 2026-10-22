@@ -12,8 +12,9 @@ import {
     SiZedindustries,
     SiWindsurf,
     SiRust,
+    SiAnthropic,
 } from '@icons-pack/react-simple-icons';
-import { Code2 } from 'lucide-react';
+import { Bot, Code2, Sparkles, TerminalSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -150,6 +151,34 @@ function resolveVisual(slug: string): Visual {
                 icon: <SiSublimetext />,
                 containerClass:
                     'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/25',
+            };
+        case 'claude':
+        case 'claudedesktop':
+        case 'claudecode':
+            return {
+                icon: <SiAnthropic />,
+                containerClass:
+                    'bg-[#D97706]/10 text-[#D97706] border-[#D97706]/25 dark:text-[#F59E0B]',
+            };
+        case 'antigravity':
+        case 'agy':
+            return {
+                icon: <Sparkles className="size-full shrink-0" />,
+                containerClass:
+                    'bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/25 dark:text-[#A78BFA]',
+            };
+        case 'opencode':
+            return {
+                icon: <TerminalSquare className="size-full shrink-0" />,
+                containerClass:
+                    'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/25',
+            };
+        case 'chatgpt':
+        case 'codex':
+            return {
+                icon: <Bot className="size-full shrink-0" />,
+                containerClass:
+                    'bg-[#10A37F]/10 text-[#10A37F] border-[#10A37F]/25',
             };
         default:
             return {

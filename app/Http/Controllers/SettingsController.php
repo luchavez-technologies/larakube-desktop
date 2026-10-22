@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\EditorLauncher;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
@@ -42,6 +43,12 @@ class SettingsController extends Controller
             'contexts' => $contexts,
             'currentContext' => $currentContext,
             'windows' => $wsl->isWindows(),
+            'availableEditors' => app(EditorLauncher::class)->available(),
+            'allEditors' => array_map(fn (string $slug, array $ed): array => [
+                'slug' => $slug,
+                'label' => $ed['label'],
+                'category' => $ed['category'] === 'agent' ? 'agent' : 'editor',
+            ], array_keys(EditorLauncher::EDITORS), array_values(EditorLauncher::EDITORS)),
             'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
             'serverNames' => Inertia::defer(function () use ($catalog): ?array {
                 $stacks = $catalog->all();
@@ -62,6 +69,7 @@ class SettingsController extends Controller
             'hideProjects' => ['nullable', 'boolean'],
             'experimental' => ['nullable', 'boolean'],
             'cliChannel' => ['nullable', 'string', 'in:canary,stable'],
+            'defaultEditor' => ['nullable', 'string', 'in:'.implode(',', array_keys(EditorLauncher::EDITORS))],
             'wslShutdownMode' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::WSL_SHUTDOWN_MODES)],
             'demoMode' => ['nullable', 'boolean'],
             'demoHiddenServers' => ['nullable', 'array'],

@@ -13,7 +13,31 @@ test('settings page renders with global configuration and AI agents', function (
             ->has('settings')
             ->has('allowedTlds')
             ->has('cloudProviders')
+            ->has('availableEditors')
+            ->has('allEditors')
+            ->where('settings.defaultEditor', 'vscode')
         );
+});
+
+test('defaultEditor preference can be saved to config and retrieved', function () {
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+
+    $settings = app(GlobalSettings::class);
+    expect($settings->getDefaultEditor())->toBe('vscode');
+
+    $this->post(route('settings.update'), [
+        'defaultEditor' => 'claude',
+    ])->assertRedirect();
+
+    expect($settings->getDefaultEditor())->toBe('claude')
+        ->and($settings->get()['defaultEditor'])->toBe('claude');
+
+    $settings->setDefaultEditor('antigravity');
+    expect($settings->getDefaultEditor())->toBe('antigravity');
+
+    File::deleteDirectory($home);
 });
 
 test('settings can be updated and saved to config', function () {

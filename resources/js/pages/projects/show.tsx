@@ -4,7 +4,6 @@ import {
     Link,
     router,
     useForm,
-    usePage,
     usePoll,
 } from '@inertiajs/react';
 import type { FormEvent, ReactNode } from 'react';
@@ -24,8 +23,6 @@ import {
     RotateCw,
     Share2,
     Unplug,
-    Code2,
-    ChevronDown,
     Key,
     ArrowUpCircle,
     Square,
@@ -35,6 +32,7 @@ import {
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
+import CopyButton from '@/components/copy-button';
 import EnvironmentSettingsDrawer, {
     LinkServerForm,
     HostForm,
@@ -42,6 +40,7 @@ import EnvironmentSettingsDrawer, {
     type EnvironmentSettingsDrawerSection,
 } from '@/components/environment-settings-drawer';
 import BackingServicesCard from '@/components/backing-services-card';
+import LocalDevCompanionsCard from '@/components/local-dev-companions-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
 import ProjectTerminalCard, {
@@ -53,7 +52,7 @@ import Card from '@/components/card';
 import FrameworkBadge from '@/components/framework-badge';
 import ProviderLogo from '@/components/provider-logo';
 import Redactable from '@/components/redactable';
-import EditorLogo from '@/components/editor-logo';
+import EditorMenu from '@/components/editor-menu';
 import FrameworkFields, {
     defaultAnswers,
     reconcile,
@@ -69,7 +68,6 @@ import {
     deploy,
     destroy,
     down,
-    editor as openEditor,
     folder as showFolder,
     index,
     init,
@@ -86,6 +84,7 @@ import { create as createServer, show as showServer } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
 import type {
     BackingServices,
+    CompanionApp,
     DeployMetrics,
     HealthMetrics,
     NewAppAnswers,
@@ -100,7 +99,7 @@ import type {
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
 
-type Editor = { slug: string; label: string };
+type Editor = { slug: string; label: string; category?: 'editor' | 'agent' };
 
 type ReadyServer = {
     name: string;
@@ -142,6 +141,7 @@ export default function ShowProject({
     podMetrics,
     deployMetrics,
     domains,
+    companions,
 }: {
     project: Project;
     server: Server | null;
@@ -159,6 +159,7 @@ export default function ShowProject({
     podMetrics?: Record<string, PodMetrics | null>;
     deployMetrics?: Record<string, DeployMetrics | null> | null;
     domains?: Record<string, ServerDomain[]> | null;
+    companions?: CompanionApp[] | null;
 }) {
     const isRunning =
         runs.some((r) => r.status === 'running') ||
@@ -264,37 +265,6 @@ export default function ShowProject({
         activeEnvConfig?.webHost ??
         (activeEnv === 'production' ? project.webHost : null);
 
-    const activeTerminalRun = useMemo(() => {
-        if (!latestRun) return null;
-        if (latestRun.status === 'running') return latestRun;
-        const runEnv = latestRun.environment?.toLowerCase();
-        if (activeEnv === 'local') {
-            const isLocal =
-                !runEnv ||
-                runEnv === 'local' ||
-                [
-                    'up-project',
-                    'down-project',
-                    'start-project',
-                    'stop-project',
-                    'init-project',
-                    'new-project',
-                ].includes(latestRun.kind ?? '');
-            return isLocal ? latestRun : null;
-        }
-        const isThisCloudEnv =
-            runEnv === activeEnv.toLowerCase() ||
-            latestRun.label
-                .toLowerCase()
-                .includes(`(${activeEnv.toLowerCase()})`) ||
-            (!latestRun.label.includes('(') &&
-                activeEnv.toLowerCase() === 'production' &&
-                ['deploy-app', 'link-server', 'configure-host'].includes(
-                    latestRun.kind ?? '',
-                ));
-        return isThisCloudEnv ? latestRun : null;
-    }, [latestRun, activeEnv]);
-
     return (
         <AppLayout title={project.name}>
             <Link
@@ -310,7 +280,25 @@ export default function ShowProject({
                         <FrameworkBadge slug={project.framework} />
                     ) : undefined
                 }
-                meta={<span>{project.path}</span>}
+                meta={
+                    <div className="flex items-center gap-1.5 font-mono text-xs text-soft">
+                        <span
+                            className="max-w-md truncate"
+                            title={project.path}
+                        >
+                            {project.path}
+                        </span>
+                        <CopyButton
+                            value={project.path}
+                            label=""
+                            copiedLabel=""
+                            size="xs"
+                            variant="ghost"
+                            className="h-5 w-5 p-0 text-faint hover:text-ink"
+                            title="Copy path"
+                        />
+                    </div>
+                }
                 actions={
                     <div className="flex items-center gap-2.5">
                         {project.exists && (
@@ -439,6 +427,7 @@ export default function ShowProject({
                                             }
                                         >
                                             <AppPerformanceMetricsCard
+                                                projectId={project.id}
                                                 activeEnv={activeEnv}
                                                 healthMetrics={healthMetrics}
                                                 podMetrics={podMetrics}
@@ -461,6 +450,18 @@ export default function ShowProject({
                                         currentEnv={activeEnvConfig}
                                         services={backing?.[activeEnv]}
                                     />
+
+                                    <Deferred
+                                        data="companions"
+                                        fallback={
+                                            <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                        }
+                                    >
+                                        <LocalDevCompanionsCard
+                                            project={project}
+                                            companions={companions}
+                                        />
+                                    </Deferred>
 
                                     {project.initialized && (
                                         <EnvironmentSecretsCard
@@ -535,10 +536,6 @@ export default function ShowProject({
                                         activeEnvConfig={activeEnvConfig}
                                     />
                                 </>
-                            )}
-
-                            {activeTerminalRun && (
-                                <ProjectTerminalCard run={activeTerminalRun} />
                             )}
                         </div>
 
@@ -1094,11 +1091,13 @@ function CloudEnvironmentOverviewCard({
 }
 
 function AppPerformanceMetricsCard({
+    projectId,
     activeEnv,
     healthMetrics,
     podMetrics,
     deployMetrics,
 }: {
+    projectId?: number;
     activeEnv: string;
     healthMetrics?: Record<string, HealthMetrics | null> | null;
     podMetrics?: Record<string, PodMetrics | null>;
@@ -1112,7 +1111,24 @@ function AppPerformanceMetricsCard({
         : [];
 
     return (
-        <Card label={`App Health & Telemetry · ${activeEnv.toUpperCase()}`}>
+        <Card
+            label={`App Health & Telemetry · ${activeEnv.toUpperCase()}`}
+            action={
+                projectId ? (
+                    <Link
+                        href={`/simulator?project=${projectId}`}
+                        className={cn(
+                            buttonClass('secondary', 'sm'),
+                            'gap-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-brand/40',
+                        )}
+                        title="Trace request flow through Cloudflare, Traefik, Pod, and Database"
+                    >
+                        <Network className="size-3 text-brand" />
+                        <span>Trace Request</span>
+                    </Link>
+                ) : undefined
+            }
+        >
             <div className="grid grid-cols-1 divide-y divide-line lg:grid-cols-3 lg:divide-x lg:divide-y-0">
                 {/* 1. Endpoint Latency */}
                 <div className="flex flex-col justify-between p-3.5">
@@ -2249,73 +2265,6 @@ function InitForm({
     );
 }
 
-/** Opens the project folder in a code editor found on this machine. */
-function EditorMenu({
-    project,
-    editors,
-}: {
-    project: Project;
-    editors: Editor[];
-}) {
-    const { errors } = usePage().props as { errors: Record<string, string> };
-
-    if (editors.length === 0) {
-        return null;
-    }
-
-    return (
-        <div className="relative">
-            {editors.length === 1 ? (
-                <Link
-                    href={openEditor(project.id).url}
-                    method="post"
-                    data={{ editor: editors[0].slug }}
-                    as="button"
-                    preserveScroll
-                    className={cn(buttonClass('secondary'), 'gap-2')}
-                >
-                    <EditorLogo slug={editors[0].slug} size="xs" />
-                    <span>Open in {editors[0].label}</span>
-                </Link>
-            ) : (
-                <details className="group">
-                    <summary
-                        className={cn(
-                            buttonClass('secondary'),
-                            'cursor-pointer list-none gap-2',
-                        )}
-                    >
-                        <Code2 className="size-4 text-soft" />
-                        <span>Open in editor</span>
-                        <ChevronDown className="size-3 text-soft transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="absolute right-0 z-10 mt-1.5 w-48 rounded-xl bg-surface p-1 shadow-lg ring-1 ring-line">
-                        {editors.map((editor) => (
-                            <Link
-                                key={editor.slug}
-                                href={openEditor(project.id).url}
-                                method="post"
-                                data={{ editor: editor.slug }}
-                                as="button"
-                                preserveScroll
-                                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-paper"
-                            >
-                                <EditorLogo slug={editor.slug} size="xs" />
-                                <span className="truncate">{editor.label}</span>
-                            </Link>
-                        ))}
-                    </div>
-                </details>
-            )}
-            {errors.editor && (
-                <p className="absolute right-0 mt-1.5 w-56 text-right text-xs text-accent">
-                    {errors.editor}
-                </p>
-            )}
-        </div>
-    );
-}
-
 function LocalClusterCard({
     project,
     runs,
@@ -2552,18 +2501,6 @@ function LocalClusterCard({
                             <PowerOff className="size-3.5" />
                             <span>Down</span>
                         </Button>
-
-                        <Link
-                            href={`/simulator?project=${project.id}`}
-                            className={cn(
-                                buttonClass('secondary', 'sm'),
-                                'gap-1.5',
-                            )}
-                            title="Trace request flow through Cloudflare, Traefik, Pod, and Database"
-                        >
-                            <Network className="size-3.5 text-brand" />
-                            <span>Trace Request</span>
-                        </Link>
                     </div>
                 </div>
 

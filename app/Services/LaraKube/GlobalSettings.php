@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Services\EditorLauncher;
 use App\Services\Runtime\WslDistro;
 use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Settings;
@@ -19,6 +20,8 @@ class GlobalSettings
     public const WSL_SHUTDOWN_MODES = ['terminate', 'shutdown', 'disabled'];
 
     public const THEMES = ['system', 'light', 'dark'];
+
+    public const DEFAULT_EDITOR = 'vscode';
 
     public function __construct(private ToolLocator $locator) {}
 
@@ -38,6 +41,7 @@ class GlobalSettings
      *     intendedProviders: list<string>,
      *     onboardingCompletedAt: ?string,
      *     wslShutdownMode: string,
+     *     defaultEditor: string,
      *     detectedAgents: array<string, array{name: string, installed: bool, bridged: bool}>
      * }
      */
@@ -80,6 +84,7 @@ class GlobalSettings
             'intendedProviders' => $this->intendedProviders(),
             'onboardingCompletedAt' => is_string($config['onboardingCompletedAt'] ?? null) ? $config['onboardingCompletedAt'] : null,
             'wslShutdownMode' => $this->wslShutdownMode(),
+            'defaultEditor' => $this->getDefaultEditor(),
             'detectedAgents' => $agents,
         ];
     }
@@ -230,6 +235,25 @@ class GlobalSettings
         return (string) ($config['localTld'] ?? 'test');
     }
 
+    public function getDefaultEditor(): string
+    {
+        $config = $this->readConfig();
+        $editor = $config['defaultEditor'] ?? null;
+
+        return is_string($editor) && array_key_exists($editor, EditorLauncher::EDITORS)
+            ? $editor
+            : self::DEFAULT_EDITOR;
+    }
+
+    public function setDefaultEditor(string $editor): void
+    {
+        if (array_key_exists($editor, EditorLauncher::EDITORS)) {
+            $config = $this->readConfig();
+            $config['defaultEditor'] = $editor;
+            $this->writeConfig($config);
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -267,6 +291,10 @@ class GlobalSettings
 
         if (isset($data['wslShutdownMode']) && in_array($data['wslShutdownMode'], self::WSL_SHUTDOWN_MODES, true)) {
             $config['wslShutdownMode'] = $data['wslShutdownMode'];
+        }
+
+        if (isset($data['defaultEditor']) && array_key_exists((string) $data['defaultEditor'], EditorLauncher::EDITORS)) {
+            $config['defaultEditor'] = (string) $data['defaultEditor'];
         }
 
         if (array_key_exists('shareToken', $data)) {

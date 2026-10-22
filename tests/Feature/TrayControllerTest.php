@@ -57,6 +57,7 @@ test('get /tray renders inertia page with telemetry data', function () {
             ->has('servers')
             ->has('projects')
             ->has('tools')
+            ->where('defaultEditor', 'vscode')
         );
 });
 
@@ -92,6 +93,7 @@ test('get /tray/data returns json structure for periodic polling', function () {
             'tools',
             'windows',
             'selectedServerId',
+            'defaultEditor',
         ]);
 });
 

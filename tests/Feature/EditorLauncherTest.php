@@ -44,9 +44,21 @@ test('only editors installed as an app or a launcher are offered', function () {
     $sandbox = editorSandbox(apps: ['Visual Studio Code', 'PhpStorm'], clis: ['zed']);
 
     expect(app(EditorLauncher::class)->available())->toBe([
-        ['slug' => 'vscode', 'label' => 'VS Code'],
-        ['slug' => 'phpstorm', 'label' => 'PhpStorm'],
-        ['slug' => 'zed', 'label' => 'Zed'],
+        ['slug' => 'vscode', 'label' => 'VS Code', 'category' => 'editor'],
+        ['slug' => 'phpstorm', 'label' => 'PhpStorm', 'category' => 'editor'],
+        ['slug' => 'zed', 'label' => 'Zed', 'category' => 'editor'],
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('ai coding agents like antigravity and claude are offered with agent category', function () {
+    $sandbox = editorSandbox(apps: ['Antigravity', 'Claude'], clis: ['claude']);
+
+    expect(app(EditorLauncher::class)->available())->toBe([
+        ['slug' => 'antigravity', 'label' => 'Antigravity', 'category' => 'agent'],
+        ['slug' => 'claude', 'label' => 'Claude Desktop', 'category' => 'agent'],
+        ['slug' => 'claude-code', 'label' => 'Claude Code (CLI)', 'category' => 'agent'],
     ]);
 
     File::deleteDirectory($sandbox['home']);
@@ -85,7 +97,7 @@ test('the project page lists the installed editors', function () {
     $project = Project::create(['path' => $sandbox['app']]);
 
     $this->get(route('projects.show', $project))
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('editors', [['slug' => 'zed', 'label' => 'Zed']]));
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('editors', [['slug' => 'zed', 'label' => 'Zed', 'category' => 'editor']]));
 
     File::deleteDirectory($sandbox['home']);
 });
@@ -96,28 +108,28 @@ test('appropriate specialized editors are prioritized and non-matching specializ
 
     // For Laravel (PHP): PhpStorm is prioritized at the top, PyCharm is filtered out
     expect($launcher->available('laravel'))->toBe([
-        ['slug' => 'phpstorm', 'label' => 'PhpStorm'],
-        ['slug' => 'vscode', 'label' => 'VS Code'],
-        ['slug' => 'zed', 'label' => 'Zed'],
+        ['slug' => 'phpstorm', 'label' => 'PhpStorm', 'category' => 'editor'],
+        ['slug' => 'vscode', 'label' => 'VS Code', 'category' => 'editor'],
+        ['slug' => 'zed', 'label' => 'Zed', 'category' => 'editor'],
     ]);
 
     // For FastAPI / Django (Python): PyCharm is prioritized at the top, PhpStorm is filtered out
     expect($launcher->available('fastapi'))->toBe([
-        ['slug' => 'pycharm', 'label' => 'PyCharm'],
-        ['slug' => 'vscode', 'label' => 'VS Code'],
-        ['slug' => 'zed', 'label' => 'Zed'],
+        ['slug' => 'pycharm', 'label' => 'PyCharm', 'category' => 'editor'],
+        ['slug' => 'vscode', 'label' => 'VS Code', 'category' => 'editor'],
+        ['slug' => 'zed', 'label' => 'Zed', 'category' => 'editor'],
     ]);
 
     expect($launcher->available('django'))->toBe([
-        ['slug' => 'pycharm', 'label' => 'PyCharm'],
-        ['slug' => 'vscode', 'label' => 'VS Code'],
-        ['slug' => 'zed', 'label' => 'Zed'],
+        ['slug' => 'pycharm', 'label' => 'PyCharm', 'category' => 'editor'],
+        ['slug' => 'vscode', 'label' => 'VS Code', 'category' => 'editor'],
+        ['slug' => 'zed', 'label' => 'Zed', 'category' => 'editor'],
     ]);
 
     // For Next.js (JS): specialized PHP/Python IDEs are filtered out, universal editors remain
     expect($launcher->available('nextjs'))->toBe([
-        ['slug' => 'vscode', 'label' => 'VS Code'],
-        ['slug' => 'zed', 'label' => 'Zed'],
+        ['slug' => 'vscode', 'label' => 'VS Code', 'category' => 'editor'],
+        ['slug' => 'zed', 'label' => 'Zed', 'category' => 'editor'],
     ]);
 
     File::deleteDirectory($sandbox['home']);
@@ -128,11 +140,11 @@ test('community editions and alternative app names like PyCharm CE and IntelliJ 
     $launcher = app(EditorLauncher::class);
 
     expect($launcher->available('fastapi'))->toBe([
-        ['slug' => 'pycharm', 'label' => 'PyCharm'],
+        ['slug' => 'pycharm', 'label' => 'PyCharm', 'category' => 'editor'],
     ]);
 
     expect($launcher->available('springboot'))->toBe([
-        ['slug' => 'idea', 'label' => 'IntelliJ IDEA'],
+        ['slug' => 'idea', 'label' => 'IntelliJ IDEA', 'category' => 'editor'],
     ]);
 
     File::deleteDirectory($sandbox['home']);

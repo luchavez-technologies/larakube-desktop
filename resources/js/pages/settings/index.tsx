@@ -30,7 +30,9 @@ import { cn } from '@/lib/utils';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
+import EditorLogo from '@/components/editor-logo';
 import WslCheck, { type WslState } from '@/components/setup/wsl-check';
+import type { Editor } from '@/types/larakube';
 
 type AgentInfo = {
     name: string;
@@ -52,10 +54,13 @@ type SettingsProps = {
         cliChannel?: string;
         demoMode?: boolean;
         demoHiddenServers?: string[];
+        defaultEditor?: string;
         detectedAgents: Record<string, AgentInfo>;
     };
     allowedTlds: string[];
     cloudProviders: Record<string, string>;
+    availableEditors?: Editor[];
+    allEditors?: Editor[];
     contexts?: string[];
     currentContext?: string | null;
     windows?: boolean;
@@ -74,6 +79,7 @@ type SettingsForm = {
     cliChannel: string;
     demoMode: boolean;
     demoHiddenServers: string[];
+    defaultEditor: string;
 };
 
 const themeOptions: {
@@ -106,6 +112,8 @@ export default function SettingsIndex({
     settings,
     allowedTlds,
     cloudProviders,
+    availableEditors = [],
+    allEditors = [],
     contexts = [],
     currentContext = null,
     windows = false,
@@ -133,7 +141,11 @@ export default function SettingsIndex({
         cliChannel: settings.cliChannel ?? 'canary',
         demoMode: settings.demoMode ?? false,
         demoHiddenServers: settings.demoHiddenServers ?? [],
+        defaultEditor: settings.defaultEditor ?? 'vscode',
     });
+
+    const availableSlugs = new Set(availableEditors.map((e) => e.slug));
+    const editorsList = allEditors.length > 0 ? allEditors : availableEditors;
 
     function toggleHiddenServer(name: string, hidden: boolean) {
         form.setData(
@@ -173,8 +185,22 @@ export default function SettingsIndex({
 
     function submit(e: FormEvent) {
         e.preventDefault();
-        form.post('/settings');
+        form.post('/settings', { preserveScroll: true });
     }
+
+    const saveAction = (
+        <Button
+            type="submit"
+            size="xs"
+            variant="secondary"
+            disabled={form.processing}
+            className="h-6 gap-1 px-2 text-[11px]"
+            title="Save changes in this section"
+        >
+            <Save className="size-3" />
+            <span>{form.processing ? 'Saving…' : 'Save'}</span>
+        </Button>
+    );
 
     return (
         <AppLayout title="Settings">
@@ -195,7 +221,7 @@ export default function SettingsIndex({
             <div className="grid grid-cols-[1fr_360px] items-start gap-6">
                 <form onSubmit={submit} className="space-y-5">
                     {/* Appearance & Theme */}
-                    <Card label="Appearance & Theme">
+                    <Card label="Appearance & Theme" action={saveAction}>
                         <div className="space-y-3">
                             <p className="text-xs text-soft">
                                 Choose your interface theme preference. System
@@ -260,8 +286,93 @@ export default function SettingsIndex({
                         </div>
                     </Card>
 
+                    {/* Default Code Editor & AI Agent */}
+                    <Card
+                        label="Default Code Editor & AI Agent"
+                        action={saveAction}
+                    >
+                        <div className="space-y-3">
+                            <p className="text-xs text-soft">
+                                Choose your preferred code editor or AI coding
+                                agent. LaraKube will use this by default when
+                                opening projects from the Menu Bar tray and
+                                quick launchers.
+                            </p>
+                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                {editorsList.map((editor) => {
+                                    const isSelected =
+                                        form.data.defaultEditor === editor.slug;
+                                    const isInstalled = availableSlugs.has(
+                                        editor.slug,
+                                    );
+                                    return (
+                                        <button
+                                            key={editor.slug}
+                                            type="button"
+                                            onClick={() =>
+                                                form.setData(
+                                                    'defaultEditor',
+                                                    editor.slug,
+                                                )
+                                            }
+                                            className={cn(
+                                                'group relative flex items-center gap-3 rounded-xl border p-3 text-left transition-all',
+                                                isSelected
+                                                    ? 'border-brand/60 bg-brand/[0.04] shadow-xs ring-1 ring-brand/40'
+                                                    : 'hover:border-line-hover border-line bg-surface shadow-2xs hover:bg-paper/60',
+                                            )}
+                                        >
+                                            <EditorLogo
+                                                slug={editor.slug}
+                                                size="sm"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <span
+                                                    className={cn(
+                                                        'block truncate text-xs font-semibold',
+                                                        isSelected
+                                                            ? 'text-ink'
+                                                            : 'text-soft group-hover:text-ink',
+                                                    )}
+                                                >
+                                                    {editor.label}
+                                                </span>
+                                                <span className="block text-[10px] text-faint">
+                                                    {editor.category === 'agent'
+                                                        ? 'AI Agent'
+                                                        : 'Editor'}
+                                                    {isInstalled
+                                                        ? ' • Installed'
+                                                        : ''}
+                                                </span>
+                                            </div>
+                                            {isSelected && (
+                                                <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+                                                    <Check className="size-2.5 stroke-[2.5]" />
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="border-t border-line/60 pt-3">
+                                <span className="text-xs text-soft">
+                                    Selected:{' '}
+                                    <strong className="font-semibold text-ink">
+                                        {editorsList.find(
+                                            (e) =>
+                                                e.slug ===
+                                                form.data.defaultEditor,
+                                        )?.label ?? form.data.defaultEditor}
+                                    </strong>
+                                </span>
+                            </div>
+                        </div>
+                    </Card>
+
                     {/* Domain & Networking */}
-                    <Card label="Local Domain & TLD">
+                    <Card label="Local Domain & TLD" action={saveAction}>
                         <div className="space-y-3">
                             <p className="text-xs text-soft">
                                 Sets the local vanity domain suffix used by the
@@ -291,7 +402,7 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* Workspace Navigation */}
-                    <Card label="Workspace Navigation Mode">
+                    <Card label="Workspace Navigation Mode" action={saveAction}>
                         <div className="space-y-3">
                             <label className="flex cursor-pointer items-start gap-3">
                                 <input
@@ -350,7 +461,7 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* Experimental */}
-                    <Card label="Experimental features">
+                    <Card label="Experimental features" action={saveAction}>
                         <label className="flex cursor-pointer items-start gap-3">
                             <input
                                 type="checkbox"
@@ -379,7 +490,7 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* Demo Mode */}
-                    <Card label="Demo Mode">
+                    <Card label="Demo Mode" action={saveAction}>
                         <div className="space-y-3">
                             <label className="flex cursor-pointer items-start gap-3">
                                 <input
@@ -464,7 +575,7 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* Cloud Providers */}
-                    <Card label="Default Cloud Provider">
+                    <Card label="Default Cloud Provider" action={saveAction}>
                         <div className="space-y-2">
                             <SelectMenu
                                 value={form.data.defaultCloudProvider}
@@ -489,7 +600,10 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* LaraKube CLI Channel */}
-                    <Card label="LaraKube CLI Release Channel">
+                    <Card
+                        label="LaraKube CLI Release Channel"
+                        action={saveAction}
+                    >
                         <div className="space-y-3">
                             <p className="text-xs leading-relaxed text-soft">
                                 Choose whether to receive early develop updates
@@ -521,7 +635,7 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* General / Let's Encrypt */}
-                    <Card label="General & SSL">
+                    <Card label="General & SSL" action={saveAction}>
                         <div className="space-y-3">
                             <div>
                                 <label className="mb-1.5 block text-xs font-medium text-ink">
@@ -539,19 +653,6 @@ export default function SettingsIndex({
                             </div>
                         </div>
                     </Card>
-
-                    <div>
-                        <Button
-                            type="submit"
-                            size="md"
-                            disabled={form.processing}
-                        >
-                            <Save className="size-4" />
-                            <span>
-                                {form.processing ? 'Saving…' : 'Save Settings'}
-                            </span>
-                        </Button>
-                    </div>
                 </form>
 
                 <div className="flex flex-col gap-5">

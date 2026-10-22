@@ -13,13 +13,62 @@ use Illuminate\Support\Facades\Process;
  */
 class EditorLauncher
 {
-    /** @var array<string, array{label: string, app: string|list<string>, cli: string, universal?: bool, languages?: list<string>, frameworks?: list<string>}> */
+    /** @var array<string, array{label: string, app?: string|list<string>, cli?: string, terminal?: bool, category?: 'editor'|'agent', universal?: bool, languages?: list<string>, frameworks?: list<string>}> */
     public const EDITORS = [
+        'antigravity' => [
+            'label' => 'Antigravity',
+            'app' => 'Antigravity',
+            'cli' => 'agy',
+            'universal' => true,
+            'category' => 'agent',
+        ],
+        'claude' => [
+            'label' => 'Claude Desktop',
+            'app' => 'Claude',
+            'universal' => true,
+            'category' => 'agent',
+        ],
+        'claude-code' => [
+            'label' => 'Claude Code (CLI)',
+            'cli' => 'claude',
+            'terminal' => true,
+            'universal' => true,
+            'category' => 'agent',
+        ],
+        'opencode' => [
+            'label' => 'OpenCode',
+            'app' => 'OpenCode',
+            'cli' => 'opencode',
+            'universal' => true,
+            'category' => 'agent',
+        ],
+        'chatgpt' => [
+            'label' => 'ChatGPT / Codex',
+            'app' => ['ChatGPT', 'Codex'],
+            'cli' => 'codex',
+            'universal' => true,
+            'category' => 'agent',
+        ],
+        'cursor' => [
+            'label' => 'Cursor',
+            'app' => 'Cursor',
+            'cli' => 'cursor',
+            'universal' => true,
+            'category' => 'editor',
+        ],
+        'windsurf' => [
+            'label' => 'Windsurf',
+            'app' => 'Windsurf',
+            'cli' => 'windsurf',
+            'universal' => true,
+            'category' => 'editor',
+        ],
         'vscode' => [
             'label' => 'VS Code',
             'app' => 'Visual Studio Code',
             'cli' => 'code',
             'universal' => true,
+            'category' => 'editor',
         ],
         'phpstorm' => [
             'label' => 'PhpStorm',
@@ -27,30 +76,21 @@ class EditorLauncher
             'cli' => 'phpstorm',
             'languages' => ['php'],
             'frameworks' => ['laravel', 'statamic', 'wordpress', 'bedrock'],
+            'category' => 'editor',
         ],
         'zed' => [
             'label' => 'Zed',
             'app' => 'Zed',
             'cli' => 'zed',
             'universal' => true,
-        ],
-        'cursor' => [
-            'label' => 'Cursor',
-            'app' => 'Cursor',
-            'cli' => 'cursor',
-            'universal' => true,
-        ],
-        'windsurf' => [
-            'label' => 'Windsurf',
-            'app' => 'Windsurf',
-            'cli' => 'windsurf',
-            'universal' => true,
+            'category' => 'editor',
         ],
         'sublime' => [
             'label' => 'Sublime Text',
             'app' => 'Sublime Text',
             'cli' => 'subl',
             'universal' => true,
+            'category' => 'editor',
         ],
         'pycharm' => [
             'label' => 'PyCharm',
@@ -58,6 +98,7 @@ class EditorLauncher
             'cli' => 'pycharm',
             'languages' => ['python'],
             'frameworks' => ['django', 'fastapi'],
+            'category' => 'editor',
         ],
         'webstorm' => [
             'label' => 'WebStorm',
@@ -65,6 +106,7 @@ class EditorLauncher
             'cli' => 'webstorm',
             'languages' => ['javascript', 'typescript'],
             'frameworks' => ['nextjs', 'next', 'react', 'vue', 'vite', 'astro', 'docusaurus', 'nestjs', 'adonisjs'],
+            'category' => 'editor',
         ],
         'goland' => [
             'label' => 'GoLand',
@@ -72,6 +114,7 @@ class EditorLauncher
             'cli' => 'goland',
             'languages' => ['go'],
             'frameworks' => ['gin'],
+            'category' => 'editor',
         ],
         'rustrover' => [
             'label' => 'RustRover',
@@ -79,6 +122,7 @@ class EditorLauncher
             'cli' => 'rustrover',
             'languages' => ['rust'],
             'frameworks' => ['axum'],
+            'category' => 'editor',
         ],
         'rubymine' => [
             'label' => 'RubyMine',
@@ -86,6 +130,7 @@ class EditorLauncher
             'cli' => 'rubymine',
             'languages' => ['ruby'],
             'frameworks' => ['rails'],
+            'category' => 'editor',
         ],
         'rider' => [
             'label' => 'Rider',
@@ -93,6 +138,7 @@ class EditorLauncher
             'cli' => 'rider',
             'languages' => ['csharp', 'dotnet'],
             'frameworks' => ['dotnet'],
+            'category' => 'editor',
         ],
         'idea' => [
             'label' => 'IntelliJ IDEA',
@@ -100,6 +146,7 @@ class EditorLauncher
             'cli' => 'idea',
             'languages' => ['java', 'kotlin'],
             'frameworks' => ['springboot'],
+            'category' => 'editor',
         ],
     ];
 
@@ -109,14 +156,17 @@ class EditorLauncher
     public function __construct(private ToolLocator $locator, private ?array $applicationDirectories = null) {}
 
     /**
-     * @return list<array{slug: string, label: string}>
+     * @return list<array{slug: string, label: string, category: 'editor'|'agent'}>
      */
     public function available(?string $framework = null): array
     {
         $installed = [];
 
         foreach (self::EDITORS as $slug => $editor) {
-            if ($this->application($editor['app']) !== null || $this->locator->find($editor['cli']) !== null) {
+            $hasApp = isset($editor['app']) && $this->application($editor['app']) !== null;
+            $hasCli = isset($editor['cli']) && $this->locator->find($editor['cli']) !== null;
+
+            if ($hasApp || $hasCli) {
                 $installed[$slug] = $editor;
             }
         }
@@ -129,6 +179,7 @@ class EditorLauncher
             return array_map(fn (string $slug, array $editor): array => [
                 'slug' => $slug,
                 'label' => $editor['label'],
+                'category' => ($editor['category'] ?? 'editor') === 'agent' ? 'agent' : 'editor',
             ], array_keys($installed), array_values($installed));
         }
 
@@ -137,11 +188,19 @@ class EditorLauncher
         $universal = [];
 
         foreach ($installed as $slug => $editor) {
-            $frameworks = $editor['frameworks'] ?? [];
+            $frameworks = is_array($editor['frameworks'] ?? null) ? $editor['frameworks'] : [];
+            /** @var 'agent'|'editor' $category */
+            $category = ($editor['category'] ?? 'editor') === 'agent' ? 'agent' : 'editor';
+            $item = [
+                'slug' => $slug,
+                'label' => $editor['label'],
+                'category' => $category,
+            ];
+
             if (in_array($frameworkSlug, $frameworks, true)) {
-                $matched[] = ['slug' => $slug, 'label' => $editor['label']];
+                $matched[] = $item;
             } elseif (! empty($editor['universal'])) {
-                $universal[] = ['slug' => $slug, 'label' => $editor['label']];
+                $universal[] = $item;
             }
         }
 
@@ -156,6 +215,7 @@ class EditorLauncher
         return array_map(fn (string $slug, array $editor): array => [
             'slug' => $slug,
             'label' => $editor['label'],
+            'category' => ($editor['category'] ?? 'editor') === 'agent' ? 'agent' : 'editor',
         ], array_keys($installed), array_values($installed));
     }
 
@@ -167,19 +227,34 @@ class EditorLauncher
             return false;
         }
 
-        $application = $this->application($editor['app']);
-        $cli = $this->locator->find($editor['cli']);
-        $command = match (true) {
-            $application !== null => ['open', '-a', $application, $path],
-            $cli !== null => [$cli, $path],
-            default => null,
-        };
+        if (! empty($editor['terminal'])) {
+            $cli = $this->locator->find($editor['cli']);
+            if ($cli === null) {
+                return false;
+            }
+            $escaped = escapeshellarg($path);
 
-        if ($command === null) {
-            return false;
+            return app(TerminalLauncher::class)->open("cd {$escaped} && {$cli}");
         }
 
-        return Process::env(['PATH' => $this->locator->path()])->timeout(30)->run($command)->successful();
+        $application = $this->application($editor['app']);
+        $cli = isset($editor['cli']) ? $this->locator->find($editor['cli']) : null;
+
+        if ($application !== null) {
+            return Process::env(['PATH' => $this->locator->path()])->timeout(30)->run(['open', '-a', $application, $path])->successful();
+        }
+
+        if ($cli !== null) {
+            if ($editor['category'] === 'agent') {
+                $escaped = escapeshellarg($path);
+
+                return app(TerminalLauncher::class)->open("cd {$escaped} && {$cli}");
+            }
+
+            return Process::env(['PATH' => $this->locator->path()])->timeout(30)->run([$cli, $path])->successful();
+        }
+
+        return false;
     }
 
     /**

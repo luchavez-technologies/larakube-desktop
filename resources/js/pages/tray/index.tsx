@@ -133,6 +133,7 @@ type TrayProps = {
     tools: ToolItem[];
     plex?: PlexItem;
     activeRun: ActiveRunItem | null;
+    defaultEditor?: string;
     windows: boolean;
 };
 
@@ -323,8 +324,28 @@ export default function TrayIndex(initialProps: TrayProps) {
         });
     };
 
+    const defaultEditor = data?.defaultEditor ?? 'vscode';
+    const editorLabel =
+        (
+            {
+                claude: 'Claude Desktop',
+                'claude-code': 'Claude Code',
+                antigravity: 'Antigravity',
+                opencode: 'OpenCode',
+                chatgpt: 'ChatGPT',
+                cursor: 'Cursor',
+                windsurf: 'Windsurf',
+                vscode: 'VS Code',
+                phpstorm: 'PhpStorm',
+                zed: 'Zed',
+                sublime: 'Sublime Text',
+            } as Record<string, string>
+        )[defaultEditor] ?? 'Editor';
+
     const openEditor = async (id: number) => {
-        await sendJson(`/tray/open-editor/${id}`, 'POST', { editor: 'vscode' });
+        await sendJson(`/tray/open-editor/${id}`, 'POST', {
+            editor: defaultEditor,
+        });
     };
 
     const stopLocalFleet = () => {
@@ -801,10 +822,10 @@ export default function TrayIndex(initialProps: TrayProps) {
                                                                 </button>
                                                             )}
 
-                                                        {/* Open in VS Code */}
+                                                        {/* Open in default editor / AI agent */}
                                                         <button
                                                             type="button"
-                                                            title="Open in VS Code"
+                                                            title={`Open in ${editorLabel}`}
                                                             onClick={() =>
                                                                 void openEditor(
                                                                     project.id,
@@ -813,7 +834,9 @@ export default function TrayIndex(initialProps: TrayProps) {
                                                             className="inline-flex size-6 items-center justify-center rounded-md text-soft transition hover:bg-badge hover:text-ink"
                                                         >
                                                             <EditorLogo
-                                                                slug="vscode"
+                                                                slug={
+                                                                    defaultEditor
+                                                                }
                                                                 size="xs"
                                                             />
                                                         </button>
@@ -1185,7 +1208,7 @@ export default function TrayIndex(initialProps: TrayProps) {
 
                                                     <button
                                                         type="button"
-                                                        title="Open in VS Code"
+                                                        title={`Open in ${editorLabel}`}
                                                         onClick={() =>
                                                             void openEditor(
                                                                 project.id,
@@ -1194,7 +1217,7 @@ export default function TrayIndex(initialProps: TrayProps) {
                                                         className="inline-flex size-6 items-center justify-center rounded-md text-soft transition hover:bg-badge hover:text-ink"
                                                     >
                                                         <EditorLogo
-                                                            slug="vscode"
+                                                            slug={defaultEditor}
                                                             size="xs"
                                                         />
                                                     </button>
