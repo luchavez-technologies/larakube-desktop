@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\Sync\SyncServerBackupJob;
+use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
@@ -78,7 +79,28 @@ class DashboardController extends Controller
                 ];
             }),
 
-            'localCluster' => Inertia::defer(fn (): array => $localCluster->detect()),
+            // SyncLocalClusterJob keeps local_cluster_state fresh in the
+            // background (on a schedule, on app boot, and immediately after
+            // any local up/down/start/stop — see RecordRunOutput). Only a
+            // machine that has never synced once falls back to a live
+            // detect() here, which also primes the DB for every request after it.
+            'localCluster' => Inertia::defer(function () use ($localCluster): array {
+                $state = LocalClusterState::current();
+
+                if ($state->last_synced_at !== null) {
+                    return [
+                        'engine' => $state->engine,
+                        'context' => $state->context,
+                        'status' => $state->status,
+                        'tone' => $state->tone,
+                    ];
+                }
+
+                $result = $localCluster->detect();
+                SyncLocalClusterJob::dispatch();
+
+                return $result;
+            }),
 
             'projects' => Inertia::defer(function () use ($inspector): array {
                 return Project::query()
@@ -221,12 +243,12 @@ class DashboardController extends Controller
                         'status' => $s->status,
                     ]))->values();
 
+                // SyncAllServerBackupsJob keeps backup_configured/backup_last_synced_at
+                // fresh on its own recurring schedule now (plus an immediate
+                // dispatch on app boot) — this request only ever reads, it
+                // never dispatches a sync itself.
                 $unprotected = [];
                 foreach ($cloudServers as $server) {
-                    if ($server->backup_last_synced_at === null || $server->backup_last_synced_at->diffInMinutes(now()) > 30) {
-                        SyncServerBackupJob::dispatch($server->id);
-                    }
-
                     if ($server->backup_configured === false) {
                         $unprotected[] = $server->name;
                     }

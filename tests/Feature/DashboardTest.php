@@ -1,16 +1,29 @@
 <?php
 
+use App\Jobs\Sync\SyncAllServerBackupsJob;
+use App\Jobs\Sync\SyncAllServerClusterUsersJob;
+use App\Jobs\Sync\SyncAllServerExternalDnsJob;
+use App\Jobs\Sync\SyncAllServerPlexJob;
+use App\Jobs\Sync\SyncAllServerTlsJob;
+use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerBackupJob;
+use App\Jobs\Sync\SyncServerClusterUsersJob;
+use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServerTlsJob;
+use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\FrameworkCatalog;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 
 /**
@@ -384,15 +397,234 @@ test('SyncServerBackupJob updates server backup status', function () {
     $status->shouldReceive('backup')
         ->with('doks-lon1-prod')
         ->once()
-        ->andReturn(['success' => true, 'configured' => true]);
+        ->andReturn(['success' => true, 'configured' => true, 'destination' => ['bucket' => 'cloud-prod-backups']]);
 
     $job = new SyncServerBackupJob($server->id);
     $job->handle($status);
 
     $server->refresh();
-    expect($server->backup_configured)->toBeTrue()
+    expect($server->backup_data)->toBe(['success' => true, 'configured' => true, 'destination' => ['bucket' => 'cloud-prod-backups']])
+        ->and($server->backup_configured)->toBeTrue()
         ->and($server->backup_sync_status)->toBe('fresh')
         ->and($server->backup_last_synced_at)->not->toBeNull();
+});
+
+test('SyncLocalClusterJob writes a fresh detection into local_cluster_state', function () {
+    $localCluster = mock(LocalCluster::class);
+    $localCluster->shouldReceive('detect')->with(fresh: true)->once()->andReturn([
+        'engine' => 'k3s',
+        'context' => 'k3s-larakube',
+        'status' => 'Ready for up',
+        'tone' => 'ok',
+    ]);
+
+    (new SyncLocalClusterJob)->handle($localCluster);
+
+    $state = LocalClusterState::current();
+    expect($state->engine)->toBe('k3s')
+        ->and($state->context)->toBe('k3s-larakube')
+        ->and($state->sync_status)->toBe('fresh')
+        ->and($state->last_synced_at)->not->toBeNull()
+        ->and($state->last_sync_error)->toBeNull();
+});
+
+test('SyncLocalClusterJob keeps the last known state and records the error on failure, instead of flashing to unknown', function () {
+    LocalClusterState::current()->update([
+        'engine' => 'OrbStack',
+        'context' => 'orbstack',
+        'status' => 'Ready for up',
+        'tone' => 'ok',
+        'sync_status' => 'fresh',
+        'last_synced_at' => now()->subMinute(),
+    ]);
+
+    $localCluster = mock(LocalCluster::class);
+    $localCluster->shouldReceive('detect')->with(fresh: true)->once()->andThrow(new RuntimeException('kubectl timed out'));
+
+    (new SyncLocalClusterJob)->handle($localCluster);
+
+    $state = LocalClusterState::current();
+    expect($state->engine)->toBe('OrbStack')
+        ->and($state->context)->toBe('orbstack')
+        ->and($state->sync_status)->toBe('error')
+        ->and($state->last_sync_error)->toBe('kubectl timed out');
+});
+
+test('SyncAllServerBackupsJob dispatches a per-server sync for every ready server with a context', function () {
+    Queue::fake();
+
+    $ready = Server::create(['name' => 'ready-with-context', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-ready', 'status' => 'ready']);
+    Server::create(['name' => 'ready-no-context', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+    Server::create(['name' => 'not-ready', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-missing', 'status' => 'missing']);
+
+    (new SyncAllServerBackupsJob)->handle();
+
+    Queue::assertPushed(SyncServerBackupJob::class, 1);
+    Queue::assertPushed(fn (SyncServerBackupJob $job): bool => $job->serverId === $ready->id);
+});
+
+test('SyncAllServerPlexJob dispatches a per-server sync for every ready server with a context', function () {
+    Queue::fake();
+
+    $ready = Server::create(['name' => 'ready-with-context', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-ready', 'status' => 'ready']);
+    Server::create(['name' => 'ready-no-context', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+    Server::create(['name' => 'not-ready', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-missing', 'status' => 'missing']);
+
+    (new SyncAllServerPlexJob)->handle();
+
+    Queue::assertPushed(SyncPlexJob::class, 1);
+    Queue::assertPushed(fn (SyncPlexJob $job): bool => $job->serverId === $ready->id);
+});
+
+test('SyncServerExternalDnsJob writes a fresh dns report into the server, and keeps the last known one on failure', function () {
+    $server = Server::create(['name' => 'cloud-prod', 'role' => 'deploy', 'provider' => 'digitalocean', 'kind' => 'doks', 'context' => 'doks-lon1-prod', 'status' => 'ready']);
+
+    $status = mock(ClusterStatus::class);
+    $status->shouldReceive('dns')->with('doks-lon1-prod')->once()->andReturn([['group' => 'alpha', 'zones' => ['example.com'], 'ready' => true, 'provider' => 'cloudflare']]);
+
+    (new SyncServerExternalDnsJob($server->id))->handle($status);
+
+    $server->refresh();
+    expect($server->externaldns_data)->toBe([['group' => 'alpha', 'zones' => ['example.com'], 'ready' => true, 'provider' => 'cloudflare']])
+        ->and($server->externaldns_sync_status)->toBe('fresh')
+        ->and($server->externaldns_last_synced_at)->not->toBeNull();
+
+    $status2 = mock(ClusterStatus::class);
+    $status2->shouldReceive('dns')->andThrow(new RuntimeException('kubectl timed out'));
+    (new SyncServerExternalDnsJob($server->id))->handle($status2);
+
+    $server->refresh();
+    expect($server->externaldns_data)->toBe([['group' => 'alpha', 'zones' => ['example.com'], 'ready' => true, 'provider' => 'cloudflare']])
+        ->and($server->externaldns_sync_status)->toBe('error')
+        ->and($server->externaldns_last_sync_error)->toBe('kubectl timed out');
+});
+
+test('SyncServerTlsJob writes a fresh tls report into the server', function () {
+    $server = Server::create(['name' => 'cloud-prod', 'role' => 'deploy', 'provider' => 'digitalocean', 'kind' => 'doks', 'context' => 'doks-lon1-prod', 'status' => 'ready']);
+
+    $status = mock(ClusterStatus::class);
+    $status->shouldReceive('tls')->with('doks-lon1-prod')->once()->andReturn(['success' => true, 'provider' => 'letsencrypt']);
+
+    (new SyncServerTlsJob($server->id))->handle($status);
+
+    $server->refresh();
+    expect($server->tls_data)->toBe(['success' => true, 'provider' => 'letsencrypt'])
+        ->and($server->tls_sync_status)->toBe('fresh');
+});
+
+test('SyncServerClusterUsersJob writes a fresh cluster-users report into the server', function () {
+    $server = Server::create(['name' => 'cloud-prod', 'role' => 'deploy', 'provider' => 'digitalocean', 'kind' => 'doks', 'context' => 'doks-lon1-prod', 'status' => 'ready']);
+
+    $status = mock(ClusterStatus::class);
+    $status->shouldReceive('clusterUsers')->with('doks-lon1-prod')->once()->andReturn([['name' => 'alice', 'person' => 'Alice', 'namespace' => 'production', 'createdAt' => null]]);
+
+    (new SyncServerClusterUsersJob($server->id))->handle($status);
+
+    $server->refresh();
+    expect($server->cluster_users_data)->toBe([['name' => 'alice', 'person' => 'Alice', 'namespace' => 'production', 'createdAt' => null]])
+        ->and($server->cluster_users_sync_status)->toBe('fresh');
+});
+
+test('SyncAllServerExternalDnsJob, SyncAllServerTlsJob, and SyncAllServerClusterUsersJob each dispatch a per-server sync for every ready server with a context', function () {
+    Queue::fake();
+
+    $ready = Server::create(['name' => 'ready-with-context', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-ready', 'status' => 'ready']);
+    Server::create(['name' => 'ready-no-context', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+    Server::create(['name' => 'not-ready', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-missing', 'status' => 'missing']);
+
+    (new SyncAllServerExternalDnsJob)->handle();
+    (new SyncAllServerTlsJob)->handle();
+    (new SyncAllServerClusterUsersJob)->handle();
+
+    Queue::assertPushed(SyncServerExternalDnsJob::class, 1);
+    Queue::assertPushed(fn (SyncServerExternalDnsJob $job): bool => $job->serverId === $ready->id);
+    Queue::assertPushed(SyncServerTlsJob::class, 1);
+    Queue::assertPushed(fn (SyncServerTlsJob $job): bool => $job->serverId === $ready->id);
+    Queue::assertPushed(SyncServerClusterUsersJob::class, 1);
+    Queue::assertPushed(fn (SyncServerClusterUsersJob $job): bool => $job->serverId === $ready->id);
+});
+
+test('dashboard reads local cluster status from the database once synced, never calling kubectl live', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $localCluster = mock(LocalCluster::class);
+    $localCluster->shouldNotReceive('detect');
+    app()->instance(LocalCluster::class, $localCluster);
+
+    LocalClusterState::current()->update([
+        'engine' => 'OrbStack',
+        'context' => 'orbstack',
+        'status' => 'Ready for up',
+        'tone' => 'ok',
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+    ]);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('localCluster.engine', 'OrbStack')
+                ->where('localCluster.context', 'orbstack')
+                ->where('localCluster.status', 'Ready for up')
+                ->where('localCluster.tone', 'ok')
+            )
+        );
+
+    File::deleteDirectory($bin);
+});
+
+test('dashboard falls back to a live detect and queues a sync when local cluster has never synced', function () {
+    onboarded();
+    Queue::fake();
+
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $localCluster = mock(LocalCluster::class);
+    $localCluster->shouldReceive('detect')->once()->andReturn([
+        'engine' => 'None',
+        'context' => null,
+        'status' => 'kubectl missing',
+        'tone' => 'muted',
+    ]);
+    app()->instance(LocalCluster::class, $localCluster);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('localCluster.status', 'kubectl missing')
+            )
+        );
+
+    Queue::assertPushed(SyncLocalClusterJob::class);
+
+    File::deleteDirectory($bin);
 });
 
 test('destroyed and missing servers are excluded from active fleet count and health score', function () {

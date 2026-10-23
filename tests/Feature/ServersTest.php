@@ -1,11 +1,19 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncPlexJob;
+use App\Jobs\Sync\SyncServerBackupJob;
+use App\Jobs\Sync\SyncServerClusterUsersJob;
+use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServerTlsJob;
+use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
 use App\Models\ServerDomain;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\TerminalLauncher;
 use Illuminate\Support\Facades\Cache;
@@ -54,6 +62,58 @@ test('the servers list is read from cloud:stacks --json', function () {
                 ->has('servers', 2)
                 ->where('servers.0.name', 'workshop-demo')
                 ->where('servers.1.status', 'unfinished')));
+
+    File::deleteDirectory($bin);
+});
+
+test('the servers list reads directly from the database once a fleet exists, never calling cloud:stacks', function () {
+    $bin = serversFakeCli();
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldNotReceive('all');
+    $stacks->shouldNotReceive('everything');
+    app()->instance(StackCatalog::class, $stacks);
+
+    Server::create(['name' => 'db-only-server', 'role' => 'deploy', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-db', 'account' => 'acct-1', 'cloud_project_id' => 'proj-1', 'status' => 'ready']);
+
+    $this->get(route('servers.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->has('servers', 1)
+                ->where('servers.0.name', 'db-only-server')
+                ->where('servers.0.account', 'acct-1')
+                ->where('servers.0.projectId', 'proj-1')
+                ->where('servers.0.isCurrent', false)));
+
+    File::deleteDirectory($bin);
+});
+
+test('a server matching local_cluster_state\'s context is flagged isCurrent, without a live kubectl call', function () {
+    $bin = serversFakeCli();
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldNotReceive('all');
+    app()->instance(StackCatalog::class, $stacks);
+
+    Server::create(['name' => 'local-cluster', 'role' => 'deploy', 'provider' => 'orbstack', 'kind' => 'discovered', 'context' => 'orbstack', 'status' => 'ready']);
+    Server::create(['name' => 'cloud-server', 'role' => 'deploy', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-1.2.3.4', 'status' => 'ready']);
+
+    LocalClusterState::current()->update([
+        'engine' => 'OrbStack',
+        'context' => 'orbstack',
+        'status' => 'Ready for up',
+        'tone' => 'ok',
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+    ]);
+
+    $this->get(route('servers.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('servers.0.isCurrent', true)
+                ->where('servers.1.isCurrent', false)));
 
     File::deleteDirectory($bin);
 });
@@ -480,6 +540,95 @@ test('a server page asks for its backup state on its own, in one call', function
     File::deleteDirectory($bin);
 });
 
+test('a server page reads backup, plex, dns, tls, and clusterUsers straight from the database when fresh, never calling the cluster live', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+
+    $status = mock(ClusterStatus::class);
+    $status->shouldNotReceive('backup');
+    $status->shouldNotReceive('plex');
+    $status->shouldNotReceive('dns');
+    $status->shouldNotReceive('tls');
+    $status->shouldNotReceive('clusterUsers');
+    app()->instance(ClusterStatus::class, $status);
+
+    Server::create([
+        'name' => 'workshop-demo',
+        'role' => 'deploy',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-203.0.113.21',
+        'status' => 'ready',
+        'backup_configured' => true,
+        'backup_data' => ['success' => true, 'configured' => true, 'destination' => ['bucket' => 'my-backups']],
+        'backup_sync_status' => 'fresh',
+        'backup_last_synced_at' => now(),
+        'plex_data' => ['success' => true, 'initialized' => true],
+        'plex_sync_status' => 'fresh',
+        'plex_last_synced_at' => now(),
+        'externaldns_data' => [['group' => 'client-a', 'zones' => ['example.com'], 'ready' => true, 'provider' => 'cloudflare']],
+        'externaldns_sync_status' => 'fresh',
+        'externaldns_last_synced_at' => now(),
+        'tls_data' => ['success' => true, 'provider' => 'letsencrypt'],
+        'tls_sync_status' => 'fresh',
+        'tls_last_synced_at' => now(),
+        'cluster_users_data' => [['name' => 'alice', 'person' => 'Alice', 'namespace' => 'production', 'createdAt' => null]],
+        'cluster_users_sync_status' => 'fresh',
+        'cluster_users_last_synced_at' => now(),
+    ]);
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('backup')
+            ->has('plex')
+            ->has('dns')
+            ->has('tls')
+            ->has('clusterUsers')
+            ->where('backup.destination.bucket', 'my-backups')
+            ->where('plex.initialized', true)
+            ->where('dns.0.group', 'client-a')
+            ->where('tls.provider', 'letsencrypt')
+            ->where('clusterUsers.0.name', 'alice'));
+
+    File::deleteDirectory($bin);
+});
+
+test('a server page falls back to a live call for backup, plex, dns, tls, and clusterUsers when the stored sync is stale', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+
+    Server::create([
+        'name' => 'workshop-demo',
+        'role' => 'deploy',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-203.0.113.21',
+        'status' => 'ready',
+        'backup_sync_status' => 'fresh',
+        'backup_last_synced_at' => now()->subSeconds(SyncServerBackupJob::FRESH_SECONDS + 1),
+        'plex_sync_status' => 'fresh',
+        'plex_last_synced_at' => now()->subSeconds(SyncPlexJob::FRESH_SECONDS + 1),
+        'externaldns_sync_status' => 'fresh',
+        'externaldns_last_synced_at' => now()->subSeconds(SyncServerExternalDnsJob::FRESH_SECONDS + 1),
+        'tls_sync_status' => 'fresh',
+        'tls_last_synced_at' => now()->subSeconds(SyncServerTlsJob::FRESH_SECONDS + 1),
+        'cluster_users_sync_status' => 'fresh',
+        'cluster_users_last_synced_at' => now()->subSeconds(SyncServerClusterUsersJob::FRESH_SECONDS + 1),
+    ]);
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('backup')
+            ->missing('plex')
+            ->missing('dns')
+            ->missing('tls')
+            ->missing('clusterUsers'));
+
+    File::deleteDirectory($bin);
+});
+
 test('the servers list enriches servers with managed ExternalDNS domains from database', function () {
     $bin = serversFakeCli();
     serversFakeStacks();
@@ -491,6 +640,17 @@ test('the servers list enriches servers with managed ExternalDNS domains from da
         'kind' => 'vps',
         'context' => 'larakube-203.0.113.21',
         'status' => 'ready',
+    ]);
+
+    // SyncServersJob mirrors every stack it sees, including unfinished
+    // leftovers like this one — a correctly-synced DB has both rows, same
+    // as the live `cloud:stacks` mock below.
+    Server::create([
+        'name' => 'cancel-test',
+        'role' => 'deploy',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'status' => 'unfinished',
     ]);
 
     ServerDomain::create([

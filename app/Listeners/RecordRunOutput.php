@@ -6,9 +6,13 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
+use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
+use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
+use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServerTlsJob;
 use App\Models\Activity;
 use App\Models\Run;
 use App\Models\Server;
@@ -108,6 +112,17 @@ class RecordRunOutput
 
         app(RunNotifier::class)->runFinished($run);
 
+        // The local cluster's own up/down/start/stop was previously invisible
+        // to LocalCluster's cache (nothing ever called its forget()), so this
+        // state could sit stale until its TTL happened to expire. Now that
+        // state lives in local_cluster_state, re-sync immediately rather than
+        // wait for SyncLocalClusterJob's own recurring tick.
+        if ($run->environment === 'local'
+            && in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject], true)
+        ) {
+            SyncLocalClusterJob::dispatch();
+        }
+
         $context = $run->meta['context'] ?? null;
         $server = $context !== null ? Server::firstWhere('context', $context) : null;
 
@@ -141,6 +156,7 @@ class RecordRunOutput
 
             if ($server !== null) {
                 SyncServerDomainsJob::dispatch($server->id);
+                SyncServerExternalDnsJob::dispatch($server->id);
             }
 
             if ($run->kind === RunKind::ConnectDomain && ($run->meta['also_enable_tls'] ?? '0') === '1' && $status === RunStatus::Succeeded) {
@@ -170,7 +186,17 @@ class RecordRunOutput
 
             if ($server !== null) {
                 SyncServerDomainsJob::dispatch($server->id);
+                SyncServerExternalDnsJob::dispatch($server->id);
+                SyncServerTlsJob::dispatch($server->id);
             }
+        }
+
+        // ClusterGrant/ClusterRevoke don't carry 'context' in their own meta
+        // (unlike the domain/TLS runs above) — $run->server_id is already
+        // reliably populated from the run's own `context` column at save
+        // time (see Run::booted()), so it's used directly here instead.
+        if ($run->server_id !== null && in_array($run->kind, [RunKind::ClusterGrant, RunKind::ClusterRevoke], true)) {
+            SyncServerClusterUsersJob::dispatch($run->server_id);
         }
 
         // Repair/resize exist to bring a broken cluster back — the next page

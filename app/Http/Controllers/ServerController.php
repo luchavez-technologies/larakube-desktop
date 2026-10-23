@@ -6,6 +6,12 @@ use App\Enums\RunKind;
 use App\Http\Requests\CloudflareStepRequest;
 use App\Http\Requests\DestroyServerRequest;
 use App\Http\Requests\StoreServerRequest;
+use App\Jobs\Sync\SyncPlexJob;
+use App\Jobs\Sync\SyncServerBackupJob;
+use App\Jobs\Sync\SyncServerClusterUsersJob;
+use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServerTlsJob;
+use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\ServerDomain;
@@ -22,6 +28,7 @@ use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
 use App\Services\SshKeyInspector;
 use App\Services\TerminalLauncher;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,10 +40,52 @@ class ServerController extends Controller
     public function index(StackCatalog $catalog, GlobalSettings $settings): Response
     {
         return Inertia::render('servers/index', [
+            // DB-first, same pattern as DashboardController's 'servers' prop:
+            // once a fleet exists, this never shells out to the CLI on a plain
+            // page visit — `cloud:stacks --json` used to run unconditionally
+            // here even with Server rows already present. Only a machine with
+            // no Server rows at all (nothing imported/created yet) falls back
+            // to a live call.
             'servers' => Inertia::defer(fn (): ?array => $this->enrichStacksWithDomains(
-                $this->visibleStacks($catalog->all(), $settings)
+                $this->visibleStacks($this->serversFromDatabase() ?? $catalog->all(), $settings)
             )),
         ]);
+    }
+
+    /**
+     * @return ?list<array<string, mixed>>
+     */
+    private function serversFromDatabase(): ?array
+    {
+        if (! Server::active()->exists()) {
+            return null;
+        }
+
+        // The currently-active kubectl context is exposed on local_cluster_state
+        // (SyncLocalClusterJob) only for a context LocalCluster recognizes as a
+        // local cluster — a remote/cloud current-context won't match here. That
+        // narrower check is still the common, meaningful case for this badge
+        // ("is this my active local dev cluster"), and avoids a live kubectl
+        // call on every page visit just to highlight one row.
+        $currentContext = LocalClusterState::current()->context;
+
+        return array_values(Server::active()
+            ->get()
+            ->map(fn (Server $s): array => [
+                'name' => $s->name,
+                'provider' => $s->provider,
+                'kind' => $s->kind,
+                'region' => $s->region,
+                'ip' => $s->ip,
+                'port' => $s->port,
+                'context' => $s->context,
+                'account' => $s->account,
+                'projectId' => $s->cloud_project_id,
+                'role' => $s->role,
+                'status' => $s->status,
+                'isCurrent' => $s->context !== null && $s->context === $currentContext,
+            ])
+            ->all());
     }
 
     /**
@@ -399,11 +448,26 @@ class ServerController extends Controller
                     ? $lastTools['tools']
                     : Inertia::defer(fn (): ?array => $toolCatalog->forContext($context), 'tools'))
                 : null,
-            'dns' => Inertia::defer(fn (): ?array => $context !== null ? $status->dns($context) : null, 'dns'),
-            'tls' => Inertia::defer(fn (): ?array => $context !== null ? $status->tls($context) : null, 'tls'),
-            'plex' => Inertia::defer(fn (): ?array => $context !== null ? $status->plex($context) : null, 'plex'),
-            'backup' => Inertia::defer(fn (): ?array => $context !== null ? $status->backup($context) : null, 'backup'),
-            'clusterUsers' => Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
+            // *_data are kept fresh in the background (their matching Sync*Job, on a
+            // recurring schedule plus an immediate dispatch on app boot) — same
+            // DB-first-with-live-fallback shape as 'tools' above. A never-synced
+            // server (no Server row, or one that predates these columns) falls
+            // back to the live call, same as before.
+            'dns' => $this->isColumnFresh($serverModel?->externaldns_last_synced_at, SyncServerExternalDnsJob::FRESH_SECONDS)
+                ? $serverModel->externaldns_data
+                : Inertia::defer(fn (): ?array => $context !== null ? $status->dns($context) : null, 'dns'),
+            'tls' => $this->isColumnFresh($serverModel?->tls_last_synced_at, SyncServerTlsJob::FRESH_SECONDS)
+                ? $serverModel->tls_data
+                : Inertia::defer(fn (): ?array => $context !== null ? $status->tls($context) : null, 'tls'),
+            'plex' => $this->isColumnFresh($serverModel?->plex_last_synced_at, SyncPlexJob::FRESH_SECONDS)
+                ? $serverModel->plex_data
+                : Inertia::defer(fn (): ?array => $context !== null ? $status->plex($context) : null, 'plex'),
+            'backup' => $this->isColumnFresh($serverModel?->backup_last_synced_at, SyncServerBackupJob::FRESH_SECONDS)
+                ? $serverModel->backup_data
+                : Inertia::defer(fn (): ?array => $context !== null ? $status->backup($context) : null, 'backup'),
+            'clusterUsers' => $this->isColumnFresh($serverModel?->cluster_users_last_synced_at, SyncServerClusterUsersJob::FRESH_SECONDS)
+                ? $serverModel->cluster_users_data
+                : Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
             'nodeMetrics' => Inertia::defer(fn (): ?array => $context !== null ? $clusterMetrics->nodeMetrics($context) : null, 'nodeMetrics'),
             // "Ready" only ever meant "provisioning finished" — this is the live
             // signal that overrides the badge when the cluster stopped answering since.
@@ -512,6 +576,11 @@ class ServerController extends Controller
         );
 
         return to_route('runs.show', $run);
+    }
+
+    private function isColumnFresh(?CarbonInterface $syncedAt, int $freshSeconds): bool
+    {
+        return $syncedAt !== null && $syncedAt->diffInSeconds(now()) < $freshSeconds;
     }
 
     private function readyContext(string $server, StackCatalog $catalog): string

@@ -163,12 +163,29 @@ return [
 
     /**
      * The queue workers that get auto-started on your application start.
+     * Each is a persistent Child Process — see
+     * https://nativephp.com/docs/desktop/2/digging-deeper/queues#configuring-workers.
+     *
+     * `sync` is a separate worker/queue from `default` on purpose: a slow
+     * per-server CLI job on `default` (e.g. SyncClusterToolsJob hitting an
+     * unreachable server, timeout 180s) used to head-of-line-block the
+     * Dashboard's own fast, frequent scheduled syncs (SyncLocalClusterJob
+     * every 15s, SyncAllServerBackupsJob every 5min) behind it on the same
+     * single worker — confirmed live 2026-10-24. Everything on `sync` has a
+     * short, bounded timeout of its own (15s or less), so this worker's
+     * timeout only needs to cover that plus overhead.
      */
     'queue_workers' => [
         'default' => [
             'queues' => ['default'],
             'memory_limit' => 256,
             'timeout' => 120,
+            'sleep' => 2,
+        ],
+        'sync' => [
+            'queues' => ['sync'],
+            'memory_limit' => 128,
+            'timeout' => 30,
             'sleep' => 2,
         ],
     ],

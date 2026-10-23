@@ -8,14 +8,21 @@ use Throwable;
 
 /**
  * Queries ClusterStatus::backup() for a server in the background and mirrors
- * the configured status into the servers table. This prevents live cluster
- * network queries from locking the single-worker web server on page visits.
+ * both the configured status (Dashboard's summary) and the full report
+ * (backup_data — destination, schedule, backup history; what the Servers
+ * detail page's backup card needs) into the servers table. This prevents
+ * live cluster network queries from locking the single-worker web server on
+ * page visits.
  */
 class SyncServerBackupJob extends SyncJob
 {
     public const FRESH_SECONDS = 1800;
 
-    public function __construct(public int $serverId) {}
+    /** The dedicated `sync` worker (config/nativephp.php) — ClusterStatus::backup() is already bounded to 15s, so it belongs with the other fast scheduled syncs, not behind a slow per-server CLI job on `default`. */
+    public function __construct(public int $serverId)
+    {
+        $this->onQueue('sync');
+    }
 
     protected function uniqueKey(): string
     {
@@ -52,6 +59,7 @@ class SyncServerBackupJob extends SyncJob
 
             $server->update([
                 'backup_configured' => $configured,
+                'backup_data' => $result,
                 'backup_sync_status' => 'fresh',
                 'backup_last_synced_at' => now(),
                 'backup_last_sync_error' => null,

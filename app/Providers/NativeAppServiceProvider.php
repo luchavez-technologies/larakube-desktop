@@ -4,10 +4,16 @@ namespace App\Providers;
 
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Jobs\Sync\SyncAllServerBackupsJob;
+use App\Jobs\Sync\SyncAllServerClusterUsersJob;
+use App\Jobs\Sync\SyncAllServerExternalDnsJob;
+use App\Jobs\Sync\SyncAllServerPlexJob;
+use App\Jobs\Sync\SyncAllServerTlsJob;
 use App\Jobs\Sync\SyncAppIconJob;
 use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
+use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
@@ -21,6 +27,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Enums\SystemThemesEnum;
+use Native\Desktop\Facades\ChildProcess;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\MenuBar;
 use Native\Desktop\Facades\System;
@@ -38,6 +45,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->closeInterruptedRuns();
         $this->syncTheme();
         $this->syncCliOnDesktopUpdate();
+        $this->startScheduler();
         $this->warmSync();
 
         AppMenu::register();
@@ -106,12 +114,43 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         }
     }
 
+    /**
+     * NativePHP auto-starts queue workers from `queue_workers` in
+     * config/nativephp.php (NativeServiceProvider::fireUpQueueWorkers()),
+     * but has no equivalent for the scheduler despite its own docs claiming
+     * one — confirmed live (2026-10-24): no `schedule:run`/`schedule:work`
+     * process ever appears for this app, in the vendor source or at
+     * runtime. Starting it ourselves as a persistent ChildProcess, the same
+     * way NativePHP starts queue workers, is what makes `Schedule::`
+     * entries in routes/console.php (SyncLocalClusterJob,
+     * SyncAllServerBackupsJob, the existing SyncCliWithDesktopJob) actually
+     * run. `persistent: true` gets the runtime's "keep it alive, restart on
+     * crash" guarantee for free, same as a queue worker — no separate
+     * kill-switch needed, since its lifecycle already dies with the app.
+     */
+    private function startScheduler(): void
+    {
+        try {
+            if (ChildProcess::get('scheduler') === null) {
+                ChildProcess::artisan('schedule:work', alias: 'scheduler', persistent: true);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Could not start the scheduler child process: '.$e->getMessage());
+        }
+    }
+
     /** Dispatches a background refresh for everything this app already knows about, so Tools/Mail are warm before the user clicks in. */
     private function warmSync(): void
     {
         try {
             SyncAppIconJob::dispatch();
             SyncServersJob::dispatch();
+            SyncLocalClusterJob::dispatch();
+            SyncAllServerBackupsJob::dispatch();
+            SyncAllServerPlexJob::dispatch();
+            SyncAllServerExternalDnsJob::dispatch();
+            SyncAllServerTlsJob::dispatch();
+            SyncAllServerClusterUsersJob::dispatch();
 
             foreach (Server::where('status', 'ready')->whereNotNull('context')->get() as $server) {
                 SyncClusterToolsJob::dispatch($server->id);

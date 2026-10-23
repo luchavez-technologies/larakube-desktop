@@ -44,8 +44,21 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $plex_data
  * @property string $backup_sync_status
  * @property bool|null $backup_configured
+ * @property array<string, mixed>|null $backup_data
  * @property Carbon|null $backup_last_synced_at
  * @property string|null $backup_last_sync_error
+ * @property string $externaldns_sync_status
+ * @property list<array<string, mixed>>|null $externaldns_data
+ * @property Carbon|null $externaldns_last_synced_at
+ * @property string|null $externaldns_last_sync_error
+ * @property string $tls_sync_status
+ * @property array<string, mixed>|null $tls_data
+ * @property Carbon|null $tls_last_synced_at
+ * @property string|null $tls_last_sync_error
+ * @property string $cluster_users_sync_status
+ * @property list<array<string, mixed>>|null $cluster_users_data
+ * @property Carbon|null $cluster_users_last_synced_at
+ * @property string|null $cluster_users_last_sync_error
  * @property-read CloudProvider|null $cloudProvider
  * @property-read CloudRegion|null $cloudRegion
  * @property-read CloudSize|null $cloudSize
@@ -84,8 +97,21 @@ class Server extends Model
         'plex_data',
         'backup_sync_status',
         'backup_configured',
+        'backup_data',
         'backup_last_synced_at',
         'backup_last_sync_error',
+        'externaldns_sync_status',
+        'externaldns_data',
+        'externaldns_last_synced_at',
+        'externaldns_last_sync_error',
+        'tls_sync_status',
+        'tls_data',
+        'tls_last_synced_at',
+        'tls_last_sync_error',
+        'cluster_users_sync_status',
+        'cluster_users_data',
+        'cluster_users_last_synced_at',
+        'cluster_users_last_sync_error',
     ];
 
     protected static function booted(): void
@@ -127,7 +153,14 @@ class Server extends Model
             'plex_last_synced_at' => 'datetime',
             'plex_data' => 'array',
             'backup_configured' => 'boolean',
+            'backup_data' => 'array',
             'backup_last_synced_at' => 'datetime',
+            'externaldns_data' => 'array',
+            'externaldns_last_synced_at' => 'datetime',
+            'tls_data' => 'array',
+            'tls_last_synced_at' => 'datetime',
+            'cluster_users_data' => 'array',
+            'cluster_users_last_synced_at' => 'datetime',
         ];
     }
 
