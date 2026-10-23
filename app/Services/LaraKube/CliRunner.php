@@ -175,14 +175,21 @@ class CliRunner
 
     /**
      * Whether this run needs the temporary passwordless sudo `larakube setup`
-     * grants: a local `up` (may sync /etc/hosts) or installing/updating dnsmasq
+     * grants: a local `up` (may sync /etc/hosts), installing/updating dnsmasq
      * (`trust` installs the CA into the System Keychain and installs dnsmasq
-     * itself). Pulled out so it can be unit-tested on its own, without ever
-     * exercising the real Elevation::grant() call it gates.
+     * itself), or installing gcloud (its `brew install --cask` can fail with
+     * "/opt/homebrew is not writable" on a Mac whose Homebrew prefix ended up
+     * owned by the wrong user — confirmed live 2026-10-24 — and the CLI's own
+     * self-heal for that (CliTool::attemptHomebrewPermissionFix()) runs
+     * `sudo -n chown`, which only succeeds non-interactively with this grant
+     * already in place; with no terminal to prompt from a Desktop-driven run,
+     * it would otherwise just fail outright rather than hang, but still fail).
+     * Pulled out so it can be unit-tested on its own, without ever exercising
+     * the real Elevation::grant() call it gates.
      */
     public function needsElevation(?RunKind $kind, ?string $environment, ?string $tool): bool
     {
         return ($kind === RunKind::UpProject && $environment === 'local')
-            || ($kind === RunKind::InstallTool && $tool === 'dnsmasq');
+            || ($kind === RunKind::InstallTool && in_array($tool, ['dnsmasq', 'gcloud'], true));
     }
 }

@@ -98,11 +98,11 @@ class RecordRunOutput
         }
 
         // Passwordless sudo exists only for the length of the run that requested
-        // it — local setup always, and a local `up` or a dnsmasq install/update
-        // only when CliRunner granted it (see its docblock there).
+        // it — local setup always, and a local `up` or a dnsmasq/gcloud
+        // install/update only when CliRunner granted it (see its docblock there).
         if ($run->kind === RunKind::SetupLocal
             || ($run->kind === RunKind::UpProject && $run->environment === 'local')
-            || ($run->kind === RunKind::InstallTool && $run->tool === 'dnsmasq')) {
+            || ($run->kind === RunKind::InstallTool && in_array($run->tool, ['dnsmasq', 'gcloud'], true))) {
             app(Elevation::class)->revoke();
         }
 
