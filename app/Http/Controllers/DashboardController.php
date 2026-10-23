@@ -80,13 +80,6 @@ class DashboardController extends Controller
 
             'localCluster' => Inertia::defer(fn (): array => $localCluster->detect()),
 
-            'toolsReady' => Inertia::defer(function () use ($readiness): bool {
-                $tools = $readiness->tools();
-                $missingRequired = array_filter($tools, fn (array $t): bool => $t['required'] && ! $t['installed']);
-
-                return $missingRequired === [];
-            }),
-
             'projects' => Inertia::defer(function () use ($inspector): array {
                 return Project::query()
                     ->latest('id')
@@ -175,93 +168,18 @@ class DashboardController extends Controller
                 return $fleetMetrics->summary(array_values($servers), array_values($projects));
             }, 'fleetMetrics'),
 
+            // backups/unprotectedServers already shared one HTTP request (same
+            // 'backups' defer group) but used to independently recompute the
+            // identical cloud-server/backup-status scan — on a cold
+            // ClusterStatus::backup() cache (uncached per-context kubectl
+            // calls), that was 2x the subprocess work for one response.
+            // Computed once here and reshaped for both keys below.
             'backups' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
-                if (Server::active()->exists()) {
-                    $cloudServers = Server::active()
-                        ->where('status', 'ready')
-                        ->whereNotNull('context')
-                        ->get()
-                        ->reject(fn (Server $s): bool => Server::isStackLocal([
-                            'name' => $s->name,
-                            'provider' => $s->provider,
-                            'kind' => $s->kind,
-                            'ip' => $s->ip,
-                            'context' => $s->context,
-                            'status' => $s->status,
-                        ]))->values();
-
-                    $unprotected = [];
-                    foreach ($cloudServers as $server) {
-                        if ($server->backup_last_synced_at === null || $server->backup_last_synced_at->diffInMinutes(now()) > 30) {
-                            SyncServerBackupJob::dispatch($server->id);
-                        }
-
-                        if ($server->backup_configured === false) {
-                            $unprotected[] = $server->name;
-                        }
-                    }
-
-                    $total = $cloudServers->count();
-                    $protected = max(0, $total - count($unprotected));
-
-                    return [
-                        'total' => $total,
-                        'protected' => $protected,
-                        'unprotected' => $unprotected,
-                    ];
-                }
-
-                $allServers = $stacks->all() ?? [];
-                $cloudServers = collect($allServers)
-                    ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context'] ?? null))
-                    ->reject(fn (array $server): bool => Server::isStackLocal($server))
-                    ->values();
-
-                $unprotected = $cloudServers
-                    ->filter(fn (array $server): bool => ($clusterStatus->backup((string) $server['context'])['configured'] ?? true) === false)
-                    ->pluck('name')
-                    ->values()
-                    ->all();
-
-                $total = $cloudServers->count();
-                $protected = max(0, $total - count($unprotected));
-
-                return [
-                    'total' => $total,
-                    'protected' => $protected,
-                    'unprotected' => $unprotected,
-                ];
+                return $this->backupSummary($stacks, $clusterStatus);
             }, 'backups'),
 
             'unprotectedServers' => Inertia::defer(function () use ($stacks, $clusterStatus): array {
-                if (Server::active()->exists()) {
-                    return Server::active()
-                        ->where('status', 'ready')
-                        ->whereNotNull('context')
-                        ->get()
-                        ->reject(fn (Server $s): bool => Server::isStackLocal([
-                            'name' => $s->name,
-                            'provider' => $s->provider,
-                            'kind' => $s->kind,
-                            'ip' => $s->ip,
-                            'context' => $s->context,
-                            'status' => $s->status,
-                        ]))
-                        ->filter(fn (Server $s): bool => $s->backup_configured === false)
-                        ->pluck('name')
-                        ->values()
-                        ->all();
-                }
-
-                $allServers = $stacks->all() ?? [];
-
-                return collect($allServers)
-                    ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context'] ?? null))
-                    ->reject(fn (array $server): bool => Server::isStackLocal($server))
-                    ->filter(fn (array $server): bool => ($clusterStatus->backup((string) $server['context'])['configured'] ?? true) === false)
-                    ->pluck('name')
-                    ->values()
-                    ->all();
+                return $this->backupSummary($stacks, $clusterStatus)['unprotected'];
             }, 'backups'),
 
             // For the dev-only Quick Launch Projects toggle (welcome-onboarding.tsx) — the
@@ -275,5 +193,66 @@ class DashboardController extends Controller
                 ? array_map(fn (array $box): array => ['name' => $box['name'], 'ip' => $box['ip'] ?? null], array_values(array_filter($stacks->devBoxes() ?? [], fn (array $box): bool => $box['status'] === 'ready')))
                 : [], 'projectDevBoxes'),
         ]);
+    }
+
+    /**
+     * The cloud-server/backup-status scan 'backups' and 'unprotectedServers'
+     * both need. They share one HTTP request (the 'backups' defer group),
+     * but each still runs its OWN closure within it — once() memoizes the
+     * actual scan (including every per-context ClusterStatus::backup() call
+     * on a cache miss) so it only runs once per request instead of twice.
+     *
+     * @return array{total: int, protected: int, unprotected: list<string>}
+     */
+    private function backupSummary(StackCatalog $stacks, ClusterStatus $clusterStatus): array
+    {
+        return once(function () use ($stacks, $clusterStatus): array {
+            if (Server::active()->exists()) {
+                $cloudServers = Server::active()
+                    ->where('status', 'ready')
+                    ->whereNotNull('context')
+                    ->get()
+                    ->reject(fn (Server $s): bool => Server::isStackLocal([
+                        'name' => $s->name,
+                        'provider' => $s->provider,
+                        'kind' => $s->kind,
+                        'ip' => $s->ip,
+                        'context' => $s->context,
+                        'status' => $s->status,
+                    ]))->values();
+
+                $unprotected = [];
+                foreach ($cloudServers as $server) {
+                    if ($server->backup_last_synced_at === null || $server->backup_last_synced_at->diffInMinutes(now()) > 30) {
+                        SyncServerBackupJob::dispatch($server->id);
+                    }
+
+                    if ($server->backup_configured === false) {
+                        $unprotected[] = $server->name;
+                    }
+                }
+
+                $total = $cloudServers->count();
+                $protected = max(0, $total - count($unprotected));
+
+                return ['total' => $total, 'protected' => $protected, 'unprotected' => $unprotected];
+            }
+
+            $allServers = $stacks->all() ?? [];
+            $cloudServers = collect($allServers)
+                ->filter(fn (array $server): bool => $server['status'] === 'ready' && is_string($server['context'] ?? null))
+                ->reject(fn (array $server): bool => Server::isStackLocal($server))
+                ->values();
+
+            $unprotected = array_values($cloudServers
+                ->filter(fn (array $server): bool => ($clusterStatus->backup((string) $server['context'])['configured'] ?? true) === false)
+                ->map(fn (array $server): string => (string) $server['name'])
+                ->all());
+
+            $total = $cloudServers->count();
+            $protected = max(0, $total - count($unprotected));
+
+            return ['total' => $total, 'protected' => $protected, 'unprotected' => $unprotected];
+        });
     }
 }

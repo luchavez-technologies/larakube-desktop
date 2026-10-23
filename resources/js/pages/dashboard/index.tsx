@@ -51,7 +51,6 @@ type DashboardProps = {
     projects?: Project[];
     servers?: Server[];
     runs: RecentRun[];
-    toolsReady?: boolean;
     backups?: BackupStats;
     localCluster?: {
         engine: string;
@@ -146,7 +145,6 @@ export default function DashboardIndex({
     projects,
     servers,
     runs,
-    toolsReady,
     backups,
     localCluster,
     fleetMetrics,
@@ -154,6 +152,13 @@ export default function DashboardIndex({
     projectDevBoxes,
     defaultProjectParent,
 }: DashboardProps) {
+    // Derived, not a separate deferred prop: it's the exact same tool scan
+    // `stats` already ran server-side (ReadinessCheck::tools()) — a second
+    // 'toolsReady' prop used to duplicate that whole subprocess scan just to
+    // expose this one boolean.
+    const toolsReady =
+        stats !== undefined ? stats.missingToolsCount === 0 : undefined;
+
     return (
         <AppLayout title="Dashboard">
             <PageHeader
@@ -191,7 +196,7 @@ export default function DashboardIndex({
 
             {/* Quick Metrics */}
             <Deferred
-                data={['stats', 'localCluster', 'toolsReady']}
+                data={['stats', 'localCluster']}
                 fallback={<QuickMetricsSkeleton />}
             >
                 {stats && localCluster && (
