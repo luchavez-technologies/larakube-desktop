@@ -403,7 +403,7 @@ export default function ShowProject({
                         <div className="flex flex-col gap-5">
                             {activeEnv === 'local' ? (
                                 <>
-                                    {project.initialized && (
+                                    {project.initialized ? (
                                         <LocalClusterCard
                                             project={project}
                                             runs={runs}
@@ -414,14 +414,40 @@ export default function ShowProject({
                                                 podMetrics?.local ?? null
                                             }
                                         />
+                                    ) : (
+                                        <Card
+                                            label="Not set up for LaraKube yet"
+                                            tone="warn"
+                                        >
+                                            <p className="mb-3 text-xs text-soft">
+                                                This folder was added as-is —
+                                                LaraKube hasn't initialized it.
+                                                Set it up to get the local
+                                                cluster, backing services, and
+                                                secrets management for this
+                                                project.
+                                            </p>
+                                            <InitForm
+                                                project={project}
+                                                frameworks={frameworks}
+                                                wizardFrameworks={
+                                                    wizardFrameworks
+                                                }
+                                                email={email}
+                                                laravelOptions={laravelOptions}
+                                            />
+                                            <InitStatus latestRun={latestRun} />
+                                        </Card>
                                     )}
 
-                                    <EnvironmentBackingServicesCard
-                                        key={activeEnv}
-                                        project={project}
-                                        currentEnv={activeEnvConfig}
-                                        services={backing?.[activeEnv]}
-                                    />
+                                    {project.initialized && (
+                                        <EnvironmentBackingServicesCard
+                                            key={activeEnv}
+                                            project={project}
+                                            currentEnv={activeEnvConfig}
+                                            services={backing?.[activeEnv]}
+                                        />
+                                    )}
 
                                     <Deferred
                                         data="companions"
@@ -1559,25 +1585,7 @@ function DeployDialog({
                                 laravelOptions={laravelOptions}
                             />
                         )}
-                        {latestRun?.kind === 'init-project' && (
-                            <p
-                                className={cn(
-                                    'mt-2 text-xs',
-                                    latestRun.status === 'succeeded'
-                                        ? 'font-medium text-ok'
-                                        : latestRun.status === 'running'
-                                          ? 'animate-pulse font-medium text-brand'
-                                          : 'text-accent',
-                                )}
-                            >
-                                {latestRun.status === 'succeeded' &&
-                                    '✓ Framework initialized.'}
-                                {latestRun.status === 'running' &&
-                                    'Setting up for LaraKube…'}
-                                {latestRun.status === 'failed' &&
-                                    'Failed to set up project.'}
-                            </p>
-                        )}
+                        <InitStatus latestRun={latestRun} />
                     </Step>
 
                     <Step
@@ -2238,6 +2246,30 @@ function InitForm({
                     <div className="h-10 animate-pulse rounded-lg bg-paper" />
                 ))}
         </form>
+    );
+}
+
+/** The live status of the most recent `init-project` run, shown next to InitForm wherever it appears. */
+function InitStatus({ latestRun }: { latestRun: ProjectRun | null }) {
+    if (latestRun?.kind !== 'init-project') {
+        return null;
+    }
+
+    return (
+        <p
+            className={cn(
+                'mt-2 text-xs',
+                latestRun.status === 'succeeded'
+                    ? 'font-medium text-ok'
+                    : latestRun.status === 'running'
+                      ? 'animate-pulse font-medium text-brand'
+                      : 'text-accent',
+            )}
+        >
+            {latestRun.status === 'succeeded' && '✓ Framework initialized.'}
+            {latestRun.status === 'running' && 'Setting up for LaraKube…'}
+            {latestRun.status === 'failed' && 'Failed to set up project.'}
+        </p>
     );
 }
 

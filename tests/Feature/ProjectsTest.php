@@ -123,6 +123,20 @@ test('a project page reads its framework, host and bound server from the .laraku
     File::deleteDirectory($sandbox['home']);
 });
 
+test('a project added via an existing folder, never initialized, reports itself as not initialized', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->get(route('projects.show', $project))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->where('project.initialized', false));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('a project page reports whether its environment host falls under a zone ExternalDNS already manages', function () {
     $sandbox = projectsSandbox();
     projectsStacks();
