@@ -223,6 +223,45 @@ export default function LocalDevCompanionsCard({
                     ).
                 </div>
 
+                {/* Mailpit catches every local outbound email unconditionally —
+                    it's core cluster infra (larakube-shared), not an opt-in
+                    companion, so it never shows Install/Pause/Remove like the
+                    ones below. */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+                    <div className="flex items-center gap-3">
+                        <ToolLogo slug="mailpit" size="md" />
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <h4 className="text-sm font-semibold text-ink">
+                                    Mailpit
+                                </h4>
+                                <StatusPill tone="ok">
+                                    Always running
+                                </StatusPill>
+                            </div>
+                            <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                                Catches every outbound email from your local
+                                apps — nothing actually leaves your machine.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <QrCodePopover
+                            url={`https://mailpit.${localTld}`}
+                            title="Mailpit"
+                            description="Scan to open Mailpit on phone"
+                        />
+                        <ExternalLinkButton
+                            url={`https://mailpit.${localTld}`}
+                            className={buttonClass('secondary', 'sm', 'gap-1')}
+                        >
+                            <ExternalLink className="size-3" />
+                            <span>Open</span>
+                        </ExternalLinkButton>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {list.map((companion) => {
                         const matchBadge = getMatchBadge(companion.slug);
