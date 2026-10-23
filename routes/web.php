@@ -195,6 +195,7 @@ Route::post('/servers/{server}/mail/accounts/password', [MailController::class, 
 Route::post('/servers/{server}/mail/sync-sso', [MailController::class, 'syncSso'])->name('servers.mail.sync-sso');
 Route::delete('/servers/{server}/mail/accounts', [MailController::class, 'deleteAccount'])->name('servers.mail.accounts.destroy');
 Route::post('/servers/{server}/mail/domains', [MailController::class, 'addDomain'])->name('servers.mail.domains.store');
+Route::delete('/servers/{server}/mail/domains', [MailController::class, 'removeDomain'])->name('servers.mail.domains.destroy');
 Route::post('/servers/{server}/mail/relay', [MailController::class, 'configureRelay'])->name('servers.mail.relay.store');
 Route::post('/servers/{server}/mail/test', [MailController::class, 'sendTest'])->name('servers.mail.test');
 Route::get('/servers/{server}/mail/check-dns', [MailController::class, 'checkDns'])->name('servers.mail.check-dns');

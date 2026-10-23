@@ -20,6 +20,7 @@ enum ActivityType: string
     case MailAccountCreated = 'mail-account-created';
     case MailAccountDeleted = 'mail-account-deleted';
     case MailDomainAdded = 'mail-domain-added';
+    case MailDomainRemoved = 'mail-domain-removed';
     case MailRelayConfigured = 'mail-relay-configured';
     case MailSyncFailed = 'mail-sync-failed';
 }

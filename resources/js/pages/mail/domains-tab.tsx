@@ -11,6 +11,7 @@ import {
     Check,
     ChevronDown,
     ChevronUp,
+    Trash2,
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
@@ -54,6 +55,9 @@ export default function DomainsTab({
     const [newDomain, setNewDomain] = useState('');
     const [cfToken, setCfToken] = useState('');
     const [acmeEmail, setAcmeEmail] = useState('');
+
+    const [removingDomain, setRemovingDomain] = useState<string | null>(null);
+    const [removeConfirm, setRemoveConfirm] = useState('');
 
     const [verifyingDomain, setVerifyingDomain] = useState<string | null>(null);
     const [checkResults, setCheckResults] = useState<
@@ -234,6 +238,17 @@ export default function DomainsTab({
                                                 )}
                                             </Button>
                                         )}
+
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setRemovingDomain(domain.name);
+                                                setRemoveConfirm('');
+                                            }}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                        </Button>
                                     </div>
                                 </div>
 
@@ -399,6 +414,104 @@ export default function DomainsTab({
                             </Card>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Remove Domain Modal */}
+            {removingDomain && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="mb-4 flex items-center justify-between">
+                            <h3 className="text-base font-semibold text-accent">
+                                Remove Domain
+                            </h3>
+                            <button
+                                onClick={() => setRemovingDomain(null)}
+                                className="text-soft transition hover:text-ink"
+                            >
+                                <XCircle className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="rounded-lg bg-red-500/10 p-3 text-xs text-red-600 ring-1 ring-red-500/20 dark:text-red-400">
+                            <p className="font-semibold">
+                                This permanently removes{' '}
+                                <strong>{removingDomain}</strong> from Stalwart:
+                            </p>
+                            <ul className="mt-1.5 list-inside list-disc space-y-0.5">
+                                <li>
+                                    every mailbox account on this domain — all
+                                    mail data lost
+                                </li>
+                                <li>its DKIM signing keys</li>
+                                <li>
+                                    the domain object and its DNS automation
+                                </li>
+                            </ul>
+                            <p className="mt-1.5">
+                                Live DNS records already published at your DNS
+                                provider are not touched.
+                            </p>
+                        </div>
+
+                        <Form
+                            action={`/servers/${server.name}/mail/domains`}
+                            method="delete"
+                            onSubmit={() => {
+                                setRemovingDomain(null);
+                                setRemoveConfirm('');
+                            }}
+                            className="mt-4 space-y-4"
+                        >
+                            <input
+                                type="hidden"
+                                name="domain"
+                                value={removingDomain}
+                            />
+
+                            <div>
+                                <label className="block text-xs font-medium text-soft">
+                                    Type{' '}
+                                    <strong className="text-ink">
+                                        {removingDomain}
+                                    </strong>{' '}
+                                    to confirm
+                                </label>
+                                <input
+                                    type="text"
+                                    name="confirm"
+                                    required
+                                    autoComplete="off"
+                                    value={removeConfirm}
+                                    onChange={(e) =>
+                                        setRemoveConfirm(e.target.value)
+                                    }
+                                    placeholder={removingDomain}
+                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setRemovingDomain(null)}
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    variant="dangerFill"
+                                    size="sm"
+                                    disabled={removeConfirm !== removingDomain}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Remove Domain
+                                </Button>
+                            </div>
+                        </Form>
+                    </div>
                 </div>
             )}
 

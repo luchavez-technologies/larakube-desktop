@@ -272,6 +272,42 @@ class MailController extends Controller
     }
 
     /**
+     * Permanently remove a domain and everything under it (accounts, DKIM
+     * signatures, its DNS automation). Deliberately requires the operator to
+     * retype the domain name server-side (CLI's own retype-confirmation,
+     * `mail:domain-delete`) rather than trusting a single checkbox click here
+     * — this destroys real mailboxes and cannot be undone.
+     */
+    public function removeDomain(Request $request, string $server, CliRunner $runner): RedirectResponse
+    {
+        $request->validate([
+            'domain' => ['required', 'string', 'max:255'],
+            'confirm' => ['required', 'string'],
+        ]);
+
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $domain = $request->string('domain')->trim()->lower()->toString();
+        $confirm = $request->string('confirm')->trim()->lower()->toString();
+
+        abort_unless($confirm === $domain, 422, 'Type the domain name to confirm.');
+
+        $run = $runner->start(
+            label: "Remove mail domain {$domain} on {$server}",
+            arguments: ['mail:domain-delete', 'production', "--context={$context}", "--domain={$domain}", '--force'],
+            kind: RunKind::MailRemoveDomain,
+            subject: $domain,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /**
      * Configure outbound mail relay or revert to direct MX.
      */
     public function configureRelay(Request $request, string $server, CliRunner $runner): RedirectResponse

@@ -281,6 +281,39 @@ test('adding a domain starts a mail-add-domain run', function () {
         ->and($run->subject)->toBe('client.com');
 });
 
+test('removing a domain starts a mail-remove-domain run when the retyped name matches', function () {
+    $bin = mailTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->delete(route('servers.mail.domains.destroy', 'prod-vps'), [
+        'domain' => 'client.com',
+        'confirm' => 'client.com',
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'mail:domain-delete', 'production', '--context=larakube-do-ams3',
+            '--domain=client.com', '--force', '--no-interaction',
+        ];
+    });
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::MailRemoveDomain)
+        ->and($run->subject)->toBe('client.com');
+});
+
+test('removing a domain refuses when the retyped name does not match', function () {
+    mailTestServer();
+    ChildProcess::fake();
+
+    $this->delete(route('servers.mail.domains.destroy', 'prod-vps'), [
+        'domain' => 'client.com',
+        'confirm' => 'not-client.com',
+    ])->assertStatus(422);
+
+    expect(Run::count())->toBe(0);
+});
+
 test('configuring outbound relay starts a mail-configure-relay run', function () {
     $bin = mailTestServer();
     $fake = ChildProcess::fake();

@@ -101,6 +101,7 @@ enum RunKind: string
     case MailResetPassword = 'mail-reset-password';
     case MailSyncSso = 'mail-sync-sso';
     case MailAddDomain = 'mail-add-domain';
+    case MailRemoveDomain = 'mail-remove-domain';
     case MailConfigureRelay = 'mail-configure-relay';
     case MailSendTest = 'mail-send-test';
 
@@ -124,7 +125,7 @@ enum RunKind: string
 
     public function changesMail(): bool
     {
-        return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailConfigureRelay], true);
+        return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailRemoveDomain, self::MailConfigureRelay], true);
     }
 
     public function changesDrive(): bool
@@ -152,6 +153,7 @@ enum RunKind: string
             self::MailCreateAccount => ActivityType::MailAccountCreated,
             self::MailDeleteAccount => ActivityType::MailAccountDeleted,
             self::MailAddDomain => ActivityType::MailDomainAdded,
+            self::MailRemoveDomain => ActivityType::MailDomainRemoved,
             self::MailConfigureRelay => ActivityType::MailRelayConfigured,
             default => null,
         };
