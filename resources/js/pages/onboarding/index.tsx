@@ -16,6 +16,7 @@ import {
 import Button from '@/components/button';
 import Card from '@/components/card';
 import ProviderLogo from '@/components/provider-logo';
+import RunDrawer from '@/components/run-drawer';
 import ToolLogo from '@/components/tool-logo';
 import FrameworkLogo from '@/components/framework-logo';
 import { celebrate } from '@/lib/celebrate';
@@ -936,6 +937,13 @@ export default function OnboardingIndex({
                     </div>
                 </div>
             </motion.div>
+
+            {/* Without AppLayout (this page deliberately skips it for the
+                full-screen wizard chrome), the floating run HUD never
+                mounts — so a tool install here looked like dead silence
+                until it finished. Same component, same global activeRuns
+                prop every Inertia page already shares. */}
+            <RunDrawer />
         </div>
     );
 }
