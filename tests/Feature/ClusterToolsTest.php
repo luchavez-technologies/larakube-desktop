@@ -514,6 +514,25 @@ test('a stale domains list still renders instantly while the background re-sync 
     File::deleteDirectory($bin);
 });
 
+test('activeCommonsServices reads a fresh plex_data column instead of calling plex:show live', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $server = Server::updateOrCreate(['name' => 'workshop-demo'], [
+        'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-203.0.113.21', 'status' => 'ready',
+        'plex_data' => ['initialized' => true, 'services' => ['postgres' => ['enabled' => true]], 'tenants' => ['tool' => [], 'project' => [], 'custom' => []]],
+        'plex_sync_status' => 'fresh', 'plex_last_synced_at' => now(),
+    ]);
+
+    $this->getJson(route('servers.domains', ['server' => 'workshop-demo']))
+        ->assertOk()
+        ->assertJson(['activeCommonsServices' => ['postgres', 'postgresql', 'oidc', 'sso', 'zitadel']]);
+
+    Process::assertNotRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'plex:show'));
+
+    File::deleteDirectory($bin);
+});
+
 test('a finished install re-syncs via the full tool:list check, merging in what changed', function () {
     $bin = clusterToolsFakeCli();
     $before = clusterToolsRows();
@@ -700,6 +719,95 @@ test('a tool\'s page carries what it holds on the Commons, for the shared backin
                 ->where('backing.commons', true)
                 ->where('backing.services.0.name', 'Postgres')
                 ->where('backing.services.0.details.0.value', 'outline_wiki')));
+
+    File::deleteDirectory($bin);
+});
+
+test('a tool\'s backing services card reads a fresh plex_data column instead of calling plex:show live', function () {
+    $bin = clusterToolsFakeCli();
+    $row = [
+        'tool' => 'outline', 'instance' => 'wiki', 'icon' => '*', 'brand' => 'Outline', 'label' => 'Wiki', 'installed' => true,
+        'commons' => ['databases' => ['outline_wiki'], 'redis' => [], 'buckets' => []],
+        'namespace' => 'larakube-shared', 'host' => 'wiki.example.com', 'aliases' => [], 'url' => 'https://wiki.example.com',
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+        '*plex:show*' => Process::result(output: json_encode(['initialized' => false, 'services' => [], 'tenants' => []])),
+    ]);
+
+    $server = Server::updateOrCreate(['name' => 'workshop-demo'], ['provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-203.0.113.21', 'status' => 'ready']);
+    $server->update([
+        'plex_data' => [
+            'initialized' => true,
+            'context' => 'larakube-203.0.113.21',
+            'services' => ['postgres' => ['enabled' => true]],
+            'tenants' => [
+                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null]],
+                'project' => [],
+                'custom' => [],
+            ],
+        ],
+        'plex_sync_status' => 'fresh',
+        'plex_last_synced_at' => now(),
+    ]);
+
+    $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'outline', 'domain' => 'wiki.example.com']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('tools/show')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('backing.commons', true)
+                ->where('backing.services.0.name', 'Postgres')
+                ->where('backing.services.0.details.0.value', 'outline_wiki')));
+
+    Process::assertNotRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'plex:show'));
+
+    File::deleteDirectory($bin);
+});
+
+test('a stale plex_data column falls back to plex:show live for the backing services card', function () {
+    $bin = clusterToolsFakeCli();
+    $row = [
+        'tool' => 'outline', 'instance' => 'wiki', 'icon' => '*', 'brand' => 'Outline', 'label' => 'Wiki', 'installed' => true,
+        'commons' => ['databases' => ['outline_wiki'], 'redis' => [], 'buckets' => []],
+        'namespace' => 'larakube-shared', 'host' => 'wiki.example.com', 'aliases' => [], 'url' => 'https://wiki.example.com',
+        'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode([$row])),
+        '*plex:show*' => Process::result(output: json_encode([
+            'initialized' => true,
+            'context' => 'larakube-203.0.113.21',
+            'services' => ['postgres' => ['enabled' => true]],
+            'tenants' => [
+                'tool' => [['name' => 'outline_wiki', 'database' => 'outline_wiki', 'databaseService' => 'postgres', 'redisIndex' => null, 's3Bucket' => null, 'rotation' => null]],
+                'project' => [],
+                'custom' => [],
+            ],
+        ])),
+    ]);
+
+    $server = Server::updateOrCreate(['name' => 'workshop-demo'], ['provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-203.0.113.21', 'status' => 'ready']);
+    $server->update([
+        'plex_data' => ['initialized' => false, 'services' => [], 'tenants' => ['tool' => [], 'project' => [], 'custom' => []]],
+        'plex_sync_status' => 'stale',
+        'plex_last_synced_at' => now()->subHours(2),
+    ]);
+
+    $this->get(route('servers.tools.show', ['server' => 'workshop-demo', 'tool' => 'outline', 'domain' => 'wiki.example.com']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('tools/show')
+            ->loadDeferredProps(fn (AssertableInertia $page) => $page
+                ->where('backing.commons', true)
+                ->where('backing.services.0.details.0.value', 'outline_wiki')));
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'plex:show'));
 
     File::deleteDirectory($bin);
 });

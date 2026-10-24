@@ -255,7 +255,7 @@ class ClusterStatus
      *
      * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
      */
-    private function parsePlexReport(mixed $report): ?array
+    public function parsePlexReport(mixed $report): ?array
     {
         if (! is_array($report) || ! isset($report['initialized'], $report['services'], $report['tenants']) || ! is_array($report['tenants'])) {
             return null;

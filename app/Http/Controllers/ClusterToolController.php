@@ -7,6 +7,7 @@ use App\Enums\RunStatus;
 use App\Http\Requests\InstallClusterToolRequest;
 use App\Http\Requests\RebindClusterToolRequest;
 use App\Http\Requests\RemoveClusterToolRequest;
+use App\Jobs\Sync\SyncPlexJob;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\CurrentServer;
@@ -19,6 +20,7 @@ use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
 use App\Services\LaraKube\ToolCommons;
 use App\Services\LaraKube\ToolCredentials;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -135,7 +137,7 @@ class ClusterToolController extends Controller
     private function activeServices(ClusterStatus $status, string $context): array
     {
         $active = [];
-        $plex = $status->plex($context);
+        $plex = $this->plexData($context, $status);
         if ($plex !== null && $plex['initialized']) {
             foreach ($plex['services'] as $name => $svc) {
                 if (! empty($svc['enabled'])) {
@@ -186,7 +188,7 @@ class ClusterToolController extends Controller
             'server' => $stack,
             'tool' => $row,
             // What the tool holds on the shared Commons, drawn by the same card as a project's services.
-            'backing' => Inertia::defer(fn (): ?array => app(ToolCommons::class)->describe($row, app(ClusterStatus::class)->plex($context))),
+            'backing' => Inertia::defer(fn (): ?array => app(ToolCommons::class)->describe($row, $this->plexData($context, app(ClusterStatus::class)))),
         ]);
     }
 
@@ -361,6 +363,29 @@ class ClusterToolController extends Controller
     private function displayName(array $row): string
     {
         return (string) preg_replace('/\s*\[[^\]]*\]$/', '', (string) $row['brand']);
+    }
+
+    /**
+     * `servers.plex_data` is kept fresh in the background (SyncPlexJob, on a
+     * recurring schedule plus an immediate dispatch on app boot) — same
+     * DB-first-with-live-fallback shape ServerController::show() already
+     * uses for its own 'plex' prop. A never-synced server (no Server row,
+     * or one that predates this column) falls back to the live call.
+     *
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
+     */
+    private function plexData(string $context, ClusterStatus $status): ?array
+    {
+        $server = Server::firstWhere('context', $context);
+
+        return $this->isColumnFresh($server?->plex_last_synced_at, SyncPlexJob::FRESH_SECONDS)
+            ? $status->parsePlexReport($server->plex_data)
+            : $status->plex($context);
+    }
+
+    private function isColumnFresh(?CarbonInterface $syncedAt, int $freshSeconds): bool
+    {
+        return $syncedAt !== null && $syncedAt->diffInSeconds(now()) < $freshSeconds;
     }
 
     /**
