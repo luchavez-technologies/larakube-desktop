@@ -3,35 +3,49 @@
 namespace App\Services\LaraKube;
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncLocalWorkloadsJob;
+use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Run;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
 class ProjectWorkloadStatus
 {
     /**
      * Local Deployment/StatefulSet replica counts, cluster-wide. Called on
-     * every Projects list/show request — uncached, this was a real,
+     * every Projects list/show request — this used to be a real,
      * synchronous `kubectl get -A` shelled out fresh on every single
-     * navigation, which on Windows (WSL-wrapped kubectl, no persistent
-     * session) is the kind of call that makes clicking between pages feel
-     * frozen. A short cache means repeated navigation within a few seconds
-     * reuses the last answer instead of re-shelling, while staying fresh
-     * enough that "is my container running" never meaningfully goes stale
-     * for someone clicking around.
+     * navigation (behind only a 5-second cache), which on Windows
+     * (WSL-wrapped kubectl, no persistent session) is the kind of call that
+     * made clicking between pages feel frozen. SyncLocalWorkloadsJob now
+     * keeps `local_cluster_state.workloads_data` current in the background
+     * (a 15-second schedule tick, matching SyncLocalClusterJob, plus an
+     * immediate dispatch on app boot and on any local up/down/start/stop via
+     * RecordRunOutput), so a machine that has synced even once reads this
+     * instantly from the database. Only a never-synced machine falls back to
+     * the live call here, which also primes the database for every request
+     * after it — same shape as DashboardController's `localCluster` prop.
      *
      * @return array<string, array{replicas: int, readyReplicas: int, deploymentsCount: int}>
      */
     public function localWorkloadStatuses(ToolLocator $locator): array
     {
-        return Cache::remember('project-workload-statuses', 5, fn (): array => $this->fetchLocalWorkloadStatuses($locator));
+        $state = LocalClusterState::current();
+
+        if ($state->workloads_last_synced_at !== null) {
+            return $state->workloads_data ?? [];
+        }
+
+        $workloads = $this->fetchLocalWorkloadStatuses($locator);
+        SyncLocalWorkloadsJob::dispatch();
+
+        return $workloads;
     }
 
     /**
      * @return array<string, array{replicas: int, readyReplicas: int, deploymentsCount: int}>
      */
-    private function fetchLocalWorkloadStatuses(ToolLocator $locator): array
+    public function fetchLocalWorkloadStatuses(ToolLocator $locator): array
     {
         $cli = $locator->find('kubectl');
         if ($cli === null) {

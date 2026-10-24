@@ -7,6 +7,7 @@ use App\Jobs\Sync\SyncAllServerPlexJob;
 use App\Jobs\Sync\SyncAllServerTlsJob;
 use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -23,6 +24,11 @@ Schedule::command('icon:sync')->monthlyOn(1, '00:00');
 // is just the floor for drift caused outside the app (e.g. the user stops
 // their local cluster from a terminal).
 Schedule::job(new SyncLocalClusterJob)->everyFifteenSeconds()->withoutOverlapping();
+
+// Same reasoning as SyncLocalClusterJob above — local project replica
+// counts are what the Projects page's Running/Paused/Down badges are built
+// from, and are equally user-actionable within the same session.
+Schedule::job(new SyncLocalWorkloadsJob)->everyFifteenSeconds()->withoutOverlapping();
 
 // Cloud backup status is lower-stakes staleness than local cluster state —
 // every few minutes is enough, and NativeAppServiceProvider::warmSync()

@@ -14,6 +14,7 @@ use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
@@ -146,6 +147,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             SyncAppIconJob::dispatch();
             SyncServersJob::dispatch();
             SyncLocalClusterJob::dispatch();
+            SyncLocalWorkloadsJob::dispatch();
             SyncAllServerBackupsJob::dispatch();
             SyncAllServerPlexJob::dispatch();
             SyncAllServerExternalDnsJob::dispatch();

@@ -2,6 +2,7 @@
 
 use App\Enums\RunKind;
 use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServerTlsJob;
@@ -9,6 +10,7 @@ use App\Listeners\RecordRunOutput;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 
@@ -93,8 +95,12 @@ test('elevation is revoked once local setup finishes', function () {
     (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
 });
 
-test('a local up/down/start/stop queues an immediate local cluster re-sync instead of waiting for the next scheduled tick', function (RunKind $kind) {
+test('a local up/down/start/stop queues an immediate local cluster and workloads re-sync instead of waiting for the next scheduled tick', function (RunKind $kind) {
     Queue::fake();
+    // A local UpProject also triggers Elevation::revoke() (see the dedicated
+    // elevation tests above) — faked here so it can never shell out to a
+    // real `osascript`/`pkexec`/sudo prompt on the machine running this suite.
+    Process::fake();
 
     $run = Run::create([
         'label' => 'Local project action',
@@ -107,9 +113,10 @@ test('a local up/down/start/stop queues an immediate local cluster re-sync inste
     (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
 
     Queue::assertPushed(SyncLocalClusterJob::class, 1);
+    Queue::assertPushed(SyncLocalWorkloadsJob::class, 1);
 })->with([RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject]);
 
-test('a cloud up/down/start/stop does not queue a local cluster re-sync', function () {
+test('a cloud up/down/start/stop does not queue a local cluster or workloads re-sync', function () {
     Queue::fake();
 
     $run = Run::create([
@@ -123,6 +130,7 @@ test('a cloud up/down/start/stop does not queue a local cluster re-sync', functi
     (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
 
     Queue::assertNotPushed(SyncLocalClusterJob::class);
+    Queue::assertNotPushed(SyncLocalWorkloadsJob::class);
 });
 
 test('connecting or disconnecting a domain queues an external-dns re-sync for the matching server', function (RunKind $kind) {

@@ -7,6 +7,7 @@ use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
@@ -116,11 +117,14 @@ class RecordRunOutput
         // to LocalCluster's cache (nothing ever called its forget()), so this
         // state could sit stale until its TTL happened to expire. Now that
         // state lives in local_cluster_state, re-sync immediately rather than
-        // wait for SyncLocalClusterJob's own recurring tick.
+        // wait for SyncLocalClusterJob's/SyncLocalWorkloadsJob's own
+        // recurring tick — the latter is exactly what flips a project's
+        // Projects-page badge between Running/Paused/Down right after this run.
         if ($run->environment === 'local'
             && in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject], true)
         ) {
             SyncLocalClusterJob::dispatch();
+            SyncLocalWorkloadsJob::dispatch();
         }
 
         $context = $run->meta['context'] ?? null;
