@@ -31,6 +31,7 @@ import {
     PowerOff,
     Save,
     Network,
+    HeartPulse,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
@@ -2779,27 +2780,151 @@ function ProjectTldForm({ project }: { project: Project }) {
 }
 
 function ProjectSettingsCard({ project }: { project: Project }) {
+    const [confirmHealOpen, setConfirmHealOpen] = useState(false);
+    const [healing, setHealing] = useState(false);
+
+    const handleHeal = () => {
+        setHealing(true);
+        router.post(
+            `/projects/${project.id}/heal`,
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => {
+                    setHealing(false);
+                    setConfirmHealOpen(false);
+                },
+            },
+        );
+    };
+
     return (
         <Card label="Project Settings">
-            <div className="space-y-2">
-                <Link
-                    href={destroy(project.id).url}
-                    method="delete"
-                    as="button"
-                    className={buttonClass(
-                        'danger',
-                        'sm',
-                        'w-full justify-center gap-1.5',
-                    )}
-                >
-                    <Trash2 className="size-3.5" />
-                    <span>Remove from LaraKube Desktop</span>
-                </Link>
-                <p className="text-center text-xs leading-relaxed text-soft">
-                    Only forgets the project in Desktop. Your local files,
-                    database, and cloud servers stay untouched.
-                </p>
+            <div className="space-y-4">
+                {/* Infrastructure Maintenance */}
+                <div>
+                    <h4 className="text-xs font-semibold text-ink">
+                        Infrastructure Maintenance
+                    </h4>
+                    <p className="mt-1 text-xs leading-relaxed text-soft">
+                        Regenerates Dockerfiles and Kubernetes manifests from
+                        your blueprint DNA without touching databases or live
+                        workloads.
+                    </p>
+                    <div className="mt-2.5">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={healing}
+                            onClick={() => setConfirmHealOpen(true)}
+                            className="w-full justify-center gap-1.5"
+                            title="Regenerate manifests from .larakube.json"
+                        >
+                            <HeartPulse className="size-3.5 text-brand" />
+                            <span>
+                                {healing ? 'Healing…' : 'Heal Infrastructure'}
+                            </span>
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="border-t border-line pt-3">
+                    <Link
+                        href={destroy(project.id).url}
+                        method="delete"
+                        as="button"
+                        className={buttonClass(
+                            'danger',
+                            'sm',
+                            'w-full justify-center gap-1.5',
+                        )}
+                    >
+                        <Trash2 className="size-3.5" />
+                        <span>Remove from LaraKube Desktop</span>
+                    </Link>
+                    <p className="mt-2 text-center text-xs leading-relaxed text-soft">
+                        Only forgets the project in Desktop. Your local files,
+                        database, and cloud servers stay untouched.
+                    </p>
+                </div>
             </div>
+
+            {/* Confirmation Modal for Heal */}
+            {confirmHealOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand ring-1 ring-brand/20">
+                                <HeartPulse className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Heal Project Infrastructure?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    This runs{' '}
+                                    <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                        larakube heal --force --prune
+                                    </code>{' '}
+                                    to regenerate your{' '}
+                                    <code className="font-mono text-ink">
+                                        .infrastructure/k8s/
+                                    </code>{' '}
+                                    manifests,{' '}
+                                    <code className="font-mono text-ink">
+                                        Dockerfile.php
+                                    </code>
+                                    , and{' '}
+                                    <code className="font-mono text-ink">
+                                        Dockerfile.node
+                                    </code>{' '}
+                                    matching your blueprint.
+                                </p>
+                                <p className="mt-2 text-xs font-medium text-ink">
+                                    Your databases, persistent storage, and live
+                                    cluster state will remain untouched.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={healing}
+                                onClick={() => setConfirmHealOpen(false)}
+                                className="gap-1.5 text-xs"
+                            >
+                                <XCircle className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={healing}
+                                onClick={handleHeal}
+                                className="gap-1.5 text-xs"
+                            >
+                                <HeartPulse
+                                    className={cn(
+                                        'size-3.5',
+                                        healing && 'animate-spin',
+                                    )}
+                                />
+                                <span>
+                                    {healing
+                                        ? 'Healing…'
+                                        : 'Heal Infrastructure'}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Card>
     );
 }

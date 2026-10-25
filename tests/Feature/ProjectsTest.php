@@ -660,6 +660,11 @@ test('project lifecycle commands dispatch correctly for local and custom environ
         $bin, 'up', 'local', '--no-console', '--no-test', '--no-interaction',
     ] && $cwd === $sandbox['app']);
 
+    $this->post(route('projects.heal', $project))->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'heal', '--force', '--prune', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
     $this->post(route('projects.down', $project))->assertRedirect();
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
         $bin, 'down', 'local', '--force', '--no-interaction',

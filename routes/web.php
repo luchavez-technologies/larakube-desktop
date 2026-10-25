@@ -169,6 +169,7 @@ Route::post('/projects/{project}/folder', [ProjectController::class, 'showFolder
 Route::post('/projects/{project}/editor', [ProjectController::class, 'openInEditor'])->name('projects.editor');
 Route::post('/projects/{project}/deploy', [ProjectController::class, 'deploy'])->name('projects.deploy');
 Route::post('/projects/{project}/up', [ProjectController::class, 'up'])->name('projects.up');
+Route::post('/projects/{project}/heal', [ProjectController::class, 'heal'])->name('projects.heal');
 Route::post('/projects/{project}/down', [ProjectController::class, 'down'])->name('projects.down');
 Route::post('/projects/{project}/start', [ProjectController::class, 'start'])->name('projects.start');
 Route::post('/projects/{project}/stop', [ProjectController::class, 'stop'])->name('projects.stop');

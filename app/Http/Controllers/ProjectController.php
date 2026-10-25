@@ -924,6 +924,13 @@ class ProjectController extends Controller
         return $this->run($runner, $project, RunKind::UpProject, "Up {$this->name($project)} ({$environment})", $args, $environment);
     }
 
+    public function heal(Project $project, CliRunner $runner): RedirectResponse
+    {
+        $args = ['heal', '--force', '--prune'];
+
+        return $this->run($runner, $project, RunKind::HealProject, "Heal {$this->name($project)}", $args);
+    }
+
     public function down(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
         $environment = (string) $request->input('environment', 'local');
@@ -1504,7 +1511,7 @@ class ProjectController extends Controller
             return strtolower(trim($matches[1]));
         }
 
-        if (in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
+        if (in_array($run->kind, [RunKind::UpProject, RunKind::HealProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
             return 'local';
         }
 

@@ -63,6 +63,7 @@ enum RunKind: string
     case DotenvPull = 'dotenv-pull';
     case DeployApp = 'deploy-app';
     case UpProject = 'up-project';
+    case HealProject = 'heal-project';
     case DownProject = 'down-project';
     case StartProject = 'start-project';
     case StopProject = 'stop-project';
