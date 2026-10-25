@@ -1363,6 +1363,7 @@ test('projects.extensions.remove updates .larakube.json and Dockerfile.php', fun
 
 test('projects.runtime updates .larakube.json and Dockerfile.php', function () {
     $sandbox = projectsSandbox();
+    $fake = ChildProcess::fake();
     $project = Project::create([
         'path' => $sandbox['app'],
     ]);
@@ -1393,6 +1394,7 @@ test('projects.runtime updates .larakube.json and Dockerfile.php', function () {
 
 test('projects.features.add and projects.features.remove update .larakube.json', function () {
     $sandbox = projectsSandbox();
+    $fake = ChildProcess::fake();
     $project = Project::create([
         'path' => $sandbox['app'],
     ]);

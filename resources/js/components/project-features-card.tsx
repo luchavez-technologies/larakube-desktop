@@ -4,7 +4,6 @@ import {
     Plus,
     X,
     Sparkles,
-    HeartPulse,
     Layers,
     Trash2,
     XCircle,
@@ -14,11 +13,14 @@ import {
     Flame,
     Bot,
     Search,
+    RotateCw,
+    Save,
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import { up } from '@/routes/projects';
 import { cn } from '@/lib/utils';
-import type { Project, ProjectEnvironment } from '@/types/larakube';
+import type { PodInfo, Project, ProjectEnvironment } from '@/types/larakube';
 
 type FeatureDefinition = {
     id: string;
@@ -75,9 +77,11 @@ const AVAILABLE_FEATURES: FeatureDefinition[] = [
 export default function ProjectFeaturesCard({
     project,
     currentEnv,
+    pods = [],
 }: {
     project: Project;
     currentEnv: ProjectEnvironment;
+    pods?: PodInfo[];
 }) {
     const isLaravel =
         project.framework === 'laravel' ||
@@ -85,9 +89,12 @@ export default function ProjectFeaturesCard({
         project.framework === undefined;
 
     const [submitting, setSubmitting] = useState(false);
+    const [rebuilding, setRebuilding] = useState(false);
+    const [featureToAdd, setFeatureToAdd] = useState<FeatureDefinition | null>(
+        null,
+    );
     const [featureToRemove, setFeatureToRemove] =
         useState<FeatureDefinition | null>(null);
-    const [healing, setHealing] = useState(false);
 
     // Active features from project blueprint or environment
     const activeFeatureIds = currentEnv.features ?? project.features ?? [];
@@ -101,21 +108,68 @@ export default function ProjectFeaturesCard({
         (id) => !AVAILABLE_FEATURES.some((f) => f.id === id),
     );
 
-    const inactiveFeatures = AVAILABLE_FEATURES.filter(
-        (f) => !activeFeatureIds.includes(f.id),
-    );
+    // Filter inactive features, applying mutex between Horizon and Queues
+    const inactiveFeatures = AVAILABLE_FEATURES.filter((f) => {
+        if (activeFeatureIds.includes(f.id)) return false;
 
-    const handleAdd = (featureId: string) => {
-        if (submitting) return;
+        // Smart Queue Mutex: hide Queues if Horizon is active, and vice versa
+        if (f.id === 'queues' && activeFeatureIds.includes('horizon')) {
+            return false;
+        }
+        if (f.id === 'horizon' && activeFeatureIds.includes('queues')) {
+            return false;
+        }
+
+        return true;
+    });
+
+    const isPodRunning = (featureId: string): boolean => {
+        return pods.some((p) => {
+            const name = p.name.toLowerCase();
+            const component = p.component.toLowerCase();
+            const isMatch =
+                component === featureId ||
+                (featureId === 'horizon' && name.includes('horizon')) ||
+                (featureId === 'queues' &&
+                    (name.includes('queues') ||
+                        name.includes('worker') ||
+                        component === 'queues')) ||
+                (featureId === 'reverb' && name.includes('reverb')) ||
+                (featureId === 'scheduler' && name.includes('scheduler')) ||
+                (featureId === 'ssr' &&
+                    (name.includes('ssr') ||
+                        name.includes('node-ssr') ||
+                        component === 'ssr')) ||
+                (featureId === 'octane' &&
+                    (name.includes('web') || component === 'web')) ||
+                name.includes(featureId);
+
+            const isRunning =
+                p.statusTone === 'ok' ||
+                p.phase?.toLowerCase() === 'running' ||
+                p.statusText?.toLowerCase() === 'running';
+
+            return isMatch && isRunning;
+        });
+    };
+
+    const handleConfirmAdd = () => {
+        if (!featureToAdd || submitting) return;
 
         setSubmitting(true);
         router.post(
             `/projects/${project.id}/features/add`,
-            { feature: featureId },
+            {
+                feature: featureToAdd.id,
+                environment: currentEnv.name,
+            },
             {
                 preserveScroll: true,
                 preserveState: true,
-                onFinish: () => setSubmitting(false),
+                onFinish: () => {
+                    setSubmitting(false);
+                    setFeatureToAdd(null);
+                },
             },
         );
     };
@@ -126,7 +180,10 @@ export default function ProjectFeaturesCard({
         setSubmitting(true);
         router.post(
             `/projects/${project.id}/features/remove`,
-            { feature: featureToRemove.id },
+            {
+                feature: featureToRemove.id,
+                environment: currentEnv.name,
+            },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -138,15 +195,15 @@ export default function ProjectFeaturesCard({
         );
     };
 
-    const handleHeal = () => {
-        setHealing(true);
+    const handleRebuild = () => {
+        setRebuilding(true);
         router.post(
-            `/projects/${project.id}/heal`,
+            up(project.id).url,
             { environment: currentEnv.name },
             {
                 preserveScroll: true,
                 preserveState: true,
-                onFinish: () => setHealing(false),
+                onFinish: () => setRebuilding(false),
             },
         );
     };
@@ -160,7 +217,7 @@ export default function ProjectFeaturesCard({
             label="Workload Features & Workers"
             action={
                 <span className="font-mono text-[11px] text-soft">
-                    {activeFeatureIds.length} active
+                    {activeFeatureIds.length} configured
                 </span>
             }
         >
@@ -182,6 +239,7 @@ export default function ProjectFeaturesCard({
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                             {activeFeatures.map((feature) => {
                                 const Icon = feature.icon;
+                                const running = isPodRunning(feature.id);
                                 return (
                                     <div
                                         key={feature.id}
@@ -192,8 +250,20 @@ export default function ProjectFeaturesCard({
                                                 <Icon className="size-3.5" />
                                             </span>
                                             <div className="min-w-0">
-                                                <div className="text-xs font-semibold text-ink">
-                                                    {feature.label}
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs font-semibold text-ink">
+                                                        {feature.label}
+                                                    </span>
+                                                    {running ? (
+                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
+                                                            ● Running
+                                                        </span>
+                                                    ) : (
+                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-line/60 px-1.5 font-mono text-[10px] text-soft">
+                                                            ○ Configured (Needs
+                                                            Up)
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="truncate text-[11px] leading-tight text-soft">
                                                     {feature.description}
@@ -215,33 +285,47 @@ export default function ProjectFeaturesCard({
                                 );
                             })}
 
-                            {customFeatureIds.map((id) => (
-                                <div
-                                    key={id}
-                                    className="flex items-center justify-between gap-2.5 rounded-xl border border-line bg-surface p-2.5 shadow-2xs"
-                                >
-                                    <div className="text-xs font-semibold text-ink">
-                                        {id}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        disabled={submitting}
-                                        onClick={() =>
-                                            setFeatureToRemove({
-                                                id,
-                                                label: id,
-                                                description:
-                                                    'Custom feature workload',
-                                                icon: Layers,
-                                            })
-                                        }
-                                        className="rounded p-1 text-soft transition hover:bg-accent-tint hover:text-accent disabled:opacity-50"
-                                        title={`Remove ${id}`}
+                            {customFeatureIds.map((id) => {
+                                const running = isPodRunning(id);
+                                return (
+                                    <div
+                                        key={id}
+                                        className="flex items-center justify-between gap-2.5 rounded-xl border border-line bg-surface p-2.5 shadow-2xs"
                                     >
-                                        <X className="size-3.5" />
-                                    </button>
-                                </div>
-                            ))}
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-semibold text-ink">
+                                                {id}
+                                            </span>
+                                            {running ? (
+                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
+                                                    ● Running
+                                                </span>
+                                            ) : (
+                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-line/60 px-1.5 font-mono text-[10px] text-soft">
+                                                    ○ Configured (Needs Up)
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={submitting}
+                                            onClick={() =>
+                                                setFeatureToRemove({
+                                                    id,
+                                                    label: id,
+                                                    description:
+                                                        'Custom feature workload',
+                                                    icon: Layers,
+                                                })
+                                            }
+                                            className="rounded p-1 text-soft transition hover:bg-accent-tint hover:text-accent disabled:opacity-50"
+                                            title={`Remove ${id}`}
+                                        >
+                                            <X className="size-3.5" />
+                                        </button>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -259,7 +343,7 @@ export default function ProjectFeaturesCard({
                                     key={feature.id}
                                     type="button"
                                     disabled={submitting}
-                                    onClick={() => handleAdd(feature.id)}
+                                    onClick={() => setFeatureToAdd(feature)}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line bg-paper/60 px-2.5 py-1 text-xs font-medium text-ink transition hover:border-brand/40 hover:bg-brand/5 hover:text-brand disabled:opacity-50"
                                     title={`Add ${feature.label}: ${feature.description}`}
                                 >
@@ -271,33 +355,93 @@ export default function ProjectFeaturesCard({
                     </div>
                 )}
 
-                {/* Sync notice */}
+                {/* Sync notice & Rebuild action */}
                 <div className="flex flex-col gap-2 rounded-xl border border-line bg-paper/50 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-[11px] leading-relaxed text-soft">
-                        Modifying features updates Kubernetes deployment
-                        manifests. Run Heal Infrastructure or Rebuild / Up to
-                        apply.
+                        Workload manifests are auto-healed on save. Run Rebuild
+                        / Up to start or update pods in your cluster.
                     </p>
                     <Button
                         type="button"
                         variant="secondary"
                         size="sm"
-                        disabled={healing}
-                        onClick={handleHeal}
+                        disabled={rebuilding}
+                        onClick={handleRebuild}
                         className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
                     >
-                        <HeartPulse
+                        <RotateCw
                             className={cn(
                                 'size-3.5 text-brand',
-                                healing && 'animate-spin',
+                                rebuilding && 'animate-spin',
                             )}
                         />
                         <span>
-                            {healing ? 'Healing…' : 'Heal Infrastructure'}
+                            {rebuilding
+                                ? 'Rebuilding…'
+                                : 'Rebuild / Up Project'}
                         </span>
                     </Button>
                 </div>
             </div>
+
+            {/* Confirmation Modal for Adding Feature */}
+            {featureToAdd && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand ring-1 ring-brand/20">
+                                <Plus className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Add {featureToAdd.label} Workload?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    Adding {featureToAdd.label} will update your
+                                    blueprint and auto-heal its Kubernetes
+                                    deployment manifest.
+                                </p>
+                                <div className="mt-3 rounded-lg border border-warn/30 bg-warn-tint/60 p-2.5 text-xs font-medium text-ink">
+                                    A project Rebuild / Up is needed for the new
+                                    workload pod to start running.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={submitting}
+                                onClick={() => setFeatureToAdd(null)}
+                                className="gap-1.5 text-xs"
+                            >
+                                <XCircle className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={submitting}
+                                onClick={handleConfirmAdd}
+                                className="gap-1.5 text-xs"
+                            >
+                                <Save
+                                    className={cn(
+                                        'size-3.5',
+                                        submitting && 'animate-spin',
+                                    )}
+                                />
+                                <span>
+                                    {submitting ? 'Saving…' : 'Add & Auto-Heal'}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Confirmation Modal for Removing Feature */}
             {featureToRemove && (
@@ -311,12 +455,15 @@ export default function ProjectFeaturesCard({
                                 <h3 className="text-base font-semibold text-ink">
                                     Remove {featureToRemove.label}?
                                 </h3>
-                                <p className="mt-1 text-xs leading-relaxed text-soft">
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
                                     This removes the {featureToRemove.label}{' '}
-                                    workload from your project configuration.
-                                    Its Kubernetes deployment will be pruned
-                                    upon your next Heal or Up.
+                                    workload from your project configuration and
+                                    prunes its Kubernetes deployment manifest.
                                 </p>
+                                <div className="mt-3 rounded-lg border border-warn/30 bg-warn-tint/60 p-2.5 text-xs font-medium text-ink">
+                                    Run Rebuild / Up after removing to terminate
+                                    any active pods in the cluster.
+                                </div>
                             </div>
                         </div>
 
@@ -349,7 +496,7 @@ export default function ProjectFeaturesCard({
                                 <span>
                                     {submitting
                                         ? 'Removing…'
-                                        : 'Remove Feature'}
+                                        : 'Remove & Auto-Heal'}
                                 </span>
                             </Button>
                         </div>

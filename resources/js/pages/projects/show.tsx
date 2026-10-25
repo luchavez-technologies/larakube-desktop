@@ -496,6 +496,7 @@ export default function ShowProject({
                                         <ProjectFeaturesCard
                                             project={project}
                                             currentEnv={activeEnvConfig}
+                                            pods={pods?.local ?? []}
                                         />
                                     )}
 
@@ -605,6 +606,7 @@ export default function ShowProject({
                                     <ProjectFeaturesCard
                                         project={project}
                                         currentEnv={activeEnvConfig}
+                                        pods={pods?.[activeEnv] ?? []}
                                     />
 
                                     <EnvironmentBackingServicesCard

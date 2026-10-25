@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 import {
     Plus,
@@ -6,12 +6,14 @@ import {
     ArrowUpCircle,
     RotateCw,
     Sparkles,
-    ChevronDown,
+    Save,
+    XCircle,
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import { add, remove } from '@/routes/projects/extensions';
 import { up } from '@/routes/projects';
+import { cn } from '@/lib/utils';
 import type { Project } from '@/types/larakube';
 
 const COMMON_PRESETS = [
@@ -21,7 +23,6 @@ const COMMON_PRESETS = [
     'intl',
     'soap',
     'pcntl',
-    'redis',
     'zip',
     'mongodb',
     'opcache',
@@ -39,25 +40,48 @@ export default function PhpExtensionsCard({
     const [removingExt, setRemovingExt] = useState<string | null>(null);
     const [rebuilding, setRebuilding] = useState(false);
     const [updatingRuntime, setUpdatingRuntime] = useState(false);
+    const [confirmRuntimeOpen, setConfirmRuntimeOpen] = useState(false);
 
     const extensions = project.additionalExtensions ?? [];
     const phpVersion = project.phpVersion || '8.5';
     const serverVariation = project.serverVariation || 'fpm-nginx';
 
+    const [selectedPhp, setSelectedPhp] = useState(phpVersion);
+    const [selectedServer, setSelectedServer] = useState(serverVariation);
+
+    useEffect(() => {
+        setSelectedPhp(phpVersion);
+    }, [phpVersion]);
+
+    useEffect(() => {
+        setSelectedServer(serverVariation);
+    }, [serverVariation]);
+
+    const isRuntimeDirty =
+        selectedPhp !== phpVersion || selectedServer !== serverVariation;
+
     const availablePresets = COMMON_PRESETS.filter(
         (preset) => !extensions.includes(preset),
     );
 
-    const handleUpdateRuntime = (data: {
-        phpVersion?: string;
-        serverVariation?: string;
-    }) => {
+    const handleSaveRuntime = () => {
         setUpdatingRuntime(true);
-        router.post(`/projects/${project.id}/runtime`, data, {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => setUpdatingRuntime(false),
-        });
+        router.post(
+            `/projects/${project.id}/runtime`,
+            {
+                phpVersion: selectedPhp,
+                serverVariation: selectedServer,
+                environment: activeEnv,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => {
+                    setUpdatingRuntime(false);
+                    setConfirmRuntimeOpen(false);
+                },
+            },
+        );
     };
 
     const handleAdd = (extToAdd?: string) => {
@@ -112,66 +136,106 @@ export default function PhpExtensionsCard({
         <Card
             label="PHP Runtime & Extensions"
             action={
-                <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                    <div className="relative inline-flex items-center">
-                        <select
-                            value={phpVersion}
-                            disabled={updatingRuntime}
-                            onChange={(e) =>
-                                handleUpdateRuntime({
-                                    phpVersion: e.target.value,
-                                })
-                            }
-                            className="cursor-pointer appearance-none rounded-md bg-brand/10 py-0.5 pr-4 pl-1.5 font-medium text-brand hover:bg-brand/15 focus:ring-1 focus:ring-brand/30 focus:outline-hidden disabled:opacity-50"
-                            title="Change PHP Version"
-                        >
-                            <option value="8.5">PHP 8.5 (Latest)</option>
-                            <option value="8.4">PHP 8.4</option>
-                            <option value="8.3">PHP 8.3</option>
-                            <option value="8.2">PHP 8.2</option>
-                            <option value="8.1">PHP 8.1</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-1 size-2.5 text-brand" />
-                    </div>
-
-                    <div className="relative inline-flex items-center">
-                        <select
-                            value={serverVariation}
-                            disabled={updatingRuntime}
-                            onChange={(e) =>
-                                handleUpdateRuntime({
-                                    serverVariation: e.target.value,
-                                })
-                            }
-                            className="cursor-pointer appearance-none rounded-md bg-line/60 py-0.5 pr-4 pl-1.5 text-soft hover:bg-line/80 focus:ring-1 focus:ring-brand/30 focus:outline-hidden disabled:opacity-50"
-                            title="Change Server Variation"
-                        >
-                            <option value="fpm-nginx">fpm-nginx</option>
-                            <option value="frankenphp">frankenphp</option>
-                            <option value="fpm-apache">fpm-apache</option>
-                            <option value="swoole">swoole</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-1 size-2.5 text-soft" />
-                    </div>
-                </div>
+                <span className="font-mono text-[11px] text-soft">
+                    {extensions.length} installed
+                </span>
             }
         >
             <div className="space-y-4">
+                {/* Runtime Configuration Panel */}
+                <div className="rounded-xl border border-line bg-paper/50 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-ink">
+                            Runtime Configuration
+                        </span>
+                        {isRuntimeDirty && (
+                            <span className="font-mono text-[10px] font-medium text-warn">
+                                Unsaved changes
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="mb-1 block text-[11px] text-soft">
+                                PHP Version
+                            </label>
+                            <select
+                                value={selectedPhp}
+                                disabled={updatingRuntime}
+                                onChange={(e) => setSelectedPhp(e.target.value)}
+                                className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-xs text-ink focus:border-brand focus:outline-hidden"
+                            >
+                                <option value="8.5">PHP 8.5 (Latest)</option>
+                                <option value="8.4">PHP 8.4</option>
+                                <option value="8.3">PHP 8.3</option>
+                                <option value="8.2">PHP 8.2</option>
+                                <option value="8.1">PHP 8.1</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-[11px] text-soft">
+                                Server
+                            </label>
+                            <select
+                                value={selectedServer}
+                                disabled={updatingRuntime}
+                                onChange={(e) =>
+                                    setSelectedServer(e.target.value)
+                                }
+                                className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-xs text-ink focus:border-brand focus:outline-hidden"
+                            >
+                                <option value="fpm-nginx">fpm-nginx</option>
+                                <option value="frankenphp">frankenphp</option>
+                                <option value="fpm-apache">fpm-apache</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {isRuntimeDirty && (
+                        <div className="mt-3 flex items-center justify-end gap-2 border-t border-line/60 pt-2.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={updatingRuntime}
+                                onClick={() => {
+                                    setSelectedPhp(phpVersion);
+                                    setSelectedServer(serverVariation);
+                                }}
+                                className="h-7 gap-1 px-2.5 text-xs"
+                            >
+                                <XCircle className="size-3" />
+                                <span>Reset</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={updatingRuntime}
+                                onClick={() => setConfirmRuntimeOpen(true)}
+                                className="h-7 gap-1.5 px-2.5 text-xs"
+                            >
+                                <Save className="size-3 text-brand" />
+                                <span>Save Runtime</span>
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
                 {/* Active Extensions */}
                 <div>
                     <div className="mb-2 flex items-center justify-between text-xs">
                         <span className="font-semibold text-ink">
                             Active Extensions
                         </span>
-                        <span className="font-mono text-[11px] text-soft">
-                            {extensions.length} installed
-                        </span>
                     </div>
 
                     {extensions.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-line bg-paper/30 p-3 text-center text-xs text-soft">
                             No custom PHP extensions configured. Standard core
-                            modules (PDO, mbstring, cURL) are pre-installed.
+                            modules (PDO, mbstring, Redis, cURL) are
+                            pre-installed in the SSU image.
                         </div>
                     ) : (
                         <div className="flex flex-wrap gap-1.5">
@@ -265,7 +329,7 @@ export default function PhpExtensionsCard({
                 {/* Rebuild image prompt */}
                 <div className="rounded-xl border border-line bg-paper/40 p-3">
                     <p className="text-[11px] leading-relaxed text-soft">
-                        Modifying extensions updates{' '}
+                        Modifying runtime or extensions updates{' '}
                         <code className="font-mono text-ink">
                             Dockerfile.php
                         </code>
@@ -291,6 +355,73 @@ export default function PhpExtensionsCard({
                     </div>
                 </div>
             </div>
+
+            {/* Confirmation Modal for PHP Runtime */}
+            {confirmRuntimeOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand ring-1 ring-brand/20">
+                                <Save className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Update PHP Runtime?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    Updating runtime to{' '}
+                                    <span className="font-semibold text-ink">
+                                        PHP {selectedPhp} ({selectedServer})
+                                    </span>{' '}
+                                    will rewrite your{' '}
+                                    <code className="font-mono text-ink">
+                                        Dockerfile.php
+                                    </code>{' '}
+                                    and auto-heal your Kubernetes manifests.
+                                </p>
+                                <div className="mt-3 rounded-lg border border-warn/30 bg-warn-tint/60 p-2.5 text-xs font-medium text-ink">
+                                    A project Rebuild / Up is needed for changes
+                                    to take effect in your cluster.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={updatingRuntime}
+                                onClick={() => setConfirmRuntimeOpen(false)}
+                                className="gap-1.5 text-xs"
+                            >
+                                <XCircle className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={updatingRuntime}
+                                onClick={handleSaveRuntime}
+                                className="gap-1.5 text-xs"
+                            >
+                                <Save
+                                    className={cn(
+                                        'size-3.5',
+                                        updatingRuntime && 'animate-spin',
+                                    )}
+                                />
+                                <span>
+                                    {updatingRuntime
+                                        ? 'Saving…'
+                                        : 'Save & Auto-Heal'}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Card>
     );
 }

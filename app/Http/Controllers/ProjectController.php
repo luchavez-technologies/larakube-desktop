@@ -1456,11 +1456,12 @@ class ProjectController extends Controller
         return back();
     }
 
-    public function updateRuntime(Request $request, Project $project): RedirectResponse
+    public function updateRuntime(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
         $validated = $request->validate([
             'phpVersion' => ['nullable', 'string', 'in:8.2,8.3,8.4,8.5,8.1,8.0,7.4'],
-            'serverVariation' => ['nullable', 'string', 'in:fpm-nginx,frankenphp,fpm-apache,swoole'],
+            'serverVariation' => ['nullable', 'string', 'in:fpm-nginx,frankenphp,fpm-apache'],
+            'environment' => ['nullable', 'string'],
         ]);
 
         $hostPath = $this->hostPath($project->path);
@@ -1497,13 +1498,20 @@ class ProjectController extends Controller
 
         $this->inspector->inspect($project->path);
 
+        if ($request->boolean('heal', true)) {
+            $env = (string) $request->input('environment', 'local');
+
+            return $this->run($runner, $project, RunKind::HealProject, "Heal {$this->name($project)}", ['heal', '--force', '--prune'], $env);
+        }
+
         return back();
     }
 
-    public function addFeature(Request $request, Project $project): RedirectResponse
+    public function addFeature(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
         $validated = $request->validate([
             'feature' => ['required', 'string', 'in:queues,horizon,reverb,scheduler,ssr,octane,ai,mcp,boost,scout,meet'],
+            'environment' => ['nullable', 'string'],
         ]);
 
         $feature = (string) $validated['feature'];
@@ -1524,13 +1532,20 @@ class ProjectController extends Controller
 
         $this->inspector->inspect($project->path);
 
+        if ($request->boolean('heal', true)) {
+            $env = (string) $request->input('environment', 'local');
+
+            return $this->run($runner, $project, RunKind::HealProject, "Heal {$this->name($project)}", ['heal', '--force', '--prune'], $env);
+        }
+
         return back();
     }
 
-    public function removeFeature(Request $request, Project $project): RedirectResponse
+    public function removeFeature(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
         $validated = $request->validate([
             'feature' => ['required', 'string'],
+            'environment' => ['nullable', 'string'],
         ]);
 
         $feature = (string) $validated['feature'];
@@ -1546,6 +1561,12 @@ class ProjectController extends Controller
         }
 
         $this->inspector->inspect($project->path);
+
+        if ($request->boolean('heal', true)) {
+            $env = (string) $request->input('environment', 'local');
+
+            return $this->run($runner, $project, RunKind::HealProject, "Heal {$this->name($project)}", ['heal', '--force', '--prune'], $env);
+        }
 
         return back();
     }
