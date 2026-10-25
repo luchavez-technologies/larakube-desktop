@@ -51,6 +51,7 @@ import ProjectTerminalCard, {
     type ProjectRun,
 } from '@/components/project-terminal-card';
 import RecentRunsCard, { type RecentRun } from '@/components/recent-runs-card';
+import PhpExtensionsCard from '@/components/php-extensions-card';
 import Sparkline from '@/components/metrics/sparkline';
 import Card from '@/components/card';
 import FrameworkBadge from '@/components/framework-badge';
@@ -609,10 +610,17 @@ export default function ShowProject({
                             )}
                         </div>
 
-                        {/* Sidebar Column (Right): Activity, Settings */}
+                        {/* Sidebar Column (Right): Runtime, Settings, Activity */}
                         <div className="flex flex-col gap-5">
-                            <RecentRunsCard runs={runs} activeEnv={activeEnv} />
+                            {(project.framework === 'laravel' ||
+                                Boolean(project.phpVersion)) && (
+                                <PhpExtensionsCard
+                                    project={project}
+                                    activeEnv={activeEnv}
+                                />
+                            )}
                             <ProjectSettingsCard project={project} />
+                            <RecentRunsCard runs={runs} activeEnv={activeEnv} />
                         </div>
                     </div>
 

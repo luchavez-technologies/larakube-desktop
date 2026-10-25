@@ -1363,6 +1363,99 @@ class ProjectController extends Controller
         return back();
     }
 
+    public function addExtension(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'extension' => ['required', 'string', 'regex:/^[a-z0-9_-]+$/i'],
+        ]);
+
+        $extension = strtolower(trim($validated['extension']));
+        $hostPath = $this->hostPath($project->path);
+        $configFile = "{$hostPath}/.larakube.json";
+        $dockerfilePath = "{$hostPath}/Dockerfile.php";
+
+        if (file_exists($configFile)) {
+            $config = json_decode((string) file_get_contents($configFile), true);
+            if (is_array($config)) {
+                $exts = is_array($config['additionalExtensions'] ?? null) ? $config['additionalExtensions'] : [];
+                if (! in_array($extension, $exts, true)) {
+                    $exts[] = $extension;
+                    $config['additionalExtensions'] = array_values($exts);
+                    file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+                }
+            }
+        }
+
+        if (file_exists($dockerfilePath)) {
+            $dockerfile = (string) file_get_contents($dockerfilePath);
+
+            if (preg_match('/RUN install-php-extensions (.*)/', $dockerfile, $matches)) {
+                $currentExts = array_filter(explode(' ', trim($matches[1])));
+                if (! in_array($extension, $currentExts, true)) {
+                    $currentExts[] = $extension;
+                    $newExts = implode(' ', array_unique($currentExts));
+                    $dockerfile = str_replace($matches[0], "RUN install-php-extensions {$newExts}", $dockerfile);
+                    file_put_contents($dockerfilePath, $dockerfile);
+                }
+            } elseif (preg_match('/^FROM\s+.*?\s+AS\s+base[^\n]*\n/mi', $dockerfile, $baseMatches)) {
+                $block = "USER root\nRUN install-php-extensions {$extension}\nUSER www-data\n\n";
+                $dockerfile = str_replace($baseMatches[0], $baseMatches[0]."\n".$block, $dockerfile);
+                file_put_contents($dockerfilePath, $dockerfile);
+            }
+        }
+
+        $this->inspector->inspect($project->path);
+
+        return back();
+    }
+
+    public function removeExtension(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'extension' => ['required', 'string'],
+        ]);
+
+        $extension = strtolower(trim($validated['extension']));
+        $hostPath = $this->hostPath($project->path);
+        $configFile = "{$hostPath}/.larakube.json";
+        $dockerfilePath = "{$hostPath}/Dockerfile.php";
+
+        if (file_exists($configFile)) {
+            $config = json_decode((string) file_get_contents($configFile), true);
+            if (is_array($config) && is_array($config['additionalExtensions'] ?? null)) {
+                $config['additionalExtensions'] = array_values(array_diff($config['additionalExtensions'], [$extension]));
+                file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+            }
+        }
+
+        if (file_exists($dockerfilePath)) {
+            $dockerfile = (string) file_get_contents($dockerfilePath);
+
+            if (preg_match('/RUN install-php-extensions (.*)/', $dockerfile, $matches)) {
+                $currentExts = array_filter(explode(' ', trim($matches[1])));
+                if (in_array($extension, $currentExts, true)) {
+                    $remaining = array_values(array_diff($currentExts, [$extension]));
+                    if (empty($remaining)) {
+                        $pattern = '/\n?USER root\s*\n\s*RUN install-php-extensions[^\n]*\n\s*USER www-data\n?/m';
+                        if (preg_match($pattern, $dockerfile)) {
+                            $dockerfile = (string) preg_replace($pattern, "\n", $dockerfile, 1);
+                        } else {
+                            $dockerfile = str_replace($matches[0]."\n", '', $dockerfile);
+                        }
+                    } else {
+                        $newExts = implode(' ', $remaining);
+                        $dockerfile = str_replace($matches[0], "RUN install-php-extensions {$newExts}", $dockerfile);
+                    }
+                    file_put_contents($dockerfilePath, $dockerfile);
+                }
+            }
+        }
+
+        $this->inspector->inspect($project->path);
+
+        return back();
+    }
+
     /**
      * Whether $path is under the user's home folder or valid user workspace directory.
      * $allowHome also accepts the home folder itself: fine to create an app in, not to add as a project.

@@ -597,6 +597,9 @@ export type Project = {
     database?: string | null;
     cacheDriver?: string | null;
     objectStorage?: string | null;
+    phpVersion?: string | null;
+    serverVariation?: string | null;
+    additionalExtensions?: string[];
     git?: {
         remote: string | null;
         platform: string;

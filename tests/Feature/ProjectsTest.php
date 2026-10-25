@@ -1292,3 +1292,71 @@ test('projects.pods.terminal launches an interactive terminal shell into the pod
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('projects.extensions.add validates input and updates .larakube.json and Dockerfile.php', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'additionalExtensions' => ['bcmath'],
+    ]));
+
+    File::put("{$sandbox['app']}/Dockerfile.php", "FROM serversideup/php:8.5-fpm-nginx AS base\nUSER root\nRUN install-php-extensions bcmath\nUSER www-data\n");
+
+    $this->post(route('projects.extensions.add', $project), ['extension' => ''])
+        ->assertSessionHasErrors('extension');
+
+    $this->post(route('projects.extensions.add', $project), ['extension' => 'invalid extension!'])
+        ->assertSessionHasErrors('extension');
+
+    $this->post(route('projects.extensions.add', $project), ['extension' => 'gd'])
+        ->assertRedirect();
+
+    $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($config['additionalExtensions'])->toBe(['bcmath', 'gd']);
+
+    $dockerfile = File::get("{$sandbox['app']}/Dockerfile.php");
+    expect($dockerfile)->toContain('RUN install-php-extensions bcmath gd');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.extensions.remove updates .larakube.json and Dockerfile.php', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'additionalExtensions' => ['bcmath', 'gd'],
+    ]));
+
+    File::put("{$sandbox['app']}/Dockerfile.php", "FROM serversideup/php:8.5-fpm-nginx AS base\nUSER root\nRUN install-php-extensions bcmath gd\nUSER www-data\n");
+
+    $this->post(route('projects.extensions.remove', $project), ['extension' => 'gd'])
+        ->assertRedirect();
+
+    $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($config['additionalExtensions'])->toBe(['bcmath']);
+
+    $dockerfile = File::get("{$sandbox['app']}/Dockerfile.php");
+    expect($dockerfile)->toContain('RUN install-php-extensions bcmath');
+
+    // Remove last extension cleans up the block
+    $this->post(route('projects.extensions.remove', $project), ['extension' => 'bcmath'])
+        ->assertRedirect();
+
+    $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($config['additionalExtensions'])->toBe([]);
+
+    $dockerfile = File::get("{$sandbox['app']}/Dockerfile.php");
+    expect($dockerfile)->not->toContain('RUN install-php-extensions');
+
+    File::deleteDirectory($sandbox['home']);
+});
