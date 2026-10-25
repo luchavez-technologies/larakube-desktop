@@ -5,15 +5,22 @@ export function ListRow({
     children,
     action,
     stack = false,
+    className,
 }: {
     children: ReactNode;
     action?: ReactNode;
     /** Puts the action row below the content instead of beside it, so a long value (a kubectl context, an SSH command) doesn't get squeezed and truncated. */
     stack?: boolean;
+    className?: string;
 }) {
     if (stack) {
         return (
-            <div className="border-t border-line py-2.5 first-of-type:border-t-0">
+            <div
+                className={cn(
+                    'border-t border-line py-2.5 first-of-type:border-t-0',
+                    className,
+                )}
+            >
                 <div className="min-w-0">{children}</div>
                 {action && (
                     <div className="mt-2 flex items-center gap-2.5">
@@ -25,7 +32,12 @@ export function ListRow({
     }
 
     return (
-        <div className="flex items-center justify-between gap-4 border-t border-line py-2.5 first-of-type:border-t-0">
+        <div
+            className={cn(
+                'flex items-center justify-between gap-4 border-t border-line py-2.5 first-of-type:border-t-0',
+                className,
+            )}
+        >
             <div className="min-w-0">{children}</div>
             {action && (
                 <div className="flex shrink-0 items-center gap-2.5">

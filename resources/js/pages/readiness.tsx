@@ -79,6 +79,11 @@ export default function Readiness({
     const accountModalProvider =
         providers?.find((p) => p.slug === accountModalProviderSlug) ?? null;
 
+    const highlightTool =
+        typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('highlight')
+            : null;
+
     return (
         <AppLayout title="Setup">
             <PageHeader
@@ -147,6 +152,7 @@ export default function Readiness({
                                 channel={selectedChannel}
                                 refresh={refresh}
                                 showLocalOnly={usage === 'apps'}
+                                highlight={highlightTool}
                             />
                         </Card>
                         <Card label="Cloud accounts">

@@ -10,6 +10,8 @@ use App\Services\FolderPicker;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\TerminalLauncher;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Inertia\Testing\AssertableInertia;
@@ -1160,6 +1162,128 @@ test('projects index returns available editors, default editor, and matches serv
             ->where('projects.0.serverName', 'prod-doks')
             ->where('projects.0.serverProvider', 'doks')
         );
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.show passes k9sInstalled flag', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->has('k9sInstalled')
+        );
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.k9s launches k9s scoped to the environment context and namespace when installed', function () {
+    $sandbox = projectsSandbox();
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*' => Process::result(),
+    ]);
+    app()->instance(TerminalLauncher::class, new TerminalLauncher(windows: false, darwin: true));
+
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    // When k9s is not installed, it errors with session error
+    $this->post(route('projects.k9s', $project), ['environment' => 'local'])
+        ->assertSessionHasErrors('k9s');
+
+    // Install fake k9s binary
+    File::put("{$sandbox['bin']}/k9s", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/k9s", 0755);
+    Cache::flush();
+
+    $this->post(route('projects.k9s', $project), ['environment' => 'local'])
+        ->assertRedirect();
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', $process->command), 'k9s') && str_contains(implode(' ', $process->command), "-n 'shop-local'"));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.pods.logs returns json with container logs', function () {
+    $sandbox = projectsSandbox();
+    File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/kubectl", 0755);
+
+    Process::fake([
+        '*logs*' => Process::result(output: "Booting Laravel application...\n"),
+        '*' => Process::result(),
+    ]);
+
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    $res = $this->getJson(route('projects.pods.logs', ['project' => $project, 'pod' => 'shop-web-123', 'environment' => 'local']));
+    $res->assertOk()
+        ->assertJson(['logs' => "Booting Laravel application...\n"]);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.pods.restart restarts the specified pod and redirects back', function () {
+    $sandbox = projectsSandbox();
+    File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/kubectl", 0755);
+
+    Process::fake([
+        '*delete pod*' => Process::result(),
+        '*' => Process::result(),
+    ]);
+
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    $this->post(route('projects.pods.restart', ['project' => $project, 'pod' => 'shop-web-123', 'environment' => 'local']))
+        ->assertRedirect();
+
+    Process::assertRan(fn ($p) => str_contains(implode(' ', $p->command), 'delete')
+        && str_contains(implode(' ', $p->command), 'pod')
+        && str_contains(implode(' ', $p->command), 'shop-web-123'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.pods.terminal launches an interactive terminal shell into the pod and container', function () {
+    $sandbox = projectsSandbox();
+    File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/kubectl", 0755);
+
+    Process::fake([
+        '*' => Process::result(),
+    ]);
+    app()->instance(TerminalLauncher::class, new TerminalLauncher(windows: false, darwin: true));
+
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    $this->post(route('projects.pods.terminal', [
+        'project' => $project,
+        'pod' => 'shop-web-123',
+        'environment' => 'local',
+        'container' => 'php',
+    ]))->assertRedirect();
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', $process->command), 'kubectl')
+        && str_contains(implode(' ', $process->command), "exec -it -n 'shop-local' 'shop-web-123'")
+        && str_contains(implode(' ', $process->command), "-c 'php'"));
 
     File::deleteDirectory($sandbox['home']);
 });

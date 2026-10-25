@@ -173,6 +173,10 @@ Route::post('/projects/{project}/down', [ProjectController::class, 'down'])->nam
 Route::post('/projects/{project}/start', [ProjectController::class, 'start'])->name('projects.start');
 Route::post('/projects/{project}/stop', [ProjectController::class, 'stop'])->name('projects.stop');
 Route::post('/projects/{project}/tld', [ProjectController::class, 'tld'])->name('projects.tld');
+Route::post('/projects/{project}/k9s', [ProjectController::class, 'k9s'])->name('projects.k9s');
+Route::get('/projects/{project}/pods/{pod}/logs', [ProjectController::class, 'podLogs'])->name('projects.pods.logs');
+Route::post('/projects/{project}/pods/{pod}/terminal', [ProjectController::class, 'podTerminal'])->name('projects.pods.terminal');
+Route::post('/projects/{project}/pods/{pod}/restart', [ProjectController::class, 'restartPod'])->name('projects.pods.restart');
 Route::post('/projects/{project}/plex/join', [PlexController::class, 'joinProject'])->name('projects.plex.join');
 Route::get('/projects/{project}/services', [ProjectController::class, 'services'])->name('projects.services');
 Route::post('/projects/{project}/plex/leave', [PlexController::class, 'leaveProject'])->name('projects.plex.leave');

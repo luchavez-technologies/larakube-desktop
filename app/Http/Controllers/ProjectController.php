@@ -24,11 +24,14 @@ use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ProjectCompanions;
 use App\Services\LaraKube\ProjectInspector;
+use App\Services\LaraKube\ProjectPods;
 use App\Services\LaraKube\ProjectServices;
 use App\Services\LaraKube\ProjectWorkloadStatus;
+use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
+use App\Services\TerminalLauncher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -571,6 +574,9 @@ class ProjectController extends Controller
         ClusterMetrics $clusterMetrics,
         FleetMetrics $fleetMetrics,
         DomainCatalog $domains,
+        ReadinessCheck $readiness,
+        ProjectPods $projectPods,
+        LocalCluster $localCluster,
     ): Response {
         $scaffold = $this->lastScaffold($project);
 
@@ -700,6 +706,31 @@ class ProjectController extends Controller
             'companions' => Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions'),
             'companionCredentials' => Inertia::defer(fn (): array => app(ProjectCompanions::class)->credentials($project->path), 'companions'),
             'localTld' => app(GlobalSettings::class)->getLocalTld(),
+            'k9sInstalled' => $readiness->status('k9s')['installed'],
+            'pods' => Inertia::defer(function () use ($projectPods, $inspection, $localCluster, $stacks): array {
+                $result = [];
+                $localCtx = $localCluster->detect()['context'] ?? 'k3d-larakube';
+                $result['local'] = $projectPods->pods($localCtx, "{$inspection['name']}-local");
+
+                $allStacks = $stacks->all() ?? [];
+                foreach ($inspection['environments'] as $name => $env) {
+                    if ($name === 'local') {
+                        continue;
+                    }
+                    $context = $env['serverContext'] ?? null;
+                    if ($context === null && ! empty($env['serverIp'])) {
+                        foreach ($allStacks as $s) {
+                            if (($s['ip'] ?? null) === $env['serverIp']) {
+                                $context = $s['context'] ?? null;
+                                break;
+                            }
+                        }
+                    }
+                    $result[$name] = $context ? $projectPods->pods($context, "{$inspection['name']}-{$name}") : [];
+                }
+
+                return $result;
+            }, 'pods'),
         ]);
     }
 
@@ -1008,6 +1039,188 @@ class ProjectController extends Controller
         $args = ['stop', $environment];
 
         return $this->run($runner, $project, RunKind::StopProject, "Stop {$this->name($project)} ({$environment})", $args, $environment);
+    }
+
+    /**
+     * Opens a new terminal window running k9s scoped to this project's
+     * environment context and namespace.
+     */
+    public function k9s(
+        Request $request,
+        Project $project,
+        ReadinessCheck $readiness,
+        TerminalLauncher $launcher,
+        LocalCluster $localCluster,
+        ToolLocator $locator,
+        StackCatalog $stacks,
+    ): RedirectResponse {
+        $environment = (string) $request->input('environment', 'local');
+        $inspection = $this->inspector->inspect($project->path);
+
+        abort_unless($inspection['exists'], 404);
+
+        if (! $readiness->status('k9s')['installed']) {
+            return back()->withErrors(['k9s' => 'k9s is not installed. Install it from Setup to use this.']);
+        }
+
+        $appName = $inspection['name'];
+        $namespace = "{$appName}-{$environment}";
+
+        $context = null;
+        if ($environment === 'local') {
+            $context = $localCluster->detect()['context'] ?? 'k3d-larakube';
+        } else {
+            $envConfig = $inspection['environments'][$environment] ?? null;
+            $context = $envConfig['serverContext'] ?? null;
+            if ($context === null && ! empty($envConfig['serverIp'])) {
+                $readyStacks = $stacks->all() ?? [];
+                foreach ($readyStacks as $s) {
+                    if (($s['ip'] ?? null) === $envConfig['serverIp']) {
+                        $context = $s['context'] ?? null;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $k9sBin = $locator->find('k9s') ?? 'k9s';
+        $cmd = escapeshellcmd($k9sBin);
+        if ($context) {
+            $cmd .= ' --context='.escapeshellarg($context);
+        }
+        $cmd .= ' -n '.escapeshellarg($namespace);
+
+        if (! $launcher->open($cmd)) {
+            return back()->withErrors(['terminal' => 'Could not open a terminal.']);
+        }
+
+        return back();
+    }
+
+    public function podLogs(
+        Request $request,
+        Project $project,
+        string $pod,
+        ProjectPods $projectPods,
+        LocalCluster $localCluster,
+        StackCatalog $stacks,
+    ): JsonResponse {
+        $environment = (string) $request->input('environment', 'local');
+        $container = $request->input('container');
+        $inspection = $this->inspector->inspect($project->path);
+        abort_unless($inspection['exists'], 404);
+
+        $namespace = "{$inspection['name']}-{$environment}";
+        $context = null;
+        if ($environment === 'local') {
+            $context = $localCluster->detect()['context'] ?? 'k3d-larakube';
+        } else {
+            $envConfig = $inspection['environments'][$environment] ?? null;
+            $context = $envConfig['serverContext'] ?? null;
+            if ($context === null && ! empty($envConfig['serverIp'])) {
+                foreach ($stacks->all() ?? [] as $s) {
+                    if (($s['ip'] ?? null) === $envConfig['serverIp']) {
+                        $context = $s['context'] ?? null;
+                        break;
+                    }
+                }
+            }
+        }
+
+        abort_if($context === null, 404);
+
+        $logs = $projectPods->logs($context, $namespace, $pod, is_string($container) ? $container : null);
+
+        return response()->json(['logs' => $logs]);
+    }
+
+    public function podTerminal(
+        Request $request,
+        Project $project,
+        string $pod,
+        LocalCluster $localCluster,
+        ToolLocator $locator,
+        StackCatalog $stacks,
+        TerminalLauncher $launcher,
+    ): RedirectResponse {
+        $environment = (string) $request->input('environment', 'local');
+        $container = $request->input('container');
+        $inspection = $this->inspector->inspect($project->path);
+        abort_unless($inspection['exists'], 404);
+
+        $namespace = "{$inspection['name']}-{$environment}";
+        $context = null;
+        if ($environment === 'local') {
+            $context = $localCluster->detect()['context'] ?? 'k3d-larakube';
+        } else {
+            $envConfig = $inspection['environments'][$environment] ?? null;
+            $context = $envConfig['serverContext'] ?? null;
+            if ($context === null && ! empty($envConfig['serverIp'])) {
+                foreach ($stacks->all() ?? [] as $s) {
+                    if (($s['ip'] ?? null) === $envConfig['serverIp']) {
+                        $context = $s['context'] ?? null;
+                        break;
+                    }
+                }
+            }
+        }
+
+        abort_if($context === null, 404);
+
+        $kubectl = $locator->find('kubectl') ?? 'kubectl';
+        $cmd = escapeshellcmd($kubectl);
+        if ($context) {
+            $cmd .= ' --context='.escapeshellarg($context);
+        }
+        $cmd .= ' exec -it -n '.escapeshellarg($namespace).' '.escapeshellarg($pod);
+
+        if (is_string($container) && $container !== '') {
+            $cmd .= ' -c '.escapeshellarg($container);
+        }
+
+        $cmd .= ' -- sh -c "command -v bash >/dev/null 2>&1 && exec bash || exec sh"';
+
+        if (! $launcher->open($cmd)) {
+            return back()->withErrors(['terminal' => 'Could not open a terminal.']);
+        }
+
+        return back();
+    }
+
+    public function restartPod(
+        Request $request,
+        Project $project,
+        string $pod,
+        ProjectPods $projectPods,
+        LocalCluster $localCluster,
+        StackCatalog $stacks,
+    ): RedirectResponse {
+        $environment = (string) $request->input('environment', 'local');
+        $inspection = $this->inspector->inspect($project->path);
+        abort_unless($inspection['exists'], 404);
+
+        $namespace = "{$inspection['name']}-{$environment}";
+        $context = null;
+        if ($environment === 'local') {
+            $context = $localCluster->detect()['context'] ?? 'k3d-larakube';
+        } else {
+            $envConfig = $inspection['environments'][$environment] ?? null;
+            $context = $envConfig['serverContext'] ?? null;
+            if ($context === null && ! empty($envConfig['serverIp'])) {
+                foreach ($stacks->all() ?? [] as $s) {
+                    if (($s['ip'] ?? null) === $envConfig['serverIp']) {
+                        $context = $s['context'] ?? null;
+                        break;
+                    }
+                }
+            }
+        }
+
+        abort_if($context === null, 404);
+
+        $projectPods->restartPod($context, $namespace, $pod);
+
+        return back();
     }
 
     public function updateGroup(Request $request, Project $project): RedirectResponse

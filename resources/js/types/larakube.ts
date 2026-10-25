@@ -803,6 +803,19 @@ export type PodMetrics = {
     updatedAt: string;
 };
 
+export type PodInfo = {
+    name: string;
+    component: string;
+    componentLabel: string;
+    phase: string;
+    statusText: string;
+    statusTone: 'ok' | 'bad' | 'warn' | 'muted';
+    ready: string;
+    restarts: number;
+    age: string;
+    containers: string[];
+};
+
 export type DeployMetrics = {
     totalDeploys: number;
     successRate: number;

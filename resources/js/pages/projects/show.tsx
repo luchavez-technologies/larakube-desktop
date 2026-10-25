@@ -19,6 +19,7 @@ import {
     Laptop,
     Cloud,
     X,
+    XCircle,
     Folder,
     RotateCw,
     Share2,
@@ -26,6 +27,7 @@ import {
     Key,
     ArrowUpCircle,
     Square,
+    SquareTerminal,
     PowerOff,
     Save,
     Network,
@@ -42,6 +44,7 @@ import EnvironmentSettingsDrawer, {
 import BackingServicesCard from '@/components/backing-services-card';
 import LocalDevCompanionsCard from '@/components/local-dev-companions-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
+import WorkloadsPodsCard from '@/components/workloads-pods-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
 import ProjectTerminalCard, {
     type ProjectRun,
@@ -71,6 +74,7 @@ import {
     folder as showFolder,
     index,
     init,
+    k9s as launchK9s,
     link,
     retry,
     start as startLifecycle,
@@ -90,6 +94,7 @@ import type {
     HealthMetrics,
     NewAppAnswers,
     NewAppQuestion,
+    PodInfo,
     PodMetrics,
     Project,
     ProjectEnvironment,
@@ -145,6 +150,8 @@ export default function ShowProject({
     companions,
     companionCredentials,
     localTld,
+    k9sInstalled = false,
+    pods,
 }: {
     project: Project;
     server: Server | null;
@@ -165,7 +172,29 @@ export default function ShowProject({
     companions?: CompanionApp[] | null;
     companionCredentials?: CompanionCredential[] | null;
     localTld?: string;
+    k9sInstalled?: boolean;
+    pods?: Record<string, PodInfo[]>;
 }) {
+    const [k9sModalOpen, setK9sModalOpen] = useState(false);
+    const [launchingK9s, setLaunchingK9s] = useState(false);
+
+    const handleOpenK9s = (env: string) => {
+        if (!k9sInstalled) {
+            setK9sModalOpen(true);
+            return;
+        }
+
+        setLaunchingK9s(true);
+        router.post(
+            launchK9s(project.id).url,
+            { environment: env },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setLaunchingK9s(false),
+            },
+        );
+    };
     const isRunning =
         runs.some((r) => r.status === 'running') ||
         latestRun?.status === 'running';
@@ -441,6 +470,26 @@ export default function ShowProject({
                                     )}
 
                                     {project.initialized && (
+                                        <Deferred
+                                            data="pods"
+                                            fallback={
+                                                <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                            }
+                                        >
+                                            <WorkloadsPodsCard
+                                                project={project}
+                                                activeEnv="local"
+                                                pods={pods?.local ?? []}
+                                                k9sInstalled={k9sInstalled}
+                                                onOpenK9s={() =>
+                                                    handleOpenK9s('local')
+                                                }
+                                                launchingK9s={launchingK9s}
+                                            />
+                                        </Deferred>
+                                    )}
+
+                                    {project.initialized && (
                                         <EnvironmentBackingServicesCard
                                             key={activeEnv}
                                             project={project}
@@ -494,6 +543,24 @@ export default function ShowProject({
                                             setDeployModalOpen(true)
                                         }
                                     />
+
+                                    <Deferred
+                                        data="pods"
+                                        fallback={
+                                            <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                        }
+                                    >
+                                        <WorkloadsPodsCard
+                                            project={project}
+                                            activeEnv={activeEnv}
+                                            pods={pods?.[activeEnv] ?? []}
+                                            k9sInstalled={k9sInstalled}
+                                            onOpenK9s={() =>
+                                                handleOpenK9s(activeEnv)
+                                            }
+                                            launchingK9s={launchingK9s}
+                                        />
+                                    </Deferred>
 
                                     <Deferred
                                         data={[
@@ -577,6 +644,82 @@ export default function ShowProject({
                         readyServers={readyServers}
                         onCreated={(newEnv) => setActiveEnv(newEnv)}
                     />
+
+                    {/* K9s Recommendation Modal Popup */}
+                    {k9sModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+                            <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl ring-1 ring-line">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+                                            <SquareTerminal className="size-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-semibold text-ink">
+                                                Real-time Pod Observability
+                                            </h3>
+                                            <p className="text-xs text-soft">
+                                                Monitor workloads, restarts &
+                                                pod logs
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setK9sModalOpen(false)}
+                                        className="cursor-pointer text-soft hover:text-ink"
+                                    >
+                                        <X className="size-4" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 rounded-xl border border-line bg-paper/60 p-3.5 text-xs leading-relaxed text-soft">
+                                    <p>
+                                        Hey, for a much better debugging and
+                                        observability experience, we recommend
+                                        installing{' '}
+                                        <strong className="font-semibold text-ink">
+                                            k9s
+                                        </strong>
+                                        .
+                                    </p>
+                                    <p className="mt-2">
+                                        It gives you a live terminal view of all
+                                        running pods, instant crash detection,
+                                        container restarts, and streaming logs
+                                        for{' '}
+                                        <code className="rounded bg-line/60 px-1 py-0.5 font-mono text-[11px] text-ink">
+                                            {project.name}-{activeEnv}
+                                        </code>
+                                        .
+                                    </p>
+                                </div>
+
+                                <div className="mt-5 flex items-center justify-end gap-2.5">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setK9sModalOpen(false)}
+                                    >
+                                        <XCircle className="size-3.5" />
+                                        <span>Close</span>
+                                    </Button>
+                                    <Link
+                                        href="/readiness?highlight=k9s"
+                                        className={buttonClass(
+                                            'primary',
+                                            'sm',
+                                            'gap-1.5',
+                                        )}
+                                    >
+                                        <ArrowRight className="size-3.5" />
+                                        <span>Install k9s in Setup</span>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </AppLayout>
@@ -1067,25 +1210,27 @@ function CloudEnvironmentOverviewCard({
                                   ? `Ready to deploy to ${activeServer.name}. Click Deploy to ship.`
                                   : 'Configure server and host to ship this environment.'}
                     </p>
-                    <Button
-                        variant={
-                            activeCi?.hasWorkflow ? 'secondary' : 'primary'
-                        }
-                        size="sm"
-                        onClick={onOpenDeploy}
-                        className="gap-1.5"
-                    >
-                        <Play className="size-3.5 fill-current" />
-                        <span>
-                            {activeCi?.hasWorkflow
-                                ? 'Deploy from Mac (Manual)'
-                                : hasSucceededDeploy
-                                  ? `Deploy ${activeEnv.toUpperCase()} again`
-                                  : activeServer
-                                    ? `Deploy to ${activeEnv.toUpperCase()}`
-                                    : 'Set up deployment'}
-                        </span>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant={
+                                activeCi?.hasWorkflow ? 'secondary' : 'primary'
+                            }
+                            size="sm"
+                            onClick={onOpenDeploy}
+                            className="gap-1.5"
+                        >
+                            <Play className="size-3.5 fill-current" />
+                            <span>
+                                {activeCi?.hasWorkflow
+                                    ? 'Deploy from Mac (Manual)'
+                                    : hasSucceededDeploy
+                                      ? `Deploy ${activeEnv.toUpperCase()} again`
+                                      : activeServer
+                                        ? `Deploy to ${activeEnv.toUpperCase()}`
+                                        : 'Set up deployment'}
+                            </span>
+                        </Button>
+                    </div>
                 </div>
             </div>
         </Card>
