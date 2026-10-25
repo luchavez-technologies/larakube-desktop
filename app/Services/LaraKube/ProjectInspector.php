@@ -53,7 +53,7 @@ class ProjectInspector
     }
 
     /**
-     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
      */
     public function inspect(string $path, string $environment = 'production'): array
     {
@@ -119,7 +119,7 @@ class ProjectInspector
      * @param  array<string, mixed>|null  $blueprint
      * @param  array<string, mixed>|null  $local
      * @param  array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}|null  $git
-     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
      */
     public function inspectBlueprint(?array $blueprint, ?array $local = null, string $environment = 'production', string $path = '', ?array $git = null): array
     {
@@ -180,6 +180,7 @@ class ProjectInspector
                     'plex' => is_array($envConfig['plex'] ?? null) ? array_values(array_filter($envConfig['plex'], 'is_string')) : [],
                     'managed' => is_array($envConfig['managed'] ?? null) ? array_values(array_filter($envConfig['managed'], 'is_string')) : [],
                     'components' => $components,
+                    'features' => array_values(array_filter($envFeatures, 'is_string')),
                     'replicas' => is_array($envConfig['replicas'] ?? null) ? $envConfig['replicas'] : [],
                     'autoscale' => is_array($envConfig['autoscale'] ?? null) ? $envConfig['autoscale'] : [],
                     'resources' => is_array($envConfig['resources'] ?? null) ? $envConfig['resources'] : [],
@@ -213,6 +214,7 @@ class ProjectInspector
                 'plex' => [],
                 'managed' => [],
                 'components' => ['web'],
+                'features' => is_array($blueprint['features'] ?? null) ? array_values(array_filter($blueprint['features'], 'is_string')) : [],
                 'replicas' => [],
                 'autoscale' => [],
                 'resources' => [],
@@ -250,6 +252,9 @@ class ProjectInspector
             'serverVariation' => is_string($blueprint['serverVariation'] ?? null) ? $blueprint['serverVariation'] : ($framework === 'laravel' ? 'fpm-nginx' : null),
             'additionalExtensions' => is_array($blueprint['additionalExtensions'] ?? null)
                 ? array_values(array_filter($blueprint['additionalExtensions'], 'is_string'))
+                : [],
+            'features' => is_array($blueprint['features'] ?? null)
+                ? array_values(array_filter($blueprint['features'], 'is_string'))
                 : [],
             'git' => $git,
             'environments' => $environments,

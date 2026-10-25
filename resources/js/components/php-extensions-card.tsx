@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Plus, X, ArrowUpCircle, RotateCw, Sparkles } from 'lucide-react';
+import {
+    Plus,
+    X,
+    ArrowUpCircle,
+    RotateCw,
+    Sparkles,
+    ChevronDown,
+} from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import { add, remove } from '@/routes/projects/extensions';
@@ -31,6 +38,7 @@ export default function PhpExtensionsCard({
     const [submitting, setSubmitting] = useState(false);
     const [removingExt, setRemovingExt] = useState<string | null>(null);
     const [rebuilding, setRebuilding] = useState(false);
+    const [updatingRuntime, setUpdatingRuntime] = useState(false);
 
     const extensions = project.additionalExtensions ?? [];
     const phpVersion = project.phpVersion || '8.5';
@@ -39,6 +47,18 @@ export default function PhpExtensionsCard({
     const availablePresets = COMMON_PRESETS.filter(
         (preset) => !extensions.includes(preset),
     );
+
+    const handleUpdateRuntime = (data: {
+        phpVersion?: string;
+        serverVariation?: string;
+    }) => {
+        setUpdatingRuntime(true);
+        router.post(`/projects/${project.id}/runtime`, data, {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => setUpdatingRuntime(false),
+        });
+    };
 
     const handleAdd = (extToAdd?: string) => {
         const raw = extToAdd || customExt;
@@ -92,13 +112,47 @@ export default function PhpExtensionsCard({
         <Card
             label="PHP Runtime & Extensions"
             action={
-                <div className="flex items-center gap-1.5 font-mono text-[11px] text-soft">
-                    <span className="rounded bg-brand/10 px-1.5 py-0.5 font-medium text-brand">
-                        PHP {phpVersion}
-                    </span>
-                    <span className="rounded bg-line/60 px-1.5 py-0.5 text-soft">
-                        {serverVariation}
-                    </span>
+                <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                    <div className="relative inline-flex items-center">
+                        <select
+                            value={phpVersion}
+                            disabled={updatingRuntime}
+                            onChange={(e) =>
+                                handleUpdateRuntime({
+                                    phpVersion: e.target.value,
+                                })
+                            }
+                            className="cursor-pointer appearance-none rounded-md bg-brand/10 py-0.5 pr-4 pl-1.5 font-medium text-brand hover:bg-brand/15 focus:ring-1 focus:ring-brand/30 focus:outline-hidden disabled:opacity-50"
+                            title="Change PHP Version"
+                        >
+                            <option value="8.5">PHP 8.5 (Latest)</option>
+                            <option value="8.4">PHP 8.4</option>
+                            <option value="8.3">PHP 8.3</option>
+                            <option value="8.2">PHP 8.2</option>
+                            <option value="8.1">PHP 8.1</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-1 size-2.5 text-brand" />
+                    </div>
+
+                    <div className="relative inline-flex items-center">
+                        <select
+                            value={serverVariation}
+                            disabled={updatingRuntime}
+                            onChange={(e) =>
+                                handleUpdateRuntime({
+                                    serverVariation: e.target.value,
+                                })
+                            }
+                            className="cursor-pointer appearance-none rounded-md bg-line/60 py-0.5 pr-4 pl-1.5 text-soft hover:bg-line/80 focus:ring-1 focus:ring-brand/30 focus:outline-hidden disabled:opacity-50"
+                            title="Change Server Variation"
+                        >
+                            <option value="fpm-nginx">fpm-nginx</option>
+                            <option value="frankenphp">frankenphp</option>
+                            <option value="fpm-apache">fpm-apache</option>
+                            <option value="swoole">swoole</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-1 size-2.5 text-soft" />
+                    </div>
                 </div>
             }
         >

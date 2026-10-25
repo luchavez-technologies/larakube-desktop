@@ -457,6 +457,7 @@ export type ProjectEnvironment = {
     plex?: string[];
     managed?: string[];
     components?: string[];
+    features?: string[];
     replicas?: Record<string, number>;
     autoscale?: Record<string, { min: number; max: number; cpu: number }>;
     resources?: Record<
@@ -600,6 +601,7 @@ export type Project = {
     phpVersion?: string | null;
     serverVariation?: string | null;
     additionalExtensions?: string[];
+    features?: string[];
     git?: {
         remote: string | null;
         platform: string;

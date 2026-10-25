@@ -1360,3 +1360,62 @@ test('projects.extensions.remove updates .larakube.json and Dockerfile.php', fun
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('projects.runtime updates .larakube.json and Dockerfile.php', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'phpVersion' => '8.5',
+        'serverVariation' => 'fpm-nginx',
+    ]));
+
+    File::put("{$sandbox['app']}/Dockerfile.php", "FROM serversideup/php:8.5-fpm-nginx-alpine AS base\n");
+
+    $this->post(route('projects.runtime', $project), [
+        'phpVersion' => '8.4',
+        'serverVariation' => 'frankenphp',
+    ])->assertRedirect();
+
+    $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($config['phpVersion'])->toBe('8.4')
+        ->and($config['serverVariation'])->toBe('frankenphp');
+
+    $dockerfile = File::get("{$sandbox['app']}/Dockerfile.php");
+    expect($dockerfile)->toContain('serversideup/php:8.4-frankenphp-alpine');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.features.add and projects.features.remove update .larakube.json', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create([
+        'path' => $sandbox['app'],
+    ]);
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'features' => ['queues'],
+    ]));
+
+    $this->post(route('projects.features.add', $project), [
+        'feature' => 'horizon',
+    ])->assertRedirect();
+
+    $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($config['features'])->toBe(['queues', 'horizon']);
+
+    $this->post(route('projects.features.remove', $project), [
+        'feature' => 'queues',
+    ])->assertRedirect();
+
+    $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($config['features'])->toBe(['horizon']);
+
+    File::deleteDirectory($sandbox['home']);
+});

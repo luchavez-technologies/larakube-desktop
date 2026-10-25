@@ -1456,6 +1456,100 @@ class ProjectController extends Controller
         return back();
     }
 
+    public function updateRuntime(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'phpVersion' => ['nullable', 'string', 'in:8.2,8.3,8.4,8.5,8.1,8.0,7.4'],
+            'serverVariation' => ['nullable', 'string', 'in:fpm-nginx,frankenphp,fpm-apache,swoole'],
+        ]);
+
+        $hostPath = $this->hostPath($project->path);
+        $configFile = "{$hostPath}/.larakube.json";
+        $dockerfilePath = "{$hostPath}/Dockerfile.php";
+
+        $newPhp = isset($validated['phpVersion']) && is_string($validated['phpVersion']) ? $validated['phpVersion'] : null;
+        $newServer = isset($validated['serverVariation']) && is_string($validated['serverVariation']) ? $validated['serverVariation'] : null;
+
+        if (file_exists($configFile)) {
+            $config = json_decode((string) file_get_contents($configFile), true);
+            if (is_array($config)) {
+                if ($newPhp !== null) {
+                    $config['phpVersion'] = $newPhp;
+                }
+                if ($newServer !== null) {
+                    $config['serverVariation'] = $newServer;
+                }
+                file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+            }
+        }
+
+        if (file_exists($dockerfilePath) && ($newPhp !== null || $newServer !== null)) {
+            $dockerfile = (string) file_get_contents($dockerfilePath);
+            $pattern = '/serversideup\/php:([0-9]+\.[0-9]+)-([a-z0-9_-]+)-(alpine|debian)/';
+            if (preg_match($pattern, $dockerfile, $m)) {
+                $targetPhp = $newPhp ?? $m[1];
+                $targetServer = $newServer ?? $m[2];
+                $targetOs = $m[3];
+                $dockerfile = (string) preg_replace($pattern, "serversideup/php:{$targetPhp}-{$targetServer}-{$targetOs}", $dockerfile);
+                file_put_contents($dockerfilePath, $dockerfile);
+            }
+        }
+
+        $this->inspector->inspect($project->path);
+
+        return back();
+    }
+
+    public function addFeature(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'feature' => ['required', 'string', 'in:queues,horizon,reverb,scheduler,ssr,octane,ai,mcp,boost,scout,meet'],
+        ]);
+
+        $feature = (string) $validated['feature'];
+        $hostPath = $this->hostPath($project->path);
+        $configFile = "{$hostPath}/.larakube.json";
+
+        if (file_exists($configFile)) {
+            $config = json_decode((string) file_get_contents($configFile), true);
+            if (is_array($config)) {
+                $features = is_array($config['features'] ?? null) ? $config['features'] : [];
+                if (! in_array($feature, $features, true)) {
+                    $features[] = $feature;
+                    $config['features'] = array_values($features);
+                    file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+                }
+            }
+        }
+
+        $this->inspector->inspect($project->path);
+
+        return back();
+    }
+
+    public function removeFeature(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'feature' => ['required', 'string'],
+        ]);
+
+        $feature = (string) $validated['feature'];
+        $hostPath = $this->hostPath($project->path);
+        $configFile = "{$hostPath}/.larakube.json";
+
+        if (file_exists($configFile)) {
+            $config = json_decode((string) file_get_contents($configFile), true);
+            if (is_array($config) && is_array($config['features'] ?? null)) {
+                $config['features'] = array_values(array_diff($config['features'], [$feature]));
+                file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+            }
+        }
+
+        $this->inspector->inspect($project->path);
+
+        return back();
+    }
+
     /**
      * Whether $path is under the user's home folder or valid user workspace directory.
      * $allowHome also accepts the home folder itself: fine to create an app in, not to add as a project.

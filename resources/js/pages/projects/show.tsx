@@ -46,6 +46,7 @@ import BackingServicesCard from '@/components/backing-services-card';
 import LocalDevCompanionsCard from '@/components/local-dev-companions-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import WorkloadsPodsCard from '@/components/workloads-pods-card';
+import ProjectFeaturesCard from '@/components/project-features-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
 import ProjectTerminalCard, {
     type ProjectRun,
@@ -492,6 +493,13 @@ export default function ShowProject({
                                     )}
 
                                     {project.initialized && (
+                                        <ProjectFeaturesCard
+                                            project={project}
+                                            currentEnv={activeEnvConfig}
+                                        />
+                                    )}
+
+                                    {project.initialized && (
                                         <EnvironmentBackingServicesCard
                                             key={activeEnv}
                                             project={project}
@@ -592,6 +600,11 @@ export default function ShowProject({
                                         project={project}
                                         activeEnv={activeEnv}
                                         activeEnvConfig={activeEnvConfig}
+                                    />
+
+                                    <ProjectFeaturesCard
+                                        project={project}
+                                        currentEnv={activeEnvConfig}
                                     />
 
                                     <EnvironmentBackingServicesCard

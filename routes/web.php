@@ -174,6 +174,9 @@ Route::post('/projects/{project}/down', [ProjectController::class, 'down'])->nam
 Route::post('/projects/{project}/start', [ProjectController::class, 'start'])->name('projects.start');
 Route::post('/projects/{project}/stop', [ProjectController::class, 'stop'])->name('projects.stop');
 Route::post('/projects/{project}/tld', [ProjectController::class, 'tld'])->name('projects.tld');
+Route::post('/projects/{project}/runtime', [ProjectController::class, 'updateRuntime'])->name('projects.runtime');
+Route::post('/projects/{project}/features/add', [ProjectController::class, 'addFeature'])->name('projects.features.add');
+Route::post('/projects/{project}/features/remove', [ProjectController::class, 'removeFeature'])->name('projects.features.remove');
 Route::post('/projects/{project}/extensions/add', [ProjectController::class, 'addExtension'])->name('projects.extensions.add');
 Route::post('/projects/{project}/extensions/remove', [ProjectController::class, 'removeExtension'])->name('projects.extensions.remove');
 Route::post('/projects/{project}/k9s', [ProjectController::class, 'k9s'])->name('projects.k9s');
