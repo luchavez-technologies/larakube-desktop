@@ -374,15 +374,28 @@ class PlexController extends Controller
 
         $projectName = basename($project->path);
         $env = $request->input('environment');
-        $label = $env ? "Leave Plex Commons ({$env})" : 'Leave Plex Commons';
+        $services = array_values(array_filter((array) $request->input('services', [])));
+
         $arguments = $env ? ['plex:leave', (string) $env, '--force'] : ['plex:leave', '--force'];
+        foreach ($services as $service) {
+            if (is_string($service)) {
+                $arguments[] = "--service={$service}";
+            }
+        }
+
+        $servicesLabel = ! empty($services) ? ' ('.implode(', ', $services).')' : '';
+        $label = $env ? "Leave Plex Commons ({$env}){$servicesLabel}" : "Leave Plex Commons{$servicesLabel}";
 
         $run = $runner->start(
             label: $label,
             arguments: $arguments,
             kind: RunKind::PlexLeave,
             subject: "project:{$project->id}",
-            meta: array_filter(['project' => (string) $project->id, 'environment' => $env ? (string) $env : null]),
+            meta: array_filter([
+                'project' => (string) $project->id,
+                'environment' => $env ? (string) $env : null,
+                'services' => ! empty($services) ? implode(',', $services) : null,
+            ]),
             cwd: $project->path,
             targetType: 'project',
             targetName: $projectName,

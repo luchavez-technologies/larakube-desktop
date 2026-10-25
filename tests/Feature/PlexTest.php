@@ -128,6 +128,23 @@ test('project plex commands accept optional environment', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
+test('project plex leave accepts specific services', function () {
+    $sandbox = plexSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('projects.plex.leave', $project), [
+        'environment' => 'staging',
+        'services' => ['postgres', 'redis'],
+    ])->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:leave', 'staging', '--force', '--service=postgres', '--service=redis', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 // --- the dedicated /plex page ------------------------------------------
 
 function plexPageFakes(): array

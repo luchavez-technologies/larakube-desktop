@@ -1477,9 +1477,123 @@ function EnvironmentBackingServicesCard({
     services?: BackingServices | null;
 }) {
     const hasPlex = services?.commons ?? (currentEnv.plex?.length ?? 0) > 0;
+    const plexServices = currentEnv.plex ?? [];
+    const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+    const [leaving, setLeaving] = useState(false);
+    const [selectedServices, setSelectedServices] = useState<string[]>([]);
     const [revealed, setRevealed] = useState<BackingServices | null>(null);
     const [revealing, setRevealing] = useState(false);
     const shown = revealed ?? services;
+
+    const commonsServicesList = useMemo(() => {
+        const active: { id: string; label: string; desc: string }[] = [];
+        const seen = new Set<string>();
+        const envPlex = currentEnv.plex ?? [];
+
+        if (shown?.services) {
+            for (const s of shown.services) {
+                if (s.mode === 'commons') {
+                    const id = (s.driver || s.name || s.kind).toLowerCase();
+                    const key = s.kind.toLowerCase();
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        const matchedPlexId =
+                            envPlex.find(
+                                (p) =>
+                                    p.toLowerCase() === id ||
+                                    p.toLowerCase() === key,
+                            ) || id;
+                        active.push({
+                            id: matchedPlexId,
+                            label: s.label || s.kind,
+                            desc: s.name ? `${s.name} (${s.kind})` : s.kind,
+                        });
+                    }
+                }
+            }
+        }
+
+        if (active.length === 0 && envPlex.length > 0) {
+            for (const item of envPlex) {
+                const lower = item.toLowerCase();
+                let label = item;
+                let desc = 'Shared backing service';
+                if (
+                    [
+                        'postgres',
+                        'postgresql',
+                        'mysql',
+                        'mariadb',
+                        'db',
+                        'database',
+                    ].includes(lower)
+                ) {
+                    label = 'Database';
+                    desc = `${item} (database & tenant user)`;
+                } else if (['redis', 'cache'].includes(lower)) {
+                    label = 'Cache & Queues';
+                    desc = `${item} (shared cache instance)`;
+                } else if (
+                    ['seaweedfs', 'minio', 's3', 'storage'].includes(lower)
+                ) {
+                    label = 'Object Storage';
+                    desc = `${item} (shared S3 bucket)`;
+                } else if (['meilisearch', 'search'].includes(lower)) {
+                    label = 'Search';
+                    desc = `${item} (search index)`;
+                }
+                active.push({ id: item, label, desc });
+            }
+        }
+
+        return active;
+    }, [currentEnv.plex, shown?.services]);
+
+    const openLeaveModal = () => {
+        if (commonsServicesList.length > 0) {
+            setSelectedServices(commonsServicesList.map((s) => s.id));
+        } else if (plexServices.length > 0) {
+            setSelectedServices([...plexServices]);
+        } else {
+            setSelectedServices(['all']);
+        }
+        setConfirmLeaveOpen(true);
+    };
+
+    const toggleService = (id: string) => {
+        setSelectedServices((prev) =>
+            prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedServices.length === commonsServicesList.length) {
+            setSelectedServices([]);
+        } else {
+            setSelectedServices(commonsServicesList.map((s) => s.id));
+        }
+    };
+
+    const handleLeaveCommons = () => {
+        if (selectedServices.length === 0 || leaving) return;
+
+        setLeaving(true);
+        router.post(
+            leavePlex(project.id).url,
+            {
+                environment: currentEnv.name,
+                services: selectedServices,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => {
+                    setLeaving(false);
+                    setConfirmLeaveOpen(false);
+                },
+            },
+        );
+    };
 
     function reveal() {
         setRevealing(true);
@@ -1553,20 +1667,17 @@ function EnvironmentBackingServicesCard({
 
                         <div className="shrink-0">
                             {hasPlex ? (
-                                <Link
-                                    href={leavePlex(project.id).url}
-                                    method="post"
-                                    data={{ environment: currentEnv.name }}
-                                    as="button"
-                                    className={cn(
-                                        buttonClass('danger', 'sm'),
-                                        'h-7 px-2.5 text-xs',
-                                    )}
+                                <Button
+                                    type="button"
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={openLeaveModal}
+                                    className="h-7 gap-1.5 px-2.5 text-xs"
                                     title={`Disconnect ${currentEnv.name} from Plex Commons`}
                                 >
                                     <Unplug className="size-3.5" />
                                     <span>Disconnect Commons</span>
-                                </Link>
+                                </Button>
                             ) : (
                                 <Link
                                     href={joinPlex(project.id).url}
@@ -1585,6 +1696,142 @@ function EnvironmentBackingServicesCard({
                             )}
                         </div>
                     </div>
+
+                    {/* Confirmation Modal for Disconnect Commons */}
+                    {confirmLeaveOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                            <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                                <div className="flex items-start gap-3.5">
+                                    <div className="bg-danger/10 text-danger ring-danger/20 flex size-10 shrink-0 items-center justify-center rounded-xl ring-1">
+                                        <Unplug className="size-5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-base font-semibold text-ink">
+                                            Disconnect from Plex Commons
+                                        </h3>
+                                        <p className="mt-1 text-xs leading-relaxed text-soft">
+                                            Disconnecting{' '}
+                                            <span className="font-semibold text-ink">
+                                                {currentEnv.name}
+                                            </span>{' '}
+                                            restores standalone self-hosted
+                                            manifests in your project.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {commonsServicesList.length > 1 && (
+                                    <div className="mt-4">
+                                        <div className="flex items-center justify-between pb-1.5">
+                                            <span className="text-xs font-medium text-ink">
+                                                Select service(s) to disconnect:
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={toggleSelectAll}
+                                                className="text-[11px] font-medium text-brand hover:underline"
+                                            >
+                                                {selectedServices.length ===
+                                                commonsServicesList.length
+                                                    ? 'Deselect all'
+                                                    : 'Select all'}
+                                            </button>
+                                        </div>
+                                        <div className="space-y-2 rounded-xl border border-line bg-paper/50 p-2.5">
+                                            {commonsServicesList.map((svc) => {
+                                                const checked =
+                                                    selectedServices.includes(
+                                                        svc.id,
+                                                    );
+                                                return (
+                                                    <label
+                                                        key={svc.id}
+                                                        className={cn(
+                                                            'flex cursor-pointer items-center justify-between rounded-lg p-2 transition-colors',
+                                                            checked
+                                                                ? 'bg-surface shadow-2xs ring-1 ring-line'
+                                                                : 'hover:bg-paper',
+                                                        )}
+                                                    >
+                                                        <div className="min-w-0 flex-1 pr-3">
+                                                            <div className="text-xs font-medium text-ink">
+                                                                {svc.label}
+                                                            </div>
+                                                            <div className="text-[11px] text-soft">
+                                                                {svc.desc}
+                                                            </div>
+                                                        </div>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() =>
+                                                                toggleService(
+                                                                    svc.id,
+                                                                )
+                                                            }
+                                                            className="size-4 rounded border-line text-brand focus:ring-brand/30"
+                                                        />
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-4 rounded-xl border border-warn/20 bg-warn-tint/50 p-3 text-[11px] leading-relaxed text-soft">
+                                    <span className="font-semibold text-ink">
+                                        Note on resources:
+                                    </span>{' '}
+                                    Standalone backing services run as dedicated
+                                    pods inside your cluster, requiring
+                                    additional CPU and RAM.
+                                </div>
+
+                                <div className="mt-6 flex items-center justify-end gap-2.5">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={leaving}
+                                        onClick={() =>
+                                            setConfirmLeaveOpen(false)
+                                        }
+                                        className="gap-1.5 text-xs"
+                                    >
+                                        <XCircle className="size-3.5" />
+                                        <span>Cancel</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="danger"
+                                        size="sm"
+                                        disabled={
+                                            leaving ||
+                                            selectedServices.length === 0
+                                        }
+                                        onClick={handleLeaveCommons}
+                                        className="gap-1.5 text-xs"
+                                    >
+                                        <Unplug
+                                            className={cn(
+                                                'size-3.5',
+                                                leaving && 'animate-spin',
+                                            )}
+                                        />
+                                        <span>
+                                            {leaving
+                                                ? 'Disconnecting…'
+                                                : selectedServices.length <
+                                                        commonsServicesList.length &&
+                                                    selectedServices.length > 0
+                                                  ? `Disconnect (${selectedServices.length})`
+                                                  : 'Disconnect Commons'}
+                                        </span>
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </>
             }
         />
