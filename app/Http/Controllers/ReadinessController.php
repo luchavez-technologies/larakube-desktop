@@ -18,14 +18,23 @@ class ReadinessController extends Controller
 {
     public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl, TerminalIntegration $terminal): Response
     {
+        $usage = $settings->get()['usage'];
+
         return Inertia::render('readiness', [
             'windows' => $wsl->isWindows(),
-            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
+            // wsl.exe itself (even a read-only `--status` probe) triggers
+            // Windows's own native "WSL is not installed, press any key to
+            // install" prompt when the feature isn't present at all —
+            // confirmed live (2026-10-26) on a clean VM. Only probe for
+            // usage === 'apps' (local k3s development, the one thing that
+            // still needs WSL); a "tools"-only user should never see this
+            // native prompt just from opening Setup.
+            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $usage === 'apps' ? $wsl->check() : null),
             'catalog' => $readiness->catalog(),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
             'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,
             'cliChannel' => $installer->channel(),
-            'usage' => $settings->get()['usage'],
+            'usage' => $usage,
             'localCluster' => Inertia::defer(fn (): array => $localCluster->detect()),
             'cliDownloadUrl' => $installer->downloadUrl(),
             'terminalConfigured' => $terminal->isConfigured(),

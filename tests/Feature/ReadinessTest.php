@@ -1,7 +1,9 @@
 <?php
 
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -175,6 +177,42 @@ test('only a Windows computer is asked about WSL', function () {
         ->has('terminalConfigured')
         ->has('shellProfile')
         ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
+});
+
+test('a "tools"-only Windows user never triggers wsl.exe at all, not even a --status probe', function () {
+    // Confirmed live (2026-10-26): wsl.exe --status alone pops Windows's own
+    // native "WSL is not installed, press any key to install" prompt when
+    // the feature isn't present — so for usage === 'tools' the deferred
+    // prop must resolve to null WITHOUT ever invoking wsl.exe, not just
+    // without rendering the in-app WslCheck wizard.
+    readinessFakeBinDirectory(['larakube']);
+    app(GlobalSettings::class)->update(['usage' => 'tools']);
+    app()->instance(Wsl::class, new Wsl(windows: true));
+
+    Process::fake(['*' => Process::result(output: '')]);
+
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('windows', true)
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
+
+    Process::assertNotRan(fn ($process) => in_array('wsl.exe', (array) $process->command, true));
+});
+
+test('an "apps" Windows user does get checked for WSL, since local k3s development still needs it', function () {
+    readinessFakeBinDirectory(['larakube']);
+    app(GlobalSettings::class)->update(['usage' => 'apps']);
+    app()->instance(Wsl::class, new Wsl(windows: true));
+
+    Process::fake([
+        '*--status*' => Process::result(output: "Default Version: 2\n"),
+        '*' => Process::result(exitCode: 1),
+    ]);
+
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('windows', true)
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->has('wsl')));
+
+    Process::assertRan(fn ($process) => in_array('wsl.exe', (array) $process->command, true));
 });
 
 test('catalog includes gh and tea tools as local-only developer tools', function () {

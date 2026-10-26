@@ -19,7 +19,14 @@ class OnboardingController extends Controller
 
         return Inertia::render('onboarding/index', [
             'windows' => $wsl->isWindows(),
-            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
+            // wsl.exe itself (even a read-only `--status` probe) triggers
+            // Windows's own native "WSL is not installed, press any key to
+            // install" prompt when the feature isn't present at all —
+            // confirmed live (2026-10-26) on a clean VM. Only probe for
+            // usage === 'apps' (local k3s development, the one thing that
+            // still needs WSL); a "tools"-only user should never see this
+            // native prompt just from opening the app.
+            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $current['usage'] === 'apps' ? $wsl->check() : null),
             'usage' => $current['usage'],
             'intendedProviders' => $current['intendedProviders'],
             'cloudProviders' => GlobalSettings::CLOUD_PROVIDERS,

@@ -77,7 +77,18 @@ export default function UsageChoice({
                                     { usage: option.value },
                                     {
                                         preserveScroll: true,
-                                        only: ['usage', 'hideProjects'],
+                                        // 'wsl' is a deferred prop gated on
+                                        // usage === 'apps' server-side (see
+                                        // OnboardingController/ReadinessController)
+                                        // specifically to avoid probing
+                                        // wsl.exe — and the native install
+                                        // prompt that triggers — for a
+                                        // "tools"-only user. Without
+                                        // re-requesting it here, switching
+                                        // to "apps" would leave it stuck at
+                                        // whatever it resolved to before a
+                                        // persona was chosen.
+                                        only: ['usage', 'hideProjects', 'wsl'],
                                     },
                                 )
                             }

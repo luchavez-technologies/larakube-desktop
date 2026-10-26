@@ -2,6 +2,7 @@
 
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Inertia\Testing\AssertableInertia;
@@ -47,6 +48,31 @@ test('the wizard shows the current usage, provider choice, and a tool catalog fi
             ->where('catalog', fn ($catalog): bool => collect($catalog)->pluck('slug')->contains('aws') === false
                 && collect($catalog)->pluck('slug')->contains('gcloud') === false
                 && collect($catalog)->pluck('slug')->contains('larakube')));
+});
+
+test('onboarding never probes wsl.exe before a persona is chosen, or for a "tools"-only persona', function () {
+    // Confirmed live (2026-10-26): wsl.exe --status alone pops Windows's own
+    // native "WSL is not installed, press any key to install" prompt when
+    // the feature isn't present — so the deferred wsl prop must resolve to
+    // null WITHOUT ever invoking wsl.exe, both before usage is chosen
+    // (null) and when it's 'tools', not just skip rendering WslCheck.
+    onboardingIsolatedHome();
+    onboardingFakeBinDirectory();
+    app()->instance(Wsl::class, new Wsl(windows: true));
+    Process::fake(['*' => Process::result(output: '')]);
+
+    $this->get(route('onboarding'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('windows', true)
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
+
+    Process::assertNotRan(fn ($process) => in_array('wsl.exe', (array) $process->command, true));
+
+    app(GlobalSettings::class)->update(['usage' => 'tools']);
+
+    $this->get(route('onboarding'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload->where('wsl', null)));
+
+    Process::assertNotRan(fn ($process) => in_array('wsl.exe', (array) $process->command, true));
 });
 
 test('an empty or missing provider choice shows every tool, not none', function () {

@@ -49,7 +49,13 @@ class SettingsController extends Controller
                 'label' => $ed['label'],
                 'category' => $ed['category'] === 'agent' ? 'agent' : 'editor',
             ], array_keys(EditorLauncher::EDITORS), array_values(EditorLauncher::EDITORS)),
-            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() ? $wsl->check() : null),
+            // wsl.exe itself (even a read-only `--status` probe) triggers
+            // Windows's own native "WSL is not installed, press any key to
+            // install" prompt when the feature isn't present at all —
+            // confirmed live (2026-10-26) on a clean VM. Only probe for
+            // usage === 'apps' (local k3s development, the one thing that
+            // still needs WSL).
+            'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $settings->get()['usage'] === 'apps' ? $wsl->check() : null),
             'serverNames' => Inertia::defer(function () use ($catalog): ?array {
                 $stacks = $catalog->all();
 
