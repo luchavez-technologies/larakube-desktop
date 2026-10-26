@@ -64,6 +64,7 @@ enum RunKind: string
     case DeployApp = 'deploy-app';
     case UpProject = 'up-project';
     case HealProject = 'heal-project';
+    case ReloadProject = 'reload-project';
     case DownProject = 'down-project';
     case StartProject = 'start-project';
     case StopProject = 'stop-project';

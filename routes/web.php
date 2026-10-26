@@ -173,6 +173,7 @@ Route::post('/projects/{project}/heal', [ProjectController::class, 'heal'])->nam
 Route::post('/projects/{project}/down', [ProjectController::class, 'down'])->name('projects.down');
 Route::post('/projects/{project}/start', [ProjectController::class, 'start'])->name('projects.start');
 Route::post('/projects/{project}/stop', [ProjectController::class, 'stop'])->name('projects.stop');
+Route::post('/projects/{project}/reload', [ProjectController::class, 'reload'])->name('projects.reload');
 Route::post('/projects/{project}/tld', [ProjectController::class, 'tld'])->name('projects.tld');
 Route::post('/projects/{project}/runtime', [ProjectController::class, 'updateRuntime'])->name('projects.runtime');
 Route::post('/projects/{project}/features/add', [ProjectController::class, 'addFeature'])->name('projects.features.add');

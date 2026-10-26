@@ -1048,6 +1048,14 @@ class ProjectController extends Controller
         return $this->run($runner, $project, RunKind::StopProject, "Stop {$this->name($project)} ({$environment})", $args, $environment);
     }
 
+    public function reload(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $environment = (string) $request->input('environment', 'local');
+        $args = ['reload', "--environment={$environment}"];
+
+        return $this->run($runner, $project, RunKind::ReloadProject, "Reload workers for {$this->name($project)} ({$environment})", $args, $environment);
+    }
+
     /**
      * Opens a new terminal window running k9s scoped to this project's
      * environment context and namespace.
@@ -1711,7 +1719,7 @@ class ProjectController extends Controller
             return strtolower(trim($matches[1]));
         }
 
-        if (in_array($run->kind, [RunKind::UpProject, RunKind::HealProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
+        if (in_array($run->kind, [RunKind::UpProject, RunKind::HealProject, RunKind::ReloadProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
             return 'local';
         }
 

@@ -90,6 +90,7 @@ export default function ProjectFeaturesCard({
 
     const [submitting, setSubmitting] = useState(false);
     const [rebuilding, setRebuilding] = useState(false);
+    const [reloading, setReloading] = useState(false);
     const [featureToAdd, setFeatureToAdd] = useState<FeatureDefinition | null>(
         null,
     );
@@ -226,6 +227,11 @@ export default function ProjectFeaturesCard({
         );
     };
 
+    const hasReloadableFeatures =
+        activeFeatureIds.some((id) =>
+            ['horizon', 'queues', 'octane'].includes(id),
+        ) || project.serverVariation === 'frankenphp';
+
     const handleRebuild = () => {
         setRebuilding(true);
         router.post(
@@ -235,6 +241,19 @@ export default function ProjectFeaturesCard({
                 preserveScroll: true,
                 preserveState: true,
                 onFinish: () => setRebuilding(false),
+            },
+        );
+    };
+
+    const handleReload = () => {
+        setReloading(true);
+        router.post(
+            `/projects/${project.id}/reload`,
+            { environment: currentEnv.name },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setReloading(false),
             },
         );
     };
@@ -411,26 +430,51 @@ export default function ProjectFeaturesCard({
                         Workload manifests are auto-healed on save. Run Rebuild
                         / Up to start or update pods in your cluster.
                     </p>
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        disabled={rebuilding}
-                        onClick={handleRebuild}
-                        className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
-                    >
-                        <RotateCw
-                            className={cn(
-                                'size-3.5 text-brand',
-                                rebuilding && 'animate-spin',
-                            )}
-                        />
-                        <span>
-                            {rebuilding
-                                ? 'Rebuilding…'
-                                : 'Rebuild / Up Project'}
-                        </span>
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {hasReloadableFeatures && (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={reloading}
+                                onClick={handleReload}
+                                className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
+                                title="Gracefully reload Horizon, queue workers, and Octane without rebuilding images (larakube reload)"
+                            >
+                                <RotateCw
+                                    className={cn(
+                                        'size-3.5 text-brand',
+                                        reloading && 'animate-spin',
+                                    )}
+                                />
+                                <span>
+                                    {reloading
+                                        ? 'Reloading…'
+                                        : 'Reload Workers'}
+                                </span>
+                            </Button>
+                        )}
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={rebuilding}
+                            onClick={handleRebuild}
+                            className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
+                        >
+                            <RotateCw
+                                className={cn(
+                                    'size-3.5 text-brand',
+                                    rebuilding && 'animate-spin',
+                                )}
+                            />
+                            <span>
+                                {rebuilding
+                                    ? 'Rebuilding…'
+                                    : 'Rebuild / Up Project'}
+                            </span>
+                        </Button>
+                    </div>
                 </div>
             </div>
 

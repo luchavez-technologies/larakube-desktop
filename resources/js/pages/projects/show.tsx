@@ -79,6 +79,7 @@ import {
     init,
     k9s as launchK9s,
     link,
+    reload as reloadLifecycle,
     retry,
     start as startLifecycle,
     stop as stopLifecycle,
@@ -2854,6 +2855,51 @@ function LocalClusterCard({
                                 </Button>
                             )}
                         </Form>
+
+                        {/* Reload Workers */}
+                        {status === 'running' &&
+                            ((
+                                (project.environments?.local?.features as
+                                    | string[]
+                                    | undefined) ??
+                                project.features ??
+                                []
+                            ).some((f: string) =>
+                                ['horizon', 'queues', 'octane'].includes(f),
+                            ) ||
+                                project.serverVariation === 'frankenphp') && (
+                                <Form action={reloadLifecycle(project.id)}>
+                                    {({ processing }) => (
+                                        <>
+                                            <input
+                                                type="hidden"
+                                                name="environment"
+                                                value="local"
+                                            />
+                                            <Button
+                                                type="submit"
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={processing}
+                                                title="Gracefully restart long-running PHP workers (Horizon, queue workers, Octane) to load updated code (larakube reload)"
+                                            >
+                                                <RotateCw
+                                                    className={cn(
+                                                        'size-3.5',
+                                                        processing &&
+                                                            'animate-spin',
+                                                    )}
+                                                />
+                                                <span>
+                                                    {processing
+                                                        ? 'Reloading…'
+                                                        : 'Reload Workers'}
+                                                </span>
+                                            </Button>
+                                        </>
+                                    )}
+                                </Form>
+                            )}
 
                         {/* Start (Resume) */}
                         <Form action={startLifecycle(project.id)}>
