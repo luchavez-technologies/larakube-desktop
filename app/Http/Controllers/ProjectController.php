@@ -1532,13 +1532,9 @@ class ProjectController extends Controller
 
         $this->inspector->inspect($project->path);
 
-        if ($request->boolean('heal', true)) {
-            $env = (string) $request->input('environment', 'local');
+        $env = (string) $request->input('environment', 'local');
 
-            return $this->run($runner, $project, RunKind::HealProject, "Heal {$this->name($project)}", ['heal', '--force', '--prune'], $env);
-        }
-
-        return back();
+        return $this->run($runner, $project, RunKind::HealProject, "Add Feature {$feature} to {$this->name($project)}", ['feature:add', $feature], $env);
     }
 
     public function removeFeature(Request $request, Project $project, CliRunner $runner): RedirectResponse
@@ -1562,13 +1558,9 @@ class ProjectController extends Controller
 
         $this->inspector->inspect($project->path);
 
-        if ($request->boolean('heal', true)) {
-            $env = (string) $request->input('environment', 'local');
+        $env = (string) $request->input('environment', 'local');
 
-            return $this->run($runner, $project, RunKind::HealProject, "Heal {$this->name($project)}", ['heal', '--force', '--prune'], $env);
-        }
-
-        return back();
+        return $this->run($runner, $project, RunKind::HealProject, "Remove Feature {$feature} from {$this->name($project)}", ['feature:remove', $feature], $env);
     }
 
     /**

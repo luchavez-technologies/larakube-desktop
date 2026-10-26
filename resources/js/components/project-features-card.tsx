@@ -123,11 +123,11 @@ export default function ProjectFeaturesCard({
         return true;
     });
 
-    const isPodRunning = (featureId: string): boolean => {
-        return pods.some((p) => {
+    const getFeaturePodInfo = (featureId: string) => {
+        const pod = pods.find((p) => {
             const name = p.name.toLowerCase();
             const component = p.component.toLowerCase();
-            const isMatch =
+            return (
                 component === featureId ||
                 (featureId === 'horizon' && name.includes('horizon')) ||
                 (featureId === 'queues' &&
@@ -142,15 +142,46 @@ export default function ProjectFeaturesCard({
                         component === 'ssr')) ||
                 (featureId === 'octane' &&
                     (name.includes('web') || component === 'web')) ||
-                name.includes(featureId);
-
-            const isRunning =
-                p.statusTone === 'ok' ||
-                p.phase?.toLowerCase() === 'running' ||
-                p.statusText?.toLowerCase() === 'running';
-
-            return isMatch && isRunning;
+                name.includes(featureId)
+            );
         });
+
+        if (!pod) {
+            return {
+                state: 'configured' as const,
+                label: '○ Configured (Needs Up)',
+            };
+        }
+
+        const isRunning =
+            pod.statusTone === 'ok' &&
+            (pod.statusText?.toLowerCase() === 'running' ||
+                pod.phase?.toLowerCase() === 'running');
+
+        if (isRunning) {
+            return { state: 'running' as const, label: '● Running', pod };
+        }
+
+        const isFailing =
+            pod.statusTone === 'bad' ||
+            pod.statusTone === 'warn' ||
+            pod.statusText?.toLowerCase().includes('crash') ||
+            pod.statusText?.toLowerCase().includes('backoff') ||
+            pod.statusText?.toLowerCase().includes('error');
+
+        if (isFailing) {
+            return {
+                state: 'failing' as const,
+                label: `● ${pod.statusText || 'Failing'}`,
+                pod,
+            };
+        }
+
+        return {
+            state: 'pending' as const,
+            label: `○ ${pod.statusText || 'Pending'}`,
+            pod,
+        };
     };
 
     const handleConfirmAdd = () => {
@@ -239,7 +270,7 @@ export default function ProjectFeaturesCard({
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                             {activeFeatures.map((feature) => {
                                 const Icon = feature.icon;
-                                const running = isPodRunning(feature.id);
+                                const podStatus = getFeaturePodInfo(feature.id);
                                 return (
                                     <div
                                         key={feature.id}
@@ -254,14 +285,24 @@ export default function ProjectFeaturesCard({
                                                     <span className="text-xs font-semibold text-ink">
                                                         {feature.label}
                                                     </span>
-                                                    {running ? (
+                                                    {podStatus.state ===
+                                                        'running' && (
                                                         <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
-                                                            ● Running
+                                                            {podStatus.label}
                                                         </span>
-                                                    ) : (
+                                                    )}
+                                                    {podStatus.state ===
+                                                        'failing' && (
+                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 font-mono text-[10px] font-medium text-red-600 dark:text-red-400">
+                                                            {podStatus.label}
+                                                        </span>
+                                                    )}
+                                                    {(podStatus.state ===
+                                                        'configured' ||
+                                                        podStatus.state ===
+                                                            'pending') && (
                                                         <span className="py-0.2 inline-flex items-center gap-1 rounded bg-line/60 px-1.5 font-mono text-[10px] text-soft">
-                                                            ○ Configured (Needs
-                                                            Up)
+                                                            {podStatus.label}
                                                         </span>
                                                     )}
                                                 </div>
@@ -286,7 +327,7 @@ export default function ProjectFeaturesCard({
                             })}
 
                             {customFeatureIds.map((id) => {
-                                const running = isPodRunning(id);
+                                const podStatus = getFeaturePodInfo(id);
                                 return (
                                     <div
                                         key={id}
@@ -296,13 +337,22 @@ export default function ProjectFeaturesCard({
                                             <span className="text-xs font-semibold text-ink">
                                                 {id}
                                             </span>
-                                            {running ? (
+                                            {podStatus.state === 'running' && (
                                                 <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
-                                                    ● Running
+                                                    {podStatus.label}
                                                 </span>
-                                            ) : (
+                                            )}
+                                            {podStatus.state === 'failing' && (
+                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 font-mono text-[10px] font-medium text-red-600 dark:text-red-400">
+                                                    {podStatus.label}
+                                                </span>
+                                            )}
+                                            {(podStatus.state ===
+                                                'configured' ||
+                                                podStatus.state ===
+                                                    'pending') && (
                                                 <span className="py-0.2 inline-flex items-center gap-1 rounded bg-line/60 px-1.5 font-mono text-[10px] text-soft">
-                                                    ○ Configured (Needs Up)
+                                                    {podStatus.label}
                                                 </span>
                                             )}
                                         </div>
