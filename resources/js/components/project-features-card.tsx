@@ -287,13 +287,13 @@ export default function ProjectFeaturesCard({
                                                     </span>
                                                     {podStatus.state ===
                                                         'running' && (
-                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
+                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-ok-tint px-1.5 font-mono text-[10px] font-medium text-ok dark:bg-emerald-500/15 dark:text-emerald-400">
                                                             {podStatus.label}
                                                         </span>
                                                     )}
                                                     {podStatus.state ===
                                                         'failing' && (
-                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 font-mono text-[10px] font-medium text-red-600 dark:text-red-400">
+                                                        <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
                                                             {podStatus.label}
                                                         </span>
                                                     )}
@@ -338,12 +338,12 @@ export default function ProjectFeaturesCard({
                                                 {id}
                                             </span>
                                             {podStatus.state === 'running' && (
-                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
+                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-ok-tint px-1.5 font-mono text-[10px] font-medium text-ok dark:bg-emerald-500/15 dark:text-emerald-400">
                                                     {podStatus.label}
                                                 </span>
                                             )}
                                             {podStatus.state === 'failing' && (
-                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 font-mono text-[10px] font-medium text-red-600 dark:text-red-400">
+                                                <span className="py-0.2 inline-flex items-center gap-1 rounded bg-accent-tint px-1.5 font-mono text-[10px] font-medium text-accent">
                                                     {podStatus.label}
                                                 </span>
                                             )}
