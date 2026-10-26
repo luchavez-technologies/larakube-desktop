@@ -2,7 +2,6 @@
 
 namespace App\Services\LaraKube;
 
-use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
@@ -36,7 +35,7 @@ class FrameworkCatalog
         $isolated = $this->locator->isolate([$cli, 'new:frameworks', '--json', '--no-interaction']);
         try {
             $result = Process::env($isolated['environment'])->timeout(30)->run($isolated['command']);
-        } catch (ProcessTimedOutException) {
+        } catch (\Throwable) {
             return null;
         }
 
