@@ -747,7 +747,15 @@ export default function OnboardingIndex({
                                         </p>
                                     )}
                                     {windows &&
+                                    usage === 'apps' &&
                                     (!wsl || wsl.state !== 'ready') ? (
+                                        // WSL is only still needed for local
+                                        // k3s development (`usage === 'apps'`)
+                                        // — cloud:create (VPS, EKS, GKE) and
+                                        // the Cluster-Tool install/remove path
+                                        // (tool:init/add/rebind/remove,
+                                        // tls:init) all run natively on
+                                        // Windows now.
                                         <WslCheck wsl={wsl} />
                                     ) : cliMissing ? (
                                         <CliMissing

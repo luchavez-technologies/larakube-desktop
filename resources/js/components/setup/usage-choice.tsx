@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Check, Code2, Wrench } from 'lucide-react';
+import ProviderLogo from '@/components/provider-logo';
 import { cn } from '@/lib/utils';
 
 const USAGES: {
@@ -8,6 +9,9 @@ const USAGES: {
     detail: string;
     icon: typeof Wrench;
     accent: string;
+    /** Slugs ProviderLogo already renders — shown so someone can see exactly what this path installs before picking it, not just read a sentence about it. */
+    installs: string[];
+    size: string;
 }[] = [
     {
         value: 'tools',
@@ -15,6 +19,8 @@ const USAGES: {
         detail: 'Create servers and set up chat, a wiki, sign-in and more for your team. Nothing runs on this computer.',
         icon: Wrench,
         accent: 'tools',
+        installs: ['kubectl', 'tofu'],
+        size: '~150MB download',
     },
     {
         value: 'apps',
@@ -22,6 +28,8 @@ const USAGES: {
         detail: 'Everything above, plus creating apps and running them on this computer to work on them.',
         icon: Code2,
         accent: 'brand',
+        installs: ['kubectl', 'tofu', 'docker', 'git'],
+        size: '~300MB+ with a container runtime',
     },
 ];
 
@@ -94,6 +102,18 @@ export default function UsageChoice({
                                 </span>
                                 <span className="mt-1 block text-xs leading-relaxed text-soft">
                                     {option.detail}
+                                </span>
+                                <span className="mt-2.5 flex items-center gap-1.5">
+                                    {option.installs.map((slug) => (
+                                        <ProviderLogo
+                                            key={slug}
+                                            slug={slug}
+                                            size="xs"
+                                        />
+                                    ))}
+                                    <span className="ml-1 text-[11px] text-faint">
+                                        {option.size}
+                                    </span>
                                 </span>
                             </span>
                             <span

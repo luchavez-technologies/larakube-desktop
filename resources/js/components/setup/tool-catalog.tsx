@@ -172,6 +172,75 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     );
 }
 
+/**
+ * Installs every installable tool in the (filtered) catalog, one after
+ * another. Deliberately fires install for EVERY entry rather than only the
+ * ones currently showing "Missing" — CatalogEntry carries no live status at
+ * this level (each row's installed/path/version is fetched independently by
+ * its own useToolStatus() call), and CliTool::install() already no-ops
+ * instantly when a tool is already present, so re-asking for an installed
+ * one costs nothing. Sequential, not parallel, so progress reads as one
+ * tool at a time finishing rather than five spawns competing at once.
+ */
+function InstallAllButton({
+    catalog,
+    channel,
+    showLocalOnly,
+}: {
+    catalog: CatalogEntry[];
+    channel: string;
+    showLocalOnly: boolean;
+}) {
+    const [running, setRunning] = useState(false);
+
+    const targets = catalog.filter(
+        (entry) => entry.installable && (showLocalOnly || !entry.localOnly),
+    );
+
+    if (targets.length === 0) {
+        return null;
+    }
+
+    const runAll = async () => {
+        setRunning(true);
+
+        for (const entry of targets) {
+            await new Promise<void>((resolve) => {
+                router.post(
+                    install(entry.slug).url,
+                    { channel },
+                    {
+                        preserveScroll: true,
+                        preserveState: true,
+                        only: ['activeRuns'],
+                        onFinish: () => resolve(),
+                    },
+                );
+            });
+        }
+
+        forgetToolStatus();
+        setRunning(false);
+    };
+
+    return (
+        <div className="mb-3 flex justify-end">
+            <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={running}
+                onClick={runAll}
+            >
+                <Download
+                    className={cn('size-3.5', running && 'animate-spin')}
+                />
+                <span>{running ? 'Installing…' : 'Install everything'}</span>
+            </Button>
+        </div>
+    );
+}
+
 /** A full "Command-line tools" list, reused by the Setup page and the onboarding wizard's install step. */
 export default function ToolCatalogList({
     catalog,
@@ -188,6 +257,11 @@ export default function ToolCatalogList({
 }) {
     return (
         <>
+            <InstallAllButton
+                catalog={catalog}
+                channel={channel}
+                showLocalOnly={showLocalOnly}
+            />
             {catalog
                 .filter((entry) => showLocalOnly || !entry.localOnly)
                 .map((entry) => (

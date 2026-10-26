@@ -105,11 +105,33 @@ class ToolLocator
         ]));
     }
 
+    /**
+     * Tools findable at a fixed native-Windows location instead of inside
+     * the larakube-ubuntu distro. kubectl/k9s/tofu/aws/gcloud are kept in
+     * sync with the CLI's (CliTool.php) own Windows installer allowlist;
+     * ssh is never installed by the CLI, but `cloud:create` shells out to
+     * the local `ssh`/`scp` binaries directly once dispatched natively (see
+     * ADR 0007's amendment), so it needs the same native-first lookup.
+     * Every other tool is still only ever found inside the larakube-ubuntu
+     * distro, per ADR 0007 point 3.
+     *
+     * @var list<string>
+     */
+    private const WINDOWS_NATIVE_TOOLS = ['kubectl', 'k9s', 'tofu', 'aws', 'gcloud', 'ssh'];
+
     public function find(string $binary): ?string
     {
         if ($this->isWindows()) {
             if ($binary === 'larakube') {
                 $native = $this->nativeWindowsLaraKubePath();
+
+                if ($native !== null) {
+                    $this->failure = null;
+
+                    return $native;
+                }
+            } elseif (in_array($binary, self::WINDOWS_NATIVE_TOOLS, true)) {
+                $native = $this->nativeWindowsToolPath($binary);
 
                 if ($native !== null) {
                     $this->failure = null;
@@ -179,6 +201,69 @@ class ToolLocator
         }
 
         $candidate = rtrim($profile, '\\/').'/.larakube/bin/larakube.exe';
+
+        return is_file($candidate) ? $candidate : null;
+    }
+
+    /**
+     * Resolves one of WINDOWS_NATIVE_TOOLS at its fixed native install
+     * location — `%USERPROFILE%\.larakube\bin\{tool}.exe` for kubectl/k9s/
+     * tofu, `%USERPROFILE%\google-cloud-sdk\bin\gcloud.cmd` for gcloud (the
+     * CLI installs it there, matching the Darwin/Linux tarball location),
+     * `%LOCALAPPDATA%\Programs\Amazon\AWSCLIV2\aws.exe` for aws (fixed by
+     * AWS's own per-user MSI, never binDir), and
+     * `%SystemRoot%\System32\OpenSSH\ssh.exe` for ssh — the fixed location
+     * Windows's own "OpenSSH Client" optional feature installs to; unlike
+     * the other four, the CLI never installs this one itself, it's either
+     * already present (Windows 10 1809+ ships it, but it can be uninstalled)
+     * or the user needs to add it via Windows Settings. Returns null for
+     * anything not in that list, or not found yet, so find() falls back to
+     * findInDistro() unchanged.
+     */
+    public function nativeWindowsToolPath(string $binary): ?string
+    {
+        if (! $this->isWindows() || ! in_array($binary, self::WINDOWS_NATIVE_TOOLS, true)) {
+            return null;
+        }
+
+        $filename = $binary === 'gcloud' ? 'gcloud.cmd' : "{$binary}.exe";
+
+        if ($this->directories !== null) {
+            foreach ($this->directories as $directory) {
+                $candidate = rtrim($directory, '\\/')."/{$filename}";
+                if (is_file($candidate)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        }
+
+        if ($binary === 'aws') {
+            $localAppData = rtrim((string) (getenv('LOCALAPPDATA') ?: ''), '\\/');
+            if ($localAppData === '') {
+                return null;
+            }
+            $candidate = "{$localAppData}/Programs/Amazon/AWSCLIV2/aws.exe";
+
+            return is_file($candidate) ? $candidate : null;
+        }
+
+        if ($binary === 'ssh') {
+            $sysRoot = rtrim((string) (getenv('SystemRoot') ?: 'C:\\Windows'), '\\/');
+            $candidate = "{$sysRoot}/System32/OpenSSH/ssh.exe";
+
+            return is_file($candidate) ? $candidate : null;
+        }
+
+        $profile = rtrim(self::hostProfile(true), '\\/');
+        if ($profile === '') {
+            return null;
+        }
+
+        $candidate = $binary === 'gcloud'
+            ? "{$profile}/google-cloud-sdk/bin/gcloud.cmd"
+            : "{$profile}/.larakube/bin/{$filename}";
 
         return is_file($candidate) ? $candidate : null;
     }
@@ -326,6 +411,7 @@ class ToolLocator
             'APP_PACKAGES_CACHE' => '',
             'APP_ROUTES_CACHE' => '',
             'APP_EVENTS_CACHE' => '',
+            'PATH' => $this->nativeWindowsPath(),
             ...$extraEnvironment,
         ];
 
@@ -338,6 +424,37 @@ class ToolLocator
             'environment' => $environment,
             'cwd' => $cwd !== null ? WslDistro::toWindows($cwd) : null,
         ];
+    }
+
+    /**
+     * The PATH a natively-dispatched `larakube.exe` process needs to find the
+     * tools `CliTool.php` installs directly on Windows — kubectl/k9s/tofu at
+     * `%USERPROFILE%\.larakube\bin`, gcloud's wrapper at
+     * `%USERPROFILE%\google-cloud-sdk\bin`, and aws (placed by its own
+     * per-user MSI, never binDir) at `%LOCALAPPDATA%\Programs\Amazon\AWSCLIV2`.
+     * Prepended onto whatever PATH this Electron process already has, never
+     * replacing it outright — `isolateForNativeWindows()`'s explicit
+     * `$environment` entries override the same-named inherited var (see its
+     * docblock), so leaving PATH out entirely would have silently inherited
+     * whatever Desktop's own process happens to carry; but an explicit PATH
+     * that *replaced* the inherited one would just as silently drop
+     * `System32`/PowerShell, breaking anything the dispatched process still
+     * shells out to (e.g. `ssh.exe`) outside the four CliTool locations.
+     */
+    private function nativeWindowsPath(): string
+    {
+        $profile = rtrim(self::hostProfile(true), '\\/');
+        $localAppData = rtrim((string) (getenv('LOCALAPPDATA') ?: ''), '\\/');
+
+        $dirs = array_values(array_filter([
+            $profile !== '' ? "{$profile}\\.larakube\\bin" : null,
+            $profile !== '' ? "{$profile}\\google-cloud-sdk\\bin" : null,
+            $localAppData !== '' ? "{$localAppData}\\Programs\\Amazon\\AWSCLIV2" : null,
+        ]));
+
+        $existing = (string) (getenv('PATH') ?: '');
+
+        return implode(';', $existing !== '' ? [...$dirs, $existing] : $dirs);
     }
 
     /**

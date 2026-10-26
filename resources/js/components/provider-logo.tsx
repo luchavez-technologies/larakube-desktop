@@ -12,7 +12,7 @@ import {
     SiPodman,
     SiCloudflare,
 } from '@icons-pack/react-simple-icons';
-import { Cloud, Server } from 'lucide-react';
+import { Cloud, KeyRound, Server } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -170,6 +170,13 @@ function resolveVisual(id: string): Visual {
                 icon: <SiOpentofu />,
                 containerClass:
                     'bg-[#FFDA18]/15 text-neutral-800 dark:text-neutral-100 border-[#FFDA18]/35',
+            };
+        case 'ssh':
+        case 'openssh':
+            return {
+                icon: <KeyRound />,
+                containerClass:
+                    'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300 border-neutral-500/25',
             };
         case 'larakube':
             return {

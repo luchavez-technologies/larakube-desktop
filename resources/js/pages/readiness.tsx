@@ -114,7 +114,14 @@ export default function Readiness({
                 }
             />
 
-            {windows && (!wsl || wsl.state !== 'ready') ? (
+            {windows && usage === 'apps' && (!wsl || wsl.state !== 'ready') ? (
+                // WSL is only still needed for local k3s development
+                // (`usage === 'apps'`) — cloud:create (VPS, EKS, GKE) and
+                // tool:init/tool:add/tool:rebind/tool:remove/tls:init (the
+                // Cluster-Tool install/remove path) all run natively on
+                // Windows now, so a "tools"-only user is never forced
+                // through this wizard just to create a server or install
+                // an app on it.
                 <WslCheck wsl={wsl} />
             ) : cliMissing ? (
                 <CliMissing

@@ -25,6 +25,7 @@ class ReadinessCheck
         'kubectl' => ['label' => 'kubectl', 'purpose' => 'Talks to your Kubernetes clusters.', 'required' => true, 'versionArgs' => ['version', '--client'], 'installable' => true],
         'k9s' => ['label' => 'k9s', 'purpose' => 'Terminal UI for browsing and managing Kubernetes clusters — optional, but what "Open in Terminal" uses on a server page.', 'required' => false, 'versionArgs' => ['version', '--short'], 'installable' => true],
         'tofu' => ['label' => 'OpenTofu', 'purpose' => 'Provisions new cloud servers.', 'required' => true, 'versionArgs' => ['version'], 'installable' => true],
+        'ssh' => ['label' => 'OpenSSH Client', 'purpose' => 'Connects to and configures a VPS cloud:create just provisioned.', 'required' => false, 'versionArgs' => ['-V'], 'installable' => false],
         'aws' => ['label' => 'AWS CLI', 'purpose' => 'Needed for Amazon Web Services servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
         'gcloud' => ['label' => 'Google Cloud CLI', 'purpose' => 'Needed for Google Cloud servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
         'gh' => ['label' => 'GitHub CLI', 'purpose' => 'Manages GitHub Actions CI and GHCR image registry secrets.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
