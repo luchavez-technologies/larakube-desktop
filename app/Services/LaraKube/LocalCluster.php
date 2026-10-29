@@ -179,12 +179,9 @@ class LocalCluster
                         ->run($probeIsolated['command']);
 
                     if ($probeResult->successful()) {
-                        return [
-                            'engine' => $candidateEngine,
-                            'context' => $candidateCtx,
-                            'status' => 'Ready for up',
-                            'tone' => 'ok',
-                        ];
+                        return $this->isProvisioned($kubectl, $candidateCtx)
+                            ? ['engine' => $candidateEngine, 'context' => $candidateCtx, 'status' => 'Ready for up', 'tone' => 'ok']
+                            : ['engine' => $candidateEngine, 'context' => $candidateCtx, 'status' => "{$candidateEngine} is running — LaraKube is not set up on it yet", 'tone' => 'warn'];
                     }
                 }
 
@@ -205,12 +202,18 @@ class LocalCluster
 
             $isReachable = $infoResult->successful();
 
-            return [
-                'engine' => $targetEngine,
-                'context' => $targetContext,
-                'status' => $isReachable ? 'Ready for up' : 'Offline / not reachable',
-                'tone' => $isReachable ? 'ok' : 'warn',
-            ];
+            if (! $isReachable) {
+                return [
+                    'engine' => $targetEngine,
+                    'context' => $targetContext,
+                    'status' => 'Offline / not reachable',
+                    'tone' => 'warn',
+                ];
+            }
+
+            return $this->isProvisioned($kubectl, (string) $targetContext)
+                ? ['engine' => $targetEngine, 'context' => $targetContext, 'status' => 'Ready for up', 'tone' => 'ok']
+                : ['engine' => $targetEngine, 'context' => $targetContext, 'status' => "{$targetEngine} is running — LaraKube is not set up on it yet", 'tone' => 'warn'];
         } catch (Throwable) {
             return [
                 'engine' => 'Unknown',
@@ -219,6 +222,31 @@ class LocalCluster
                 'tone' => 'muted',
             ];
         }
+    }
+
+    /**
+     * Whether `larakube setup` has actually been applied to this context, not
+     * just whether the engine itself is reachable — a bare OrbStack/Docker
+     * Desktop/Colima install answers `cluster-info` just fine on its own,
+     * with no Traefik, no LaraKube namespaces, nothing `larakube up` could
+     * deploy onto. Mirrors the CLI's own `SetupCommand::isTraefikRunning()`
+     * check (a Traefik Service in the `traefik` namespace, or anywhere,
+     * labeled `app.kubernetes.io/name=traefik`) so "ready" here means the
+     * same thing it means to `larakube setup`'s own idempotency guard.
+     */
+    private function isProvisioned(string $kubectl, string $context): bool
+    {
+        $named = $this->locator->isolate([$kubectl, 'get', 'svc', '-n', 'traefik', 'traefik', "--context={$context}", '-o', 'name']);
+        $namedResult = Process::env($named['environment'])->timeout(3)->run($named['command']);
+
+        if ($namedResult->successful() && trim($namedResult->output()) !== '') {
+            return true;
+        }
+
+        $labeled = $this->locator->isolate([$kubectl, 'get', 'svc', '-A', '-l', 'app.kubernetes.io/name=traefik', "--context={$context}", '-o', 'name']);
+        $labeledResult = Process::env($labeled['environment'])->timeout(3)->run($labeled['command']);
+
+        return $labeledResult->successful() && trim($labeledResult->output()) !== '';
     }
 
     /**

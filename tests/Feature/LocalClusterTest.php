@@ -141,6 +141,7 @@ test('detects reachable local k3s-larakube even when current context is set to a
     Process::fake([
         '*config*view*-o*json*' => Process::result(output: $configJson),
         '*cluster-info*--context=k3s-larakube*' => Process::result(output: 'Kubernetes control plane is running at https://127.0.0.1:6443'),
+        '*get*svc*-n*traefik*traefik*' => Process::result(output: 'service/traefik'),
     ]);
 
     $cluster = app(LocalCluster::class)->detect();
@@ -149,6 +150,42 @@ test('detects reachable local k3s-larakube even when current context is set to a
         ->and($cluster['context'])->toBe('k3s-larakube')
         ->and($cluster['status'])->toBe('Ready for up')
         ->and($cluster['tone'])->toBe('ok');
+
+    File::deleteDirectory($bin);
+});
+
+test('reports a warning, not ready, when a local engine is reachable but LaraKube has never been set up on it', function () {
+    // Confirmed live (2026-10-29): a bare OrbStack install answers
+    // `cluster-info` just fine on its own, with no Traefik, no LaraKube
+    // namespaces, nothing `larakube up` could deploy onto — the dashboard
+    // and readiness pages must not report it as "Ready" until `larakube
+    // setup` has actually been applied, or the Setup prompt disappears
+    // forever the moment any local k8s engine exists.
+    $bin = localClusterFakeBin();
+
+    $configJson = json_encode([
+        'current-context' => 'orbstack',
+        'contexts' => [
+            ['name' => 'orbstack', 'context' => ['cluster' => 'orbstack']],
+        ],
+        'clusters' => [
+            ['name' => 'orbstack', 'cluster' => ['server' => 'https://127.0.0.1:6443']],
+        ],
+    ]);
+
+    Process::fake([
+        '*config*view*-o*json*' => Process::result(output: $configJson),
+        '*cluster-info*--context=orbstack*' => Process::result(output: 'Kubernetes control plane is running at https://127.0.0.1:6443'),
+        '*get*svc*-n*traefik*traefik*' => Process::result(exitCode: 1, errorOutput: 'services "traefik" not found'),
+        '*get*svc*-A*-l*app.kubernetes.io/name=traefik*' => Process::result(output: ''),
+    ]);
+
+    $cluster = app(LocalCluster::class)->detect();
+
+    expect($cluster['engine'])->toBe('OrbStack')
+        ->and($cluster['context'])->toBe('orbstack')
+        ->and($cluster['status'])->toBe('OrbStack is running — LaraKube is not set up on it yet')
+        ->and($cluster['tone'])->toBe('warn');
 
     File::deleteDirectory($bin);
 });
