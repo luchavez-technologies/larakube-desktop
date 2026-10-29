@@ -616,7 +616,7 @@ class ServerController extends Controller
         }
 
         if (! $launcher->open($command)) {
-            return back()->withErrors(['terminal' => 'Could not open a terminal.']);
+            return back()->withErrors(['terminal' => $launcher->lastFailure() ?? 'Could not open a terminal.']);
         }
 
         return back();

@@ -32,7 +32,7 @@ test('on Windows, the command runs inside the bundled WSL distro, in Windows Ter
         '*wt.exe*' => Process::result(),
         '*' => Process::result(),
     ]);
-    $launcher = new TerminalLauncher(windows: true, darwin: false);
+    $launcher = new TerminalLauncher(windows: true, darwin: false, wslFeatureEnabled: true);
 
     $launcher->open('k9s --context=foo');
 
@@ -49,7 +49,7 @@ test('on Windows without Windows Terminal, it falls back to a plain console host
         '*wt.exe*' => Process::result(exitCode: 1),
         '*' => Process::result(),
     ]);
-    $launcher = new TerminalLauncher(windows: true, darwin: false);
+    $launcher = new TerminalLauncher(windows: true, darwin: false, wslFeatureEnabled: true);
 
     $launcher->open('k9s --context=foo');
 
@@ -61,6 +61,22 @@ test('on Windows without Windows Terminal, it falls back to a plain console host
         '/k',
         'wsl.exe -d larakube-ubuntu --user larakube -- k9s --context=foo',
     ]);
+});
+
+test('on Windows, "Open Terminal" never invokes wsl.exe when the WSL optional component itself is not on', function () {
+    // Confirmed live (2026-10-30): wsl.exe, with ANY subcommand or flags,
+    // pops Windows's own native "WSL is not installed, press any key to
+    // install" console prompt the instant the feature isn't present —
+    // the Servers page "Open Terminal" (SSH) button, k9s/pod-terminal
+    // buttons, and editor launchers all reach this same openWindows() path,
+    // so it must check first, like every other wsl.exe call site in the app.
+    Process::fake();
+    $launcher = new TerminalLauncher(windows: true, darwin: false, wslFeatureEnabled: false);
+
+    expect($launcher->open('ssh welcome-ec2'))->toBeFalse()
+        ->and($launcher->lastFailure())->toBe('Windows Subsystem for Linux (WSL) is not turned on.');
+
+    Process::assertNothingRan();
 });
 
 test('on Linux, the first available terminal emulator is used', function () {

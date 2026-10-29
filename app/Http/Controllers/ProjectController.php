@@ -1106,7 +1106,7 @@ class ProjectController extends Controller
         $cmd .= ' -n '.escapeshellarg($namespace);
 
         if (! $launcher->open($cmd)) {
-            return back()->withErrors(['terminal' => 'Could not open a terminal.']);
+            return back()->withErrors(['terminal' => $launcher->lastFailure() ?? 'Could not open a terminal.']);
         }
 
         return back();
@@ -1196,7 +1196,7 @@ class ProjectController extends Controller
         $cmd .= ' -- sh -c "command -v bash >/dev/null 2>&1 && exec bash || exec sh"';
 
         if (! $launcher->open($cmd)) {
-            return back()->withErrors(['terminal' => 'Could not open a terminal.']);
+            return back()->withErrors(['terminal' => $launcher->lastFailure() ?? 'Could not open a terminal.']);
         }
 
         return back();
