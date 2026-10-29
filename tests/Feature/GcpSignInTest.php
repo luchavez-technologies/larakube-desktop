@@ -10,7 +10,7 @@ use Native\Desktop\Facades\ChildProcess;
 function gcpSignInWindows(): void
 {
     putenv('SystemRoot=C:\\Windows');
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
     Process::fake(['*' => Process::result(output: "/usr/local/bin/larakube\n")]);
 }
 
@@ -68,7 +68,7 @@ test('the code is checked before it reaches the process', function () {
 
 test('projects are listed by the CLI as ids and names', function () {
     putenv('SystemRoot=C:\\Windows');
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
     Process::fake([
         '*which*' => Process::result(output: "/usr/local/bin/larakube\n"),
         '*cloud:projects*' => Process::result(output: json_encode(['success' => true, 'projects' => [['id' => 'demo-123', 'name' => 'Demo']]])),
@@ -79,7 +79,7 @@ test('projects are listed by the CLI as ids and names', function () {
 
 test('saving gcp service account credentials delegates to CLI cloud:credentials', function () {
     putenv('SystemRoot=C:\\Windows');
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
     Process::fake([
         '*which*' => Process::result(output: "/usr/local/bin/larakube\n"),
         '*' => Process::result(output: json_encode([

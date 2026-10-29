@@ -175,7 +175,7 @@ test('usage choice can be set on Windows without WSL being installed or accessib
     File::ensureDirectoryExists($tempProfile);
     $_SERVER['USERPROFILE'] = realpath($tempProfile);
 
-    $locator = new ToolLocator(windows: true);
+    $locator = new ToolLocator(windows: true, wslFeatureEnabled: true);
     app()->instance(ToolLocator::class, $locator);
     $settings = new GlobalSettings($locator);
     app()->instance(GlobalSettings::class, $settings);

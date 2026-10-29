@@ -26,12 +26,17 @@ function wslListing(string ...$lines): string
 }
 
 test('a Windows computer without WSL is offered to turn it on', function () {
+    // featureEnabled: false — the optional component itself isn't on, so
+    // check() must never even attempt wsl.exe (which would otherwise pop
+    // Windows's own native install prompt on a real machine in this state).
     Process::fake(['*' => Process::result(errorOutput: 'not recognized', exitCode: 1)]);
 
-    $result = (new Wsl(windows: true))->check();
+    $result = (new Wsl(windows: true, featureEnabled: false))->check();
 
     expect($result['state'])->toBe('missing')
         ->and($result['command'])->toBe('wsl --install --no-distribution');
+
+    Process::assertNothingRan();
 });
 
 test('a user\'s own distribution does not count as LaraKube Linux', function () {
@@ -40,7 +45,7 @@ test('a user\'s own distribution does not count as LaraKube Linux', function () 
         '*--list*' => Process::result(output: wslListing('* Ubuntu           Running   2')),
     ]);
 
-    expect((new Wsl(windows: true))->check()['state'])->toBe('no-distro');
+    expect((new Wsl(windows: true, featureEnabled: true))->check()['state'])->toBe('no-distro');
 });
 
 test('a WSL 1 distribution is asked to be converted', function () {
@@ -49,7 +54,7 @@ test('a WSL 1 distribution is asked to be converted', function () {
         '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Stopped   1')),
     ]);
 
-    $result = (new Wsl(windows: true))->check();
+    $result = (new Wsl(windows: true, featureEnabled: true))->check();
 
     expect($result['state'])->toBe('old-version')
         ->and($result['command'])->toBe('wsl --set-version larakube-ubuntu 2');
@@ -68,7 +73,7 @@ test('a stopped WSL 2 distribution counts as ready once it answers a command', f
     ]);
     Http::fake(['*.sha256' => Http::response($checksum.'  larakube-ubuntu-amd64.tar.gz')]);
 
-    $result = (new Wsl(windows: true))->check();
+    $result = (new Wsl(windows: true, featureEnabled: true))->check();
 
     expect($result)->toMatchArray(['state' => 'ready', 'distro' => 'larakube-ubuntu', 'version' => 2]);
     Process::assertRan(fn ($process) => in_array('larakube-ubuntu', (array) $process->command, true) && in_array('echo', (array) $process->command, true));
@@ -83,7 +88,7 @@ test('a distribution that will not start is reported as broken', function () {
         '*echo*' => Process::result(errorOutput: 'WSL 2 requires an update', exitCode: 1),
     ]);
 
-    expect((new Wsl(windows: true))->check()['state'])->toBe('broken');
+    expect((new Wsl(windows: true, featureEnabled: true))->check()['state'])->toBe('broken');
 });
 
 test('a running distribution is reported as ready', function () {
@@ -99,7 +104,7 @@ test('a running distribution is reported as ready', function () {
     ]);
     Http::fake(['*.sha256' => Http::response($checksum.'  larakube-ubuntu-amd64.tar.gz')]);
 
-    expect((new Wsl(windows: true))->check()['state'])->toBe('ready');
+    expect((new Wsl(windows: true, featureEnabled: true))->check()['state'])->toBe('ready');
 
     File::deleteDirectory($home);
 });
@@ -116,7 +121,7 @@ test('a distro whose recorded checksum no longer matches the latest published im
     ]);
     Http::fake(['*.sha256' => Http::response(str_repeat('b', 64).'  larakube-ubuntu-amd64.tar.gz')]);
 
-    expect((new Wsl(windows: true))->check()['state'])->toBe('stale');
+    expect((new Wsl(windows: true, featureEnabled: true))->check()['state'])->toBe('stale');
 
     File::deleteDirectory($home);
 });
@@ -134,7 +139,7 @@ test('a distro whose recorded checksum matches the latest published image is not
     ]);
     Http::fake(['*.sha256' => Http::response($checksum.'  larakube-ubuntu-amd64.tar.gz')]);
 
-    expect((new Wsl(windows: true))->check()['state'])->toBe('ready');
+    expect((new Wsl(windows: true, featureEnabled: true))->check()['state'])->toBe('ready');
 
     File::deleteDirectory($home);
 });
@@ -149,7 +154,7 @@ test('importing records the imported image\'s checksum for later staleness check
         '*' => Process::result(),
     ]);
 
-    expect((new Wsl(windows: true))->import()['ok'])->toBeTrue();
+    expect((new Wsl(windows: true, featureEnabled: true))->import()['ok'])->toBeTrue();
 
     expect(file_get_contents($home.'/LaraKube/wsl/imported.sha256'))
         ->toBe(hash('sha256', 'rootfs bytes'));
@@ -166,7 +171,7 @@ test('the image is downloaded, checked against its published checksum, and kept 
         '*' => Http::response($body),
     ]);
 
-    $result = (new Wsl(windows: true))->download();
+    $result = (new Wsl(windows: true, featureEnabled: true))->download();
 
     expect($result['ok'])->toBeTrue()
         ->and(file_get_contents($home.'/LaraKube/wsl/larakube-ubuntu.tar.gz'))->toBe($body);
@@ -180,7 +185,7 @@ test('a download that does not match its checksum is deleted', function () {
         '*' => Http::response('tampered'),
     ]);
 
-    $result = (new Wsl(windows: true))->download();
+    $result = (new Wsl(windows: true, featureEnabled: true))->download();
 
     expect($result['ok'])->toBeFalse()
         ->and(file_exists($home.'/LaraKube/wsl/larakube-ubuntu.tar.gz'))->toBeFalse();
@@ -189,7 +194,7 @@ test('a download that does not match its checksum is deleted', function () {
 test('download progress returns default state when no download is in progress', function () {
     Cache::forget('wsl.download.progress');
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     expect($wsl->downloadProgress())->toBe([
         'total' => 0,
         'downloaded' => 0,
@@ -206,7 +211,7 @@ test('download progress reads cached progress values', function () {
         'formatted' => '238.4 MB / 476.8 MB',
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     expect($wsl->downloadProgress())->toBe([
         'total' => 500000000,
         'downloaded' => 250000000,
@@ -227,8 +232,8 @@ test('importing creates the distro once and restarts it, and a second run does n
         '*' => Process::result(),
     ]);
 
-    expect((new Wsl(windows: true))->import()['ok'])->toBeTrue()
-        ->and((new Wsl(windows: true))->import()['ok'])->toBeTrue();
+    expect((new Wsl(windows: true, featureEnabled: true))->import()['ok'])->toBeTrue()
+        ->and((new Wsl(windows: true, featureEnabled: true))->import()['ok'])->toBeTrue();
 
     Process::assertRanTimes(fn ($process) => in_array('--import', (array) $process->command, true), 1);
     Process::assertRanTimes(fn ($process) => in_array('--terminate', (array) $process->command, true), 2);
@@ -250,7 +255,7 @@ test('importing injects the host-cached larakube-linux-x64 binary into the distr
     ]);
 
     try {
-        expect((new Wsl(windows: true))->import()['ok'])->toBeTrue();
+        expect((new Wsl(windows: true, featureEnabled: true))->import()['ok'])->toBeTrue();
 
         Process::assertRan(fn ($process) => in_array('install', (array) $process->command, true)
             && in_array('/usr/local/bin/larakube', (array) $process->command, true));
@@ -269,8 +274,8 @@ test('resetting removes only the LaraKube distro, and is harmless when it is alr
         '*' => Process::result(),
     ]);
 
-    expect((new Wsl(windows: true))->reset()['ok'])->toBeTrue()
-        ->and((new Wsl(windows: true))->reset()['ok'])->toBeTrue();
+    expect((new Wsl(windows: true, featureEnabled: true))->reset()['ok'])->toBeTrue()
+        ->and((new Wsl(windows: true, featureEnabled: true))->reset()['ok'])->toBeTrue();
 
     Process::assertRanTimes(fn ($process) => in_array('--unregister', (array) $process->command, true), 1);
     Process::assertNotRan(fn ($process) => in_array('Ubuntu', (array) $process->command, true));
@@ -279,7 +284,7 @@ test('resetting removes only the LaraKube distro, and is harmless when it is alr
 test('terminate stops the larakube distro or a custom distro', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     expect($wsl->terminate())->toBeTrue();
     expect($wsl->terminate('custom-distro'))->toBeTrue();
 
@@ -290,7 +295,7 @@ test('terminate stops the larakube distro or a custom distro', function () {
 test('shutdown shuts down the entire wsl virtual machine', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     expect($wsl->shutdown())->toBeTrue();
 
     Process::assertRan(fn ($process) => (array) $process->command === ['wsl.exe', '--shutdown']);
@@ -312,7 +317,7 @@ test('updating runs larakube update --yes inside the distro without touching pro
         '*update*' => Process::result(output: "✅ LaraKube updated successfully!\n"),
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     $result = $wsl->update();
 
     expect($result['ok'])->toBeTrue()
@@ -331,7 +336,7 @@ test('updating falls back to root if larakube user update fails', function () {
             ->push(Process::result(output: "✅ LaraKube updated successfully!\n")),
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     $result = $wsl->update();
 
     expect($result['ok'])->toBeTrue();
@@ -346,7 +351,7 @@ test('backupUserHome archives student projects to the local backups directory', 
         '*tar*' => Process::result(),
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     $result = $wsl->backupUserHome();
 
     expect($result['ok'])->toBeTrue()
@@ -369,7 +374,7 @@ test('resetting automatically creates a safety backup before unregistering the d
         '*' => Process::result(),
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     $result = $wsl->reset();
 
     expect($result['ok'])->toBeTrue()
@@ -393,7 +398,7 @@ test('restoreUserHome extracts a backup produced by backupUserHome back into the
         '*tar*' => Process::result(),
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     $result = $wsl->restoreUserHome($backupPath);
 
     expect($result['ok'])->toBeTrue()
@@ -412,7 +417,7 @@ test('restoreUserHome refuses a path outside the LaraKube backups directory', fu
         '*--list*' => Process::result(output: wslListing('* larakube-ubuntu Running   2')),
     ]);
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     $result = $wsl->restoreUserHome('C:\\Users\\student\\Documents\\anything.tar.gz');
 
     expect($result['ok'])->toBeFalse()
@@ -429,7 +434,7 @@ test('ensureMirroredNetworking creates .wslconfig if missing', function () {
     putenv('USERPROFILE='.$temp);
 
     try {
-        $wsl = new Wsl(windows: true);
+        $wsl = new Wsl(windows: true, featureEnabled: true);
         expect($wsl->ensureMirroredNetworking())->toBeTrue();
 
         $content = file_get_contents($temp.'/.wslconfig');
@@ -448,7 +453,7 @@ test('ensureMirroredNetworking updates existing .wslconfig in place', function (
     file_put_contents($temp.'/.wslconfig', "[wsl2]\nnetworkingMode=nat\nmemory=8GB\n");
 
     try {
-        $wsl = new Wsl(windows: true);
+        $wsl = new Wsl(windows: true, featureEnabled: true);
         expect($wsl->ensureMirroredNetworking())->toBeTrue();
 
         $content = file_get_contents($temp.'/.wslconfig');

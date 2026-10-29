@@ -17,7 +17,7 @@ class Wsl
 {
     public const ENABLE_COMMAND = 'wsl --install --no-distribution';
 
-    public function __construct(private ?bool $windows = null) {}
+    public function __construct(private ?bool $windows = null, private ?bool $featureEnabled = null) {}
 
     public function isWindows(): bool
     {
@@ -25,10 +25,39 @@ class Wsl
     }
 
     /**
+     * Whether the "Windows Subsystem for Linux" optional component is on,
+     * checked via DISM/PowerShell — never `wsl.exe` itself. Confirmed live
+     * (2026-10-30): `wsl.exe`, with ANY subcommand or flags (`--status`,
+     * `--list`, `-d ... --exec ...`), pops Windows's own native "WSL is not
+     * installed, press any key to install" console prompt the instant the
+     * feature isn't present at all — there is no read-only way to ask
+     * wsl.exe itself. Every method below that would otherwise shell out to
+     * wsl.exe for a background/automatic check (not the explicit Setup
+     * wizard, which wants to trigger installation) must check this first.
+     */
+    public function featureEnabled(): bool
+    {
+        if ($this->featureEnabled !== null) {
+            return $this->featureEnabled;
+        }
+
+        $result = Process::timeout(15)->run([
+            'powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+            '(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State',
+        ]);
+
+        return $result->successful() && str_contains(strtolower(trim($result->output())), 'enabled');
+    }
+
+    /**
      * @return array{state: 'ready'|'missing'|'no-distro'|'old-version'|'broken'|'stale', distro: ?string, version: ?int, message: string, command: ?string}
      */
     public function check(): array
     {
+        if (! $this->featureEnabled()) {
+            return $this->result('missing', null, null, 'Windows Subsystem for Linux (WSL) is not turned on yet. LaraKube Desktop needs it to run.', self::ENABLE_COMMAND);
+        }
+
         $status = Process::timeout(30)->run(['wsl.exe', '--status']);
 
         if (! $status->successful()) {
@@ -455,7 +484,7 @@ class Wsl
      */
     public function terminate(?string $distro = null): bool
     {
-        if (! $this->isWindows()) {
+        if (! $this->isWindows() || ! $this->featureEnabled()) {
             return false;
         }
 
@@ -469,7 +498,7 @@ class Wsl
      */
     public function shutdown(): bool
     {
-        if (! $this->isWindows()) {
+        if (! $this->isWindows() || ! $this->featureEnabled()) {
             return false;
         }
 
@@ -556,6 +585,10 @@ class Wsl
     /** @return array{name: string, version: int}|null */
     public function distro(): ?array
     {
+        if (! $this->featureEnabled()) {
+            return null;
+        }
+
         $listing = Process::timeout(30)->run(['wsl.exe', '--list', '--verbose']);
 
         if (! $listing->successful()) {

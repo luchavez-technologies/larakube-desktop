@@ -3,6 +3,7 @@
 namespace App\Services\LaraKube;
 
 use App\Services\Runtime\WslDistro;
+use App\Services\Wsl;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -21,8 +22,9 @@ class ToolLocator
      * @param  list<string>|null  $directories
      * @param  bool|null  $windows  force the Windows behaviour (commands run inside the larakube-ubuntu WSL distro), for tests
      * @param  bool|null  $darwin  force the Darwin/macOS behaviour, for tests
+     * @param  bool|null  $wslFeatureEnabled  force whether the WSL optional component itself is reported on, for tests — real production code resolves and caches this lazily via Wsl::featureEnabled() instead of ever needing it passed in
      */
-    public function __construct(private ?array $directories = null, private ?bool $windows = null, private ?bool $darwin = null) {}
+    public function __construct(private ?array $directories = null, private ?bool $windows = null, private ?bool $darwin = null, private ?bool $wslFeatureEnabled = null) {}
 
     /** On Windows the CLI and its tools live inside the larakube-ubuntu WSL distro, so every command is run there. */
     public function isWindows(): bool
@@ -271,9 +273,22 @@ class ToolLocator
     /**
      * Asks the distro where a binary is, searching the same directories as on a Mac. No shell and no quoting:
      * `env` sets PATH and `which` answers, so there is no script for wsl.exe to mangle.
+     *
+     * Confirmed live (2026-10-30): wsl.exe, with ANY subcommand or flags,
+     * pops Windows's own native "WSL is not installed, press any key to
+     * install" console prompt the instant the feature isn't present at
+     * all — including this `-d ... --exec ... which <binary>` call. Every
+     * tool lookup that falls through to here must confirm the feature is
+     * actually on first, via DISM/PowerShell (never wsl.exe itself).
      */
     private function findInDistro(string $binary): ?string
     {
+        if (! ($this->wslFeatureEnabled ??= (new Wsl(windows: true))->featureEnabled())) {
+            $this->failure = 'Windows Subsystem for Linux (WSL) is not turned on.';
+
+            return null;
+        }
+
         $result = Process::timeout(90)->run([
             self::wslExecutable(), '-d', WslDistro::NAME, '--user', WslDistro::USER,
             '--exec', '/usr/bin/env', 'PATH='.$this->path(), '/usr/bin/which', $binary,

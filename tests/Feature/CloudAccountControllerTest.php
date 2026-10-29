@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Process;
 function fakeCloudAccountCli(string $result): void
 {
     putenv('SystemRoot=C:\\Windows');
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
     Process::fake([
         '*which*' => Process::result(output: "/usr/local/bin/larakube\n"),
         '*' => Process::result(output: $result),

@@ -15,7 +15,7 @@ test('a project folder is shown in the file manager', function () {
 
 test('on Windows a project inside the distro is shown through its network share', function () {
     $project = Project::create(['path' => '/home/larakube/projects/shop']);
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
 
     Shell::shouldReceive('showInFolder')->once()->with('\\\\wsl.localhost\\larakube-ubuntu\\home\\larakube\\projects\\shop');
 

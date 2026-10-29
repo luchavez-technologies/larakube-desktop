@@ -9,7 +9,7 @@ use Native\Desktop\Events\Windows\WindowClosed;
 test('closing the main window on Windows terminates the LaraKube distro by default', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     app()->instance(Wsl::class, $wsl);
 
     event(new WindowClosed('main'));
@@ -20,7 +20,7 @@ test('closing the main window on Windows terminates the LaraKube distro by defau
 test('closing a non-main window does not shut down WSL', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     app()->instance(Wsl::class, $wsl);
 
     event(new WindowClosed('logs'));
@@ -31,7 +31,7 @@ test('closing a non-main window does not shut down WSL', function () {
 test('closing the main window with shutdown mode shuts down entire WSL VM', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     app()->instance(Wsl::class, $wsl);
 
     $settings = mock(GlobalSettings::class);
@@ -46,7 +46,7 @@ test('closing the main window with shutdown mode shuts down entire WSL VM', func
 test('closing the main window with disabled mode does not shut down WSL', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     app()->instance(Wsl::class, $wsl);
 
     $settings = mock(GlobalSettings::class);
@@ -61,7 +61,7 @@ test('closing the main window with disabled mode does not shut down WSL', functi
 test('power monitor system shutdown on Windows triggers WSL termination', function () {
     Process::fake();
 
-    $wsl = new Wsl(windows: true);
+    $wsl = new Wsl(windows: true, featureEnabled: true);
     app()->instance(Wsl::class, $wsl);
 
     event(new Shutdown);

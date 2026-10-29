@@ -96,7 +96,7 @@ test('on Windows, freshly enabling mirrored networking restarts WSL when no othe
     File::ensureDirectoryExists($userProfile);
     putenv("USERPROFILE={$userProfile}");
 
-    app()->instance(Wsl::class, new Wsl(windows: true));
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
     ChildProcess::fake();
     Process::fake([
         '*--list*--running*' => Process::result(output: localSetupWslListing('* larakube-ubuntu Running   2')),
@@ -123,7 +123,7 @@ test('on Windows, the restart is skipped (not forced) when another WSL distro is
     File::ensureDirectoryExists($userProfile);
     putenv("USERPROFILE={$userProfile}");
 
-    app()->instance(Wsl::class, new Wsl(windows: true));
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
     ChildProcess::fake();
     Process::fake([
         '*--list*--running*' => Process::result(output: localSetupWslListing('* larakube-ubuntu Running   2', '  Ubuntu           Running   2')),
@@ -151,7 +151,7 @@ test('on Windows, already-mirrored config never triggers a restart on a later se
     putenv("USERPROFILE={$userProfile}");
     file_put_contents($userProfile.'/.wslconfig', "[wsl2]\r\nnetworkingMode=mirrored\r\n");
 
-    app()->instance(Wsl::class, new Wsl(windows: true));
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
     ChildProcess::fake();
     Process::fake([
         '*--list*--running*' => Process::result(output: localSetupWslListing('* larakube-ubuntu Running   2')),

@@ -201,7 +201,7 @@ test('a "tools"-only Windows user never triggers wsl.exe at all, not even a --st
 test('an "apps" Windows user does get checked for WSL, since local k3s development still needs it', function () {
     readinessFakeBinDirectory(['larakube']);
     app(GlobalSettings::class)->update(['usage' => 'apps']);
-    app()->instance(Wsl::class, new Wsl(windows: true));
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
 
     Process::fake([
         '*--status*' => Process::result(output: "Default Version: 2\n"),

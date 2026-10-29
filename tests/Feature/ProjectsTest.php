@@ -1070,7 +1070,7 @@ test('project dotenv endpoints trigger push, pull, and return drift status', fun
 });
 
 test('folder picker and project paths adapt seamlessly on Windows WSL', function () {
-    $windowsLocator = new ToolLocator(windows: true);
+    $windowsLocator = new ToolLocator(windows: true, wslFeatureEnabled: true);
     app()->instance(ToolLocator::class, $windowsLocator);
     projectsFrameworks();
 

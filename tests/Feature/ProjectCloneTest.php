@@ -187,7 +187,7 @@ test('pickParentFolder rejects system directory with 422', function () {
 });
 
 test('pickParentFolder passes defaultPath and adapts Windows WSL paths', function () {
-    $windowsLocator = new ToolLocator(windows: true);
+    $windowsLocator = new ToolLocator(windows: true, wslFeatureEnabled: true);
     app()->instance(ToolLocator::class, $windowsLocator);
 
     $picker = mock(FolderPicker::class);

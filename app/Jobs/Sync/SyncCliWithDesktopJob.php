@@ -3,6 +3,7 @@
 namespace App\Jobs\Sync;
 
 use App\Services\LaraKube\CliInstaller;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\RunNotifier;
 use App\Services\Wsl;
@@ -33,11 +34,21 @@ class SyncCliWithDesktopJob extends SyncJob
         return $this->notify ? 'desktop-version-change' : 'hourly-channel-check';
     }
 
-    public function handle(CliInstaller $installer, ToolLocator $locator, Wsl $wsl, RunNotifier $notifier): void
+    public function handle(CliInstaller $installer, ToolLocator $locator, Wsl $wsl, GlobalSettings $settings, RunNotifier $notifier): void
     {
         $channel = $installer->channel();
 
-        $synced = $wsl->isWindows()
+        // WSL is only still needed for local k3s development
+        // (usage === 'apps') — cloud:create and the Cluster-Tool install/
+        // remove path run natively on Windows now, so a "tools"-only user's
+        // larakube.exe is synced the same no-WSL way macOS/Linux already
+        // are here, never through Wsl::update() (which, even with its own
+        // guard against wsl.exe's native "WSL is not installed" prompt,
+        // has nothing to update for a user who was never meant to need WSL
+        // at all).
+        $useWsl = $wsl->isWindows() && $settings->get()['usage'] === 'apps';
+
+        $synced = $useWsl
             ? $wsl->update(channel: $channel)['ok']
             : ($locator->find('larakube') !== null && $installer->install($channel)['success']);
 

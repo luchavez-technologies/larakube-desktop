@@ -172,7 +172,24 @@ test('windows still asks the WSL distro for a tool with no native Windows instal
 
     // directories: null forces the real findInDistro() path (the injected-
     // directories branch above is a test-only shortcut that bypasses it).
-    $locator = new ToolLocator(windows: true);
+    // wslFeatureEnabled: true — this test is about the distro lookup
+    // itself, not the "WSL isn't even on" short-circuit ahead of it.
+    $locator = new ToolLocator(windows: true, wslFeatureEnabled: true);
 
     expect($locator->find('hcloud'))->toBe('/home/larakube/.larakube/bin/hcloud');
+});
+
+test('windows never asks the WSL distro when the WSL optional component itself is not on', function () {
+    // Confirmed live (2026-10-30): wsl.exe, with ANY subcommand or flags,
+    // pops Windows's own native "WSL is not installed, press any key to
+    // install" console prompt the instant the feature isn't present —
+    // findInDistro() must never reach it in that state.
+    Process::fake();
+
+    $locator = new ToolLocator(windows: true, wslFeatureEnabled: false);
+
+    expect($locator->find('hcloud'))->toBeNull()
+        ->and($locator->lastFailure())->toBe('Windows Subsystem for Linux (WSL) is not turned on.');
+
+    Process::assertNothingRan();
 });

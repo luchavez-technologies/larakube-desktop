@@ -8,7 +8,7 @@ use Native\Desktop\Facades\ChildProcess;
 
 test('on Windows the CLI is updated by its own update command inside the distro, without asking', function () {
     putenv('SystemRoot=C:\\Windows');
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
     Process::fake(['*' => Process::result(output: "/usr/local/bin/larakube\n")]);
     $fake = ChildProcess::fake();
 
@@ -24,7 +24,7 @@ test('on Windows the CLI is updated by its own update command inside the distro,
 
 test('the stable channel updates without --canary', function () {
     putenv('SystemRoot=C:\\Windows');
-    app()->instance(ToolLocator::class, new ToolLocator(windows: true));
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
     Process::fake(['*' => Process::result(output: "/usr/local/bin/larakube\n")]);
     $fake = ChildProcess::fake();
 

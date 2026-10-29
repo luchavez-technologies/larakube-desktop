@@ -10,7 +10,11 @@ use Native\Desktop\Facades\ChildProcess;
 
 function windowsLocator(): ToolLocator
 {
-    return new ToolLocator(windows: true);
+    // wslFeatureEnabled: true — every test in this file exercises actual
+    // distro-lookup behavior (wsl.exe running, succeeding, or failing with
+    // a distro-level error), not the "WSL optional component itself isn't
+    // on" case, which would otherwise short-circuit before wsl.exe ever runs.
+    return new ToolLocator(windows: true, wslFeatureEnabled: true);
 }
 
 test('on Windows a command runs inside the larakube-ubuntu distro as its own user, from an empty environment', function (): void {
