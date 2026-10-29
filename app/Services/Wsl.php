@@ -34,6 +34,13 @@ class Wsl
      * wsl.exe itself. Every method below that would otherwise shell out to
      * wsl.exe for a background/automatic check (not the explicit Setup
      * wizard, which wants to trigger installation) must check this first.
+     *
+     * Cached across requests (not just this instance): ToolLocator::find()
+     * reaches this, via a fresh `new Wsl()`, from DashboardController's
+     * synchronous CLI-presence check on every single app open — PowerShell's
+     * cold-start cost would otherwise repeat on every open rather than once
+     * per session, which is exactly the kind of optional-component state
+     * that doesn't change while the app is running.
      */
     public function featureEnabled(): bool
     {
@@ -41,12 +48,14 @@ class Wsl
             return $this->featureEnabled;
         }
 
-        $result = Process::timeout(15)->run([
-            'powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
-            '(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State',
-        ]);
+        return Cache::remember('wsl.feature-enabled', now()->addMinutes(10), function (): bool {
+            $result = Process::timeout(15)->run([
+                'powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+                '(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State',
+            ]);
 
-        return $result->successful() && str_contains(strtolower(trim($result->output())), 'enabled');
+            return $result->successful() && str_contains(strtolower(trim($result->output())), 'enabled');
+        });
     }
 
     /**
@@ -126,10 +135,14 @@ class Wsl
     {
         $arguments = implode(',', array_map(fn (string $argument): string => "'{$argument}'", ['--install', '--no-distribution']));
 
-        return Process::timeout(900)->run([
+        $enabled = Process::timeout(900)->run([
             'powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
             "Start-Process -FilePath wsl.exe -ArgumentList {$arguments} -Verb RunAs -Wait",
         ])->successful();
+
+        Cache::forget('wsl.feature-enabled');
+
+        return $enabled;
     }
 
     /** Where the image is downloaded from; `LARAKUBE_ROOTFS_URL` points at a canary or a mirror. */
