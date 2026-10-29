@@ -5,6 +5,7 @@ import Button from '@/components/button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import ProviderLogo from '@/components/provider-logo';
 import StatusPill from '@/components/status-pill';
+import { sendJson } from '@/lib/http';
 import { forgetToolStatus, useToolStatus } from '@/lib/tool-status';
 import { cn } from '@/lib/utils';
 import { install, update } from '@/routes/setup/tools';
@@ -173,14 +174,44 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
 }
 
 /**
+ * Polls the same `/runs/{id}/stream` endpoint the floating run HUD
+ * (run-drawer.tsx's TrackedRun) already uses, until the run leaves
+ * "running" — so a caller can genuinely wait for one install to finish,
+ * not just for the HTTP request that started it to come back.
+ */
+async function waitForRunToFinish(runId: number): Promise<void> {
+    for (;;) {
+        const res = await sendJson<{ status: string }>(
+            `/runs/${runId}/stream`,
+            'GET',
+        );
+
+        if (!res.ok || res.data.status !== 'running') {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+}
+
+/**
  * Installs every installable tool in the (filtered) catalog, one after
- * another. Deliberately fires install for EVERY entry rather than only the
- * ones currently showing "Missing" — CatalogEntry carries no live status at
- * this level (each row's installed/path/version is fetched independently by
- * its own useToolStatus() call), and CliTool::install() already no-ops
+ * another — genuinely one at a time, each awaited to completion before the
+ * next starts, not just the HTTP request that kicks it off. CliRunner::start()
+ * spawns a background process and returns immediately (see CliRunner.php),
+ * so without waitForRunToFinish() every install below would actually run
+ * concurrently as independent OS processes — several large downloads
+ * (kubectl/OpenTofu/the Google Cloud SDK, 50-150MB each) competing for
+ * bandwidth and memory at once on a fresh machine, confirmed live
+ * (2026-10-29) to be confusing and resource-risky during first-run
+ * onboarding, which is exactly the case this button exists for.
+ *
+ * Deliberately fires install for EVERY entry rather than only the ones
+ * currently showing "Missing" — CatalogEntry carries no live status at this
+ * level (each row's installed/path/version is fetched independently by its
+ * own useToolStatus() call), and CliTool::install() already no-ops
  * instantly when a tool is already present, so re-asking for an installed
- * one costs nothing. Sequential, not parallel, so progress reads as one
- * tool at a time finishing rather than five spawns competing at once.
+ * one costs nothing.
  */
 function InstallAllButton({
     catalog,
@@ -205,7 +236,7 @@ function InstallAllButton({
         setRunning(true);
 
         for (const entry of targets) {
-            await new Promise<void>((resolve) => {
+            const runId = await new Promise<number | null>((resolve) => {
                 router.post(
                     install(entry.slug).url,
                     { channel },
@@ -213,13 +244,24 @@ function InstallAllButton({
                         preserveScroll: true,
                         preserveState: true,
                         only: ['activeRuns'],
-                        onFinish: () => resolve(),
+                        onSuccess: (page) => {
+                            const runs = (page.props.activeRuns ?? []) as {
+                                id: number;
+                            }[];
+                            resolve(runs.length > 0 ? runs[0].id : null);
+                        },
+                        onError: () => resolve(null),
                     },
                 );
             });
+
+            if (runId !== null) {
+                await waitForRunToFinish(runId);
+            }
+
+            forgetToolStatus();
         }
 
-        forgetToolStatus();
         setRunning(false);
     };
 
