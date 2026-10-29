@@ -125,7 +125,6 @@ export default function Readiness({
                 <WslCheck wsl={wsl} />
             ) : cliMissing ? (
                 <CliMissing
-                    windows={windows}
                     diagnostic={cli.status?.diagnostic ?? null}
                     command={cliInstallCommand}
                     channel={selectedChannel}

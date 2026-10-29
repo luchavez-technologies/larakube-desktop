@@ -6,13 +6,11 @@ import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 
 export default function CliMissing({
-    windows,
     diagnostic,
     command,
     channel,
     onChannelChange,
 }: {
-    windows: boolean;
     diagnostic: string | null;
     command: string;
     channel: string;
@@ -30,25 +28,6 @@ export default function CliMissing({
             },
         );
     };
-
-    if (windows) {
-        return (
-            <Card tone="error" className="p-6.5">
-                <h2 className="text-lg font-semibold tracking-[-0.015em]">
-                    The LaraKube CLI did not answer
-                </h2>
-                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                    It comes with LaraKube Linux, so it should already be there.
-                    Press Check again; if this stays, send the details below.
-                </p>
-                {diagnostic && (
-                    <pre className="mt-3 max-w-full overflow-x-auto rounded-lg bg-term px-3 py-2 font-mono text-xs whitespace-pre-wrap text-term-bright">
-                        {diagnostic}
-                    </pre>
-                )}
-            </Card>
-        );
-    }
 
     return (
         <Card tone="error" className="p-6.5">
@@ -126,6 +105,12 @@ export default function CliMissing({
                     <CopyButton value={command} />
                 </div>
             </div>
+
+            {diagnostic && (
+                <pre className="mt-4 max-w-full overflow-x-auto rounded-lg bg-term px-3 py-2 font-mono text-xs whitespace-pre-wrap text-term-bright">
+                    {diagnostic}
+                </pre>
+            )}
         </Card>
     );
 }

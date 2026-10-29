@@ -759,7 +759,6 @@ export default function OnboardingIndex({
                                         <WslCheck wsl={wsl} />
                                     ) : cliMissing ? (
                                         <CliMissing
-                                            windows={windows}
                                             diagnostic={
                                                 cli.status?.diagnostic ?? null
                                             }
