@@ -217,3 +217,22 @@ test('on Windows isolate() runs native larakube.exe directly without wsl.exe wra
         ->and(implode(' ', $isolated['command']))->not->toContain('dop_v1_secret')
         ->and(implode(' ', $isolated['command']))->not->toContain('wsl.exe');
 });
+
+test('on Windows isolate() also runs a natively-found tool like kubectl.exe directly, never through wsl.exe', function (): void {
+    // Confirmed live (2026-10-29): find('kubectl') correctly resolves the
+    // native kubectl.exe install, but isolate() only ever recognized
+    // larakube.exe as "native" — every other natively-installed tool
+    // (kubectl/k9s/tofu/aws/gcloud/ssh) was silently re-routed into
+    // wsl.exe, popping Windows's own "WSL is not installed" prompt even on
+    // a machine that had every tool it needed natively and no WSL at all.
+    $nativeKubectl = 'C:\\Users\\Mia\\.larakube\\bin\\kubectl.exe';
+
+    Process::fake();
+
+    $isolated = windowsLocator()->isolate([$nativeKubectl, 'config', 'view', '-o', 'json']);
+
+    expect($isolated['command'])->toBe([$nativeKubectl, 'config', 'view', '-o', 'json'])
+        ->and(implode(' ', $isolated['command']))->not->toContain('wsl.exe');
+
+    Process::assertNothingRan();
+});

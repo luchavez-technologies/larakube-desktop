@@ -364,7 +364,7 @@ class ToolLocator
         }
 
         if ($this->isWindows()) {
-            if ($this->isNativeWindowsLaraKubeCommand($command)) {
+            if ($this->isNativeWindowsPath($command)) {
                 return $this->isolateForNativeWindows($command, $extraEnvironment, $cwd);
             }
 
@@ -388,26 +388,39 @@ class ToolLocator
     }
 
     /**
+     * Whether $command[0] is already a native Windows location, returned by
+     * nativeWindowsLaraKubePath()/nativeWindowsToolPath() (`find('larakube')`,
+     * `find('kubectl')`, etc. all resolve one of those first) — a bare
+     * drive-letter absolute path. A distro-resolved binary is always a Linux
+     * path instead (`/home/...`, from findInDistro()), so this one check
+     * correctly routes every natively-installed tool straight to the host,
+     * not just larakube.exe — findInDistro() mis-routing kubectl/k9s/tofu/
+     * aws/gcloud/ssh into `wsl.exe` even when they were found natively is
+     * exactly what kept popping Windows's own "WSL is not installed" prompt
+     * on a machine that never needed WSL at all (confirmed live, 2026-10-29).
+     *
      * @param  list<string>  $command
      */
-    private function isNativeWindowsLaraKubeCommand(array $command): bool
+    private function isNativeWindowsPath(array $command): bool
     {
-        $binary = strtolower((string) ($command[0] ?? ''));
-
-        return $binary === 'larakube.exe'
-            || str_ends_with($binary, '/larakube.exe')
-            || str_ends_with($binary, '\\larakube.exe');
+        return preg_match('#^[A-Za-z]:[\\\\/]#', (string) ($command[0] ?? '')) === 1;
     }
 
     /**
-     * Runs the native Windows `larakube.exe` binary directly on the host without a `wsl.exe` wrapper,
-     * letting the CLI's own `WslBridge` decide per-command whether to stay on Windows (`setup`, `update`,
-     * `wsl:*`, 1-hop UAC prompts) or dispatch into `larakube-ubuntu`.
+     * Runs a natively-resolved Windows binary (larakube.exe, or any of
+     * WINDOWS_NATIVE_TOOLS once `find()` has located it on the host) directly,
+     * without a `wsl.exe` wrapper. For larakube.exe specifically, its own
+     * `WslBridge` still decides per-command whether to stay on Windows
+     * (`setup`, `update`, `wsl:*`, 1-hop UAC prompts) or dispatch further
+     * into `larakube-ubuntu` itself.
      *
-     * Because Symfony Process and Electron ChildProcess merge child env vars with Desktop's own process
-     * environment on Windows (where `/usr/bin/env -i` does not exist), we explicitly override the Laravel
-     * framework variables that `cli/config/*.php` and `Illuminate\Foundation\Application` read so Desktop's
-     * `CACHE_STORE=database` or bootstrap cache paths never pollute the CLI child process.
+     * Because Symfony Process and Electron ChildProcess merge child env vars
+     * with Desktop's own process environment on Windows (where
+     * `/usr/bin/env -i` does not exist), we explicitly override the Laravel
+     * framework variables that `cli/config/*.php` and
+     * `Illuminate\Foundation\Application` read so Desktop's
+     * `CACHE_STORE=database` or bootstrap cache paths never pollute the CLI
+     * child process — harmless no-ops for a non-Laravel binary like kubectl.
      *
      * @param  list<string>  $command
      * @param  array<string, string>  $extraEnvironment

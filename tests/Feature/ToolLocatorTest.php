@@ -103,7 +103,7 @@ test('a natively-dispatched larakube.exe gets a PATH that finds the native-Windo
 
     try {
         $locator = new ToolLocator(windows: true);
-        $isolated = $locator->isolate(['larakube.exe', 'cloud:create']);
+        $isolated = $locator->isolate(['C:\\Users\\jamie\\.larakube\\bin\\larakube.exe', 'cloud:create']);
 
         expect($isolated['environment']['PATH'])
             ->toContain('C:\\Users\\jamie\\.larakube\\bin')
