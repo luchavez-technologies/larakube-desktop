@@ -119,6 +119,20 @@ test('a natively-dispatched larakube.exe gets a PATH that finds the native-Windo
     }
 });
 
+test('a natively-dispatched larakube.exe never gets an empty VIEW_COMPILED_PATH, since larakube.exe is a real Laravel app that reads it directly', function () {
+    // Confirmed live (2026-10-30): forcing VIEW_COMPILED_PATH='' here was
+    // meant to stop Desktop's own env from leaking into the CLI child
+    // process, but Desktop never sets this var in the first place, and
+    // cli/config/view.php consumes it directly (no file_exists() guard,
+    // unlike the APP_*_CACHE paths) as the Blade-compiled-view directory —
+    // an empty string would break any larakube.exe command that renders a
+    // Blade view once dispatched natively from Desktop.
+    $locator = new ToolLocator(windows: true);
+    $isolated = $locator->isolate(['C:\\Users\\jamie\\.larakube\\bin\\larakube.exe', '--version']);
+
+    expect($isolated['environment'])->not->toHaveKey('VIEW_COMPILED_PATH');
+});
+
 test('windows finds ssh.exe at the OpenSSH optional feature\'s fixed install path, not inside the WSL distro', function () {
     $oldSystemRoot = getenv('SystemRoot');
     $sysRoot = sys_get_temp_dir().'/larakube-toollocator-sysroot-'.bin2hex(random_bytes(6));

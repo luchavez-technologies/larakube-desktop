@@ -418,9 +418,23 @@ class ToolLocator
      * with Desktop's own process environment on Windows (where
      * `/usr/bin/env -i` does not exist), we explicitly override the Laravel
      * framework variables that `cli/config/*.php` and
-     * `Illuminate\Foundation\Application` read so Desktop's
-     * `CACHE_STORE=database` or bootstrap cache paths never pollute the CLI
-     * child process — harmless no-ops for a non-Laravel binary like kubectl.
+     * `Illuminate\Foundation\Application` read so Desktop's own
+     * `CACHE_STORE=database` (set in Desktop's .env, confirmed to leak
+     * otherwise) never pollutes the CLI child process — a no-op for a
+     * non-Laravel binary like kubectl, but NOT for larakube.exe itself,
+     * which genuinely is a Laravel app and reads these for real. That
+     * distinction matters: `VIEW_COMPILED_PATH` used to be forced to an
+     * empty string here on the mistaken assumption every override here was
+     * harmless — but `cli/config/view.php` actually consumes it directly as
+     * the Blade-compiled-view directory, no `file_exists()` guard first
+     * (unlike the `APP_*_CACHE` paths below, which Laravel only ever reads
+     * through a guarded `file_exists()` check, so an empty string there
+     * safely just skips the cache). An empty `VIEW_COMPILED_PATH` would
+     * break any larakube.exe command that renders a Blade view (e.g.
+     * Kubernetes manifest templates) when dispatched from Desktop. Desktop
+     * itself never sets `VIEW_COMPILED_PATH`, so there was nothing to
+     * actually guard against — simply not listing it here lets `config/
+     * view.php`'s own per-PHAR-build default take over correctly.
      *
      * @param  list<string>  $command
      * @param  array<string, string>  $extraEnvironment
@@ -433,7 +447,6 @@ class ToolLocator
             'APP_ENV' => 'development',
             'CACHE_STORE' => 'file',
             'CACHE_DRIVER' => 'file',
-            'VIEW_COMPILED_PATH' => '',
             'APP_CONFIG_CACHE' => '',
             'APP_SERVICES_CACHE' => '',
             'APP_PACKAGES_CACHE' => '',
