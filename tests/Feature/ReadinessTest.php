@@ -63,6 +63,26 @@ test('a tool is not checked again until asked to, or until an install ends', fun
     File::deleteDirectory($bin);
 });
 
+test('a tool that is installed but whose --version check fails reports the real reason, not the install path as a fake version', function () {
+    // Confirmed live (2026-10-30): a correctly-installed larakube.exe whose
+    // --version check failed for some reason had its install PATH shown in
+    // the version slot instead — read as a garbled/corrupted install. The
+    // backend must never let the frontend confuse "installed" with "version
+    // known"; a failed version check should say why, not go silent.
+    $bin = readinessFakeBinDirectory(['larakube']);
+    Cache::flush();
+    Process::fake([
+        '*larakube*--version*' => Process::result(errorOutput: 'something went wrong', exitCode: 1),
+    ]);
+
+    $this->getJson(route('setup.tools.status', 'larakube'))
+        ->assertOk()
+        ->assertJson(['installed' => true, 'version' => null])
+        ->assertJsonFragment(['diagnostic' => 'Exit 1: something went wrong']);
+
+    File::deleteDirectory($bin);
+});
+
 test('providers are null when the CLI is too old to know cloud:providers', function () {
     $bin = readinessFakeBinDirectory(['larakube']);
     Process::fake([

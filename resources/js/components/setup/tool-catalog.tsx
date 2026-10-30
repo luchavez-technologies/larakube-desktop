@@ -88,10 +88,24 @@ export function ToolRow({
                                 }
                                 detail={
                                     tool?.installed
-                                        ? (tool.version ?? tool.path)
+                                        ? (tool.version ??
+                                          // version check failed (see
+                                          // ReadinessCheck::version()'s
+                                          // diagnostic) — showing the
+                                          // install path here instead read
+                                          // as a garbled version string,
+                                          // confirmed live (2026-10-30) to
+                                          // read as broken/corrupted.
+                                          (tool.path ? (
+                                              <span title={tool.path}>
+                                                  Installed
+                                              </span>
+                                          ) : (
+                                              'Installed'
+                                          )))
                                         : entry.purpose
                                 }
-                                mono={tool?.installed}
+                                mono={tool?.installed && tool.version != null}
                             />
                             {highlight && !tool?.installed && (
                                 <span className="inline-flex shrink-0 animate-pulse items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand ring-1 ring-brand/20">
@@ -137,12 +151,11 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                             handleAction('/setup/cli/update', { channel })
                         }
                     >
-                        <ArrowUpCircle
-                            className={cn(
-                                'size-3.5',
-                                submitting && 'animate-spin',
-                            )}
-                        />
+                        {submitting ? (
+                            <RefreshCw className="size-3.5 animate-spin" />
+                        ) : (
+                            <ArrowUpCircle className="size-3.5" />
+                        )}
                         <span>Update</span>
                     </Button>
                 ) : (
@@ -154,12 +167,11 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                             disabled={submitting}
                             onClick={() => handleAction(update(tool.slug).url)}
                         >
-                            <ArrowUpCircle
-                                className={cn(
-                                    'size-3.5',
-                                    submitting && 'animate-spin',
-                                )}
-                            />
+                            {submitting ? (
+                                <RefreshCw className="size-3.5 animate-spin" />
+                            ) : (
+                                <ArrowUpCircle className="size-3.5" />
+                            )}
                             <span>Update</span>
                         </Button>
                     )
@@ -181,9 +193,11 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                         handleAction(install(tool.slug).url, { channel })
                     }
                 >
-                    <Download
-                        className={cn('size-3.5', submitting && 'animate-spin')}
-                    />
+                    {submitting ? (
+                        <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                        <Download className="size-3.5" />
+                    )}
                     <span>Install</span>
                 </Button>
             )}
@@ -315,9 +329,11 @@ function InstallAllButton({
                 disabled={running}
                 onClick={runAll}
             >
-                <Download
-                    className={cn('size-3.5', running && 'animate-spin')}
-                />
+                {running ? (
+                    <RefreshCw className="size-3.5 animate-spin" />
+                ) : (
+                    <Download className="size-3.5" />
+                )}
                 <span>
                     {running && progress
                         ? `Installing… (${progress.done} of ${progress.total})`

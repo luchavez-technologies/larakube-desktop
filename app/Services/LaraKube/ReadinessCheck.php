@@ -111,12 +111,13 @@ class ReadinessCheck
         return Cache::remember($key, now()->addMinutes(5), function () use ($slug): array {
             $path = $this->locator->find($slug);
 
-            return [
-                'installed' => $path !== null,
-                'path' => $path,
-                'version' => $path !== null ? $this->version($path, self::TOOLS[$slug]['versionArgs']) : null,
-                'diagnostic' => $path === null ? $this->locator->lastFailure() : null,
-            ];
+            if ($path === null) {
+                return ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $this->locator->lastFailure()];
+            }
+
+            ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, self::TOOLS[$slug]['versionArgs']);
+
+            return ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
         });
     }
 
@@ -409,17 +410,34 @@ class ReadinessCheck
 
     /**
      * @param  list<string>  $arguments
+     * @return array{version: ?string, diagnostic: ?string}
      */
-    private function version(string $path, array $arguments): ?string
+    private function version(string $path, array $arguments): array
     {
         $isolated = $this->locator->isolate([$path, ...$arguments]);
 
-        $result = Process::env($isolated['environment'])
-            ->timeout(20)
-            ->run($isolated['command']);
+        try {
+            $result = Process::env($isolated['environment'])
+                ->timeout(20)
+                ->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return ['version' => null, 'diagnostic' => 'Timed out running '.implode(' ', $arguments).'.'];
+        }
 
         if (! $result->successful()) {
-            return null;
+            // Confirmed live (2026-10-30): a tool that genuinely installed
+            // and runs fine for every other command can still fail its own
+            // `--version` check — captured here so the row can say WHY
+            // instead of silently falling back to showing the install path
+            // as if it were the version (exactly the confusion reported).
+            $detail = trim($result->errorOutput().$result->output());
+
+            return [
+                'version' => null,
+                'diagnostic' => $detail !== ''
+                    ? "Exit {$result->exitCode()}: {$detail}"
+                    : "Exit {$result->exitCode()} running ".implode(' ', $arguments).'.',
+            ];
         }
 
         $firstLine = trim(strtok(trim($result->output()) ?: trim($result->errorOutput()), "\n") ?: '');
@@ -427,7 +445,7 @@ class ReadinessCheck
         // collapsing is a no-op for every other tool's single-spaced first line.
         $firstLine = (string) preg_replace('/\s+/', ' ', $firstLine);
 
-        return $firstLine !== '' ? $firstLine : null;
+        return ['version' => $firstLine !== '' ? $firstLine : null, 'diagnostic' => null];
     }
 
     private function lastLine(string $output): string
