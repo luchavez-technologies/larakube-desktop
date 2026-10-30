@@ -36,12 +36,27 @@ class ReadinessCheck
         'dnsmasq' => ['label' => 'dnsmasq', 'purpose' => 'Wildcard local-domain DNS so project hosts resolve automatically, without a sudo prompt on every `up`.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
     ];
 
-    public const CLI_INSTALL_COMMAND = 'curl -fsSL https://docs.larakube.app/install.sh | bash -s -- --canary';
+    private const CLI_INSTALL_COMMAND_POSIX = 'curl -fsSL https://docs.larakube.app/install.sh | bash -s -- --canary';
+
+    private const CLI_INSTALL_COMMAND_WINDOWS = '$env:LARAKUBE_CHANNEL="canary"; irm https://docs.larakube.app/install.ps1 | iex';
 
     /** Which cloud provider (GlobalSettings::CLOUD_PROVIDERS key) each provider-specific CLI tool is for. DO/Hetzner need no CLI binary — just the API token fields already on Setup/Settings. */
     private const PROVIDER_TOOLS = ['aws' => 'aws', 'gcloud' => 'gcp'];
 
     public function __construct(private ToolLocator $locator) {}
+
+    /**
+     * The manual "install without the button" command shown on CliMissing —
+     * a bash one-liner is meaningless on Windows (no curl/bash by default,
+     * and the wrong install mechanism entirely), confirmed live (2026-10-30)
+     * still showing the Ubuntu command verbatim to a Windows user. The
+     * PowerShell variant is the same `irm ... | iex` the docs site's own
+     * Windows installation page already documents.
+     */
+    public function cliInstallCommand(): string
+    {
+        return $this->locator->isWindows() ? self::CLI_INSTALL_COMMAND_WINDOWS : self::CLI_INSTALL_COMMAND_POSIX;
+    }
 
     /**
      * Every tool the page lists, without checking this computer, so the page can

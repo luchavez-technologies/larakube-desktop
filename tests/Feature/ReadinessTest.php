@@ -244,3 +244,15 @@ test('ToolLocator prefers the newer larakube binary when multiple directories co
     File::deleteDirectory($dirOld);
     File::deleteDirectory($dirNew);
 });
+
+test('the manual install command is a PowerShell one-liner on Windows, not the Ubuntu bash command', function () {
+    // Confirmed live (2026-10-30): a Windows user on the CLI-missing screen
+    // was shown `curl -fsSL ... | bash -s -- --canary` verbatim — meaningless
+    // without curl/bash, and the wrong install mechanism entirely.
+    $posix = new ReadinessCheck(new ToolLocator(windows: false));
+    $windows = new ReadinessCheck(new ToolLocator(windows: true));
+
+    expect($posix->cliInstallCommand())->toContain('bash')->toContain('install.sh')
+        ->and($windows->cliInstallCommand())->toContain('irm')->toContain('install.ps1')
+        ->and($windows->cliInstallCommand())->not->toContain('bash');
+});

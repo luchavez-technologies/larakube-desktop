@@ -31,7 +31,7 @@ class OnboardingController extends Controller
             'intendedProviders' => $current['intendedProviders'],
             'cloudProviders' => GlobalSettings::CLOUD_PROVIDERS,
             'catalog' => $readiness->catalog($current['intendedProviders']),
-            'cliInstallCommand' => ReadinessCheck::CLI_INSTALL_COMMAND,
+            'cliInstallCommand' => $readiness->cliInstallCommand(),
             'cliChannel' => $installer->channel(),
         ]);
     }
