@@ -38,6 +38,13 @@ function load(slug: string, fresh: boolean): Promise<ToolStatus> {
     return request;
 }
 
+/** A one-off fresh check, for a caller that needs to decide something (not render a row) — bypasses the `known` cache entirely. */
+export function toolIsInstalled(slug: string): Promise<boolean> {
+    return load(slug, true)
+        .then((status) => status.installed)
+        .catch(() => false);
+}
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 

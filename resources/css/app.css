@@ -48,6 +48,17 @@
     --color-servers: #2c9fc0;
     --color-tools: #8457e0;
     --color-tools-tint: #f2edfc;
+
+    /* An indeterminate progress bar's sliding segment — installs stream no byte count to show a real percentage. */
+    --animate-indeterminate: indeterminate 1.1s ease-in-out infinite;
+    @keyframes indeterminate {
+        0% {
+            transform: translateX(-100%);
+        }
+        100% {
+            transform: translateX(300%);
+        }
+    }
 }
 
 body {

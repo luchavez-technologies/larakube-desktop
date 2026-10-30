@@ -6,23 +6,42 @@ import { ListRow, TwoLine } from '@/components/list-row';
 import ProviderLogo from '@/components/provider-logo';
 import StatusPill from '@/components/status-pill';
 import { sendJson } from '@/lib/http';
-import { forgetToolStatus, useToolStatus } from '@/lib/tool-status';
+import {
+    forgetToolStatus,
+    toolIsInstalled,
+    useToolStatus,
+} from '@/lib/tool-status';
 import { cn } from '@/lib/utils';
 import { install, update } from '@/routes/setup/tools';
 import type { Tool } from '@/types/larakube';
 
 export type CatalogEntry = Omit<Tool, 'installed' | 'path' | 'version'>;
 
+/** An indeterminate progress bar — installs stream no byte count, so this communicates "working" without faking a percentage. */
+function InstallingBar() {
+    return (
+        <div className="flex items-center gap-2">
+            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-badge">
+                <div className="h-full w-1/3 animate-indeterminate rounded-full bg-brand" />
+            </div>
+            <span className="text-xs font-medium text-faint">Installing…</span>
+        </div>
+    );
+}
+
 export function ToolRow({
     entry,
     channel,
     refresh,
     highlight = false,
+    installing = false,
 }: {
     entry: CatalogEntry;
     channel: string;
     refresh: number;
     highlight?: boolean;
+    /** This row's install/update is the one an in-progress "Install everything" run is currently on. */
+    installing?: boolean;
 }) {
     const rowRef = useRef<HTMLDivElement>(null);
     const { status, checking } = useToolStatus(entry.slug, refresh);
@@ -48,7 +67,9 @@ export function ToolRow({
         >
             <ListRow
                 action={
-                    tool && !checking ? (
+                    installing ? (
+                        <InstallingBar />
+                    ) : tool && !checking ? (
                         <ToolState tool={tool} channel={channel} />
                     ) : (
                         <RefreshCw className="size-4 animate-spin text-faint" />
@@ -195,34 +216,43 @@ async function waitForRunToFinish(runId: number): Promise<void> {
 }
 
 /**
- * Installs every installable tool in the (filtered) catalog, one after
- * another — genuinely one at a time, each awaited to completion before the
- * next starts, not just the HTTP request that kicks it off. CliRunner::start()
- * spawns a background process and returns immediately (see CliRunner.php),
- * so without waitForRunToFinish() every install below would actually run
- * concurrently as independent OS processes — several large downloads
- * (kubectl/OpenTofu/the Google Cloud SDK, 50-150MB each) competing for
- * bandwidth and memory at once on a fresh machine, confirmed live
- * (2026-10-29) to be confusing and resource-risky during first-run
- * onboarding, which is exactly the case this button exists for.
+ * Installs every installable tool in the (filtered) catalog that isn't
+ * already present, one after another — genuinely one at a time, each
+ * awaited to completion before the next starts, not just the HTTP request
+ * that kicks it off. CliRunner::start() spawns a background process and
+ * returns immediately (see CliRunner.php), so without waitForRunToFinish()
+ * every install below would actually run concurrently as independent OS
+ * processes — several large downloads (kubectl/OpenTofu/the Google Cloud
+ * SDK, 50-150MB each) competing for bandwidth and memory at once on a fresh
+ * machine, confirmed live (2026-10-29) to be confusing and resource-risky
+ * during first-run onboarding, which is exactly the case this button exists
+ * for.
  *
- * Deliberately fires install for EVERY entry rather than only the ones
- * currently showing "Missing" — CatalogEntry carries no live status at this
- * level (each row's installed/path/version is fetched independently by its
- * own useToolStatus() call), and CliTool::install() already no-ops
- * instantly when a tool is already present, so re-asking for an installed
- * one costs nothing.
+ * Checks each tool's live status before firing its install — `larakube
+ * setup --tools=X` is supposed to no-op when a tool is already present, but
+ * confirmed live (2026-10-30) that re-running it against an already-working
+ * kubectl/gcloud on Windows can still fail (file-in-use, partial
+ * re-extraction, etc.), which then shows a contradictory "Failed" run next
+ * to a row that still correctly says "Installed" from before. Skipping
+ * already-installed tools entirely avoids touching a tool this button has
+ * no reason to touch.
  */
 function InstallAllButton({
     catalog,
     channel,
     showLocalOnly,
+    onInstallingChange,
 }: {
     catalog: CatalogEntry[];
     channel: string;
     showLocalOnly: boolean;
+    onInstallingChange: (slug: string | null) => void;
 }) {
     const [running, setRunning] = useState(false);
+    const [progress, setProgress] = useState<{
+        done: number;
+        total: number;
+    } | null>(null);
 
     const targets = catalog.filter(
         (entry) => entry.installable && (showLocalOnly || !entry.localOnly),
@@ -234,8 +264,16 @@ function InstallAllButton({
 
     const runAll = async () => {
         setRunning(true);
+        setProgress({ done: 0, total: targets.length });
 
-        for (const entry of targets) {
+        for (const [index, entry] of targets.entries()) {
+            if (await toolIsInstalled(entry.slug)) {
+                setProgress({ done: index + 1, total: targets.length });
+                continue;
+            }
+
+            onInstallingChange(entry.slug);
+
             const runId = await new Promise<number | null>((resolve) => {
                 router.post(
                     install(entry.slug).url,
@@ -260,8 +298,11 @@ function InstallAllButton({
             }
 
             forgetToolStatus();
+            setProgress({ done: index + 1, total: targets.length });
         }
 
+        onInstallingChange(null);
+        setProgress(null);
         setRunning(false);
     };
 
@@ -277,7 +318,11 @@ function InstallAllButton({
                 <Download
                     className={cn('size-3.5', running && 'animate-spin')}
                 />
-                <span>{running ? 'Installing…' : 'Install everything'}</span>
+                <span>
+                    {running && progress
+                        ? `Installing… (${progress.done} of ${progress.total})`
+                        : 'Install everything'}
+                </span>
             </Button>
         </div>
     );
@@ -297,12 +342,15 @@ export default function ToolCatalogList({
     showLocalOnly?: boolean;
     highlight?: string | null;
 }) {
+    const [installingSlug, setInstallingSlug] = useState<string | null>(null);
+
     return (
         <>
             <InstallAllButton
                 catalog={catalog}
                 channel={channel}
                 showLocalOnly={showLocalOnly}
+                onInstallingChange={setInstallingSlug}
             />
             {catalog
                 .filter((entry) => showLocalOnly || !entry.localOnly)
@@ -313,6 +361,7 @@ export default function ToolCatalogList({
                         channel={channel}
                         refresh={refresh}
                         highlight={highlight === entry.slug}
+                        installing={installingSlug === entry.slug}
                     />
                 ))}
         </>
