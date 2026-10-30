@@ -138,10 +138,14 @@ class CliInstaller
             $tempFile = storage_path('framework/temp/larakube-download-'.bin2hex(random_bytes(4)));
             File::ensureDirectoryExists(dirname($tempFile));
 
+            // GitHub's release CDN occasionally resets the connection mid-download
+            // (confirmed live, 2026-10-30: "The request was aborted: The connection
+            // was closed unexpectedly" on a real Windows machine) — retry a few
+            // times before giving up, since this is almost always transient.
             $response = Http::withOptions([
                 'follow_redirects' => true,
                 'verify' => true,
-            ])->timeout(120)->sink($tempFile)->get($url);
+            ])->timeout(120)->retry(3, 2000)->sink($tempFile)->get($url);
 
             if (! $response->successful() || ! file_exists($tempFile) || filesize($tempFile) < 1024) {
                 if (file_exists($tempFile)) {
@@ -200,7 +204,7 @@ class CliInstaller
             $response = Http::withOptions([
                 'follow_redirects' => true,
                 'verify' => true,
-            ])->timeout(120)->sink($linuxTemp)->get($this->linuxCacheDownloadUrl($channel));
+            ])->timeout(120)->retry(3, 2000)->sink($linuxTemp)->get($this->linuxCacheDownloadUrl($channel));
 
             if ($response->successful() && (! file_exists($linuxTemp) || filesize($linuxTemp) === 0)) {
                 $body = $response->body();
