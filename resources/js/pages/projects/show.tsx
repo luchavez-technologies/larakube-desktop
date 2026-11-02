@@ -2342,7 +2342,7 @@ function AddEnvironmentDialog({
     onClose,
     project,
     readyServers,
-    onCreated: _onCreated,
+    onCreated,
 }: {
     open: boolean;
     onClose: () => void;
@@ -2352,6 +2352,7 @@ function AddEnvironmentDialog({
 }) {
     const [name, setName] = useState('');
     const [server, setServer] = useState(readyServers[0]?.name ?? '');
+    const [webHost, setWebHost] = useState('');
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -2398,7 +2399,16 @@ function AddEnvironmentDialog({
                     </button>
                 </div>
 
-                <Form action={link(project.id)} className="space-y-4">
+                <Form
+                    action={link(project.id)}
+                    className="space-y-4"
+                    onSuccess={() => {
+                        onCreated?.(name);
+                        setName('');
+                        setWebHost('');
+                        onClose();
+                    }}
+                >
                     {({ errors, processing }) => (
                         <>
                             <div>
@@ -2467,6 +2477,36 @@ function AddEnvironmentDialog({
                                 )}
                             </div>
 
+                            <div>
+                                <label className="mb-1.5 block text-xs font-medium text-ink">
+                                    Web Domain
+                                </label>
+                                <input
+                                    name="web_host"
+                                    value={webHost}
+                                    onChange={(e) =>
+                                        setWebHost(e.target.value.trim())
+                                    }
+                                    placeholder={
+                                        name
+                                            ? `${name}.example.com`
+                                            : 'app.example.com'
+                                    }
+                                    spellCheck={false}
+                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                                {errors.web_host && (
+                                    <p className="mt-1 text-xs text-accent">
+                                        {errors.web_host}
+                                    </p>
+                                )}
+                                <p className="mt-1 text-[11px] text-soft">
+                                    A real domain this environment will be
+                                    reachable at, without https://. You can
+                                    change this later.
+                                </p>
+                            </div>
+
                             <div className="flex items-center justify-end gap-2.5 border-t border-line pt-3">
                                 <Button
                                     type="button"
@@ -2481,6 +2521,7 @@ function AddEnvironmentDialog({
                                     size="sm"
                                     disabled={
                                         name.trim() === '' ||
+                                        webHost.trim() === '' ||
                                         processing ||
                                         readyServers.length === 0
                                     }

@@ -799,7 +799,15 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'server' => ['required', 'string'],
             'environment' => ['nullable', 'string', 'alpha_dash'],
-        ]);
+            // Required: `cloud:configure --only=target` always runs the
+            // real-host guard (EnsuresRealHosts::ensureHosts()) before it'll
+            // save a new environment, and non-interactively it can't prompt
+            // for one — confirmed live (2026-11-01), an empty --web-hosts=
+            // (plural — additional hostnames) was being passed with no
+            // --web-host= (singular — the primary one) at all, so linking a
+            // brand-new environment's server always failed.
+            'web_host' => ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
+        ], ['web_host.regex' => 'Enter a domain like app.example.com, without https://.']);
         $environment = $validated['environment'] ?? self::ENVIRONMENT;
         $name = $validated['server'];
         $server = $stacks->find($name);
@@ -819,7 +827,7 @@ class ProjectController extends Controller
         // rebinding (no git remote, gh/tea not logged in) and would wrongly
         // report this as failed even though the rebind itself already saved.
         $args = [
-            'cloud:configure', $environment, '--only=target', "--context={$server['context']}", '--rebind', '--web-hosts=',
+            'cloud:configure', $environment, '--only=target', "--context={$server['context']}", '--rebind', "--web-host={$validated['web_host']}", '--web-hosts=',
         ];
 
         if (! empty($server['sshKey'])) {

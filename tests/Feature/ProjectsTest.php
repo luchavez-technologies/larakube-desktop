@@ -215,13 +215,13 @@ test('multi-environment server linking, host configuration, and deployment', fun
     $project = Project::create(['path' => $sandbox['app']]);
     $fake = ChildProcess::fake();
 
-    $this->post(route('projects.link', $project), ['server' => 'workshop-demo', 'environment' => 'staging'])->assertRedirect();
+    $this->post(route('projects.link', $project), ['server' => 'workshop-demo', 'environment' => 'staging', 'web_host' => 'staging.example.com'])->assertRedirect();
     $this->post(route('projects.host', $project), ['host' => 'staging.example.com', 'environment' => 'staging'])->assertRedirect();
     $this->post(route('projects.deploy', $project), ['environment' => 'staging'])->assertRedirect();
 
     $bin = "{$sandbox['bin']}/larakube";
     foreach ([
-        ['cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts='],
+        ['cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-host=staging.example.com', '--web-hosts='],
         ['cloud:configure', 'staging', '--only=hosts', '--web-host=staging.example.com'],
         ['cloud:deploy', 'staging'],
     ] as $arguments) {
@@ -637,12 +637,13 @@ test('linking a ready server creates the production environment on it, with no p
     $project = Project::create(['path' => $sandbox['app']]);
     $fake = ChildProcess::fake();
 
-    $this->post(route('projects.link', $project), ['server' => 'not-a-server'])->assertSessionHasErrors('server');
-    $this->post(route('projects.link', $project), ['server' => 'workshop-demo'])->assertRedirect();
+    $this->post(route('projects.link', $project), ['server' => 'not-a-server', 'web_host' => 'shop.example.com'])->assertSessionHasErrors('server');
+    $this->post(route('projects.link', $project), ['server' => 'workshop-demo'])->assertSessionHasErrors('web_host');
+    $this->post(route('projects.link', $project), ['server' => 'workshop-demo', 'web_host' => 'shop.example.com'])->assertRedirect();
 
     $bin = "{$sandbox['bin']}/larakube";
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        $bin, 'cloud:configure', 'production', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts=', '--no-interaction',
+        $bin, 'cloud:configure', 'production', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-host=shop.example.com', '--web-hosts=', '--no-interaction',
     ] && $cwd === $sandbox['app']);
     expect(Run::sole()->kind)->toBe(RunKind::LinkServer);
 
@@ -708,11 +709,12 @@ test('linking a server supports custom environments like staging', function () {
     $this->post(route('projects.link', $project), [
         'server' => 'workshop-demo',
         'environment' => 'staging',
+        'web_host' => 'staging.example.com',
     ])->assertRedirect();
 
     $bin = "{$sandbox['bin']}/larakube";
     $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        $bin, 'cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-hosts=', '--no-interaction',
+        $bin, 'cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-host=staging.example.com', '--web-hosts=', '--no-interaction',
     ] && $cwd === $sandbox['app']);
 
     File::deleteDirectory($sandbox['home']);
