@@ -5,6 +5,7 @@ use App\Http\Controllers\CloudAccountController;
 use App\Http\Controllers\CloudAuthController;
 use App\Http\Controllers\ClusterAccessController;
 use App\Http\Controllers\ClusterToolController;
+use App\Http\Controllers\ClusterToolEnvController;
 use App\Http\Controllers\CompanionController;
 use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
@@ -231,6 +232,8 @@ Route::get('/servers/{server}/apps/{tool}/credentials', [ClusterToolController::
 Route::post('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'store'])->name('servers.apps.store');
 Route::post('/servers/{server}/apps/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.apps.rebind');
 Route::delete('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.apps.destroy');
+Route::get('/servers/{server}/apps/{tool}/env', [ClusterToolEnvController::class, 'status'])->name('servers.apps.env.status');
+Route::post('/servers/{server}/apps/{tool}/env', [ClusterToolEnvController::class, 'update'])->name('servers.apps.env.update');
 
 // Legacy routes preserved for backward compatibility
 Route::get('/tools', [ClusterToolController::class, 'entry'])->name('tools');
@@ -243,6 +246,8 @@ Route::get('/servers/{server}/tools/{tool}/credentials', [ClusterToolController:
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
 Route::post('/servers/{server}/tools/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.tools.rebind');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');
+Route::get('/servers/{server}/tools/{tool}/env', [ClusterToolEnvController::class, 'status'])->name('servers.tools.env.status');
+Route::post('/servers/{server}/tools/{tool}/env', [ClusterToolEnvController::class, 'update'])->name('servers.tools.env.update');
 Route::get('/quick-actions/fields', [QuickActionController::class, 'fields'])->name('quick-actions.fields');
 Route::post('/quick-actions/launch', [QuickActionController::class, 'launch'])->name('quick-actions.launch');
 

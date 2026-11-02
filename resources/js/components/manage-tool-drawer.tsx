@@ -22,6 +22,7 @@ import ToolLogo from '@/components/tool-logo';
 import CopyButton from '@/components/copy-button';
 import QrCodePopover from '@/components/qr-code-popover';
 import HostPicker from '@/components/host-picker';
+import ToolEnvCard from '@/components/tool-env-card';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
@@ -530,6 +531,11 @@ export default function ManageToolDrawer({
                                 )}
                             </div>
                         </div>
+                    )}
+
+                    {/* Custom Environment Variables */}
+                    {tool.installed && (
+                        <ToolEnvCard server={server} tool={tool} />
                     )}
 
                     {/* Components & Workloads Card (if multi-component) */}
