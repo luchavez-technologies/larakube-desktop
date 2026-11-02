@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\OpenBaoStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Native\Desktop\Facades\ChildProcess;
 
 function openBaoTestServer(): string
@@ -81,6 +84,35 @@ test('viewing openbao page renders openbao/index with installation status', func
             ->where('server.name', 'prod-vps')
             ->where('isInstalled', true)
         );
+});
+
+test('refreshing OpenBao marks the row stale and dispatches SyncOpenBaoJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'context' => 'larakube-do-ams3',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'openbao',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true, 'bootstrapped' => true, 'sealed' => false]],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    openBaoTestServer();
+
+    $this->post(route('servers.openbao.refresh', 'prod-vps'))
+        ->assertRedirect();
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('stale');
+
+    Queue::assertPushed(SyncOpenBaoJob::class, fn (SyncOpenBaoJob $job) => $job->serverId === $server->id);
 });
 
 test('sealing OpenBao starts an openbao-seal run', function () {

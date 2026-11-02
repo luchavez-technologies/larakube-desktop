@@ -47,6 +47,15 @@ class OpenBaoController extends Controller
         ]);
     }
 
+    /** Force an immediate re-sync, bypassing the cached row's freshness window. */
+    public function refresh(string $server, OpenBaoStatus $status): RedirectResponse
+    {
+        $context = (string) $this->readyServer($server)['context'];
+        $status->forget($context);
+
+        return back();
+    }
+
     /** Seal OpenBao immediately — blocks all secret access cluster-wide until unsealed. */
     public function seal(Request $request, string $server, CliRunner $runner): RedirectResponse
     {

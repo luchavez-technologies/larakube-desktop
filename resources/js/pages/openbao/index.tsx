@@ -1,8 +1,9 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     Download,
     Lock,
+    RefreshCw,
     RotateCw,
     ShieldCheck,
     ShieldOff,
@@ -113,6 +114,17 @@ export default function OpenBaoIndex({
     const [importConfirm, setImportConfirm] = useState('');
     const [granting, setGranting] = useState(false);
 
+    usePoll(
+        2000,
+        { only: ['status', 'openBaoSync'] },
+        {
+            autoStart:
+                isInstalled &&
+                (openBaoSync.status === 'syncing' ||
+                    openBaoSync.status === 'stale'),
+        },
+    );
+
     const loading = isInstalled && status === undefined;
     const resolved: Status = status ?? { installed: isInstalled };
     const staticRoles = resolved.staticRoles ?? [];
@@ -168,6 +180,22 @@ export default function OpenBaoIndex({
                             value={server.name}
                             buildHref={(name) => openBaoIndex(name).url}
                         />
+
+                        {isInstalled && (
+                            <Form
+                                action={openbao.refresh(server.name).url}
+                                method="post"
+                            >
+                                <button
+                                    type="submit"
+                                    className={buttonClass('secondary', 'md')}
+                                    title="Force an immediate re-sync, bypassing the cached data's freshness window"
+                                >
+                                    <RefreshCw className="h-4 w-4" />
+                                    <span>Resync</span>
+                                </button>
+                            </Form>
+                        )}
 
                         {isInstalled && resolved.bootstrapped && (
                             <Form

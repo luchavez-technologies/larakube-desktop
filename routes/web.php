@@ -226,6 +226,7 @@ Route::delete('/servers/{server}/drive', [DriveController::class, 'destroy'])->n
 
 Route::get('/openbao', [OpenBaoController::class, 'entry'])->name('openbao');
 Route::get('/servers/{server}/openbao', [OpenBaoController::class, 'index'])->name('servers.openbao.index');
+Route::post('/servers/{server}/openbao/refresh', [OpenBaoController::class, 'refresh'])->name('servers.openbao.refresh');
 Route::post('/servers/{server}/openbao/seal', [OpenBaoController::class, 'seal'])->name('servers.openbao.seal');
 Route::post('/servers/{server}/openbao/unseal', [OpenBaoController::class, 'unseal'])->name('servers.openbao.unseal');
 Route::post('/servers/{server}/openbao/rotate', [OpenBaoController::class, 'rotate'])->name('servers.openbao.rotate');
