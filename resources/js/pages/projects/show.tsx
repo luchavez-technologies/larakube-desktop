@@ -229,6 +229,7 @@ export default function ShowProject({
     const [activeEnv, setActiveEnv] = useState<string>('local');
     const [deployModalOpen, setDeployModalOpen] = useState(false);
     const [addEnvModalOpen, setAddEnvModalOpen] = useState(false);
+    const [removeEnvTarget, setRemoveEnvTarget] = useState<string | null>(null);
 
     // Active cloud environment config when viewing cloud tabs
     const activeCloudEnvName =
@@ -427,8 +428,8 @@ export default function ShowProject({
                         cloudEnvs={cloudEnvs}
                         readyServers={readyServers}
                         onAddEnv={() => setAddEnvModalOpen(true)}
+                        onRemoveEnv={setRemoveEnvTarget}
                         runs={runs}
-                        project={project}
                     />
 
                     {/* Main Layout Grid */}
@@ -636,13 +637,7 @@ export default function ShowProject({
                                     activeEnv={activeEnv}
                                 />
                             )}
-                            <ProjectSettingsCard
-                                project={project}
-                                activeEnv={activeEnv}
-                                onEnvironmentRemoved={() =>
-                                    setActiveEnv('local')
-                                }
-                            />
+                            <ProjectSettingsCard project={project} />
                             <RecentRunsCard runs={runs} activeEnv={activeEnv} />
                         </div>
                     </div>
@@ -675,6 +670,14 @@ export default function ShowProject({
                         project={project}
                         readyServers={readyServers}
                         onCreated={(newEnv) => setActiveEnv(newEnv)}
+                    />
+
+                    {/* Remove Environment Modal Popup */}
+                    <RemoveEnvironmentDialog
+                        environment={removeEnvTarget}
+                        onClose={() => setRemoveEnvTarget(null)}
+                        project={project}
+                        onRemoved={() => setActiveEnv('local')}
                     />
 
                     {/* K9s Recommendation Modal Popup */}
@@ -765,16 +768,16 @@ function EnvironmentSwitchBar({
     cloudEnvs,
     readyServers,
     onAddEnv,
+    onRemoveEnv,
     runs,
-    project,
 }: {
     activeEnv: string;
     onSelectEnv: (env: string) => void;
     cloudEnvs: ProjectEnvironment[];
     readyServers: ReadyServer[];
     onAddEnv: () => void;
+    onRemoveEnv: (env: string) => void;
     runs: RecentRun[];
-    project: Project;
 }) {
     const isLocalActive = activeEnv === 'local';
     const isLocalRunning = runs.some(
@@ -786,10 +789,6 @@ function EnvironmentSwitchBar({
                 'stop-project',
             ].includes(r.kind ?? '') && r.status === 'running',
     );
-
-    const effectiveTld =
-        project.effectiveTld || project.localTld || project.globalTld || 'kube';
-    const localDomain = `${project.name}.${effectiveTld}`;
 
     // Only the cloud environments the project really has: none until one is created.
     const envsToRender = cloudEnvs;
@@ -844,36 +843,51 @@ function EnvironmentSwitchBar({
                     );
 
                     return (
-                        <button
+                        <div
                             key={env.name}
-                            type="button"
-                            onClick={() => onSelectEnv(env.name)}
                             className={cn(
-                                'flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all',
+                                'group flex items-center gap-1 rounded-xl pr-1 text-xs font-semibold transition-all',
                                 isSelected
                                     ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
                                     : 'text-soft hover:bg-paper hover:text-ink',
                             )}
                         >
-                            {serverProvider ? (
-                                <ProviderLogo
-                                    provider={serverProvider}
-                                    size="xs"
-                                    className="size-4 rounded-sm border-0 p-0 shadow-none"
-                                />
-                            ) : (
-                                <Cloud className="size-3.5 text-sky-500" />
-                            )}
-                            <span className="uppercase">{env.name}</span>
-                            {env.serverName && (
-                                <span className="rounded bg-line/60 px-1 text-[10px] font-normal text-soft">
-                                    {env.serverName}
-                                </span>
-                            )}
-                            {isRunning && (
-                                <span className="size-2 animate-ping rounded-full bg-brand" />
-                            )}
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => onSelectEnv(env.name)}
+                                className="flex items-center gap-1.5 py-2 pl-3"
+                            >
+                                {serverProvider ? (
+                                    <ProviderLogo
+                                        provider={serverProvider}
+                                        size="xs"
+                                        className="size-4 rounded-sm border-0 p-0 shadow-none"
+                                    />
+                                ) : (
+                                    <Cloud className="size-3.5 text-sky-500" />
+                                )}
+                                <span className="uppercase">{env.name}</span>
+                                {env.serverName && (
+                                    <span className="rounded bg-line/60 px-1 text-[10px] font-normal text-soft">
+                                        {env.serverName}
+                                    </span>
+                                )}
+                                {isRunning && (
+                                    <span className="size-2 animate-ping rounded-full bg-brand" />
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemoveEnv(env.name);
+                                }}
+                                title={`Remove ${env.name} from this project's blueprint`}
+                                className="rounded-lg p-1 text-soft opacity-0 transition-opacity group-hover:opacity-100 hover:bg-paper hover:text-accent"
+                            >
+                                <X className="size-3" />
+                            </button>
+                        </div>
                     );
                 })}
 
@@ -890,29 +904,15 @@ function EnvironmentSwitchBar({
             </div>
 
             {/* Contextual Action on the Right */}
-            <div className="flex items-center gap-2 pr-1">
-                {isLocalActive ? (
-                    <ExternalLinkButton
-                        url={`https://${localDomain}`}
-                        className={cn(
-                            buttonClass('secondary', 'sm'),
-                            'gap-1.5',
-                        )}
-                        title="Open local application in browser"
-                    >
-                        <span>Open local site</span>
-                        <ExternalLink className="size-3" />
-                    </ExternalLinkButton>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        {activeDeploy && (
-                            <StatusPill tone="busy">
-                                {`Deploying (${activeEnv})`}
-                            </StatusPill>
-                        )}
-                    </div>
-                )}
-            </div>
+            {!isLocalActive && (
+                <div className="flex items-center gap-2 pr-1">
+                    {activeDeploy && (
+                        <StatusPill tone="busy">
+                            {`Deploying (${activeEnv})`}
+                        </StatusPill>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -2546,6 +2546,122 @@ function AddEnvironmentDialog({
     );
 }
 
+/** Confirmation dialog for dropping a cloud environment from the blueprint, triggered by the X on its tab */
+function RemoveEnvironmentDialog({
+    environment,
+    onClose,
+    project,
+    onRemoved,
+}: {
+    environment: string | null;
+    onClose: () => void;
+    project: Project;
+    onRemoved?: () => void;
+}) {
+    const [removing, setRemoving] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        if (environment) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [environment, onClose]);
+
+    if (!environment) return null;
+
+    const handleRemove = () => {
+        setRemoving(true);
+        router.post(
+            removeEnvironment(project.id).url,
+            { environment },
+            {
+                preserveScroll: true,
+                onSuccess: () => onRemoved?.(),
+                onFinish: () => {
+                    setRemoving(false);
+                    onClose();
+                },
+            },
+        );
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="remove-env-dialog-title"
+                className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl ring-1 ring-line"
+            >
+                <div className="flex items-start gap-3.5">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/20">
+                        <Unplug className="size-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3
+                            id="remove-env-dialog-title"
+                            className="text-base font-semibold text-ink"
+                        >
+                            Remove {environment}?
+                        </h3>
+                        <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                            This runs{' '}
+                            <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                larakube env:remove {environment}
+                            </code>{' '}
+                            to drop it from{' '}
+                            <code className="font-mono text-ink">
+                                .larakube.json
+                            </code>{' '}
+                            and remove its generated{' '}
+                            <code className="font-mono text-ink">
+                                k8s/overlays/{environment}
+                            </code>{' '}
+                            manifests.
+                        </p>
+                        <p className="mt-2 text-xs font-medium text-ink">
+                            Its live server, cluster resources, and .env.
+                            {environment} are not touched.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2.5">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={removing}
+                        onClick={onClose}
+                        className="gap-1.5 text-xs"
+                    >
+                        <XCircle className="size-3.5" />
+                        <span>Cancel</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        disabled={removing}
+                        onClick={handleRemove}
+                        className="gap-1.5 text-xs"
+                    >
+                        <Trash2 className="size-3.5" />
+                        <span>
+                            {removing ? 'Removing…' : `Remove ${environment}`}
+                        </span>
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function Step({
     number,
     title,
@@ -3143,38 +3259,9 @@ function ProjectTldForm({ project }: { project: Project }) {
     );
 }
 
-function ProjectSettingsCard({
-    project,
-    activeEnv,
-    onEnvironmentRemoved,
-}: {
-    project: Project;
-    activeEnv?: string;
-    onEnvironmentRemoved?: () => void;
-}) {
+function ProjectSettingsCard({ project }: { project: Project }) {
     const [confirmHealOpen, setConfirmHealOpen] = useState(false);
     const [healing, setHealing] = useState(false);
-    const [confirmRemoveEnvOpen, setConfirmRemoveEnvOpen] = useState(false);
-    const [removingEnv, setRemovingEnv] = useState(false);
-
-    const isCloudEnvActive = Boolean(activeEnv) && activeEnv !== 'local';
-
-    const handleRemoveEnvironment = () => {
-        if (!activeEnv) return;
-        setRemovingEnv(true);
-        router.post(
-            removeEnvironment(project.id).url,
-            { environment: activeEnv },
-            {
-                preserveScroll: true,
-                onSuccess: () => onEnvironmentRemoved?.(),
-                onFinish: () => {
-                    setRemovingEnv(false);
-                    setConfirmRemoveEnvOpen(false);
-                },
-            },
-        );
-    };
 
     const handleHeal = () => {
         setHealing(true);
@@ -3223,27 +3310,6 @@ function ProjectSettingsCard({
                     </div>
                 </div>
 
-                {isCloudEnvActive && (
-                    <div className="border-t border-line pt-3">
-                        <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            disabled={removingEnv}
-                            onClick={() => setConfirmRemoveEnvOpen(true)}
-                            className="w-full justify-center gap-1.5"
-                        >
-                            <Unplug className="size-3.5" />
-                            <span>Remove {activeEnv} Environment</span>
-                        </Button>
-                        <p className="mt-2 text-center text-xs leading-relaxed text-soft">
-                            Only drops it from this project's blueprint. Its
-                            server, cluster resources, and .env.{activeEnv} stay
-                            untouched.
-                        </p>
-                    </div>
-                )}
-
                 <div className="border-t border-line pt-3">
                     <Link
                         href={destroy(project.id).url}
@@ -3264,72 +3330,6 @@ function ProjectSettingsCard({
                     </p>
                 </div>
             </div>
-
-            {/* Confirmation Modal for Remove Environment */}
-            {confirmRemoveEnvOpen && activeEnv && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
-                        <div className="flex items-start gap-3.5">
-                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/20">
-                                <Unplug className="size-5" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <h3 className="text-base font-semibold text-ink">
-                                    Remove {activeEnv}?
-                                </h3>
-                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
-                                    This runs{' '}
-                                    <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
-                                        larakube env:remove {activeEnv}
-                                    </code>{' '}
-                                    to drop it from{' '}
-                                    <code className="font-mono text-ink">
-                                        .larakube.json
-                                    </code>{' '}
-                                    and remove its generated{' '}
-                                    <code className="font-mono text-ink">
-                                        k8s/overlays/{activeEnv}
-                                    </code>{' '}
-                                    manifests.
-                                </p>
-                                <p className="mt-2 text-xs font-medium text-ink">
-                                    Its live server, cluster resources, and
-                                    .env.{activeEnv} are not touched.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 flex items-center justify-end gap-2.5">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={removingEnv}
-                                onClick={() => setConfirmRemoveEnvOpen(false)}
-                                className="gap-1.5 text-xs"
-                            >
-                                <XCircle className="size-3.5" />
-                                <span>Cancel</span>
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="danger"
-                                size="sm"
-                                disabled={removingEnv}
-                                onClick={handleRemoveEnvironment}
-                                className="gap-1.5 text-xs"
-                            >
-                                <Trash2 className="size-3.5" />
-                                <span>
-                                    {removingEnv
-                                        ? 'Removing…'
-                                        : `Remove ${activeEnv}`}
-                                </span>
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Confirmation Modal for Heal */}
             {confirmHealOpen && (
