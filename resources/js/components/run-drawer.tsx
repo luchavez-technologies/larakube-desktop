@@ -367,13 +367,12 @@ export default function RunDrawer() {
         ...activeRunsFromProps,
     ]);
 
-    const [expandedId, setExpandedId] = useState<number | null>(() => {
-        const first = activeRunsFromProps[0];
-        if (!first || explicitlyCollapsedIds.has(first.id)) {
-            return null;
-        }
-        return first.id;
-    });
+    // Starts collapsed by default — a run only pops its panel open once it
+    // finishes (see TrackedRun's onFinished), not the moment it starts. A
+    // freshly-started run taking over the screen while the person is still
+    // looking at whatever they just clicked was reported live (2026-11-02)
+    // as bad UX; minimized-by-default with a surfaced result is the fix.
+    const [expandedId, setExpandedId] = useState<number | null>(null);
     const moveAside = useIsAnyRightDrawerOpen();
 
     useEffect(() => {
@@ -383,10 +382,6 @@ export default function RunDrawer() {
         if (fresh.length === 0) {
             return;
         }
-
-        const newest = fresh[0];
-        explicitlyCollapsedIds.delete(newest.id);
-        setExpandedId(newest.id);
 
         setSeeds((prev) => [...fresh, ...prev]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
