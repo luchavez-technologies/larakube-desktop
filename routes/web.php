@@ -30,6 +30,7 @@ use App\Http\Controllers\RunController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SimulatorController;
+use App\Http\Controllers\SsoController;
 use App\Http\Controllers\ToolInstallController;
 use App\Http\Controllers\TrayController;
 use App\Http\Controllers\TunnelController;
@@ -234,6 +235,18 @@ Route::post('/servers/{server}/openbao/grant', [OpenBaoController::class, 'grant
 Route::post('/servers/{server}/openbao/revoke', [OpenBaoController::class, 'revoke'])->name('servers.openbao.revoke');
 Route::post('/servers/{server}/openbao/export', [OpenBaoController::class, 'export'])->name('servers.openbao.export');
 Route::post('/servers/{server}/openbao/import', [OpenBaoController::class, 'import'])->name('servers.openbao.import');
+
+Route::get('/sso', [SsoController::class, 'entry'])->name('sso');
+Route::get('/servers/{server}/sso', [SsoController::class, 'index'])->name('servers.sso.index');
+Route::post('/servers/{server}/sso/refresh', [SsoController::class, 'refresh'])->name('servers.sso.refresh');
+Route::post('/servers/{server}/sso/wire', [SsoController::class, 'wire'])->name('servers.sso.wire');
+Route::post('/servers/{server}/sso/unwire', [SsoController::class, 'unwire'])->name('servers.sso.unwire');
+Route::post('/servers/{server}/sso/grant', [SsoController::class, 'grant'])->name('servers.sso.grant');
+Route::post('/servers/{server}/sso/revoke', [SsoController::class, 'revoke'])->name('servers.sso.revoke');
+Route::post('/servers/{server}/sso/create', [SsoController::class, 'create'])->name('servers.sso.create');
+Route::post('/servers/{server}/sso/org', [SsoController::class, 'org'])->name('servers.sso.org');
+Route::post('/servers/{server}/sso/org-grant', [SsoController::class, 'orgGrant'])->name('servers.sso.org-grant');
+Route::post('/servers/{server}/sso/prune', [SsoController::class, 'prune'])->name('servers.sso.prune');
 
 // Apps (App Store & Cluster Apps)
 Route::get('/apps', [ClusterToolController::class, 'entry'])->name('apps');

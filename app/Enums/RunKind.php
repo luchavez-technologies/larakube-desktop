@@ -126,6 +126,16 @@ enum RunKind: string
     case OpenBaoExport = 'openbao-export';
     case OpenBaoImport = 'openbao-import';
 
+    /** Zitadel SSO management. */
+    case SsoCreate = 'sso-create';
+    case SsoGrant = 'sso-grant';
+    case SsoRevoke = 'sso-revoke';
+    case SsoWire = 'sso-wire';
+    case SsoUnwire = 'sso-unwire';
+    case SsoOrg = 'sso-org';
+    case SsoOrgGrant = 'sso-org-grant';
+    case SsoPrune = 'sso-prune';
+
     public function changesBackups(): bool
     {
         return in_array($this, [self::BackupInit, self::BackupSchedule, self::BackupUnschedule, self::BackupRun, self::BackupRestore, self::BackupPrune], true);
@@ -149,6 +159,11 @@ enum RunKind: string
     public function changesOpenBao(): bool
     {
         return in_array($this, [self::OpenBaoSeal, self::OpenBaoUnseal, self::OpenBaoRotate, self::OpenBaoGrant, self::OpenBaoRevoke, self::OpenBaoImport], true);
+    }
+
+    public function changesSso(): bool
+    {
+        return in_array($this, [self::SsoWire, self::SsoUnwire, self::SsoGrant, self::SsoRevoke, self::SsoOrgGrant, self::SsoPrune], true);
     }
 
     /**

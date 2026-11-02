@@ -259,6 +259,15 @@ class RecordRunOutput
                 );
             }
         }
+
+        if ($server !== null && $run->kind?->changesOpenBao()) {
+            SyncClusterToolsJob::dispatch($server->id);
+        }
+
+        if ($server !== null && $run->kind?->changesSso()) {
+            // A later unit will add a dedicated SyncSsoJob dispatch here instead.
+            SyncClusterToolsJob::dispatch($server->id);
+        }
     }
 
     private function recordActivity(Run $run, Server $server): void

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Models\Run;
 use App\Models\Server;
@@ -9,6 +10,7 @@ use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
+use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 
 function openBaoTestServer(): string
@@ -257,4 +259,27 @@ test('importing secrets refuses when the retyped server name does not match', fu
     ])->assertStatus(422);
 
     expect(Run::count())->toBe(0);
+});
+
+test('a run that changes OpenBao dispatches SyncClusterToolsJob on completion', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+
+    $run = Run::create([
+        'label' => 'Seal OpenBao on prod-vps',
+        'command' => ['larakube', 'secrets:seal'],
+        'kind' => RunKind::OpenBaoSeal,
+        'meta' => ['server' => 'prod-vps', 'context' => 'larakube-do-ams3'],
+    ]);
+
+    event(new ProcessExited($run->alias(), 0));
+
+    Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $job) => $job->serverId === $server->id);
 });

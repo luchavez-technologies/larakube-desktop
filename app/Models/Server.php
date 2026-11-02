@@ -262,6 +262,12 @@ class Server extends Model
         return $this->clusterTools()->where('tool', 'openbao')->first();
     }
 
+    /** The cluster tool row for Zitadel SSO management, under either slug the CLI has used. */
+    public function ssoTool(): ?ClusterTool
+    {
+        return $this->clusterTools()->whereIn('tool', ['sso', 'zitadel'])->first();
+    }
+
     public function isFresh(): bool
     {
         return $this->sync_status === 'fresh';
