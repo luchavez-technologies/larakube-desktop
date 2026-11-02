@@ -17,6 +17,7 @@ use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\OpenBaoController;
 use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
@@ -222,6 +223,16 @@ Route::post('/servers/{server}/drive/extensions/install', [DriveController::clas
 Route::post('/servers/{server}/drive/extensions/uninstall', [DriveController::class, 'uninstallExtension'])->name('servers.drive.extensions.uninstall');
 Route::post('/servers/{server}/drive/restart', [DriveController::class, 'restart'])->name('servers.drive.restart');
 Route::delete('/servers/{server}/drive', [DriveController::class, 'destroy'])->name('servers.drive.destroy');
+
+Route::get('/openbao', [OpenBaoController::class, 'entry'])->name('openbao');
+Route::get('/servers/{server}/openbao', [OpenBaoController::class, 'index'])->name('servers.openbao.index');
+Route::post('/servers/{server}/openbao/seal', [OpenBaoController::class, 'seal'])->name('servers.openbao.seal');
+Route::post('/servers/{server}/openbao/unseal', [OpenBaoController::class, 'unseal'])->name('servers.openbao.unseal');
+Route::post('/servers/{server}/openbao/rotate', [OpenBaoController::class, 'rotate'])->name('servers.openbao.rotate');
+Route::post('/servers/{server}/openbao/grant', [OpenBaoController::class, 'grant'])->name('servers.openbao.grant');
+Route::post('/servers/{server}/openbao/revoke', [OpenBaoController::class, 'revoke'])->name('servers.openbao.revoke');
+Route::post('/servers/{server}/openbao/export', [OpenBaoController::class, 'export'])->name('servers.openbao.export');
+Route::post('/servers/{server}/openbao/import', [OpenBaoController::class, 'import'])->name('servers.openbao.import');
 
 // Apps (App Store & Cluster Apps)
 Route::get('/apps', [ClusterToolController::class, 'entry'])->name('apps');

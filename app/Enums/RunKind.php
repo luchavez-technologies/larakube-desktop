@@ -117,6 +117,15 @@ enum RunKind: string
     case DriveRestart = 'drive-restart';
     case DriveRemove = 'drive-remove';
 
+    /** OpenBao secrets management. */
+    case OpenBaoSeal = 'openbao-seal';
+    case OpenBaoUnseal = 'openbao-unseal';
+    case OpenBaoRotate = 'openbao-rotate';
+    case OpenBaoGrant = 'openbao-grant';
+    case OpenBaoRevoke = 'openbao-revoke';
+    case OpenBaoExport = 'openbao-export';
+    case OpenBaoImport = 'openbao-import';
+
     public function changesBackups(): bool
     {
         return in_array($this, [self::BackupInit, self::BackupSchedule, self::BackupUnschedule, self::BackupRun, self::BackupRestore, self::BackupPrune], true);
@@ -135,6 +144,11 @@ enum RunKind: string
     public function changesDrive(): bool
     {
         return in_array($this, [self::DriveDeploy, self::DriveOfficeDeploy, self::DriveInstallExtension, self::DriveUninstallExtension, self::DriveRestart, self::DriveRemove], true);
+    }
+
+    public function changesOpenBao(): bool
+    {
+        return in_array($this, [self::OpenBaoSeal, self::OpenBaoUnseal, self::OpenBaoRotate, self::OpenBaoGrant, self::OpenBaoRevoke, self::OpenBaoImport], true);
     }
 
     /**

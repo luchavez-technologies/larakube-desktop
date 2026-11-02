@@ -17,13 +17,22 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Network,
+    ShieldCheck,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { cn } from '@/lib/utils';
 import type { Untested } from '@/types/larakube';
-import { dashboard, drive, mail, plex, readiness, tools } from '@/routes';
+import {
+    dashboard,
+    drive,
+    mail,
+    openbao,
+    plex,
+    readiness,
+    tools,
+} from '@/routes';
 import { show as helpShow } from '@/routes/help';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as runsIndex } from '@/routes/runs';
@@ -131,6 +140,17 @@ const navigation: NavItem[] = [
             url.startsWith('/drive') || /^\/servers\/[^/]+\/drive/.test(url),
         accent: 'bg-sky-600',
         icon: HardDrive,
+        experimental: true,
+    },
+    {
+        label: 'OpenBao',
+        description: 'Secrets & rotation',
+        href: openbao().url,
+        active: (url) =>
+            url.startsWith('/openbao') ||
+            /^\/servers\/[^/]+\/openbao/.test(url),
+        accent: 'bg-amber-600',
+        icon: ShieldCheck,
         experimental: true,
     },
     {

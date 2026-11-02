@@ -256,6 +256,12 @@ class Server extends Model
         return $this->clusterTools()->whereIn('tool', ['drive', 'ocis'])->first();
     }
 
+    /** The cluster tool row for OpenBao secrets management. */
+    public function openBaoTool(): ?ClusterTool
+    {
+        return $this->clusterTools()->where('tool', 'openbao')->first();
+    }
+
     public function isFresh(): bool
     {
         return $this->sync_status === 'fresh';
