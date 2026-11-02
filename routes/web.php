@@ -163,6 +163,7 @@ Route::post('/projects/{project}/group', [ProjectController::class, 'updateGroup
 Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');
 Route::post('/projects/{project}/link', [ProjectController::class, 'link'])->name('projects.link');
 Route::post('/projects/{project}/host', [ProjectController::class, 'host'])->name('projects.host');
+Route::post('/projects/{project}/environment/remove', [ProjectController::class, 'removeEnvironment'])->name('projects.removeEnvironment');
 Route::post('/projects/{project}/ci', [ProjectController::class, 'configureCi'])->name('projects.ci');
 Route::post('/projects/{project}/retry', [ProjectController::class, 'retry'])->name('projects.retry');
 Route::post('/projects/{project}/folder', [ProjectController::class, 'showFolder'])->name('projects.folder');

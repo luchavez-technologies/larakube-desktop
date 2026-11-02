@@ -54,6 +54,8 @@ enum RunKind: string
     case InitProject = 'init-project';
     /** A cloud environment created with `env`, bound to an existing server. */
     case LinkServer = 'link-server';
+    /** A cloud environment dropped from the project's blueprint with `env:remove` — never touches a live server or cluster. */
+    case RemoveEnvironment = 'remove-environment';
     case ConfigureHost = 'configure-host';
     case ConfigureCi = 'configure-ci';
     case ConfigureReplicas = 'configure-replicas';

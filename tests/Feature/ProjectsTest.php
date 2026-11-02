@@ -700,6 +700,26 @@ test('tld endpoint can pin and clear project localTld in blueprint', function ()
     File::deleteDirectory($sandbox['home']);
 });
 
+test('removing an environment dispatches env:remove --force and never touches local', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.removeEnvironment', $project), ['environment' => 'local'])
+        ->assertSessionHasErrors('environment');
+
+    $this->post(route('projects.removeEnvironment', $project), ['environment' => 'production'])
+        ->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'env:remove', 'production', '--force', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+    expect(Run::sole()->kind)->toBe(RunKind::RemoveEnvironment);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('linking a server supports custom environments like staging', function () {
     $sandbox = projectsSandbox();
     projectsStacks();

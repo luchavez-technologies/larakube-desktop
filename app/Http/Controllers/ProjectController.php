@@ -850,6 +850,23 @@ class ProjectController extends Controller
         return $this->run($runner, $project, RunKind::ConfigureHost, "Set the address of {$this->name($project)} ({$environment})", ['cloud:configure', $environment, '--only=hosts', "--web-host={$host}"], $environment);
     }
 
+    /**
+     * Drops an environment from this project's blueprint — never touches a
+     * live server or cluster. --force: Desktop drives the confirmation
+     * itself (the browser confirm dialog before this request is even sent),
+     * so the CLI's own "type confirm to proceed" prompt would otherwise just
+     * hang non-interactively.
+     */
+    public function removeEnvironment(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash', 'not_in:local'],
+        ]);
+        $environment = $validated['environment'];
+
+        return $this->run($runner, $project, RunKind::RemoveEnvironment, "Remove {$environment} from {$this->name($project)}'s blueprint", ['env:remove', $environment, '--force'], $environment);
+    }
+
     public function configureCi(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
         $validated = $request->validate([

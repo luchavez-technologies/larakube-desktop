@@ -80,6 +80,7 @@ import {
     k9s as launchK9s,
     link,
     reload as reloadLifecycle,
+    removeEnvironment,
     retry,
     start as startLifecycle,
     stop as stopLifecycle,
@@ -635,7 +636,13 @@ export default function ShowProject({
                                     activeEnv={activeEnv}
                                 />
                             )}
-                            <ProjectSettingsCard project={project} />
+                            <ProjectSettingsCard
+                                project={project}
+                                activeEnv={activeEnv}
+                                onEnvironmentRemoved={() =>
+                                    setActiveEnv('local')
+                                }
+                            />
                             <RecentRunsCard runs={runs} activeEnv={activeEnv} />
                         </div>
                     </div>
@@ -3136,9 +3143,38 @@ function ProjectTldForm({ project }: { project: Project }) {
     );
 }
 
-function ProjectSettingsCard({ project }: { project: Project }) {
+function ProjectSettingsCard({
+    project,
+    activeEnv,
+    onEnvironmentRemoved,
+}: {
+    project: Project;
+    activeEnv?: string;
+    onEnvironmentRemoved?: () => void;
+}) {
     const [confirmHealOpen, setConfirmHealOpen] = useState(false);
     const [healing, setHealing] = useState(false);
+    const [confirmRemoveEnvOpen, setConfirmRemoveEnvOpen] = useState(false);
+    const [removingEnv, setRemovingEnv] = useState(false);
+
+    const isCloudEnvActive = Boolean(activeEnv) && activeEnv !== 'local';
+
+    const handleRemoveEnvironment = () => {
+        if (!activeEnv) return;
+        setRemovingEnv(true);
+        router.post(
+            removeEnvironment(project.id).url,
+            { environment: activeEnv },
+            {
+                preserveScroll: true,
+                onSuccess: () => onEnvironmentRemoved?.(),
+                onFinish: () => {
+                    setRemovingEnv(false);
+                    setConfirmRemoveEnvOpen(false);
+                },
+            },
+        );
+    };
 
     const handleHeal = () => {
         setHealing(true);
@@ -3187,6 +3223,27 @@ function ProjectSettingsCard({ project }: { project: Project }) {
                     </div>
                 </div>
 
+                {isCloudEnvActive && (
+                    <div className="border-t border-line pt-3">
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            disabled={removingEnv}
+                            onClick={() => setConfirmRemoveEnvOpen(true)}
+                            className="w-full justify-center gap-1.5"
+                        >
+                            <Unplug className="size-3.5" />
+                            <span>Remove {activeEnv} Environment</span>
+                        </Button>
+                        <p className="mt-2 text-center text-xs leading-relaxed text-soft">
+                            Only drops it from this project's blueprint. Its
+                            server, cluster resources, and .env.{activeEnv} stay
+                            untouched.
+                        </p>
+                    </div>
+                )}
+
                 <div className="border-t border-line pt-3">
                     <Link
                         href={destroy(project.id).url}
@@ -3207,6 +3264,72 @@ function ProjectSettingsCard({ project }: { project: Project }) {
                     </p>
                 </div>
             </div>
+
+            {/* Confirmation Modal for Remove Environment */}
+            {confirmRemoveEnvOpen && activeEnv && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/20">
+                                <Unplug className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Remove {activeEnv}?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    This runs{' '}
+                                    <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                        larakube env:remove {activeEnv}
+                                    </code>{' '}
+                                    to drop it from{' '}
+                                    <code className="font-mono text-ink">
+                                        .larakube.json
+                                    </code>{' '}
+                                    and remove its generated{' '}
+                                    <code className="font-mono text-ink">
+                                        k8s/overlays/{activeEnv}
+                                    </code>{' '}
+                                    manifests.
+                                </p>
+                                <p className="mt-2 text-xs font-medium text-ink">
+                                    Its live server, cluster resources, and
+                                    .env.{activeEnv} are not touched.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={removingEnv}
+                                onClick={() => setConfirmRemoveEnvOpen(false)}
+                                className="gap-1.5 text-xs"
+                            >
+                                <XCircle className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                disabled={removingEnv}
+                                onClick={handleRemoveEnvironment}
+                                className="gap-1.5 text-xs"
+                            >
+                                <Trash2 className="size-3.5" />
+                                <span>
+                                    {removingEnv
+                                        ? 'Removing…'
+                                        : `Remove ${activeEnv}`}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Confirmation Modal for Heal */}
             {confirmHealOpen && (
