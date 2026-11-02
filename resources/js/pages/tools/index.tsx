@@ -18,7 +18,9 @@ import ServerSwitcher from '@/components/server-switcher';
 import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
-import CustomEnvFields from '@/components/custom-env-fields';
+import CustomEnvFields, {
+    excludeCustomEnvFields,
+} from '@/components/custom-env-fields';
 import HostPicker from '@/components/host-picker';
 import { ExternalLinkButton } from '@/lib/open-external';
 import QrCodePopover from '@/components/qr-code-popover';
@@ -1548,16 +1550,15 @@ function InstallDialog({
     // toggle that can't work.
     const optionFields = useMemo(
         () =>
-            (tool.initFields ?? []).filter(
-                (field) =>
-                    !['host', 'account'].includes(field.role ?? 'option') &&
-                    !(
-                        isLocalServer &&
-                        ['proxied', 'vpnOnly'].includes(field.key)
-                    ) &&
-                    // Rendered by the bespoke CustomEnvFields editor below
-                    // instead of the generic repeatable-text-list fallback.
-                    !['customEnv', 'customEnvSecret'].includes(field.key),
+            excludeCustomEnvFields(
+                (tool.initFields ?? []).filter(
+                    (field) =>
+                        !['host', 'account'].includes(field.role ?? 'option') &&
+                        !(
+                            isLocalServer &&
+                            ['proxied', 'vpnOnly'].includes(field.key)
+                        ),
+                ),
             ),
         [tool.initFields, isLocalServer],
     );

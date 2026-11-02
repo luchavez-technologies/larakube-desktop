@@ -24,6 +24,9 @@ import { ExternalLinkButton } from '@/lib/open-external';
 import Button, { buttonClass } from '@/components/button';
 import CopyButton from '@/components/copy-button';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
+import CustomEnvFields, {
+    excludeCustomEnvFields,
+} from '@/components/custom-env-fields';
 import HostPicker, { type HostPickerMeta } from '@/components/host-picker';
 import InfoTooltip from '@/components/info-tooltip';
 import Redactable from '@/components/redactable';
@@ -198,6 +201,13 @@ export default function QuickLaunchModal({
     // curated per app — fields is what the CLI reports for the current
     // app+server, options is the person's answers to it.
     const [fields, setFields] = useState<FrameworkField[]>([]);
+    // Rendered by the bespoke CustomEnvFields editor instead of the generic
+    // repeatable-text-list fallback — same split tools/index.tsx's Install
+    // dialog already makes.
+    const genericOptionFields = useMemo(
+        () => excludeCustomEnvFields(fields),
+        [fields],
+    );
     const [options, setOptions] = useState<NewAppAnswers>({});
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [wireSso, setWireSso] = useState<boolean>(false);
@@ -1132,10 +1142,16 @@ export default function QuickLaunchModal({
                                         onDomainsLoaded={handleDomainsLoaded}
                                     />
 
-                                    {/* ADR 0010: this app's own deploy options, live from the CLI — not a hand-curated picker. */}
-                                    {fields.length > 0 && (
+                                    <CustomEnvFields
+                                        fields={fields}
+                                        answers={options}
+                                        onChange={setOptions}
+                                    />
+
+                                    {/* ADR 0010: this app's own deploy options, live from the CLI — not a hand-curated picker. Rendered by CustomEnvFields above instead of this generic fallback. */}
+                                    {genericOptionFields.length > 0 && (
                                         <FrameworkFields
-                                            fields={fields}
+                                            fields={genericOptionFields}
                                             answers={options}
                                             errors={fieldErrors}
                                             errorPrefix="options"

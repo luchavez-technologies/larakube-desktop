@@ -19,6 +19,22 @@ function parseRows(entries: unknown, secret: boolean): Row[] {
 }
 
 /**
+ * `customEnv`/`customEnvSecret` are rendered by <CustomEnvFields> instead of
+ * the generic initFields-driven form — every caller that hands fields to
+ * FrameworkFields (the Install dialog, Quick Launch, and anywhere else that
+ * adopts this same initFields pipeline later, e.g. an "Update App" config
+ * editor) excludes them the same way, via this one helper, so the exclusion
+ * can never drift between call sites.
+ */
+export function excludeCustomEnvFields(
+    fields: FrameworkField[],
+): FrameworkField[] {
+    return fields.filter(
+        (field) => field.key !== 'customEnv' && field.key !== 'customEnvSecret',
+    );
+}
+
+/**
  * KEY/VALUE/secret-toggle editor for a tool's `customEnv`/`customEnvSecret`
  * init options — the Install-dialog counterpart to ToolEnvCard's post-
  * install editor, letting a person inject their own vars (an external mail/
