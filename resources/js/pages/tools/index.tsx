@@ -8,7 +8,6 @@ import {
     ArrowUpCircle,
     Plus,
     ArrowRight,
-    Check,
     Settings2,
     Sparkles,
     XCircle,
@@ -16,14 +15,13 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
-import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
+import HostPicker from '@/components/host-picker';
 import { ExternalLinkButton } from '@/lib/open-external';
 import QrCodePopover from '@/components/qr-code-popover';
 import ToolLogo from '@/components/tool-logo';
-import Redactable from '@/components/redactable';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import ManageToolDrawer from '@/components/manage-tool-drawer';
@@ -1514,38 +1512,11 @@ function InstallDialog({
         return Array.from(map.values());
     }, [domains, tools]);
 
-    const initialBaseDomain = useMemo(() => {
-        const suggested = suggestedDomain(tools);
-        if (suggested && knownDomains.some((d) => d.domain === suggested)) {
-            return suggested;
-        }
-        return knownDomains[0]?.domain ?? suggested ?? '';
-    }, [knownDomains, tools]);
-
     const isMulti = isNewInstance || tool.installed;
-    const [isCustomDomain, setIsCustomDomain] = useState(
-        () => knownDomains.length === 0,
-    );
-    const [selectedBaseDomain, setSelectedBaseDomain] =
-        useState(initialBaseDomain);
-    const [subdomain, setSubdomain] = useState(() =>
-        defaultSubdomainForTool(tool, Boolean(isMulti), tools),
-    );
-    const [customDomain, setCustomDomain] = useState('');
 
-    const domain = useMemo(() => {
-        if (isCustomDomain || knownDomains.length === 0) {
-            return customDomain.trim().toLowerCase();
-        }
-        const sub = subdomain.trim().toLowerCase();
-        return sub ? `${sub}.${selectedBaseDomain}` : selectedBaseDomain;
-    }, [
-        isCustomDomain,
-        knownDomains.length,
-        customDomain,
-        subdomain,
-        selectedBaseDomain,
-    ]);
+    // Resolved by the shared HostPicker (same widget as Create Environment
+    // and Environment Settings) via its onChange callback.
+    const [domain, setDomain] = useState('');
 
     const tagline = toolTagline(tool);
     const name = toolName(tool);
@@ -1561,9 +1532,9 @@ function InstallDialog({
         }
         const cleanDomain = domain
             ? domain.replace(/^https?:\/\//, '').split('/')[0]
-            : selectedBaseDomain || 'example.com';
+            : 'example.com';
         return `admin@${cleanDomain}`;
-    }, [server.account, domain, selectedBaseDomain]);
+    }, [server.account, domain]);
 
     const isLocalServer = useMemo(() => isLocalServerCheck(server), [server]);
 
@@ -1593,21 +1564,10 @@ function InstallDialog({
         // Cloudflare already proxies every Ingress on this zone — deploying
         // straight through DNS-only would be the surprising choice. Computed
         // once, at mount, same as every other initial value here: this
-        // dialog remounts fresh each time it opens.
-        const matched = isCustomDomain
-            ? knownDomains.find(
-                  (d) =>
-                      d.externalDns &&
-                      customDomain.trim().toLowerCase() !== '' &&
-                      (customDomain.trim().toLowerCase() === d.domain ||
-                          customDomain
-                              .trim()
-                              .toLowerCase()
-                              .endsWith(`.${d.domain}`)),
-              )
-            : knownDomains.find(
-                  (d) => d.domain === selectedBaseDomain && d.externalDns,
-              );
+        // dialog remounts fresh each time it opens. HostPicker defaults to
+        // the same ExternalDNS zone once it mounts, so this mirrors what it
+        // will actually resolve to.
+        const matched = knownDomains.find((d) => d.externalDns);
 
         // Local clusters never offer a `proxied` field at all (see
         // optionFields above) — for cloud servers, default to true only when
@@ -1693,72 +1653,6 @@ function InstallDialog({
                 candidate.installed,
         ) && tool.mail !== 'N/A';
 
-    const selectedDomainMeta = knownDomains.find(
-        (d) => d.domain === (isCustomDomain ? domain : selectedBaseDomain),
-    );
-
-    const [dnsStatus, setDnsStatus] = useState<{
-        checking: boolean;
-        checked: boolean;
-        matches: boolean;
-        resolvedIp: string | null;
-        isWildcard: boolean;
-    }>({
-        checking: false,
-        checked: false,
-        matches: false,
-        resolvedIp: null,
-        isWildcard: false,
-    });
-
-    useEffect(() => {
-        if (!domain || !server.ip || selectedDomainMeta?.externalDns) {
-            setDnsStatus({
-                checking: false,
-                checked: false,
-                matches: false,
-                resolvedIp: null,
-                isWildcard: false,
-            });
-            return;
-        }
-
-        let cancelled = false;
-        setDnsStatus((prev) => ({ ...prev, checking: true }));
-
-        const timer = setTimeout(() => {
-            fetch(
-                `/servers/${server.name}/check-dns?domain=${encodeURIComponent(domain)}`,
-            )
-                .then((res) => res.json())
-                .then((data) => {
-                    if (!cancelled) {
-                        setDnsStatus({
-                            checking: false,
-                            checked: true,
-                            matches: !!data.matches,
-                            resolvedIp: data.resolvedIp ?? null,
-                            isWildcard: !!data.isWildcard,
-                        });
-                    }
-                })
-                .catch(() => {
-                    if (!cancelled) {
-                        setDnsStatus((prev) => ({
-                            ...prev,
-                            checking: false,
-                            checked: false,
-                        }));
-                    }
-                });
-        }, 400);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [domain, server.name, server.ip, selectedDomainMeta?.externalDns]);
-
     const [slidIn, setSlidIn] = useState(false);
 
     useEffect(() => {
@@ -1823,241 +1717,28 @@ function InstallDialog({
                                     </div>
                                 )}
 
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <span className="block text-xs font-medium text-soft">
-                                            {isCustomDomain
-                                                ? 'Domain / Host'
-                                                : 'Host Address'}
-                                        </span>
-                                        {knownDomains.length > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (isCustomDomain) {
-                                                        setIsCustomDomain(
-                                                            false,
-                                                        );
-                                                    } else {
-                                                        setIsCustomDomain(true);
-                                                        setCustomDomain(domain);
-                                                    }
-                                                }}
-                                                className="text-xs text-tools hover:underline"
-                                            >
-                                                {isCustomDomain
-                                                    ? 'Pick connected base domain'
-                                                    : '+ Custom domain'}
-                                            </button>
+                                <div>
+                                    <HostPicker
+                                        name="domain"
+                                        value={domain}
+                                        onChange={setDomain}
+                                        domains={knownDomains}
+                                        serverName={server.name}
+                                        serverIp={server.ip ?? null}
+                                        defaultSubdomain={defaultSubdomainForTool(
+                                            tool,
+                                            Boolean(isMulti),
+                                            tools,
                                         )}
-                                    </div>
-
-                                    {!isCustomDomain &&
-                                    knownDomains.length > 0 ? (
-                                        <div className="space-y-2">
-                                            {knownDomains.length > 1 && (
-                                                <div>
-                                                    <SelectMenu
-                                                        value={
-                                                            selectedBaseDomain
-                                                        }
-                                                        accent="tools"
-                                                        triggerClassName="font-mono text-[13px]"
-                                                        onChange={(value) =>
-                                                            setSelectedBaseDomain(
-                                                                value,
-                                                            )
-                                                        }
-                                                        options={knownDomains.map(
-                                                            (d) => ({
-                                                                value: d.domain,
-                                                                label: d.domain,
-                                                                badge: d.externalDns ? (
-                                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                                                                        <Sparkles className="size-2.5" />
-                                                                        ExternalDNS
-                                                                    </span>
-                                                                ) : d.tls ? (
-                                                                    <span className="shrink-0 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
-                                                                        TLS
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="shrink-0 rounded-full bg-badge px-1.5 py-0.5 text-[10px] font-medium text-soft">
-                                                                        Active
-                                                                        Ingress
-                                                                    </span>
-                                                                ),
-                                                            }),
-                                                        )}
-                                                        footer={
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setIsCustomDomain(
-                                                                        true,
-                                                                    );
-                                                                    setCustomDomain(
-                                                                        domain,
-                                                                    );
-                                                                }}
-                                                                className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs text-soft transition hover:bg-badge hover:text-ink"
-                                                            >
-                                                                <Plus className="size-3.5 text-soft" />
-                                                                <span>
-                                                                    Enter custom
-                                                                    domain…
-                                                                </span>
-                                                            </button>
-                                                        }
-                                                    />
-                                                </div>
-                                            )}
-                                            <div className="flex rounded-lg ring-1 ring-line focus-within:ring-2 focus-within:ring-tools">
-                                                <input
-                                                    type="text"
-                                                    value={subdomain}
-                                                    onChange={(event) =>
-                                                        setSubdomain(
-                                                            event.target.value
-                                                                .trim()
-                                                                .toLowerCase()
-                                                                .replace(
-                                                                    /[^a-z0-9-]/g,
-                                                                    '',
-                                                                ),
-                                                        )
-                                                    }
-                                                    placeholder={defaultSubdomainForTool(
-                                                        tool,
-                                                        Boolean(isMulti),
-                                                        tools,
-                                                    )}
-                                                    autoFocus
-                                                    spellCheck={false}
-                                                    className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-mono text-[13px] outline-none"
-                                                />
-                                                <div className="flex items-center border-l border-line bg-badge/40 px-3 font-mono text-[13px] text-soft">
-                                                    .{selectedBaseDomain}
-                                                </div>
-                                            </div>
-                                            <input
-                                                type="hidden"
-                                                name="domain"
-                                                value={domain}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <input
-                                                name="domain"
-                                                value={customDomain}
-                                                onChange={(event) =>
-                                                    setCustomDomain(
-                                                        event.target.value
-                                                            .trim()
-                                                            .toLowerCase(),
-                                                    )
-                                                }
-                                                placeholder="e.g. pocket.example.com"
-                                                autoFocus
-                                                spellCheck={false}
-                                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
-                                            />
-                                        </div>
-                                    )}
-
+                                        isLocal={isLocalServer}
+                                        checkDns
+                                        label="Domain / Host Address"
+                                    />
                                     {errors.domain && (
                                         <span className="mt-1 block text-xs text-accent">
                                             {errors.domain}
                                         </span>
                                     )}
-
-                                    <div className="mt-2 space-y-1.5 rounded-lg bg-paper p-3 text-xs text-soft">
-                                        <div className="flex items-center justify-between">
-                                            <span className="font-mono text-[12px] text-ink">
-                                                https://
-                                                {domain || 'example.com'}
-                                            </span>
-                                            {selectedDomainMeta?.externalDns ? (
-                                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
-                                                    <Check className="size-3" />{' '}
-                                                    ExternalDNS auto-sync
-                                                </span>
-                                            ) : dnsStatus.checking ? (
-                                                <span className="text-[11px] text-soft">
-                                                    Checking DNS…
-                                                </span>
-                                            ) : dnsStatus.checked &&
-                                              dnsStatus.matches ? (
-                                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
-                                                    <Check className="size-3" />{' '}
-                                                    A record points to{' '}
-                                                    <Redactable
-                                                        value={server.ip ?? ''}
-                                                        kind="ip"
-                                                    />
-                                                </span>
-                                            ) : null}
-                                        </div>
-
-                                        {selectedDomainMeta?.externalDns ? (
-                                            <p className="text-[11px] leading-relaxed text-soft">
-                                                DNS records are managed
-                                                automatically through
-                                                ExternalDNS on Cloudflare.
-                                            </p>
-                                        ) : (
-                                            <p className="text-[11px] leading-relaxed text-soft">
-                                                {dnsStatus.checked &&
-                                                dnsStatus.matches ? (
-                                                    <>
-                                                        Traffic resolves to{' '}
-                                                        <span className="font-mono text-ink">
-                                                            <Redactable
-                                                                value={
-                                                                    server.ip ??
-                                                                    ''
-                                                                }
-                                                                kind="ip"
-                                                            />
-                                                        </span>
-                                                        . Traefik will route
-                                                        requests and issue Let's
-                                                        Encrypt certificates
-                                                        automatically.
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        ExternalDNS is not
-                                                        syncing this domain. If
-                                                        you already set up an A
-                                                        record (or wildcard{' '}
-                                                        <span className="font-mono text-ink">
-                                                            *.
-                                                            {domain || 'domain'}
-                                                        </span>
-                                                        ) pointing to{' '}
-                                                        <span className="font-mono text-ink">
-                                                            {server.ip ? (
-                                                                <Redactable
-                                                                    value={
-                                                                        server.ip
-                                                                    }
-                                                                    kind="ip"
-                                                                />
-                                                            ) : (
-                                                                'the server'
-                                                            )}
-                                                        </span>
-                                                        , Traefik will route
-                                                        traffic and issue Let's
-                                                        Encrypt certificates
-                                                        automatically.
-                                                    </>
-                                                )}
-                                            </p>
-                                        )}
-                                    </div>
                                 </div>
                                 {needsAdminEmail && (
                                     <label className="block">

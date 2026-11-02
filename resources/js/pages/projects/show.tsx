@@ -32,6 +32,8 @@ import {
     Save,
     Network,
     HeartPulse,
+    Globe,
+    Server as ServerIcon,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
@@ -42,6 +44,8 @@ import EnvironmentSettingsDrawer, {
     CiPipelineForm,
     type EnvironmentSettingsDrawerSection,
 } from '@/components/environment-settings-drawer';
+import HostPicker from '@/components/host-picker';
+import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
 import LocalDevCompanionsCard from '@/components/local-dev-companions-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
@@ -2343,7 +2347,7 @@ function DeployDialog({
     );
 }
 
-/** Modal dialog for adding a new cloud environment */
+/** Right-hand sidebar drawer for adding a new cloud environment */
 function AddEnvironmentDialog({
     open,
     onClose,
@@ -2360,47 +2364,82 @@ function AddEnvironmentDialog({
     const [name, setName] = useState('');
     const [server, setServer] = useState(readyServers[0]?.name ?? '');
     const [webHost, setWebHost] = useState('');
+    const [slidIn, setSlidIn] = useState(false);
+
+    useRightDrawerOpen(open);
 
     useEffect(() => {
+        if (open) {
+            const timer = setTimeout(() => setSlidIn(true), 20);
+            return () => clearTimeout(timer);
+        } else {
+            setSlidIn(false);
+        }
+    }, [open]);
+
+    const handleClose = () => {
+        setSlidIn(false);
+        setTimeout(() => onClose(), 250);
+    };
+
+    useEffect(() => {
+        if (!open) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                onClose();
+                handleClose();
             }
         };
-        if (open) {
-            window.addEventListener('keydown', handleKeyDown);
-        }
+        window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [open, onClose]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     if (!open) return null;
 
+    const activeServer = readyServers.find((s) => s.name === server) ?? null;
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs">
+        <div
+            className={cn(
+                'fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-300',
+                slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={handleClose}
+        >
             <div
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="add-env-dialog-title"
-                className="w-full max-w-[480px] rounded-2xl bg-surface p-6 shadow-2xl ring-1 ring-line"
+                className={cn(
+                    'flex h-full w-full max-w-xl flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-300 ease-out md:max-w-lg',
+                    slidIn ? 'translate-x-0' : 'translate-x-full',
+                )}
+                onClick={(e) => e.stopPropagation()}
             >
-                <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
-                    <div>
-                        <h3
-                            id="add-env-dialog-title"
-                            className="text-base font-semibold text-ink"
-                        >
-                            Add Cloud Environment
-                        </h3>
-                        <p className="mt-0.5 text-xs text-soft">
-                            Create an environment overlay and bind it to a
-                            server.
-                        </p>
+                {/* Drawer Header */}
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex size-9 items-center justify-center rounded-xl bg-servers/10 text-servers">
+                            <Cloud className="size-5" />
+                        </div>
+                        <div>
+                            <h2
+                                id="add-env-dialog-title"
+                                className="text-base font-semibold text-ink"
+                            >
+                                Add Cloud Environment
+                            </h2>
+                            <p className="text-xs text-soft">
+                                {project.name} · Create an overlay and bind it
+                                to a server
+                            </p>
+                        </div>
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
-                        className="rounded-lg p-1.5 text-soft transition-colors hover:bg-paper hover:text-ink"
-                        title="Close dialog"
+                        onClick={handleClose}
+                        aria-label="Close drawer"
+                        className="rounded-lg p-1.5 text-soft transition hover:bg-badge hover:text-ink focus:outline-none"
                     >
                         <X className="size-4" />
                     </button>
@@ -2408,118 +2447,137 @@ function AddEnvironmentDialog({
 
                 <Form
                     action={link(project.id)}
-                    className="space-y-4"
+                    className="flex flex-1 flex-col overflow-hidden"
                     onSuccess={() => {
                         onCreated?.(name);
                         setName('');
                         setWebHost('');
-                        onClose();
+                        handleClose();
                     }}
                 >
                     {({ errors, processing }) => (
                         <>
-                            <div>
-                                <label className="mb-1.5 block text-xs font-medium text-ink">
-                                    Environment Name
-                                </label>
-                                <input
-                                    name="environment"
-                                    value={name}
-                                    onChange={(e) =>
-                                        setName(
-                                            e.target.value
-                                                .toLowerCase()
-                                                .replace(/[^a-z0-9_-]/g, ''),
-                                        )
-                                    }
-                                    placeholder="staging, qa, uat"
-                                    spellCheck={false}
-                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                                {errors.environment && (
-                                    <p className="mt-1 text-xs text-accent">
-                                        {errors.environment}
+                            <div className="flex-1 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent] space-y-6 overflow-y-auto p-6">
+                                {/* Section: Environment Name */}
+                                <div className="rounded-2xl border border-line bg-paper/40 p-5">
+                                    <div className="mb-4 border-b border-line/60 pb-3">
+                                        <h3 className="text-sm font-semibold text-ink">
+                                            Environment Name
+                                        </h3>
+                                    </div>
+                                    <input
+                                        name="environment"
+                                        value={name}
+                                        onChange={(e) =>
+                                            setName(
+                                                e.target.value
+                                                    .toLowerCase()
+                                                    .replace(
+                                                        /[^a-z0-9_-]/g,
+                                                        '',
+                                                    ),
+                                            )
+                                        }
+                                        placeholder="staging, qa, uat"
+                                        spellCheck={false}
+                                        className="w-full rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    />
+                                    {errors.environment && (
+                                        <p className="mt-1.5 text-xs text-accent">
+                                            {errors.environment}
+                                        </p>
+                                    )}
+                                    <p className="mt-1.5 text-[11px] text-soft">
+                                        Lowercase letters, numbers, hyphens, and
+                                        underscores only.
                                     </p>
-                                )}
-                                <p className="mt-1 text-[11px] text-soft">
-                                    Lowercase letters, numbers, hyphens, and
-                                    underscores only.
-                                </p>
+                                </div>
+
+                                {/* Section: Target Server */}
+                                <div className="rounded-2xl border border-line bg-paper/40 p-5">
+                                    <div className="mb-4 flex items-center gap-2 border-b border-line/60 pb-3">
+                                        <ServerIcon className="size-4 text-brand" />
+                                        <h3 className="text-sm font-semibold text-ink">
+                                            Target Server
+                                        </h3>
+                                    </div>
+                                    <SelectMenu
+                                        name="server"
+                                        value={server}
+                                        accent="servers"
+                                        className="w-full"
+                                        triggerClassName="py-2 text-xs rounded-xl"
+                                        onChange={setServer}
+                                        options={readyServers.map((s) => ({
+                                            value: s.name,
+                                            label: (
+                                                <>
+                                                    {s.name}
+                                                    {s.provider
+                                                        ? ` (${providerLabels[s.provider] ?? s.provider})`
+                                                        : ''}
+                                                    {s.ip && (
+                                                        <>
+                                                            {' · '}
+                                                            <Redactable
+                                                                value={s.ip}
+                                                                kind="ip"
+                                                            />
+                                                        </>
+                                                    )}
+                                                </>
+                                            ),
+                                        }))}
+                                    />
+                                    {errors.server && (
+                                        <p className="mt-1.5 text-xs text-accent">
+                                            {errors.server}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Section: Public Address */}
+                                <div className="rounded-2xl border border-line bg-paper/40 p-5">
+                                    <div className="mb-4 flex items-center gap-2 border-b border-line/60 pb-3">
+                                        <Globe className="size-4 text-brand" />
+                                        <h3 className="text-sm font-semibold text-ink">
+                                            Public Address
+                                        </h3>
+                                    </div>
+                                    <HostPicker
+                                        key={server}
+                                        name="web_host"
+                                        value={webHost}
+                                        onChange={setWebHost}
+                                        serverName={server || null}
+                                        serverIp={activeServer?.ip ?? null}
+                                        defaultSubdomain={(name || project.name)
+                                            .toLowerCase()
+                                            .replace(/[^a-z0-9-]/g, '')}
+                                        hideLabel
+                                        disabled={processing}
+                                    />
+                                    {errors.web_host && (
+                                        <p className="mt-1.5 text-xs text-accent">
+                                            {errors.web_host}
+                                        </p>
+                                    )}
+                                    <p className="mt-2 text-[11px] text-soft">
+                                        Domains already connected to this
+                                        server&rsquo;s cluster are detected
+                                        automatically. You can change this
+                                        later.
+                                    </p>
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="mb-1.5 block text-xs font-medium text-ink">
-                                    Target Server
-                                </label>
-                                <SelectMenu
-                                    name="server"
-                                    value={server}
-                                    accent="servers"
-                                    onChange={setServer}
-                                    options={readyServers.map((s) => ({
-                                        value: s.name,
-                                        label: (
-                                            <>
-                                                {s.name}
-                                                {s.provider
-                                                    ? ` (${providerLabels[s.provider] ?? s.provider})`
-                                                    : ''}
-                                                {s.ip && (
-                                                    <>
-                                                        {' · '}
-                                                        <Redactable
-                                                            value={s.ip}
-                                                            kind="ip"
-                                                        />
-                                                    </>
-                                                )}
-                                            </>
-                                        ),
-                                    }))}
-                                />
-                                {errors.server && (
-                                    <p className="mt-1 text-xs text-accent">
-                                        {errors.server}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="mb-1.5 block text-xs font-medium text-ink">
-                                    Web Domain
-                                </label>
-                                <input
-                                    name="web_host"
-                                    value={webHost}
-                                    onChange={(e) =>
-                                        setWebHost(e.target.value.trim())
-                                    }
-                                    placeholder={
-                                        name
-                                            ? `${name}.example.com`
-                                            : 'app.example.com'
-                                    }
-                                    spellCheck={false}
-                                    className="w-full rounded-lg border-0 bg-paper px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                                {errors.web_host && (
-                                    <p className="mt-1 text-xs text-accent">
-                                        {errors.web_host}
-                                    </p>
-                                )}
-                                <p className="mt-1 text-[11px] text-soft">
-                                    A real domain this environment will be
-                                    reachable at, without https://. You can
-                                    change this later.
-                                </p>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-2.5 border-t border-line pt-3">
+                            {/* Drawer Footer */}
+                            <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-line bg-paper/30 px-6 py-3.5">
                                 <Button
                                     type="button"
                                     variant="secondary"
                                     size="sm"
-                                    onClick={onClose}
+                                    onClick={handleClose}
                                 >
                                     Cancel
                                 </Button>
@@ -2533,9 +2591,12 @@ function AddEnvironmentDialog({
                                         readyServers.length === 0
                                     }
                                 >
-                                    {processing
-                                        ? 'Creating…'
-                                        : 'Create Environment'}
+                                    <Plus className="size-3" />
+                                    <span>
+                                        {processing
+                                            ? 'Creating…'
+                                            : 'Create Environment'}
+                                    </span>
                                 </Button>
                             </div>
                         </>

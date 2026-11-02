@@ -4,6 +4,7 @@ import { Check, ChevronDown, Globe, Plus, Sparkles, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ServerDomain } from '@/types/larakube';
 import CopyButton from '@/components/copy-button';
+import Redactable from '@/components/redactable';
 
 export type HostPickerMeta = {
     subdomain: string;
@@ -42,6 +43,26 @@ export type HostPickerProps = {
     hideLabel?: boolean;
     /** Show ExternalDNS Auto-Sync banner and DNS guidance cards (default: true) */
     showBanners?: boolean;
+    /**
+     * Live-check whether the resolved host's A record already points at
+     * `serverIp` (debounced `GET /servers/{serverName}/check-dns`), for
+     * surfaces that deploy straight onto a domain with no ExternalDNS zone
+     * and want to say so before the user clicks deploy. Requires `serverName`.
+     */
+    checkDns?: boolean;
+    /**
+     * Fires once with the raw `GET /servers/{serverName}/domains` response,
+     * whenever this picker fetches it on the caller's behalf (i.e. no
+     * `domains` prop was given). Lets a caller that also needs
+     * `activeCommonsServices`/`isLocal` off that same response read it here
+     * instead of issuing a second, duplicate fetch.
+     */
+    onDomainsLoaded?: (data: {
+        domains: ServerDomain[];
+        activeCommonsServices?: string[];
+        localTld?: string;
+        isLocal?: boolean;
+    }) => void;
     /** Custom extra content or actions inside the picker */
     children?: ReactNode;
     className?: string;
@@ -147,9 +168,16 @@ export default function HostPicker({
     label = 'Domain / Host Address',
     hideLabel = false,
     showBanners = true,
+    checkDns = false,
+    onDomainsLoaded,
     children,
     className,
 }: HostPickerProps) {
+    const onDomainsLoadedRef = useRef(onDomainsLoaded);
+    useEffect(() => {
+        onDomainsLoadedRef.current = onDomainsLoaded;
+    });
+
     const pageLocalTld =
         (usePage().props as { localTld?: string }).localTld || 'kube';
     const [serverLocalTld, setServerLocalTld] = useState<string | null>(null);
@@ -186,16 +214,24 @@ export default function HostPicker({
             .then(
                 (data: {
                     domains?: ServerDomain[];
+                    activeCommonsServices?: string[];
                     localTld?: string;
                     isLocal?: boolean;
                 }) => {
                     if (cancelled) return;
+                    const fetched = data.domains ?? [];
                     if (Array.isArray(data.domains)) {
-                        setFetchedDomains(data.domains);
+                        setFetchedDomains(fetched);
                     }
                     if (data.localTld) {
                         setServerLocalTld(data.localTld);
                     }
+                    onDomainsLoadedRef.current?.({
+                        domains: fetched,
+                        activeCommonsServices: data.activeCommonsServices,
+                        localTld: data.localTld,
+                        isLocal: data.isLocal,
+                    });
                 },
             )
             .catch(() => {
@@ -300,6 +336,24 @@ export default function HostPicker({
         activeLocalTld,
     ]);
 
+    // Domains fetched by serverName arrive after the initial mount, by which
+    // point `useCustomDomain` has already defaulted to true (nothing was
+    // known yet). Switch back to the connected-domains picker once they land
+    // — but only while the field is still untouched, so it never clobbers a
+    // domain the user already started typing.
+    useEffect(() => {
+        if (!fetchedDomains || fetchedDomains.length === 0) return;
+        if (!useCustomDomain || customDomain.trim() !== '') return;
+
+        const best =
+            fetchedDomains.find((d) => d.externalDns)?.domain ??
+            fetchedDomains[0].domain;
+        setBaseDomain(best);
+        setUseCustomDomain(false);
+        // Reacts only to the fetch landing, not to the mode/text it then sets.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchedDomains]);
+
     // Close dropdown on outside click or Escape
     useEffect(() => {
         if (!domainDropdownOpen) return;
@@ -382,6 +436,65 @@ export default function HostPicker({
         hasExternalDns,
         matchedExternalDnsDomain,
     ]);
+
+    const [dnsStatus, setDnsStatus] = useState<{
+        checking: boolean;
+        checked: boolean;
+        matches: boolean;
+        resolvedIp: string | null;
+    }>({ checking: false, checked: false, matches: false, resolvedIp: null });
+
+    useEffect(() => {
+        if (!checkDns || !resolvedDomain || !serverName || hasExternalDns) {
+            setDnsStatus({
+                checking: false,
+                checked: false,
+                matches: false,
+                resolvedIp: null,
+            });
+            return;
+        }
+
+        let cancelled = false;
+        setDnsStatus((prev) => ({ ...prev, checking: true }));
+
+        const timer = setTimeout(() => {
+            fetch(
+                `/servers/${encodeURIComponent(serverName)}/check-dns?domain=${encodeURIComponent(resolvedDomain)}`,
+            )
+                .then((res) => (res.ok ? res.json() : null))
+                .then(
+                    (
+                        data: {
+                            matches?: boolean;
+                            resolvedIp?: string | null;
+                        } | null,
+                    ) => {
+                        if (cancelled) return;
+                        setDnsStatus({
+                            checking: false,
+                            checked: true,
+                            matches: Boolean(data?.matches),
+                            resolvedIp: data?.resolvedIp ?? null,
+                        });
+                    },
+                )
+                .catch(() => {
+                    if (!cancelled) {
+                        setDnsStatus((prev) => ({
+                            ...prev,
+                            checking: false,
+                            checked: false,
+                        }));
+                    }
+                });
+        }, 400);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [checkDns, resolvedDomain, serverName, hasExternalDns]);
 
     const handleToggleCustomDomain = () => {
         if (useCustomDomain) {
@@ -642,11 +755,18 @@ export default function HostPicker({
                         https://{resolvedDomain || '…'}
                     </span>
                 </span>
-                {hasExternalDns && (
+                {hasExternalDns ? (
                     <span className="inline-flex shrink-0 items-center gap-1 font-medium text-ok dark:text-emerald-400">
                         <Check className="size-3" /> ExternalDNS Auto-Sync
                     </span>
-                )}
+                ) : checkDns && dnsStatus.checking ? (
+                    <span className="shrink-0 text-faint">Checking DNS…</span>
+                ) : checkDns && dnsStatus.checked && dnsStatus.matches ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 font-medium text-ok dark:text-emerald-400">
+                        <Check className="size-3" /> A record points to{' '}
+                        {serverIp}
+                    </span>
+                ) : null}
             </div>
 
             {/* Banners */}
@@ -705,17 +825,36 @@ export default function HostPicker({
                                 />
                             </div>
                             <p className="mt-1.5 text-[11px] leading-relaxed text-soft">
-                                Create an{' '}
-                                <strong className="text-ink">A-record</strong>{' '}
-                                for{' '}
-                                <strong className="font-mono text-ink">
-                                    {resolvedDomain || 'your host'}
-                                </strong>{' '}
-                                pointing to{' '}
-                                <strong className="font-mono text-ink">
-                                    {serverIp}
-                                </strong>
-                                .
+                                {checkDns &&
+                                dnsStatus.checked &&
+                                dnsStatus.matches ? (
+                                    <>
+                                        Traffic already resolves to{' '}
+                                        <strong className="font-mono text-ink">
+                                            <Redactable
+                                                value={serverIp}
+                                                kind="ip"
+                                            />
+                                        </strong>{' '}
+                                        — ready to go.
+                                    </>
+                                ) : (
+                                    <>
+                                        Create an{' '}
+                                        <strong className="text-ink">
+                                            A-record
+                                        </strong>{' '}
+                                        for{' '}
+                                        <strong className="font-mono text-ink">
+                                            {resolvedDomain || 'your host'}
+                                        </strong>{' '}
+                                        pointing to{' '}
+                                        <strong className="font-mono text-ink">
+                                            {serverIp}
+                                        </strong>
+                                        .
+                                    </>
+                                )}
                             </p>
                         </div>
                     ) : null}
