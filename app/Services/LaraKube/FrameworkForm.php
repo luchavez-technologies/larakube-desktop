@@ -54,6 +54,35 @@ class FrameworkForm
                 continue;
             }
 
+            if ($type === 'text' && ! empty($field['multiple'])) {
+                $entries = is_array($answer) ? $answer : [];
+                $hadAny = false;
+                $failed = false;
+
+                foreach ($entries as $entry) {
+                    $value = is_string($entry) ? trim($entry) : '';
+                    if ($value === '') {
+                        continue;
+                    }
+
+                    if (($error = $this->invalidText($field, $value, $label)) !== null) {
+                        $errors[$key] = $error;
+                        $failed = true;
+
+                        break;
+                    }
+
+                    $hadAny = true;
+                    $flags = [...$flags, ...$this->flagsFor($field, null, $value)];
+                }
+
+                if (! $failed && ! $hadAny && ! empty($field['required'])) {
+                    $errors[$key] = "Enter {$label}.";
+                }
+
+                continue;
+            }
+
             if ($type === 'text') {
                 $value = is_string($answer) ? trim($answer) : '';
 

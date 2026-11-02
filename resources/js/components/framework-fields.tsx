@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import SelectMenu from '@/components/select-menu';
 import { cn } from '@/lib/utils';
 import type { FrameworkField, NewAppAnswers } from '@/types/larakube';
@@ -22,7 +22,7 @@ export function defaultAnswers(fields: FrameworkField[]): NewAppAnswers {
     return Object.fromEntries(
         fields.map((field) => [
             field.key,
-            field.type === 'multiselect'
+            field.type === 'multiselect' || field.multiple
                 ? []
                 : field.type === 'confirm'
                   ? isConfirmedByDefault(field.default)
@@ -179,6 +179,7 @@ export default function FrameworkFields({
                 className={
                     field.type === 'multiselect' ||
                     field.type === 'confirm' ||
+                    (field.type === 'text' && field.multiple) ||
                     isSmallSelect
                         ? 'col-span-full'
                         : undefined
@@ -210,7 +211,73 @@ export default function FrameworkFields({
                         <span className="mb-1.5 block text-xs font-medium text-soft">
                             {field.label}
                         </span>
-                        {field.type === 'text' ? (
+                        {field.type === 'text' && field.multiple ? (
+                            <div className="space-y-1.5">
+                                {(Array.isArray(answer) ? answer : []).map(
+                                    (value, index) => (
+                                        <div
+                                            key={index}
+                                            className="flex items-center gap-1.5"
+                                        >
+                                            <input
+                                                type="text"
+                                                value={value}
+                                                onChange={(event) => {
+                                                    const next = [
+                                                        ...(Array.isArray(
+                                                            answer,
+                                                        )
+                                                            ? answer
+                                                            : []),
+                                                    ];
+                                                    next[index] =
+                                                        event.target.value;
+                                                    set(field.key, next);
+                                                }}
+                                                placeholder={field.placeholder}
+                                                autoFocus={focus && index === 0}
+                                                spellCheck={false}
+                                                className={inputClass}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    set(
+                                                        field.key,
+                                                        (Array.isArray(answer)
+                                                            ? answer
+                                                            : []
+                                                        ).filter(
+                                                            (_, i) =>
+                                                                i !== index,
+                                                        ),
+                                                    )
+                                                }
+                                                className="shrink-0 rounded-lg p-2 text-soft hover:bg-badge hover:text-ink"
+                                                title="Remove"
+                                            >
+                                                <X className="size-3.5" />
+                                            </button>
+                                        </div>
+                                    ),
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        set(field.key, [
+                                            ...(Array.isArray(answer)
+                                                ? answer
+                                                : []),
+                                            '',
+                                        ])
+                                    }
+                                    className="flex items-center gap-1 text-xs font-medium text-soft hover:text-ink"
+                                >
+                                    <Plus className="size-3" />
+                                    <span>Add</span>
+                                </button>
+                            </div>
+                        ) : field.type === 'text' ? (
                             <input
                                 type={
                                     field.format === 'email' ? 'email' : 'text'

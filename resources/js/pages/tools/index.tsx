@@ -18,6 +18,7 @@ import ServerSwitcher from '@/components/server-switcher';
 import StatusPill from '@/components/status-pill';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
+import CustomEnvFields from '@/components/custom-env-fields';
 import HostPicker from '@/components/host-picker';
 import { ExternalLinkButton } from '@/lib/open-external';
 import QrCodePopover from '@/components/qr-code-popover';
@@ -1553,7 +1554,10 @@ function InstallDialog({
                     !(
                         isLocalServer &&
                         ['proxied', 'vpnOnly'].includes(field.key)
-                    ),
+                    ) &&
+                    // Rendered by the bespoke CustomEnvFields editor below
+                    // instead of the generic repeatable-text-list fallback.
+                    !['customEnv', 'customEnvSecret'].includes(field.key),
             ),
         [tool.initFields, isLocalServer],
     );
@@ -1772,6 +1776,11 @@ function InstallDialog({
                                         )}
                                     </label>
                                 )}
+                                <CustomEnvFields
+                                    fields={tool.initFields ?? []}
+                                    answers={options}
+                                    onChange={setOptions}
+                                />
                                 {optionFields.length > 0 && (
                                     <div className="space-y-4">
                                         <FrameworkFields
@@ -1783,40 +1792,33 @@ function InstallDialog({
                                             errorPrefix="options"
                                             onChange={setOptions}
                                         />
-                                        {Object.entries(options).flatMap(
-                                            ([key, value]) =>
-                                                (Array.isArray(value)
-                                                    ? value
-                                                    : [value]
-                                                )
-                                                    .filter(
-                                                        (item) =>
-                                                            item !== null &&
-                                                            item !== '' &&
-                                                            item !== false,
-                                                    )
-                                                    .map((item, index) => (
-                                                        <input
-                                                            key={`${key}-${index}`}
-                                                            type="hidden"
-                                                            name={
-                                                                Array.isArray(
-                                                                    value,
-                                                                )
-                                                                    ? `options[${key}][]`
-                                                                    : `options[${key}]`
-                                                            }
-                                                            value={
-                                                                item === true
-                                                                    ? '1'
-                                                                    : String(
-                                                                          item,
-                                                                      )
-                                                            }
-                                                        />
-                                                    )),
-                                        )}
                                     </div>
+                                )}
+                                {Object.entries(options).flatMap(
+                                    ([key, value]) =>
+                                        (Array.isArray(value) ? value : [value])
+                                            .filter(
+                                                (item) =>
+                                                    item !== null &&
+                                                    item !== '' &&
+                                                    item !== false,
+                                            )
+                                            .map((item, index) => (
+                                                <input
+                                                    key={`${key}-${index}`}
+                                                    type="hidden"
+                                                    name={
+                                                        Array.isArray(value)
+                                                            ? `options[${key}][]`
+                                                            : `options[${key}]`
+                                                    }
+                                                    value={
+                                                        item === true
+                                                            ? '1'
+                                                            : String(item)
+                                                    }
+                                                />
+                                            )),
                                 )}
                                 {ssoInstalled && (
                                     <Checkbox

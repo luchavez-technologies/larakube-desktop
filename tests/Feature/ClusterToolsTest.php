@@ -256,6 +256,45 @@ test('installing with a specific domain host targets that host', function () {
     File::deleteDirectory($bin);
 });
 
+test('installing forwards posted custom env vars as repeated --custom-env/--custom-env-secret flags', function () {
+    $bin = clusterToolsFakeCli();
+    $rows = [
+        [
+            'tool' => 'pocketbase', 'instance' => '', 'icon' => '*', 'brand' => 'PocketBase', 'label' => 'PocketBase', 'installed' => false,
+            'namespace' => 'larakube-shared', 'host' => null, 'aliases' => [], 'url' => null,
+            'installedAt' => null, 'mail' => 'N/A', 'sso' => '—', 'sync' => 'N/A', 'rotation' => 'N/A', 'vpn' => 'N/A', 'db_role' => null,
+            'initFields' => [
+                ['key' => 'adminEmail', 'type' => 'text', 'role' => 'account', 'label' => 'Admin Email', 'description' => '', 'required' => false, 'flag' => '--admin-email='],
+                ['key' => 'customEnv', 'type' => 'text', 'role' => 'option', 'label' => 'Custom Environment Variable', 'description' => '', 'required' => false, 'flag' => '--custom-env=', 'multiple' => true],
+                ['key' => 'customEnvSecret', 'type' => 'text', 'role' => 'option', 'label' => 'Custom Secret Environment Variable', 'description' => '', 'required' => false, 'flag' => '--custom-env-secret=', 'multiple' => true],
+            ],
+        ],
+    ];
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*tool:list*' => Process::result(output: json_encode($rows, JSON_PRETTY_PRINT)),
+    ]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'pocketbase']), [
+        'domain' => 'pocket.example.com',
+        'admin_email' => 'admin@example.com',
+        'options' => [
+            'customEnv' => ['FEATURE_X=true', ''],
+            'customEnvSecret' => ['WEBHOOK_SECRET=super-secret'],
+        ],
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'tool:add', '--tool=pocketbase', '--context=larakube-203.0.113.21', '--domain=pocket.example.com', '--admin-email=admin@example.com',
+        '--no-wire-sso', '--no-wire-mail', '--custom-env=FEATURE_X=true', '--custom-env-secret=WEBHOOK_SECRET=super-secret', '--force', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
 test('installing an additional deployment of a tool succeeds with its host', function () {
     $bin = clusterToolsFakeCli();
     $rows = [
