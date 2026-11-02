@@ -4,6 +4,7 @@ namespace App\Jobs\Sync;
 
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -39,7 +40,19 @@ class SyncOpenBaoJob extends SyncJob
 
         $openBaoTool->update(['sync_status' => 'syncing']);
 
-        $status = $this->json($locator, ['secrets:status', 'production', "--context={$server->context}", '--json']);
+        try {
+            $status = $this->json($locator, ['secrets:status', 'production', "--context={$server->context}", '--json']);
+        } catch (ProcessTimedOutException) {
+            // A timed-out Process::run() throws rather than returning — left
+            // uncaught, the job fails and sync_status is stuck on 'syncing'
+            // forever (the retry/failure path never reaches the update()
+            // below). Confirmed live 2026-11-03: the per-role rotation-info
+            // read used to be two port-forwards each; at 9 real wired tools
+            // that was comfortably enough to exceed this job's own timeout.
+            $openBaoTool->update(['sync_status' => 'error', 'last_sync_error' => 'Timed out waiting for OpenBao.']);
+
+            return;
+        }
 
         if ($status === null) {
             $openBaoTool->update(['sync_status' => 'error', 'last_sync_error' => 'Could not reach OpenBao.']);
@@ -70,7 +83,7 @@ class SyncOpenBaoJob extends SyncJob
         }
 
         $isolated = $locator->isolate([$cli, ...$arguments, '--no-interaction']);
-        $result = Process::env($isolated['environment'])->timeout(60)->run($isolated['command']);
+        $result = Process::env($isolated['environment'])->timeout(150)->run($isolated['command']);
 
         $output = trim($result->output());
 

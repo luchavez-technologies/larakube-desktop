@@ -16,6 +16,7 @@ import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ServerSwitcher from '@/components/server-switcher';
 import ExperimentalBadge from '@/components/experimental-badge';
+import ToolLogo from '@/components/tool-logo';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
@@ -25,14 +26,17 @@ import type { Server } from '@/types/larakube';
 
 type StaticRoleRow = {
     tool: string;
+    slug: string;
     instance: string;
     role: string;
     rotationPeriod: string | null;
+    lastRotatedAt: string | null;
     wired: boolean;
 };
 
 type CustomEnvRow = {
     tool: string;
+    slug: string;
     instance: string;
     plainCount: number;
     secretCount: number;
@@ -58,6 +62,29 @@ type Props = {
         error: string | null;
     };
 };
+
+function timeAgo(iso: string | null): string {
+    if (!iso) {
+        return '—';
+    }
+
+    const seconds = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
+    );
+
+    if (seconds < 60) {
+        return 'just now';
+    }
+    if (seconds < 3600) {
+        return `${Math.floor(seconds / 60)}m ago`;
+    }
+    if (seconds < 86400) {
+        return `${Math.floor(seconds / 3600)}h ago`;
+    }
+
+    return `${Math.floor(seconds / 86400)}d ago`;
+}
 
 function Pulse({ className }: { className?: string }) {
     return <div className={`animate-pulse rounded-md bg-paper ${className}`} />;
@@ -113,6 +140,7 @@ export default function OpenBaoIndex({
     const [importPath, setImportPath] = useState('');
     const [importConfirm, setImportConfirm] = useState('');
     const [granting, setGranting] = useState(false);
+    const [sealing, setSealing] = useState(false);
 
     usePoll(
         2000,
@@ -197,38 +225,74 @@ export default function OpenBaoIndex({
                             </Form>
                         )}
 
-                        {isInstalled && resolved.bootstrapped && (
+                        {isInstalled && resolved.bootstrapped && sealed && (
                             <Form
-                                action={
-                                    sealed
-                                        ? openbao.unseal(server.name).url
-                                        : openbao.seal(server.name).url
-                                }
+                                action={openbao.unseal(server.name).url}
                                 method="post"
                             >
                                 <button
                                     type="submit"
-                                    className={buttonClass(
-                                        sealed ? 'primary' : 'danger',
-                                        'md',
-                                    )}
-                                    title={
-                                        sealed
-                                            ? 'Unseal OpenBao using its stored unseal key'
-                                            : 'Seal OpenBao — blocks all secret access cluster-wide until unsealed'
-                                    }
+                                    className={buttonClass('primary', 'md')}
+                                    title="Unseal OpenBao using its stored unseal key"
                                 >
-                                    {sealed ? (
-                                        <Lock className="h-4 w-4" />
-                                    ) : (
-                                        <ShieldOff className="h-4 w-4" />
-                                    )}
-                                    <span>{sealed ? 'Unseal' : 'Seal'}</span>
+                                    <Lock className="h-4 w-4" />
+                                    <span>Unseal</span>
                                 </button>
                             </Form>
                         )}
+
+                        {isInstalled && resolved.bootstrapped && !sealed && (
+                            <Button
+                                variant="danger"
+                                size="md"
+                                onClick={() => setSealing(true)}
+                                title="Seal OpenBao — blocks all secret access cluster-wide until unsealed"
+                            >
+                                <ShieldOff className="h-4 w-4" />
+                                <span>Seal</span>
+                            </Button>
+                        )}
                     </div>
                 </div>
+
+                {sealing && (
+                    <div className="space-y-3 rounded-xl bg-accent-tint p-4 ring-1 ring-accent-line">
+                        <p className="text-xs text-accent">
+                            Sealing OpenBao immediately blocks{' '}
+                            <strong>all</strong> secret access cluster-wide —
+                            every pod reading a secret through it (database
+                            password rotation, custom env var reveals, access
+                            grants) stops working until it&rsquo;s unsealed
+                            again. It does not delete anything and does not
+                            restart any pod; already-running pods keep the
+                            values they already loaded, but anything that asks
+                            OpenBao for a secret while sealed fails until you
+                            click Unseal.
+                        </p>
+                        <div className="flex items-center justify-end gap-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setSealing(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Form
+                                action={openbao.seal(server.name).url}
+                                method="post"
+                                onSuccess={() => setSealing(false)}
+                            >
+                                <button
+                                    type="submit"
+                                    className={buttonClass('dangerFill', 'sm')}
+                                >
+                                    <ShieldOff className="h-4 w-4" />
+                                    <span>Seal OpenBao</span>
+                                </button>
+                            </Form>
+                        </div>
+                    </div>
+                )}
 
                 {!isInstalled ? (
                     <OpenBaoEmptyState server={server} />
@@ -262,6 +326,9 @@ export default function OpenBaoIndex({
                                                     Rotation Period
                                                 </th>
                                                 <th className="px-4 py-2 font-medium">
+                                                    Last Rotated
+                                                </th>
+                                                <th className="px-4 py-2 font-medium">
                                                     Wired
                                                 </th>
                                                 <th className="px-4 py-2" />
@@ -272,8 +339,16 @@ export default function OpenBaoIndex({
                                                 <tr
                                                     key={`${row.tool}-${row.instance}`}
                                                 >
-                                                    <td className="px-4 py-2.5 font-medium text-ink">
-                                                        {row.tool}
+                                                    <td className="px-4 py-2.5">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <ToolLogo
+                                                                slug={row.slug}
+                                                                size="sm"
+                                                            />
+                                                            <span className="font-medium text-ink">
+                                                                {row.tool}
+                                                            </span>
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-2.5 text-soft">
                                                         {row.instance || '—'}
@@ -281,6 +356,11 @@ export default function OpenBaoIndex({
                                                     <td className="px-4 py-2.5 text-soft">
                                                         {row.rotationPeriod ??
                                                             '—'}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-soft">
+                                                        {timeAgo(
+                                                            row.lastRotatedAt,
+                                                        )}
                                                     </td>
                                                     <td className="px-4 py-2.5">
                                                         {row.wired ? (
@@ -449,8 +529,16 @@ export default function OpenBaoIndex({
                                                 <tr
                                                     key={`${row.tool}-${row.instance}`}
                                                 >
-                                                    <td className="px-4 py-2.5 font-medium text-ink">
-                                                        {row.tool}
+                                                    <td className="px-4 py-2.5">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <ToolLogo
+                                                                slug={row.slug}
+                                                                size="sm"
+                                                            />
+                                                            <span className="font-medium text-ink">
+                                                                {row.tool}
+                                                            </span>
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-2.5 text-soft">
                                                         {row.instance || '—'}

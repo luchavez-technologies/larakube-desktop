@@ -16,7 +16,7 @@ use App\Models\Server;
 class OpenBaoStatus
 {
     /**
-     * @return array{installed: bool, bootstrapped?: bool, sealed?: ?bool, staticRoles?: list<array{tool: string, instance: string, role: string, rotationPeriod: ?string, wired: bool}>, customEnv?: list<array{tool: string, instance: string, plainCount: int, secretCount: int, vaulted: bool}>}
+     * @return array{installed: bool, bootstrapped?: bool, sealed?: ?bool, staticRoles?: list<array{tool: string, slug: string, instance: string, role: string, rotationPeriod: ?string, lastRotatedAt: ?string, wired: bool}>, customEnv?: list<array{tool: string, slug: string, instance: string, plainCount: int, secretCount: int, vaulted: bool}>}
      */
     public function status(string $context): array
     {
@@ -32,7 +32,7 @@ class OpenBaoStatus
             return ['installed' => false];
         }
 
-        /** @var array{installed: bool, bootstrapped?: bool, sealed?: ?bool, staticRoles?: list<array{tool: string, instance: string, role: string, rotationPeriod: ?string, wired: bool}>, customEnv?: list<array{tool: string, instance: string, plainCount: int, secretCount: int, vaulted: bool}>} $status */
+        /** @var array{installed: bool, bootstrapped?: bool, sealed?: ?bool, staticRoles?: list<array{tool: string, slug: string, instance: string, role: string, rotationPeriod: ?string, lastRotatedAt: ?string, wired: bool}>, customEnv?: list<array{tool: string, slug: string, instance: string, plainCount: int, secretCount: int, vaulted: bool}>} $status */
         $status = $tool->data['status'] ?? ['installed' => true];
 
         return $status;
