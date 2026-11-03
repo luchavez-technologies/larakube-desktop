@@ -3,8 +3,10 @@
 namespace App\Jobs\Sync;
 
 use App\Models\Server;
+use App\Models\SsoGrant;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -53,12 +55,42 @@ class SyncSsoJob extends SyncJob
             return;
         }
 
-        $ssoTool->update([
-            'data' => [...$ssoTool->data, 'status' => $status],
-            'sync_status' => 'fresh',
-            'last_synced_at' => now(),
-            'last_sync_error' => null,
-        ]);
+        /** @var list<array{email: string, tool: string, slug: string, role: string, project: string}> $grants */
+        $grants = is_array($status['grants'] ?? null) ? array_values($status['grants']) : [];
+        unset($status['grants']);
+
+        DB::transaction(function () use ($server, $ssoTool, $status, $grants): void {
+            $matchedIds = [];
+
+            foreach ($grants as $row) {
+                $grant = SsoGrant::updateOrCreate(
+                    [
+                        'server_id' => $server->id,
+                        'email' => $row['email'],
+                        'slug' => $row['slug'],
+                        'role' => $row['role'],
+                        'project' => $row['project'],
+                    ],
+                    [
+                        'cluster_tool_id' => $ssoTool->id,
+                        'tool' => $row['tool'],
+                    ],
+                );
+
+                $matchedIds[] = $grant->id;
+            }
+
+            SsoGrant::where('server_id', $server->id)
+                ->whereNotIn('id', $matchedIds)
+                ->delete();
+
+            $ssoTool->update([
+                'data' => [...$ssoTool->data, 'status' => $status],
+                'sync_status' => 'fresh',
+                'last_synced_at' => now(),
+                'last_sync_error' => null,
+            ]);
+        });
     }
 
     /**

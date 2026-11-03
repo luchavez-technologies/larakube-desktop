@@ -5,6 +5,7 @@ use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Run;
 use App\Models\Server;
+use App\Models\SsoGrant;
 use App\Services\LaraKube\SsoStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
@@ -565,6 +566,296 @@ test('SyncSsoJob handles failure response and records error', function () {
     $tool->refresh();
     expect($tool->sync_status)->toBe('error')
         ->and($tool->last_sync_error)->toBe('Could not reach Zitadel SSO.');
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('SyncSsoJob creates sso_grants rows from payload and excludes grants key from stored status', function () {
+    $bin = ssoTestServer();
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['initial' => 'value'],
+        'sync_status' => 'stale',
+    ]);
+
+    $payloadGrants = [
+        [
+            'email' => 'alice@example.com',
+            'tool' => 'Forgejo (Git Forge & CI/CD)',
+            'slug' => 'forgejo',
+            'role' => 'admin',
+            'project' => 'default',
+        ],
+        [
+            'email' => 'bob@example.com',
+            'tool' => 'Grafana (Metrics & Dashboards)',
+            'slug' => 'grafana',
+            'role' => 'viewer',
+            'project' => 'monitoring',
+        ],
+    ];
+
+    Process::fake([
+        '*sso:status*' => Process::result(output: json_encode([
+            'installed' => true,
+            'wiredTools' => ['forgejo'],
+            'orgs' => ['test-org'],
+            'orphanedProjects' => [],
+            'grants' => $payloadGrants,
+        ])),
+    ]);
+
+    SyncSsoJob::dispatchSync($server->id);
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('fresh')
+        ->and(array_key_exists('grants', $tool->data['status']))->toBeFalse()
+        ->and($tool->data['status']['installed'])->toBeTrue()
+        ->and($tool->data['status']['wiredTools'])->toBe(['forgejo'])
+        ->and($tool->data['status']['orgs'])->toBe(['test-org'])
+        ->and($tool->data['status']['orphanedProjects'])->toBe([]);
+
+    $grants = SsoGrant::where('server_id', $server->id)->orderBy('email')->get();
+    expect($grants)->toHaveCount(2);
+
+    expect($grants[0]->email)->toBe('alice@example.com')
+        ->and($grants[0]->server_id)->toBe($server->id)
+        ->and($grants[0]->cluster_tool_id)->toBe($tool->id)
+        ->and($grants[0]->tool)->toBe('Forgejo (Git Forge & CI/CD)')
+        ->and($grants[0]->slug)->toBe('forgejo')
+        ->and($grants[0]->role)->toBe('admin')
+        ->and($grants[0]->project)->toBe('default');
+
+    expect($grants[1]->email)->toBe('bob@example.com')
+        ->and($grants[1]->server_id)->toBe($server->id)
+        ->and($grants[1]->cluster_tool_id)->toBe($tool->id)
+        ->and($grants[1]->tool)->toBe('Grafana (Metrics & Dashboards)')
+        ->and($grants[1]->slug)->toBe('grafana')
+        ->and($grants[1]->role)->toBe('viewer')
+        ->and($grants[1]->project)->toBe('monitoring');
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('SyncSsoJob second sync prunes removed grant and preserves existing grant id', function () {
+    $bin = ssoTestServer();
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'stale',
+    ]);
+
+    $grant1 = [
+        'email' => 'alice@example.com',
+        'tool' => 'Forgejo (Git Forge & CI/CD)',
+        'slug' => 'forgejo',
+        'role' => 'admin',
+        'project' => 'default',
+    ];
+    $grant2 = [
+        'email' => 'bob@example.com',
+        'tool' => 'Grafana (Metrics & Dashboards)',
+        'slug' => 'grafana',
+        'role' => 'viewer',
+        'project' => 'monitoring',
+    ];
+
+    Process::fake([
+        '*sso:status*' => Process::result(output: json_encode([
+            'installed' => true,
+            'grants' => [$grant1, $grant2],
+        ])),
+    ]);
+
+    SyncSsoJob::dispatchSync($server->id);
+
+    expect(SsoGrant::where('server_id', $server->id)->count())->toBe(2);
+    $aliceRow = SsoGrant::where('server_id', $server->id)->where('email', 'alice@example.com')->sole();
+    $bobRow = SsoGrant::where('server_id', $server->id)->where('email', 'bob@example.com')->sole();
+
+    // Second sync: CLI returns only grant1 (alice)
+    Process::fake([
+        '*sso:status*' => Process::result(output: json_encode([
+            'installed' => true,
+            'grants' => [$grant1],
+        ])),
+    ]);
+
+    SyncSsoJob::dispatchSync($server->id);
+
+    $remainingGrants = SsoGrant::where('server_id', $server->id)->get();
+    expect($remainingGrants)->toHaveCount(1)
+        ->and($remainingGrants[0]->id)->toBe($aliceRow->id)
+        ->and($remainingGrants[0]->email)->toBe('alice@example.com')
+        ->and(SsoGrant::find($bobRow->id))->toBeNull();
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('SyncSsoJob with zero grants deletes all grants for server but leaves other server grants untouched', function () {
+    $bin = ssoTestServer();
+    $server1 = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool1 = $server1->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'stale',
+    ]);
+
+    $server2 = Server::create([
+        'name' => 'staging-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-fra1',
+        'status' => 'ready',
+    ]);
+    $tool2 = $server2->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'fresh',
+    ]);
+
+    // Create grants for server1
+    SsoGrant::create([
+        'server_id' => $server1->id,
+        'cluster_tool_id' => $tool1->id,
+        'email' => 'dev1@example.com',
+        'tool' => 'Forgejo',
+        'slug' => 'forgejo',
+        'role' => 'admin',
+        'project' => 'default',
+    ]);
+    SsoGrant::create([
+        'server_id' => $server1->id,
+        'cluster_tool_id' => $tool1->id,
+        'email' => 'dev2@example.com',
+        'tool' => 'Outline',
+        'slug' => 'outline',
+        'role' => 'editor',
+        'project' => 'wiki',
+    ]);
+
+    // Create grants for server2
+    $server2Grant = SsoGrant::create([
+        'server_id' => $server2->id,
+        'cluster_tool_id' => $tool2->id,
+        'email' => 'other@example.com',
+        'tool' => 'Forgejo',
+        'slug' => 'forgejo',
+        'role' => 'member',
+        'project' => 'staging',
+    ]);
+
+    Process::fake([
+        '*sso:status*' => Process::result(output: json_encode([
+            'installed' => true,
+            'grants' => [],
+        ])),
+    ]);
+
+    SyncSsoJob::dispatchSync($server1->id);
+
+    expect(SsoGrant::where('server_id', $server1->id)->count())->toBe(0)
+        ->and(SsoGrant::where('server_id', $server2->id)->count())->toBe(1)
+        ->and(SsoGrant::find($server2Grant->id))->not->toBeNull();
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('SyncSsoJob does not touch grants of a different server during sync with new grants', function () {
+    $bin = ssoTestServer();
+    $server1 = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool1 = $server1->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'stale',
+    ]);
+
+    $server2 = Server::create([
+        'name' => 'staging-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-fra1',
+        'status' => 'ready',
+    ]);
+    $tool2 = $server2->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'fresh',
+    ]);
+
+    // Server2 has a grant with the same email and slug
+    $server2Grant = SsoGrant::create([
+        'server_id' => $server2->id,
+        'cluster_tool_id' => $tool2->id,
+        'email' => 'alice@example.com',
+        'tool' => 'Forgejo (Server 2)',
+        'slug' => 'forgejo',
+        'role' => 'admin',
+        'project' => 'default',
+    ]);
+
+    // Server1 syncs with a grant that shares the same email, slug, role, and project
+    Process::fake([
+        '*sso:status*' => Process::result(output: json_encode([
+            'installed' => true,
+            'grants' => [
+                [
+                    'email' => 'alice@example.com',
+                    'tool' => 'Forgejo (Server 1)',
+                    'slug' => 'forgejo',
+                    'role' => 'admin',
+                    'project' => 'default',
+                ],
+            ],
+        ])),
+    ]);
+
+    SyncSsoJob::dispatchSync($server1->id);
+
+    // Server 1 should have its own grant
+    $server1Grant = SsoGrant::where('server_id', $server1->id)->sole();
+    expect($server1Grant->id)->not->toBe($server2Grant->id)
+        ->and($server1Grant->cluster_tool_id)->toBe($tool1->id)
+        ->and($server1Grant->tool)->toBe('Forgejo (Server 1)');
+
+    // Server 2 grant should be completely untouched
+    $server2GrantFresh = $server2Grant->fresh();
+    expect($server2GrantFresh)->not->toBeNull()
+        ->and($server2GrantFresh->server_id)->toBe($server2->id)
+        ->and($server2GrantFresh->cluster_tool_id)->toBe($tool2->id)
+        ->and($server2GrantFresh->tool)->toBe('Forgejo (Server 2)');
 
     File::deleteDirectory(dirname($bin));
 });
