@@ -145,8 +145,8 @@ const navigation: NavItem[] = [
         experimental: true,
     },
     {
-        label: 'OpenBao',
-        description: 'Secrets & rotation',
+        label: 'Secrets',
+        description: 'Rotation & backups',
         href: openbao().url,
         active: (url) =>
             url.startsWith('/openbao') ||
@@ -156,8 +156,8 @@ const navigation: NavItem[] = [
         experimental: true,
     },
     {
-        label: 'Zitadel SSO',
-        description: 'Identity & access',
+        label: 'Identity',
+        description: 'Users & access grants',
         href: sso().url,
         active: (url) =>
             url.startsWith('/sso') || /^\/servers\/[^/]+\/sso/.test(url),
