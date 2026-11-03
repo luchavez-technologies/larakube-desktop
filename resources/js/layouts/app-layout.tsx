@@ -17,6 +17,7 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Network,
+    KeyRound,
     ShieldCheck,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
@@ -31,6 +32,7 @@ import {
     openbao,
     plex,
     readiness,
+    sso,
     tools,
 } from '@/routes';
 import { show as helpShow } from '@/routes/help';
@@ -151,6 +153,16 @@ const navigation: NavItem[] = [
             /^\/servers\/[^/]+\/openbao/.test(url),
         accent: 'bg-amber-600',
         icon: ShieldCheck,
+        experimental: true,
+    },
+    {
+        label: 'Zitadel SSO',
+        description: 'Identity & access',
+        href: sso().url,
+        active: (url) =>
+            url.startsWith('/sso') || /^\/servers\/[^/]+\/sso/.test(url),
+        accent: 'bg-indigo-600',
+        icon: KeyRound,
         experimental: true,
     },
     {
