@@ -1,10 +1,13 @@
 import { Form, Head, usePoll } from '@inertiajs/react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
+    ChevronDown,
+    ChevronUp,
     Download,
     Lock,
     RefreshCw,
     RotateCw,
+    Search,
     ShieldCheck,
     ShieldOff,
     Upload,
@@ -142,6 +145,13 @@ export default function OpenBaoIndex({
     const [granting, setGranting] = useState(false);
     const [sealing, setSealing] = useState(false);
 
+    const [rotationSearch, setRotationSearch] = useState('');
+    const [customEnvSearch, setCustomEnvSearch] = useState('');
+    const [sort, setSort] = useState<{
+        key: 'tool' | 'rotationPeriod' | 'lastRotatedAt';
+        direction: 'asc' | 'desc';
+    } | null>(null);
+
     usePoll(
         2000,
         { only: ['status', 'openBaoSync'] },
@@ -159,6 +169,51 @@ export default function OpenBaoIndex({
     const customEnv = resolved.customEnv ?? [];
     const sealed = resolved.sealed ?? null;
 
+    const filteredStaticRoles = useMemo(() => {
+        if (!rotationSearch.trim()) return staticRoles;
+        const q = rotationSearch.toLowerCase();
+        return staticRoles.filter(
+            (r) =>
+                r.tool.toLowerCase().includes(q) ||
+                r.slug.toLowerCase().includes(q) ||
+                r.instance.toLowerCase().includes(q) ||
+                (r.rotationPeriod?.toLowerCase().includes(q) ?? false),
+        );
+    }, [staticRoles, rotationSearch]);
+
+    const sortedStaticRoles = useMemo(() => {
+        if (!sort) return filteredStaticRoles;
+        return [...filteredStaticRoles].sort((a, b) => {
+            const aVal = (a[sort.key] ?? '').toLowerCase();
+            const bVal = (b[sort.key] ?? '').toLowerCase();
+            const cmp = aVal.localeCompare(bVal);
+            return sort.direction === 'asc' ? cmp : -cmp;
+        });
+    }, [filteredStaticRoles, sort]);
+
+    function handleSort(key: 'tool' | 'rotationPeriod' | 'lastRotatedAt') {
+        setSort((current) => {
+            if (current?.key === key) {
+                return {
+                    key,
+                    direction: current.direction === 'asc' ? 'desc' : 'asc',
+                };
+            }
+            return { key, direction: 'asc' };
+        });
+    }
+
+    const filteredCustomEnv = useMemo(() => {
+        if (!customEnvSearch.trim()) return customEnv;
+        const q = customEnvSearch.toLowerCase();
+        return customEnv.filter(
+            (c) =>
+                c.tool.toLowerCase().includes(q) ||
+                c.slug.toLowerCase().includes(q) ||
+                c.instance.toLowerCase().includes(q),
+        );
+    }, [customEnv, customEnvSearch]);
+
     return (
         <AppLayout title={`OpenBao · ${server.name}`}>
             <Head title={`OpenBao · ${server.name}`} />
@@ -167,10 +222,16 @@ export default function OpenBaoIndex({
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <div className="flex items-center gap-2">
+                            <ToolLogo slug="openbao" size="sm" />
                             <h1 className="text-xl font-bold tracking-tight text-ink">
                                 OpenBao
                             </h1>
                             <ExperimentalBadge side="bottom" />
+                            {isInstalled && resolved.bootstrapped && (
+                                <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                    OpenBao Active
+                                </span>
+                            )}
                             {isInstalled && resolved.bootstrapped && (
                                 <span
                                     className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ${
@@ -312,105 +373,203 @@ export default function OpenBaoIndex({
                                     on a Commons-backed tool to wire one.
                                 </p>
                             ) : (
-                                <div className="overflow-hidden rounded-xl ring-1 ring-line">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-paper/50 text-left text-soft">
-                                            <tr>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Tool
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Instance
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Rotation Period
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Last Rotated
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Wired
-                                                </th>
-                                                <th className="px-4 py-2" />
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-line">
-                                            {staticRoles.map((row) => (
-                                                <tr
-                                                    key={`${row.tool}-${row.instance}`}
-                                                >
-                                                    <td className="px-4 py-2.5">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <ToolLogo
-                                                                slug={row.slug}
-                                                                size="sm"
-                                                            />
-                                                            <span className="font-medium text-ink">
-                                                                {row.tool}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.instance || '—'}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.rotationPeriod ??
-                                                            '—'}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {timeAgo(
-                                                            row.lastRotatedAt,
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {row.wired ? (
-                                                            <span className="text-emerald-600 dark:text-emerald-400">
-                                                                yes
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-soft">
-                                                                no
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right">
-                                                        {row.wired &&
-                                                            !sealed && (
-                                                                <Form
-                                                                    action={
-                                                                        openbao.rotate(
-                                                                            server.name,
-                                                                        ).url
-                                                                    }
-                                                                    method="post"
+                                <div className="space-y-3">
+                                    <div className="relative w-64">
+                                        <Search className="text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            value={rotationSearch}
+                                            onChange={(e) =>
+                                                setRotationSearch(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Search credential rotation..."
+                                            className="placeholder:text-muted w-full rounded-lg border border-line bg-surface py-1.5 pr-3 pl-9 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                                        />
+                                    </div>
+                                    <Card className="overflow-hidden p-0">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-line bg-paper/50 text-soft">
+                                                        <th
+                                                            className="cursor-pointer px-5 py-3 font-medium transition select-none hover:text-ink"
+                                                            onClick={() =>
+                                                                handleSort(
+                                                                    'tool',
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    Tool
+                                                                </span>
+                                                                {sort?.key ===
+                                                                    'tool' &&
+                                                                    (sort.direction ===
+                                                                    'asc' ? (
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    ))}
+                                                            </div>
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Instance
+                                                        </th>
+                                                        <th
+                                                            className="cursor-pointer px-5 py-3 font-medium transition select-none hover:text-ink"
+                                                            onClick={() =>
+                                                                handleSort(
+                                                                    'rotationPeriod',
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    Rotation
+                                                                    Period
+                                                                </span>
+                                                                {sort?.key ===
+                                                                    'rotationPeriod' &&
+                                                                    (sort.direction ===
+                                                                    'asc' ? (
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    ))}
+                                                            </div>
+                                                        </th>
+                                                        <th
+                                                            className="cursor-pointer px-5 py-3 font-medium transition select-none hover:text-ink"
+                                                            onClick={() =>
+                                                                handleSort(
+                                                                    'lastRotatedAt',
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    Last Rotated
+                                                                </span>
+                                                                {sort?.key ===
+                                                                    'lastRotatedAt' &&
+                                                                    (sort.direction ===
+                                                                    'asc' ? (
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    ))}
+                                                            </div>
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Wired
+                                                        </th>
+                                                        <th className="px-5 py-3" />
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line text-ink">
+                                                    {sortedStaticRoles.length ===
+                                                    0 ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={6}
+                                                                className="px-5 py-8 text-center text-soft"
+                                                            >
+                                                                No credential
+                                                                rotation found.
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        sortedStaticRoles.map(
+                                                            (row) => (
+                                                                <tr
+                                                                    key={`${row.tool}-${row.instance}`}
+                                                                    className="transition hover:bg-paper/30"
                                                                 >
-                                                                    <input
-                                                                        type="hidden"
-                                                                        name="tool"
-                                                                        value={
-                                                                            row.tool
-                                                                        }
-                                                                    />
-                                                                    <button
-                                                                        type="submit"
-                                                                        className={buttonClass(
-                                                                            'ghost',
-                                                                            'xs',
+                                                                    <td className="px-5 py-3.5">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <ToolLogo
+                                                                                slug={
+                                                                                    row.slug
+                                                                                }
+                                                                                size="sm"
+                                                                            />
+                                                                            <span className="font-medium text-ink">
+                                                                                {
+                                                                                    row.tool
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {row.instance ||
+                                                                            '—'}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {row.rotationPeriod ??
+                                                                            '—'}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {timeAgo(
+                                                                            row.lastRotatedAt,
                                                                         )}
-                                                                        title="Rotate now"
-                                                                    >
-                                                                        <RotateCw className="size-3.5" />
-                                                                        <span>
-                                                                            Rotate
-                                                                        </span>
-                                                                    </button>
-                                                                </Form>
-                                                            )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5">
+                                                                        {row.wired ? (
+                                                                            <span className="text-emerald-600 dark:text-emerald-400">
+                                                                                yes
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-soft">
+                                                                                no
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-right">
+                                                                        {row.wired &&
+                                                                            !sealed && (
+                                                                                <Form
+                                                                                    action={
+                                                                                        openbao.rotate(
+                                                                                            server.name,
+                                                                                        )
+                                                                                            .url
+                                                                                    }
+                                                                                    method="post"
+                                                                                >
+                                                                                    <input
+                                                                                        type="hidden"
+                                                                                        name="tool"
+                                                                                        value={
+                                                                                            row.tool
+                                                                                        }
+                                                                                    />
+                                                                                    <button
+                                                                                        type="submit"
+                                                                                        className={buttonClass(
+                                                                                            'ghost',
+                                                                                            'xs',
+                                                                                        )}
+                                                                                        title="Rotate now"
+                                                                                    >
+                                                                                        <RotateCw className="size-3.5" />
+                                                                                        <span>
+                                                                                            Rotate
+                                                                                        </span>
+                                                                                    </button>
+                                                                                </Form>
+                                                                            )}
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        )
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
                                 </div>
                             )}
                         </Card>
@@ -503,67 +662,111 @@ export default function OpenBaoIndex({
                                     environment variables yet.
                                 </p>
                             ) : (
-                                <div className="overflow-hidden rounded-xl ring-1 ring-line">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-paper/50 text-left text-soft">
-                                            <tr>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Tool
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Instance
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Plain
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Secret
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Vaulted
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-line">
-                                            {customEnv.map((row) => (
-                                                <tr
-                                                    key={`${row.tool}-${row.instance}`}
-                                                >
-                                                    <td className="px-4 py-2.5">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <ToolLogo
-                                                                slug={row.slug}
-                                                                size="sm"
-                                                            />
-                                                            <span className="font-medium text-ink">
-                                                                {row.tool}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.instance || '—'}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.plainCount}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.secretCount}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {row.vaulted ? (
-                                                            <span className="text-emerald-600 dark:text-emerald-400">
-                                                                yes
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-soft">
-                                                                no
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="space-y-3">
+                                    <div className="relative w-64">
+                                        <Search className="text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            value={customEnvSearch}
+                                            onChange={(e) =>
+                                                setCustomEnvSearch(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Search custom environment variables..."
+                                            className="placeholder:text-muted w-full rounded-lg border border-line bg-surface py-1.5 pr-3 pl-9 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                                        />
+                                    </div>
+                                    <Card className="overflow-hidden p-0">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-line bg-paper/50 text-soft">
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Tool
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Instance
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Plain
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Secret
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Vaulted
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line text-ink">
+                                                    {filteredCustomEnv.length ===
+                                                    0 ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={5}
+                                                                className="px-5 py-8 text-center text-soft"
+                                                            >
+                                                                No custom
+                                                                environment
+                                                                variables found.
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredCustomEnv.map(
+                                                            (row) => (
+                                                                <tr
+                                                                    key={`${row.tool}-${row.instance}`}
+                                                                    className="transition hover:bg-paper/30"
+                                                                >
+                                                                    <td className="px-5 py-3.5">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <ToolLogo
+                                                                                slug={
+                                                                                    row.slug
+                                                                                }
+                                                                                size="sm"
+                                                                            />
+                                                                            <span className="font-medium text-ink">
+                                                                                {
+                                                                                    row.tool
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {row.instance ||
+                                                                            '—'}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {
+                                                                            row.plainCount
+                                                                        }
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {
+                                                                            row.secretCount
+                                                                        }
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5">
+                                                                        {row.vaulted ? (
+                                                                            <span className="text-emerald-600 dark:text-emerald-400">
+                                                                                yes
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-soft">
+                                                                                no
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        )
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
                                 </div>
                             )}
                         </Card>
