@@ -1,10 +1,14 @@
 import { Form, Head, usePoll } from '@inertiajs/react';
-import { useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
     Building2,
+    ChevronDown,
+    ChevronUp,
     KeyRound,
+    Layers,
     Plug,
     RefreshCw,
+    Search,
     Trash2,
     Unlink,
     UserMinus,
@@ -58,6 +62,7 @@ type Props = {
     servers: Server[];
     isInstalled: boolean;
     status?: Status;
+    grants?: GrantRow[];
     ssoSync: {
         status: SyncStatus;
         lastSyncedAt: string | null;
@@ -111,6 +116,7 @@ export default function SsoIndex({
     servers,
     isInstalled,
     status,
+    grants: grantsProp,
     ssoSync,
 }: Props) {
     const [wiring, setWiring] = useState(false);
@@ -126,9 +132,17 @@ export default function SsoIndex({
     const [revoking, setRevoking] = useState<GrantRow | null>(null);
     const [pruning, setPruning] = useState(false);
 
+    const [wiredSearch, setWiredSearch] = useState('');
+    const [grantsSearch, setGrantsSearch] = useState('');
+    const [sort, setSort] = useState<{
+        key: 'email' | 'tool' | 'role';
+        direction: 'asc' | 'desc';
+    } | null>(null);
+    const [grouped, setGrouped] = useState(false);
+
     usePoll(
         2000,
-        { only: ['status', 'ssoSync'] },
+        { only: ['status', 'grants', 'ssoSync'] },
         {
             autoStart:
                 isInstalled &&
@@ -136,12 +150,80 @@ export default function SsoIndex({
         },
     );
 
-    const loading = isInstalled && status === undefined;
+    const loading =
+        isInstalled && (status === undefined || grantsProp === undefined);
     const resolved: Status = status ?? { installed: isInstalled };
     const wiredTools = resolved.wiredTools ?? [];
-    const grants = resolved.grants ?? [];
+    const grants = grantsProp ?? [];
     const orgs = resolved.orgs ?? [];
     const orphanedProjects = resolved.orphanedProjects ?? [];
+
+    const filteredWiredTools = useMemo(() => {
+        if (!wiredSearch.trim()) return wiredTools;
+        const q = wiredSearch.toLowerCase();
+        return wiredTools.filter(
+            (w) =>
+                w.tool.toLowerCase().includes(q) ||
+                w.slug.toLowerCase().includes(q) ||
+                w.instance.toLowerCase().includes(q) ||
+                (w.host?.toLowerCase().includes(q) ?? false),
+        );
+    }, [wiredTools, wiredSearch]);
+
+    const filteredGrants = useMemo(() => {
+        if (!grantsSearch.trim()) return grants;
+        const q = grantsSearch.toLowerCase();
+        return grants.filter(
+            (g) =>
+                g.email.toLowerCase().includes(q) ||
+                g.tool.toLowerCase().includes(q) ||
+                g.role.toLowerCase().includes(q) ||
+                g.project.toLowerCase().includes(q),
+        );
+    }, [grants, grantsSearch]);
+
+    const sortedGrants = useMemo(() => {
+        if (!sort) return filteredGrants;
+        return [...filteredGrants].sort((a, b) => {
+            const aVal = a[sort.key].toLowerCase();
+            const bVal = b[sort.key].toLowerCase();
+            const cmp = aVal.localeCompare(bVal);
+            return sort.direction === 'asc' ? cmp : -cmp;
+        });
+    }, [filteredGrants, sort]);
+
+    function handleSort(key: 'email' | 'tool' | 'role') {
+        setSort((current) => {
+            if (current?.key === key) {
+                return {
+                    key,
+                    direction: current.direction === 'asc' ? 'desc' : 'asc',
+                };
+            }
+            return { key, direction: 'asc' };
+        });
+    }
+
+    const groupedGrants = useMemo(() => {
+        if (!grouped) return [];
+        const groups = new Map<
+            string,
+            { tool: string; slug: string; rows: GrantRow[] }
+        >();
+        for (const row of sortedGrants) {
+            const existing = groups.get(row.tool);
+            if (existing) {
+                existing.rows.push(row);
+            } else {
+                groups.set(row.tool, {
+                    tool: row.tool,
+                    slug: row.slug,
+                    rows: [row],
+                });
+            }
+        }
+        return Array.from(groups.values());
+    }, [grouped, sortedGrants]);
 
     return (
         <AppLayout title={`Zitadel SSO · ${server.name}`}>
@@ -151,10 +233,16 @@ export default function SsoIndex({
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <div className="flex items-center gap-2">
+                            <ToolLogo slug="zitadel" size="sm" />
                             <h1 className="text-xl font-bold tracking-tight text-ink">
                                 Zitadel SSO
                             </h1>
                             <ExperimentalBadge side="bottom" />
+                            {isInstalled && (
+                                <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                    Zitadel Active
+                                </span>
+                            )}
                             {isInstalled && (
                                 <SyncStatusBadge
                                     status={ssoSync.status}
@@ -414,91 +502,129 @@ export default function SsoIndex({
                                     No tools are wired to Zitadel SSO yet.
                                 </p>
                             ) : (
-                                <div className="overflow-hidden rounded-xl ring-1 ring-line">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-paper/50 text-left text-soft">
-                                            <tr>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Tool
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Instance
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Host
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Wired
-                                                </th>
-                                                <th className="px-4 py-2" />
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-line">
-                                            {wiredTools.map((row) => (
-                                                <tr
-                                                    key={`${row.tool}-${row.instance}`}
-                                                >
-                                                    <td className="px-4 py-2.5">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <ToolLogo
-                                                                slug={row.slug}
-                                                                size="sm"
-                                                            />
-                                                            <span className="font-medium text-ink">
-                                                                {row.tool}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.instance || '—'}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.host ?? '—'}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {row.wired ? (
-                                                            <span className="text-emerald-600 dark:text-emerald-400">
-                                                                yes
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-soft">
-                                                                no
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right">
-                                                        {row.wired && (
-                                                            <button
-                                                                type="button"
-                                                                className={buttonClass(
-                                                                    'ghost',
-                                                                    'xs',
-                                                                )}
-                                                                onClick={() =>
-                                                                    setUnwiring(
-                                                                        {
-                                                                            tool:
-                                                                                row.slug ||
-                                                                                row.tool,
-                                                                            domain:
-                                                                                row.host ??
-                                                                                '',
-                                                                        },
-                                                                    )
-                                                                }
-                                                                title={`Unwire ${row.tool}`}
+                                <div className="space-y-3">
+                                    <div className="relative w-64">
+                                        <Search className="text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            value={wiredSearch}
+                                            onChange={(e) =>
+                                                setWiredSearch(e.target.value)
+                                            }
+                                            placeholder="Search wired tools..."
+                                            className="placeholder:text-muted w-full rounded-lg border border-line bg-surface py-1.5 pr-3 pl-9 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                                        />
+                                    </div>
+                                    <Card className="overflow-hidden p-0">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-line bg-paper/50 text-soft">
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Tool
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Instance
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Host
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Wired
+                                                        </th>
+                                                        <th className="px-5 py-3" />
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line text-ink">
+                                                    {filteredWiredTools.length ===
+                                                    0 ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={5}
+                                                                className="px-5 py-8 text-center text-soft"
                                                             >
-                                                                <Unlink className="size-3.5" />
-                                                                <span>
-                                                                    Unwire
-                                                                </span>
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                                No wired tools
+                                                                found.
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredWiredTools.map(
+                                                            (row) => (
+                                                                <tr
+                                                                    key={`${row.tool}-${row.instance}`}
+                                                                    className="transition hover:bg-paper/30"
+                                                                >
+                                                                    <td className="px-5 py-3.5">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <ToolLogo
+                                                                                slug={
+                                                                                    row.slug
+                                                                                }
+                                                                                size="sm"
+                                                                            />
+                                                                            <span className="font-medium text-ink">
+                                                                                {
+                                                                                    row.tool
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {row.instance ||
+                                                                            '—'}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {row.host ??
+                                                                            '—'}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5">
+                                                                        {row.wired ? (
+                                                                            <span className="text-emerald-600 dark:text-emerald-400">
+                                                                                yes
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-soft">
+                                                                                no
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-right">
+                                                                        {row.wired && (
+                                                                            <button
+                                                                                type="button"
+                                                                                className={buttonClass(
+                                                                                    'ghost',
+                                                                                    'xs',
+                                                                                )}
+                                                                                onClick={() =>
+                                                                                    setUnwiring(
+                                                                                        {
+                                                                                            tool:
+                                                                                                row.slug ||
+                                                                                                row.tool,
+                                                                                            domain:
+                                                                                                row.host ??
+                                                                                                '',
+                                                                                        },
+                                                                                    )
+                                                                                }
+                                                                                title={`Unwire ${row.tool}`}
+                                                                            >
+                                                                                <Unlink className="size-3.5" />
+                                                                                <span>
+                                                                                    Unwire
+                                                                                </span>
+                                                                            </button>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        )
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
                                 </div>
                             )}
                         </Card>
@@ -506,14 +632,28 @@ export default function SsoIndex({
                         <Card
                             label="Access Grants"
                             action={
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setGranting((v) => !v)}
-                                >
-                                    <UserPlus className="h-4 w-4" />
-                                    <span>Grant Access</span>
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setGrouped((v) => !v)}
+                                    >
+                                        <Layers className="h-4 w-4" />
+                                        <span>
+                                            {grouped
+                                                ? 'Ungroup'
+                                                : 'Group by Tool'}
+                                        </span>
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setGranting((v) => !v)}
+                                    >
+                                        <UserPlus className="h-4 w-4" />
+                                        <span>Grant Access</span>
+                                    </Button>
+                                </div>
                             }
                         >
                             {granting && (
@@ -613,70 +753,278 @@ export default function SsoIndex({
                                     No SSO access grants found.
                                 </p>
                             ) : (
-                                <div className="overflow-hidden rounded-xl ring-1 ring-line">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-paper/50 text-left text-soft">
-                                            <tr>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Email
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Tool
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Role
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Project
-                                                </th>
-                                                <th className="px-4 py-2" />
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-line">
-                                            {grants.map((row) => (
-                                                <tr
-                                                    key={`${row.email}-${row.tool}-${row.role}-${row.project}`}
-                                                >
-                                                    <td className="px-4 py-2.5 font-medium text-ink">
-                                                        {row.email}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <ToolLogo
-                                                                slug={row.slug}
-                                                                size="sm"
-                                                            />
-                                                            <span className="text-soft">
-                                                                {row.tool}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.role}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-soft">
-                                                        {row.project || '—'}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right">
-                                                        <button
-                                                            type="button"
-                                                            className={buttonClass(
-                                                                'ghost',
-                                                                'xs',
-                                                            )}
+                                <div className="space-y-3">
+                                    <div className="relative w-64">
+                                        <Search className="text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            value={grantsSearch}
+                                            onChange={(e) =>
+                                                setGrantsSearch(e.target.value)
+                                            }
+                                            placeholder="Search access grants..."
+                                            className="placeholder:text-muted w-full rounded-lg border border-line bg-surface py-1.5 pr-3 pl-9 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                                        />
+                                    </div>
+                                    <Card className="overflow-hidden p-0">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-line bg-paper/50 text-soft">
+                                                        <th
+                                                            className="cursor-pointer px-5 py-3 font-medium transition select-none hover:text-ink"
                                                             onClick={() =>
-                                                                setRevoking(row)
+                                                                handleSort(
+                                                                    'email',
+                                                                )
                                                             }
-                                                            title={`Revoke ${row.email}`}
                                                         >
-                                                            <UserMinus className="size-3.5" />
-                                                            <span>Revoke</span>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    Email
+                                                                </span>
+                                                                {sort?.key ===
+                                                                    'email' &&
+                                                                    (sort.direction ===
+                                                                    'asc' ? (
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    ))}
+                                                            </div>
+                                                        </th>
+                                                        <th
+                                                            className="cursor-pointer px-5 py-3 font-medium transition select-none hover:text-ink"
+                                                            onClick={() =>
+                                                                handleSort(
+                                                                    'tool',
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    Tool
+                                                                </span>
+                                                                {sort?.key ===
+                                                                    'tool' &&
+                                                                    (sort.direction ===
+                                                                    'asc' ? (
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    ))}
+                                                            </div>
+                                                        </th>
+                                                        <th
+                                                            className="cursor-pointer px-5 py-3 font-medium transition select-none hover:text-ink"
+                                                            onClick={() =>
+                                                                handleSort(
+                                                                    'role',
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    Role
+                                                                </span>
+                                                                {sort?.key ===
+                                                                    'role' &&
+                                                                    (sort.direction ===
+                                                                    'asc' ? (
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    ))}
+                                                            </div>
+                                                        </th>
+                                                        <th className="px-5 py-3 font-medium">
+                                                            Project
+                                                        </th>
+                                                        <th className="px-5 py-3" />
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line text-ink">
+                                                    {sortedGrants.length ===
+                                                    0 ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={5}
+                                                                className="px-5 py-8 text-center text-soft"
+                                                            >
+                                                                No access grants
+                                                                found.
+                                                            </td>
+                                                        </tr>
+                                                    ) : grouped ? (
+                                                        groupedGrants.map(
+                                                            (group) => (
+                                                                <Fragment
+                                                                    key={
+                                                                        group.tool
+                                                                    }
+                                                                >
+                                                                    <tr className="bg-paper/40 font-medium text-ink">
+                                                                        <td
+                                                                            colSpan={
+                                                                                5
+                                                                            }
+                                                                            className="px-5 py-2.5"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5">
+                                                                                <ToolLogo
+                                                                                    slug={
+                                                                                        group.slug
+                                                                                    }
+                                                                                    size="sm"
+                                                                                />
+                                                                                <span className="font-semibold text-ink">
+                                                                                    {
+                                                                                        group.tool
+                                                                                    }
+                                                                                </span>
+                                                                                <span className="inline-flex items-center rounded-md bg-paper px-2 py-0.5 text-[11px] font-medium text-soft ring-1 ring-line">
+                                                                                    {
+                                                                                        group
+                                                                                            .rows
+                                                                                            .length
+                                                                                    }{' '}
+                                                                                    {group
+                                                                                        .rows
+                                                                                        .length ===
+                                                                                    1
+                                                                                        ? 'grant'
+                                                                                        : 'grants'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {group.rows.map(
+                                                                        (
+                                                                            row,
+                                                                        ) => (
+                                                                            <tr
+                                                                                key={`${row.email}-${row.tool}-${row.role}-${row.project}`}
+                                                                                className="transition hover:bg-paper/30"
+                                                                            >
+                                                                                <td className="px-5 py-3.5 font-medium text-ink">
+                                                                                    {
+                                                                                        row.email
+                                                                                    }
+                                                                                </td>
+                                                                                <td className="px-5 py-3.5">
+                                                                                    <div className="flex items-center gap-2.5">
+                                                                                        <ToolLogo
+                                                                                            slug={
+                                                                                                row.slug
+                                                                                            }
+                                                                                            size="sm"
+                                                                                        />
+                                                                                        <span className="text-soft">
+                                                                                            {
+                                                                                                row.tool
+                                                                                            }
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="px-5 py-3.5 text-soft">
+                                                                                    {
+                                                                                        row.role
+                                                                                    }
+                                                                                </td>
+                                                                                <td className="px-5 py-3.5 text-soft">
+                                                                                    {row.project ||
+                                                                                        '—'}
+                                                                                </td>
+                                                                                <td className="px-5 py-3.5 text-right">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className={buttonClass(
+                                                                                            'ghost',
+                                                                                            'xs',
+                                                                                        )}
+                                                                                        onClick={() =>
+                                                                                            setRevoking(
+                                                                                                row,
+                                                                                            )
+                                                                                        }
+                                                                                        title={`Revoke ${row.email}`}
+                                                                                    >
+                                                                                        <UserMinus className="size-3.5" />
+                                                                                        <span>
+                                                                                            Revoke
+                                                                                        </span>
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ),
+                                                                    )}
+                                                                </Fragment>
+                                                            ),
+                                                        )
+                                                    ) : (
+                                                        sortedGrants.map(
+                                                            (row) => (
+                                                                <tr
+                                                                    key={`${row.email}-${row.tool}-${row.role}-${row.project}`}
+                                                                    className="transition hover:bg-paper/30"
+                                                                >
+                                                                    <td className="px-5 py-3.5 font-medium text-ink">
+                                                                        {
+                                                                            row.email
+                                                                        }
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <ToolLogo
+                                                                                slug={
+                                                                                    row.slug
+                                                                                }
+                                                                                size="sm"
+                                                                            />
+                                                                            <span className="text-soft">
+                                                                                {
+                                                                                    row.tool
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {
+                                                                            row.role
+                                                                        }
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-soft">
+                                                                        {row.project ||
+                                                                            '—'}
+                                                                    </td>
+                                                                    <td className="px-5 py-3.5 text-right">
+                                                                        <button
+                                                                            type="button"
+                                                                            className={buttonClass(
+                                                                                'ghost',
+                                                                                'xs',
+                                                                            )}
+                                                                            onClick={() =>
+                                                                                setRevoking(
+                                                                                    row,
+                                                                                )
+                                                                            }
+                                                                            title={`Revoke ${row.email}`}
+                                                                        >
+                                                                            <UserMinus className="size-3.5" />
+                                                                            <span>
+                                                                                Revoke
+                                                                            </span>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        )
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
                                 </div>
                             )}
                         </Card>
@@ -752,46 +1100,54 @@ export default function SsoIndex({
                                     No partner organizations configured.
                                 </p>
                             ) : (
-                                <div className="overflow-hidden rounded-xl ring-1 ring-line">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-paper/50 text-left text-soft">
-                                            <tr>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Organization
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Org ID
-                                                </th>
-                                                <th className="px-4 py-2 font-medium">
-                                                    Domain Verified
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-line">
-                                            {orgs.map((row) => (
-                                                <tr key={row.orgId || row.name}>
-                                                    <td className="px-4 py-2.5 font-medium text-ink">
-                                                        {row.name}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 font-mono text-soft">
-                                                        {row.orgId}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {row.domainVerified ? (
-                                                            <span className="text-emerald-600 dark:text-emerald-400">
-                                                                yes
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-soft">
-                                                                no
-                                                            </span>
-                                                        )}
-                                                    </td>
+                                <Card className="overflow-hidden p-0">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-line bg-paper/50 text-soft">
+                                                    <th className="px-5 py-3 font-medium">
+                                                        Organization
+                                                    </th>
+                                                    <th className="px-5 py-3 font-medium">
+                                                        Org ID
+                                                    </th>
+                                                    <th className="px-5 py-3 font-medium">
+                                                        Domain Verified
+                                                    </th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody className="divide-y divide-line text-ink">
+                                                {orgs.map((row) => (
+                                                    <tr
+                                                        key={
+                                                            row.orgId ||
+                                                            row.name
+                                                        }
+                                                        className="transition hover:bg-paper/30"
+                                                    >
+                                                        <td className="px-5 py-3.5 font-medium text-ink">
+                                                            {row.name}
+                                                        </td>
+                                                        <td className="px-5 py-3.5 font-mono text-soft">
+                                                            {row.orgId}
+                                                        </td>
+                                                        <td className="px-5 py-3.5">
+                                                            {row.domainVerified ? (
+                                                                <span className="text-emerald-600 dark:text-emerald-400">
+                                                                    yes
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-soft">
+                                                                    no
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
                             )}
                         </Card>
 

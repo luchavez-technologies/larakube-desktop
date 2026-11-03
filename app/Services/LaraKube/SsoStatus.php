@@ -6,6 +6,7 @@ use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Models\ClusterTool;
 use App\Models\Server;
+use App\Models\SsoGrant;
 
 /**
  * Zitadel SSO status, user accounts, and tool authentication wiring,
@@ -49,6 +50,29 @@ class SsoStatus
         $tool = $this->syncIfNeeded($server);
 
         return $tool !== null && $tool->installed;
+    }
+
+    /**
+     * @return list<array{email: string, tool: string, slug: string, role: string, project: string}>
+     */
+    public function grants(string $context): array
+    {
+        $server = Server::firstWhere('context', $context);
+
+        if ($server === null) {
+            return [];
+        }
+
+        $this->syncIfNeeded($server);
+
+        return array_values($server->ssoGrants()->get()
+            ->map(fn (SsoGrant $g): array => [
+                'email' => $g->email,
+                'tool' => $g->tool,
+                'slug' => $g->slug,
+                'role' => $g->role,
+                'project' => $g->project,
+            ])->all());
     }
 
     /**

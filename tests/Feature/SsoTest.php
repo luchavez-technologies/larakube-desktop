@@ -75,6 +75,15 @@ test('viewing sso page renders sso/index with installation status', function () 
     $status->shouldReceive('status')->with('larakube-do-ams3')->andReturn([
         'installed' => true,
     ]);
+    $status->shouldReceive('grants')->with('larakube-do-ams3')->andReturn([
+        [
+            'email' => 'alice@example.com',
+            'tool' => 'Forgejo',
+            'slug' => 'forgejo',
+            'role' => 'admin',
+            'project' => 'default',
+        ],
+    ]);
     $status->shouldReceive('syncState')->with('larakube-do-ams3')->andReturn([
         'status' => 'fresh', 'lastSyncedAt' => now()->toAtomString(), 'error' => null,
     ]);
@@ -473,6 +482,68 @@ test('syncState returns tool sync details or stale default when missing', functi
         'lastSyncedAt' => $syncedAt->toAtomString(),
         'error' => null,
     ]);
+});
+
+test('SsoStatus grants returns empty array when server does not exist', function () {
+    $status = app(SsoStatus::class);
+    expect($status->grants('unknown-context'))->toBe([]);
+});
+
+test('SsoStatus grants returns mapped grants for server', function () {
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true]],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+    ]);
+
+    SsoGrant::create([
+        'server_id' => $server->id,
+        'email' => 'alice@example.com',
+        'tool' => 'Forgejo',
+        'slug' => 'forgejo',
+        'role' => 'admin',
+        'project' => 'default',
+    ]);
+
+    $status = app(SsoStatus::class);
+    expect($status->grants('larakube-do-ams3'))->toBe([
+        [
+            'email' => 'alice@example.com',
+            'tool' => 'Forgejo',
+            'slug' => 'forgejo',
+            'role' => 'admin',
+            'project' => 'default',
+        ],
+    ]);
+});
+
+test('viewing sso page when not installed passes empty grants and installed false status', function () {
+    ssoTestServer();
+
+    $status = mock(SsoStatus::class);
+    $status->shouldReceive('isInstalled')->with('larakube-do-ams3')->andReturn(false);
+    $status->shouldReceive('syncState')->with('larakube-do-ams3')->andReturn([
+        'status' => 'fresh', 'lastSyncedAt' => now()->toAtomString(), 'error' => null,
+    ]);
+    app()->instance(SsoStatus::class, $status);
+
+    $this->get(route('servers.sso.index', 'prod-vps'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('sso/index', false)
+            ->where('isInstalled', false)
+            ->where('grants', [])
+            ->where('status', ['installed' => false])
+        );
 });
 
 test('SyncSsoJob updates tool data and marks it fresh on success', function () {

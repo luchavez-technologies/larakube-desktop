@@ -46,6 +46,9 @@ class SsoController extends Controller
             'status' => $isInstalled
                 ? Inertia::defer(fn (): array => $this->status->status($context), 'status')
                 : ['installed' => false],
+            'grants' => $isInstalled
+                ? Inertia::defer(fn (): array => $this->status->grants($context), 'grants')
+                : [],
             'ssoSync' => $this->status->syncState($context),
         ]);
     }
