@@ -64,6 +64,7 @@ use Illuminate\Support\Carbon;
  * @property-read CloudSize|null $cloudSize
  * @property-read Collection<int, Project> $projects
  * @property-read Collection<int, Run> $runs
+ * @property-read Collection<int, SsoGrant> $ssoGrants
  */
 class Server extends Model
 {
@@ -218,6 +219,14 @@ class Server extends Model
     public function mailDomains(): HasMany
     {
         return $this->hasMany(MailDomain::class);
+    }
+
+    /**
+     * @return HasMany<SsoGrant, $this>
+     */
+    public function ssoGrants(): HasMany
+    {
+        return $this->hasMany(SsoGrant::class);
     }
 
     /**
