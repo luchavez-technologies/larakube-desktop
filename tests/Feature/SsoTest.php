@@ -2,15 +2,20 @@
 
 use App\Enums\RunKind;
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\LaraKube\SsoStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
+use Symfony\Component\Process\Exception\ProcessTimedOutException as SymfonyTimedOut;
+use Symfony\Component\Process\Process as SymfonyProcess;
 
 function ssoTestServer(): string
 {
@@ -92,6 +97,35 @@ test('refreshing SSO calls forget on SsoStatus and redirects back', function () 
 
     $this->post(route('servers.sso.refresh', 'prod-vps'))
         ->assertRedirect();
+});
+
+test('refreshing SSO marks the row stale and dispatches SyncSsoJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'context' => 'larakube-do-ams3',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true]],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    ssoTestServer();
+
+    $this->post(route('servers.sso.refresh', 'prod-vps'))
+        ->assertRedirect();
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('stale');
+
+    Queue::assertPushed(SyncSsoJob::class, fn (SyncSsoJob $job) => $job->serverId === $server->id);
 });
 
 test('wiring a tool starts an sso-wire run', function () {
@@ -272,7 +306,7 @@ test('pruning projects starts an sso-prune run', function () {
     expect($run->kind)->toBe(RunKind::SsoPrune);
 });
 
-test('a run that changes SSO dispatches SyncClusterToolsJob on completion', function () {
+test('a run that changes SSO dispatches SyncSsoJob on completion', function () {
     Queue::fake();
 
     $server = Server::create([
@@ -292,10 +326,10 @@ test('a run that changes SSO dispatches SyncClusterToolsJob on completion', func
 
     event(new ProcessExited($run->alias(), 0));
 
-    Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $job) => $job->serverId === $server->id);
+    Queue::assertPushed(SyncSsoJob::class, fn (SyncSsoJob $job) => $job->serverId === $server->id);
 });
 
-test('a run that changes OpenBao dispatches SyncClusterToolsJob on completion', function () {
+test('forget dispatches SyncClusterToolsJob when sso tool row is missing', function () {
     Queue::fake();
 
     $server = Server::create([
@@ -306,14 +340,231 @@ test('a run that changes OpenBao dispatches SyncClusterToolsJob on completion', 
         'status' => 'ready',
     ]);
 
-    $run = Run::create([
-        'label' => 'Seal OpenBao on prod-vps',
-        'command' => ['larakube', 'secrets:seal'],
-        'kind' => RunKind::OpenBaoSeal,
-        'meta' => ['server' => 'prod-vps', 'context' => 'larakube-do-ams3'],
-    ]);
-
-    event(new ProcessExited($run->alias(), 0));
+    app(SsoStatus::class)->forget('larakube-do-ams3');
 
     Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $job) => $job->serverId === $server->id);
+    Queue::assertNotPushed(SyncSsoJob::class);
+});
+
+test('an SSO tool mid-sync is left alone instead of triggering another sync', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true]],
+        'sync_status' => 'syncing',
+        'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    $status = app(SsoStatus::class);
+    expect($status->isInstalled('larakube-do-ams3'))->toBeTrue()
+        ->and($status->status('larakube-do-ams3'))->toBe(['installed' => true]);
+
+    Queue::assertNotPushed(SyncSsoJob::class);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('a stale or partially-synced SSO tool triggers SyncSsoJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true]],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now()->subSeconds(SyncSsoJob::FRESH_SECONDS + 10),
+    ]);
+
+    $status = app(SsoStatus::class);
+    $status->isInstalled('larakube-do-ams3');
+
+    Queue::assertPushed(SyncSsoJob::class, fn (SyncSsoJob $job) => $job->serverId === $server->id);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('a fresh SSO tool does not trigger any sync jobs', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true, 'version' => '1.0']],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now()->subSeconds(10),
+    ]);
+
+    $status = app(SsoStatus::class);
+    expect($status->isInstalled('larakube-do-ams3'))->toBeTrue()
+        ->and($status->status('larakube-do-ams3'))->toBe(['installed' => true, 'version' => '1.0']);
+
+    Queue::assertNotPushed(SyncSsoJob::class);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('a missing or non-fresh SSO tool triggers SyncClusterToolsJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+
+    $status = app(SsoStatus::class);
+    expect($status->isInstalled('larakube-do-ams3'))->toBeFalse();
+
+    Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $job) => $job->serverId === $server->id);
+    Queue::assertNotPushed(SyncSsoJob::class);
+});
+
+test('syncState returns tool sync details or stale default when missing', function () {
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+
+    $status = app(SsoStatus::class);
+    expect($status->syncState('unknown-context'))->toBe([
+        'status' => 'stale',
+        'lastSyncedAt' => null,
+        'error' => null,
+    ]);
+
+    $syncedAt = now();
+    $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true]],
+        'sync_status' => 'fresh',
+        'last_synced_at' => $syncedAt,
+        'last_sync_error' => null,
+    ]);
+
+    expect($status->syncState('larakube-do-ams3'))->toBe([
+        'status' => 'fresh',
+        'lastSyncedAt' => $syncedAt->toAtomString(),
+        'error' => null,
+    ]);
+});
+
+test('SyncSsoJob updates tool data and marks it fresh on success', function () {
+    $bin = ssoTestServer();
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['initial' => 'value'],
+        'sync_status' => 'stale',
+    ]);
+
+    Process::fake([
+        '*sso:status*' => Process::result(output: json_encode(['installed' => true, 'orgs' => []])),
+    ]);
+
+    SyncSsoJob::dispatchSync($server->id);
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('fresh')
+        ->and($tool->last_synced_at)->not->toBeNull()
+        ->and($tool->last_sync_error)->toBeNull()
+        ->and($tool->data)->toBe([
+            'initial' => 'value',
+            'status' => ['installed' => true, 'orgs' => []],
+        ]);
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('SyncSsoJob handles timeout gracefully and records error', function () {
+    $bin = ssoTestServer();
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'stale',
+    ]);
+
+    Process::fake([
+        '*sso:status*' => fn () => throw new ProcessTimedOutException(
+            new SymfonyTimedOut(new SymfonyProcess(['larakube']), SymfonyTimedOut::TYPE_GENERAL),
+            Process::result(),
+        ),
+    ]);
+
+    SyncSsoJob::dispatchSync($server->id);
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('error')
+        ->and($tool->last_sync_error)->toBe('Timed out waiting for Zitadel SSO.');
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('SyncSsoJob handles failure response and records error', function () {
+    $bin = ssoTestServer();
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => [],
+        'sync_status' => 'stale',
+    ]);
+
+    Process::fake([
+        '*sso:status*' => Process::result(output: 'not json', exitCode: 1),
+    ]);
+
+    SyncSsoJob::dispatchSync($server->id);
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('error')
+        ->and($tool->last_sync_error)->toBe('Could not reach Zitadel SSO.');
+
+    File::deleteDirectory(dirname($bin));
 });

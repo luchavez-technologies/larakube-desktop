@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\RunKind;
-use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Models\Run;
 use App\Models\Server;
@@ -261,7 +260,7 @@ test('importing secrets refuses when the retyped server name does not match', fu
     expect(Run::count())->toBe(0);
 });
 
-test('a run that changes OpenBao dispatches SyncClusterToolsJob on completion', function () {
+test('a run that changes OpenBao dispatches SyncOpenBaoJob on completion', function () {
     Queue::fake();
 
     $server = Server::create([
@@ -281,5 +280,5 @@ test('a run that changes OpenBao dispatches SyncClusterToolsJob on completion', 
 
     event(new ProcessExited($run->alias(), 0));
 
-    Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $job) => $job->serverId === $server->id);
+    Queue::assertPushed(SyncOpenBaoJob::class, fn (SyncOpenBaoJob $job) => $job->serverId === $server->id);
 });

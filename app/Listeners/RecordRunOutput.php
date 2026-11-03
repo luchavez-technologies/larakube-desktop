@@ -9,11 +9,13 @@ use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncMailJob;
+use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServerTlsJob;
+use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Activity;
 use App\Models\Run;
 use App\Models\Server;
@@ -261,12 +263,11 @@ class RecordRunOutput
         }
 
         if ($server !== null && $run->kind?->changesOpenBao()) {
-            SyncClusterToolsJob::dispatch($server->id);
+            SyncOpenBaoJob::dispatch($server->id);
         }
 
         if ($server !== null && $run->kind?->changesSso()) {
-            // A later unit will add a dedicated SyncSsoJob dispatch here instead.
-            SyncClusterToolsJob::dispatch($server->id);
+            SyncSsoJob::dispatch($server->id);
         }
     }
 
