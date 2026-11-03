@@ -99,6 +99,9 @@ Route::post('/servers/{server}/plex/provision', [PlexController::class, 'provisi
 Route::post('/servers/{server}/plex/services', [PlexController::class, 'addService'])->name('servers.plex.services.add');
 Route::post('/servers/{server}/plex/tenants/{tenant}/evict', [PlexController::class, 'evictTenant'])->name('servers.plex.tenants.evict');
 Route::post('/servers/{server}/plex/tenants/{tenant}/rotate', [PlexController::class, 'rotateTenant'])->name('servers.plex.tenants.rotate');
+Route::get('/backups', [BackupController::class, 'entry'])->name('backups');
+Route::get('/servers/{server}/backups', [BackupController::class, 'index'])->name('servers.backups.index');
+Route::post('/servers/{server}/backups/refresh', [BackupController::class, 'refresh'])->name('servers.backups.refresh');
 Route::post('/servers/{server}/backups/setup', [BackupController::class, 'setup'])->name('servers.backups.setup');
 Route::post('/servers/{server}/backups/schedule', [BackupController::class, 'schedule'])->name('servers.backups.schedule');
 Route::post('/servers/{server}/backups/unschedule', [BackupController::class, 'unschedule'])->name('servers.backups.unschedule');
@@ -204,6 +207,7 @@ Route::get('/servers/{server}/plex', [PlexController::class, 'index'])->name('se
 
 Route::get('/mail', [MailController::class, 'entry'])->name('mail');
 Route::get('/servers/{server}/mail', [MailController::class, 'index'])->name('servers.mail.index');
+Route::post('/servers/{server}/mail/refresh', [MailController::class, 'refresh'])->name('servers.mail.refresh');
 Route::post('/servers/{server}/mail/deploy', [MailController::class, 'deploy'])->name('servers.mail.deploy');
 Route::post('/servers/{server}/mail/accounts', [MailController::class, 'createAccount'])->name('servers.mail.accounts.store');
 Route::post('/servers/{server}/mail/accounts/password', [MailController::class, 'resetPassword'])->name('servers.mail.accounts.password');
@@ -246,6 +250,7 @@ Route::post('/servers/{server}/sso/revoke', [SsoController::class, 'revoke'])->n
 Route::post('/servers/{server}/sso/create', [SsoController::class, 'create'])->name('servers.sso.create');
 Route::post('/servers/{server}/sso/org', [SsoController::class, 'org'])->name('servers.sso.org');
 Route::post('/servers/{server}/sso/org-grant', [SsoController::class, 'orgGrant'])->name('servers.sso.org-grant');
+Route::post('/servers/{server}/sso/org-delete', [SsoController::class, 'deleteOrg'])->name('servers.sso.org-delete');
 Route::post('/servers/{server}/sso/prune', [SsoController::class, 'prune'])->name('servers.sso.prune');
 
 // Apps (App Store & Cluster Apps)
@@ -303,6 +308,8 @@ Route::get('/simulator', [SimulatorController::class, 'index'])->name('simulator
 Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('settings.theme');
+Route::post('/settings/demo-mode', [SettingsController::class, 'toggleDemoMode'])->name('settings.demo-mode');
+Route::post('/settings/sync-cli', [SettingsController::class, 'syncCli'])->name('settings.sync-cli');
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');
 Route::post('/uninstall', [UninstallController::class, 'execute'])->name('uninstall.execute');
 

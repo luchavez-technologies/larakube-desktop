@@ -3,12 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncServerBackupJob;
+use App\Models\Server;
+use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 use Native\Desktop\Facades\Shell;
 
 /**
@@ -25,6 +30,118 @@ class BackupController extends Controller
         'weekly' => '0 3 * * 0',
         'twice-daily' => '0 3,15 * * *',
     ];
+
+    /** Entry route from sidebar: redirects to last browsed cloud server or first ready server. */
+    public function entry(CurrentServer $current, StackCatalog $stacks): RedirectResponse
+    {
+        $ready = array_values(array_filter(
+            $stacks->all() ?? [],
+            fn (array $stack): bool => $stack['status'] === 'ready' && $stack['context'] !== null,
+        ));
+        $cloudReady = array_values(array_filter(
+            $ready,
+            fn (array $stack): bool => ! Server::isStackLocal($stack),
+        ));
+
+        $candidates = $cloudReady !== [] ? $cloudReady : $ready;
+        $names = array_column($candidates, 'name');
+        $resolved = $current->resolve($names);
+
+        return $resolved === null ? to_route('servers.index') : to_route('servers.backups.index', $resolved);
+    }
+
+    /** Backups & Disaster Recovery overview for the selected server (ADR 0018). */
+    public function index(string $server, StackCatalog $stacks, CurrentServer $current): Response
+    {
+        $stack = $this->stack($server, $stacks);
+        $current->remember($server);
+
+        $serverModel = Server::where('name', $stack['name'])->first() ?? Server::syncFromStack($stack);
+        $isLocal = Server::isStackLocal($stack);
+
+        if (! $isLocal) {
+            $isFresh = $serverModel->backup_last_synced_at !== null
+                && $serverModel->backup_last_synced_at->diffInSeconds(now()) < SyncServerBackupJob::FRESH_SECONDS
+                && $serverModel->backup_sync_status !== 'stale';
+
+            if (! $isFresh && $serverModel->backup_sync_status !== 'syncing') {
+                $serverModel->update(['backup_sync_status' => 'syncing']);
+                SyncServerBackupJob::dispatch($serverModel->id);
+            }
+        }
+
+        $readyServers = array_values(array_filter(
+            $stacks->all() ?? [],
+            fn (array $s): bool => $s['status'] === 'ready' && $s['context'] !== null,
+        ));
+
+        $cloudServers = [];
+        $protectedCount = 0;
+        if (Server::activeUnfiltered()->exists()) {
+            $dbCloud = Server::active()
+                ->where('status', 'ready')
+                ->whereNotNull('context')
+                ->get()
+                ->reject(fn (Server $s): bool => Server::isStackLocal([
+                    'name' => $s->name,
+                    'provider' => $s->provider,
+                    'kind' => $s->kind,
+                    'ip' => $s->ip,
+                    'context' => $s->context,
+                    'status' => $s->status,
+                ]))
+                ->values();
+
+            foreach ($dbCloud as $cs) {
+                $configured = $cs->backup_configured === true;
+                if ($configured) {
+                    $protectedCount++;
+                }
+                $cloudServers[] = [
+                    'name' => $cs->name,
+                    'provider' => $cs->provider,
+                    'region' => $cs->region,
+                    'configured' => $configured,
+                    'lastSyncedAt' => $cs->backup_last_synced_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        return Inertia::render('backups/index', [
+            'server' => $stack,
+            'servers' => $readyServers,
+            'isLocal' => $isLocal,
+            'backup' => $serverModel->backup_data,
+            'backupSync' => [
+                'status' => $isLocal ? 'fresh' : ($serverModel->backup_sync_status ?? 'stale'),
+                'lastSyncedAt' => $serverModel->backup_last_synced_at?->toIso8601String(),
+                'error' => $serverModel->backup_last_sync_error,
+            ],
+            'fleet' => [
+                'total' => count($cloudServers),
+                'protected' => $protectedCount,
+                'servers' => $cloudServers,
+            ],
+        ]);
+    }
+
+    /** Force an immediate re-sync of the server's backup state. */
+    public function refresh(string $server, StackCatalog $stacks): RedirectResponse
+    {
+        $stack = $this->stack($server, $stacks);
+        $serverModel = Server::where('name', $stack['name'])->first() ?? Server::syncFromStack($stack);
+
+        if (! Server::isStackLocal($stack)) {
+            $serverModel->update([
+                'backup_sync_status' => 'syncing',
+                'backup_last_synced_at' => null,
+                'backup_last_sync_error' => null,
+            ]);
+            SyncServerBackupJob::dispatch($serverModel->id);
+        }
+
+        return back();
+    }
 
     public function setup(Request $request, string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
     {
@@ -167,7 +284,9 @@ class BackupController extends Controller
         return back();
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}
+     */
     private function stack(string $server, StackCatalog $stacks): array
     {
         $stack = $stacks->find($server);

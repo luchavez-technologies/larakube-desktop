@@ -11,6 +11,7 @@ use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Jobs\Sync\SyncPlexJob;
+use App\Jobs\Sync\SyncServerBackupJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
@@ -142,6 +143,11 @@ class RecordRunOutput
 
         if ($context !== null && $run->kind?->changesBackups()) {
             app(ClusterStatus::class)->forgetBackup($context);
+
+            if ($server !== null) {
+                $server->update(['backup_sync_status' => 'syncing']);
+                SyncServerBackupJob::dispatch($server->id);
+            }
         }
 
         // Busted on completion, not when the action is clicked — the run is
@@ -222,6 +228,7 @@ class RecordRunOutput
             if ($run->kind === RunKind::MailDeploy) {
                 SyncClusterToolsJob::dispatch($server->id);
             } else {
+                $server->mailTool()?->update(['sync_status' => 'syncing']);
                 SyncMailJob::dispatch($server->id);
             }
 
@@ -231,6 +238,7 @@ class RecordRunOutput
         }
 
         if ($server !== null && $run->kind?->changesDrive()) {
+            $server->driveTool()?->update(['sync_status' => 'syncing']);
             SyncClusterToolsJob::dispatch($server->id);
             SyncDriveJob::dispatch($server->id);
 
@@ -263,10 +271,27 @@ class RecordRunOutput
         }
 
         if ($server !== null && $run->kind?->changesOpenBao()) {
+            $server->openBaoTool()?->update(['sync_status' => 'syncing']);
             SyncOpenBaoJob::dispatch($server->id);
         }
 
         if ($server !== null && $run->kind?->changesSso()) {
+            $ssoTool = $server->ssoTool();
+            if ($ssoTool !== null) {
+                $data = $ssoTool->data;
+                if ($run->kind === RunKind::SsoOrgDelete && $status === RunStatus::Succeeded && $run->subject !== null && is_array($data['status']['orgs'] ?? null)) {
+                    $data['status']['orgs'] = array_values(array_filter(
+                        $data['status']['orgs'],
+                        fn (mixed $org): bool => ! is_array($org)
+                            || (strcasecmp((string) ($org['name'] ?? ''), $run->subject) !== 0
+                                && (string) ($org['orgId'] ?? '') !== $run->subject),
+                    ));
+                }
+                $ssoTool->update([
+                    'data' => $data,
+                    'sync_status' => 'syncing',
+                ]);
+            }
             SyncSsoJob::dispatch($server->id);
         }
     }

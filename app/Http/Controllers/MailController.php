@@ -41,28 +41,30 @@ class MailController extends Controller
         $context = (string) $stack['context'];
         $isInstalled = $status->isInstalled($context);
         $servers = array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready'));
+        $info = $isInstalled ? $status->serverInfo($context) : null;
 
         return Inertia::render('mail/index', [
             'server' => $stack,
             'servers' => $servers,
             'isInstalled' => $isInstalled,
-            'serverInfo' => $isInstalled
-                ? Inertia::defer(fn (): ?array => $status->serverInfo($context), 'serverInfo')
-                : null,
-            'hasSso' => $isInstalled
-                ? Inertia::defer(fn (): bool => (bool) ($status->serverInfo($context)['sso']['installed'] ?? false), 'hasSso')
-                : false,
-            'domains' => $isInstalled
-                ? Inertia::defer(fn (): array => $status->domains($context), 'domains')
-                : [],
-            'accounts' => $isInstalled
-                ? Inertia::defer(fn (): array => $status->accounts($context), 'accounts')
-                : ['accounts' => [], 'queue' => 0],
-            'wiredTools' => $isInstalled
-                ? Inertia::defer(fn (): array => $status->wiredTools($context), 'wiredTools')
-                : [],
+            'serverInfo' => $info,
+            'hasSso' => $isInstalled && (bool) ($info['sso']['installed'] ?? false),
+            'domains' => $isInstalled ? $status->domains($context) : [],
+            'accounts' => $isInstalled ? $status->accounts($context) : ['accounts' => [], 'queue' => 0],
+            'wiredTools' => $isInstalled ? $status->wiredTools($context) : [],
             'mailSync' => $status->syncState($context),
         ]);
+    }
+
+    /**
+     * Force an immediate re-sync of Stalwart mail domains, accounts, and status.
+     */
+    public function refresh(string $server, MailStatus $status): RedirectResponse
+    {
+        $context = (string) $this->readyServer($server)['context'];
+        $status->forget($context);
+
+        return back();
     }
 
     /**
@@ -286,6 +288,7 @@ class MailController extends Controller
         $request->validate([
             'domain' => ['required', 'string', 'max:255'],
             'confirm' => ['required', 'string'],
+            'with_sso' => ['nullable', 'boolean'],
         ]);
 
         $stack = $this->readyServer($server);
@@ -295,9 +298,15 @@ class MailController extends Controller
 
         abort_unless($confirm === $domain, 422, 'Type the domain name to confirm.');
 
+        $args = ['mail:domain-delete', 'production', "--context={$context}", "--domain={$domain}"];
+        if ($request->boolean('with_sso')) {
+            $args[] = '--with-sso';
+        }
+        $args[] = '--force';
+
         $run = $runner->start(
             label: "Remove mail domain {$domain} on {$server}",
-            arguments: ['mail:domain-delete', 'production', "--context={$context}", "--domain={$domain}", '--force'],
+            arguments: $args,
             kind: RunKind::MailRemoveDomain,
             subject: $domain,
             meta: ['server' => $server, 'context' => $context],

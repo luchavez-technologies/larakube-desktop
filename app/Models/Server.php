@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\LaraKube\GlobalSettings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -32,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $account
  * @property string|null $cloud_project_id
  * @property string $status
+ * @property bool $hidden_in_demo
  * @property string $sync_status
  * @property Carbon|null $last_synced_at
  * @property string|null $last_sync_error
@@ -86,6 +88,7 @@ class Server extends Model
         'account',
         'cloud_project_id',
         'status',
+        'hidden_in_demo',
         'sync_status',
         'last_synced_at',
         'last_sync_error',
@@ -117,6 +120,16 @@ class Server extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Server $server): void {
+            if (! array_key_exists('hidden_in_demo', $server->getAttributes()) && $server->name !== '') {
+                $server->hidden_in_demo = in_array(
+                    $server->name,
+                    rescue(fn (): array => app(GlobalSettings::class)->demoHiddenServers(), [], report: false),
+                    true,
+                );
+            }
+        });
+
         static::saving(function (Server $server): void {
             if ($server->provider && ! in_array($server->provider, ['custom', 'existing', 'local'], true)) {
                 $server->cloud_provider_id ??= CloudProvider::where('slug', $server->provider)->value('id');
@@ -149,6 +162,7 @@ class Server extends Model
         return [
             'port' => 'integer',
             'bindings' => 'array',
+            'hidden_in_demo' => 'boolean',
             'last_synced_at' => 'datetime',
             'domains_last_synced_at' => 'datetime',
             'plex_last_synced_at' => 'datetime',
@@ -283,12 +297,41 @@ class Server extends Model
     }
 
     /**
-     * Scope a query to only include active servers (excluding dev boxes and missing/destroyed servers).
+     * Scope a query to exclude servers marked hidden in Demo Mode while Demo Mode is active.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        if (app(GlobalSettings::class)->demoMode()) {
+            $hiddenNames = app(GlobalSettings::class)->demoHiddenServers();
+
+            return $query->where('hidden_in_demo', false)
+                ->when($hiddenNames !== [], fn (Builder $q): Builder => $q->whereNotIn('name', $hiddenNames));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Scope a query to only include active, visible servers (excluding dev boxes, missing/destroyed servers, and demo-hidden servers when Demo Mode is on).
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
      */
     public function scopeActive(Builder $query): Builder
+    {
+        return $this->scopeActiveUnfiltered($query)->visible();
+    }
+
+    /**
+     * Scope a query to include all active servers regardless of Demo Mode visibility.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeActiveUnfiltered(Builder $query): Builder
     {
         return $query->where('role', '!=', 'dev')->whereNotIn('status', ['missing', 'destroyed']);
     }

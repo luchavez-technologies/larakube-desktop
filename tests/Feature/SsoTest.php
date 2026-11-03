@@ -930,3 +930,51 @@ test('SyncSsoJob does not touch grants of a different server during sync with ne
 
     File::deleteDirectory(dirname($bin));
 });
+
+test('SsoStatus dispatches SyncSsoJob instead of SyncClusterToolsJob when installed tool row is stale', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $server->clusterTools()->create([
+        'tool' => 'sso',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true]],
+        'sync_status' => 'stale',
+        'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    expect(app(SsoStatus::class)->isInstalled('larakube-do-ams3'))->toBeTrue();
+
+    Queue::assertPushed(SyncSsoJob::class, fn (SyncSsoJob $job) => $job->serverId === $server->id);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('offboarding a partner organization starts an sso-org-delete run and supports with_mail cascade', function () {
+    $bin = ssoTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.sso.org-delete', 'prod-vps'), [
+        'org' => 'nexa-web.site',
+        'confirm' => 'nexa-web.site',
+        'with_mail' => true,
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'sso:org-delete', 'production', '--context=larakube-do-ams3',
+            '--org=nexa-web.site', '--with-mail', '--force', '--no-interaction',
+        ];
+    });
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::SsoOrgDelete)
+        ->and($run->subject)->toBe('nexa-web.site')
+        ->and($run->kind->changesSso())->toBeTrue()
+        ->and($run->kind->changesMail())->toBeTrue();
+});

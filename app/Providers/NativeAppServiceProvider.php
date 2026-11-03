@@ -16,9 +16,11 @@ use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncMailJob;
+use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServersJob;
+use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
@@ -165,6 +167,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
                 if ($server->driveTool()?->installed) {
                     SyncDriveJob::dispatch($server->id);
+                }
+
+                if ($server->openBaoTool()?->installed) {
+                    SyncOpenBaoJob::dispatch($server->id);
+                }
+
+                if ($server->ssoTool()?->installed) {
+                    SyncSsoJob::dispatch($server->id);
                 }
             }
         } catch (\Throwable) {

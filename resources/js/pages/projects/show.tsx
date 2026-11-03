@@ -3245,7 +3245,7 @@ function LocalClusterCard({
                             </Button>
                             <Form
                                 action={down(project.id)}
-                                onSubmit={() => setConfirmDownOpen(false)}
+                                onSuccess={() => setConfirmDownOpen(false)}
                             >
                                 {({ processing }) => (
                                     <Button

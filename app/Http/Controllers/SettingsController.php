@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\Sync\SyncCliWithDesktopJob;
+use App\Models\Server;
 use App\Services\EditorLauncher;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
@@ -56,11 +58,13 @@ class SettingsController extends Controller
             // usage === 'apps' (local k3s development, the one thing that
             // still needs WSL).
             'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $settings->get()['usage'] === 'apps' ? $wsl->check() : null),
-            'serverNames' => Inertia::defer(function () use ($catalog): ?array {
-                $stacks = $catalog->all();
+            'serverNames' => Server::activeUnfiltered()->exists()
+                ? Server::activeUnfiltered()->orderBy('name')->pluck('name')->all()
+                : Inertia::defer(function () use ($catalog): ?array {
+                    $stacks = $catalog->all(includeDemoHidden: true);
 
-                return $stacks === null ? null : array_map(fn (array $stack): string => $stack['name'], $stacks);
-            }),
+                    return $stacks === null ? null : array_map(fn (array $stack): string => $stack['name'], $stacks);
+                }),
         ]);
     }
 
@@ -96,6 +100,35 @@ class SettingsController extends Controller
         $settings->setTheme($validated['theme']);
 
         return back()->with('success', 'Theme updated.');
+    }
+
+    public function toggleDemoMode(Request $request, GlobalSettings $settings): RedirectResponse
+    {
+        $validated = $request->validate([
+            'demoMode' => ['nullable', 'boolean'],
+            'demoHiddenServers' => ['nullable', 'array'],
+            'demoHiddenServers.*' => ['string'],
+        ]);
+
+        $nextMode = array_key_exists('demoMode', $validated) && $validated['demoMode'] !== null
+            ? (bool) $validated['demoMode']
+            : ! $settings->demoMode();
+
+        $payload = ['demoMode' => $nextMode];
+        if (array_key_exists('demoHiddenServers', $validated) && is_array($validated['demoHiddenServers'])) {
+            $payload['demoHiddenServers'] = $validated['demoHiddenServers'];
+        }
+
+        $settings->update($payload);
+
+        return back()->with('success', $nextMode ? 'Demo Mode enabled.' : 'Demo Mode disabled.');
+    }
+
+    public function syncCli(): RedirectResponse
+    {
+        SyncCliWithDesktopJob::dispatch(notify: true);
+
+        return back()->with('success', 'Syncing LaraKube CLI with the active release channel in the background.');
     }
 
     public function bridge(string $agent, GlobalSettings $settings): RedirectResponse

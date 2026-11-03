@@ -29,3 +29,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0015](0015-nativephp-settings-facade-over-browser-localstorage.md)      | Use NativePHP Settings facade over browser LocalStorage for persistent application state        | Accepted |
 | [0016](0016-interactive-simulation-engine-xyflow-motion.md)              | Interactive Request Simulation Engine via React Flow and Motion                                 | Accepted |
 | [0017](0017-always-run-native-migrate-after-adding-migrations.md)        | Always run `php artisan native:migrate` after adding or changing a migration                    | Accepted |
+| [0018](0018-database-first-background-sync-and-tabbed-service-pages.md)  | Database-first background sync and tabbed UI for cluster service pages                          | Accepted |

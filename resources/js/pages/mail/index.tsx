@@ -1,7 +1,14 @@
-import { Head, usePoll } from '@inertiajs/react';
-import { useState } from 'react';
-import { Globe, Send, Settings, ExternalLink, Inbox } from 'lucide-react';
-import { buttonClass } from '@/components/button';
+import { Head, router, usePoll } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
+import {
+    Globe,
+    Send,
+    Settings,
+    ExternalLink,
+    Inbox,
+    RotateCw,
+} from 'lucide-react';
+import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { index as mailIndex } from '@/routes/servers/mail';
@@ -186,20 +193,47 @@ export default function MailIndex({
     mailSync,
 }: Props) {
     const [activeTab, setActiveTab] = useState<TabType>('mailboxes');
+    const [refreshing, setRefreshing] = useState(false);
 
-    usePoll(
+    const isSyncing =
+        isInstalled &&
+        (mailSync.status === 'syncing' || mailSync.status === 'stale');
+
+    const { start: startPoll, stop: stopPoll } = usePoll(
         2000,
         {
             only: [
+                'isInstalled',
                 'serverInfo',
+                'hasSso',
                 'domains',
                 'accounts',
                 'wiredTools',
                 'mailSync',
             ],
         },
-        { autoStart: isInstalled && mailSync.status === 'syncing' },
+        { autoStart: isSyncing },
     );
+
+    useEffect(() => {
+        if (isSyncing) {
+            startPoll();
+        } else {
+            stopPoll();
+        }
+    }, [isSyncing, startPoll, stopPoll]);
+
+    function handleRefresh() {
+        setRefreshing(true);
+        router.post(
+            `/servers/${encodeURIComponent(server.name)}/mail/refresh`,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setRefreshing(false),
+            },
+        );
+    }
 
     // Deferred props arrive as undefined until the follow-up request lands — show a
     // skeleton instead of silently defaulting to empty and popping in once real data lands.
@@ -282,6 +316,26 @@ export default function MailIndex({
                             value={server.name}
                             buildHref={(name) => mailIndex(name).url}
                         />
+
+                        {isInstalled && (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="md"
+                                disabled={refreshing || isSyncing}
+                                onClick={handleRefresh}
+                                title="Re-sync domains, mailboxes, and relay configuration from Stalwart"
+                            >
+                                <RotateCw
+                                    className={`h-4 w-4 ${refreshing || isSyncing ? 'animate-spin' : ''}`}
+                                />
+                                <span>
+                                    {refreshing || isSyncing
+                                        ? 'Syncing…'
+                                        : 'Refresh'}
+                                </span>
+                            </Button>
+                        )}
 
                         {isInstalled && serverInfo?.webmailUrl && (
                             <ExternalLinkButton

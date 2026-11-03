@@ -183,7 +183,8 @@ export type RunKind =
     | 'drive-install-extension'
     | 'drive-uninstall-extension'
     | 'drive-restart'
-    | 'drive-remove';
+    | 'drive-remove'
+    | 'sso-org-delete';
 
 export type Run = {
     id: number;
@@ -269,6 +270,7 @@ export type Server = {
     isCurrent?: boolean;
     /** Whether this server has at least one domain ExternalDNS manages — an instant DB read, present for every server, not just a selected one. */
     hasExternalDns?: boolean;
+    backupConfigured?: boolean | null;
     domains?: ServerDomain[];
 };
 

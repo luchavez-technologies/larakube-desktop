@@ -395,14 +395,13 @@ test('viewing the mail page syncs real mail accounts and domains into the databa
         ->assertInertia(fn ($page) => $page
             ->component('mail/index')
             ->where('isInstalled', true)
-            ->loadDeferredProps(fn ($reload) => $reload
-                ->where('accounts.accounts.0.email', 'admin@example.com')
-                ->where('domains.0.name', 'example.com')
-                ->where('wiredTools.0.slug', 'forgejo')
-                ->where('wiredTools.0.tool', 'Forgejo (Git Forge & CI/CD)')
-                ->where('wiredTools.0.instance', 'git-example-com')
-                ->where('wiredTools.0.host', 'git.example.com')
-                ->where('wiredTools.0.wired', true)));
+            ->where('accounts.accounts.0.email', 'admin@example.com')
+            ->where('domains.0.name', 'example.com')
+            ->where('wiredTools.0.slug', 'forgejo')
+            ->where('wiredTools.0.tool', 'Forgejo (Git Forge & CI/CD)')
+            ->where('wiredTools.0.instance', 'git-example-com')
+            ->where('wiredTools.0.host', 'git.example.com')
+            ->where('wiredTools.0.wired', true));
 
     expect(MailAccount::where('email', 'admin@example.com')->exists())->toBeTrue()
         ->and(MailDomain::where('name', 'example.com')->exists())->toBeTrue();
@@ -474,4 +473,170 @@ test('a mail tool mid-sync is left alone instead of triggering another sync', fu
 
     Queue::assertNotPushed(SyncMailJob::class);
     Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('refreshing Mail marks the stalwart row stale and dispatches SyncMailJob', function () {
+    Queue::fake();
+    mailTestServer();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = ClusterTool::create([
+        'server_id' => $server->id,
+        'tool' => 'stalwart',
+        'host' => 'send.example.com',
+        'installed' => true,
+        'data' => ['tool' => 'stalwart', 'serverInfo' => ['installed' => true], 'queue' => 0],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+    ]);
+
+    $this->post(route('servers.mail.refresh', 'prod-vps'))
+        ->assertRedirect();
+
+    $tool->refresh();
+    expect($tool->sync_status)->toBe('stale');
+
+    Queue::assertPushed(SyncMailJob::class, fn (SyncMailJob $job) => $job->serverId === $server->id);
+});
+
+test('SyncClusterToolsJob preserves deep-sync keys on existing cluster_tools rows', function () {
+    Queue::fake();
+    mailTestServer();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = ClusterTool::create([
+        'server_id' => $server->id,
+        'tool' => 'stalwart',
+        'host' => 'send.example.com',
+        'installed' => true,
+        'data' => [
+            'tool' => 'stalwart',
+            'serverInfo' => ['installed' => true, 'host' => 'send.example.com'],
+            'queue' => 3,
+            'wiredTools' => [['slug' => 'forgejo', 'wired' => true]],
+        ],
+        'sync_status' => 'fresh',
+        'last_synced_at' => now(),
+    ]);
+
+    Process::fake([
+        '*tool:list*' => Process::result(output: json_encode([
+            ['tool' => 'stalwart', 'host' => 'send.example.com', 'ready' => true, 'installed' => true],
+        ])),
+    ]);
+
+    (new SyncClusterToolsJob($server->id))->handle(app(ToolLocator::class));
+
+    $tool->refresh();
+    expect($tool->data)->toHaveKey('serverInfo')
+        ->and($tool->data['serverInfo']['host'])->toBe('send.example.com')
+        ->and($tool->data['queue'])->toBe(3)
+        ->and($tool->data['wiredTools'])->toHaveCount(1);
+});
+
+test('SyncMailJob preserves cached domains and accounts when mail:show reports installed false on an installed tool', function () {
+    mailTestServer();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $tool = ClusterTool::create([
+        'server_id' => $server->id,
+        'tool' => 'stalwart',
+        'host' => 'send.example.com',
+        'installed' => true,
+        'data' => ['tool' => 'stalwart', 'serverInfo' => ['installed' => true]],
+        'sync_status' => 'stale',
+        'last_synced_at' => now()->subMinutes(15),
+    ]);
+    $domain = MailDomain::create([
+        'server_id' => $server->id,
+        'cluster_tool_id' => $tool->id,
+        'domain_id' => 'd1',
+        'name' => 'example.com',
+        'accounts_count' => 1,
+    ]);
+    MailAccount::create([
+        'server_id' => $server->id,
+        'mail_domain_id' => $domain->id,
+        'email' => 'admin@example.com',
+        'name' => 'Admin',
+        'role' => 'admin',
+    ]);
+
+    Process::fake([
+        '*mail:show*' => Process::result(output: json_encode(['installed' => false])),
+    ]);
+
+    (new SyncMailJob($server->id))->handle(app(ToolLocator::class));
+
+    expect(MailDomain::where('server_id', $server->id)->count())->toBe(1)
+        ->and(MailAccount::where('server_id', $server->id)->count())->toBe(1)
+        ->and($tool->fresh()->installed)->toBeTrue()
+        ->and($tool->fresh()->sync_status)->toBe('error');
+});
+
+test('MailStatus dispatches SyncMailJob instead of SyncClusterToolsJob when installed tool row is stale', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    ClusterTool::create([
+        'server_id' => $server->id,
+        'tool' => 'stalwart',
+        'host' => 'send.example.com',
+        'installed' => true,
+        'data' => ['tool' => 'stalwart', 'serverInfo' => ['installed' => true], 'queue' => 0],
+        'sync_status' => 'stale',
+        'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    expect(app(MailStatus::class)->isInstalled('larakube-do-ams3'))->toBeTrue();
+
+    Queue::assertPushed(SyncMailJob::class, fn (SyncMailJob $job) => $job->serverId === $server->id);
+    Queue::assertNotPushed(SyncClusterToolsJob::class);
+});
+
+test('removing a mail domain with with_sso forwards --with-sso flag and marks both mail and sso as changed', function () {
+    $bin = mailTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->delete(route('servers.mail.domains.destroy', 'prod-vps'), [
+        'domain' => 'nexa-web.site',
+        'confirm' => 'nexa-web.site',
+        'with_sso' => true,
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, mixed ...$rest) use ($bin): bool {
+        return array_slice((array) $cmd, 4) === [
+            $bin, 'mail:domain-delete', 'production', '--context=larakube-do-ams3',
+            '--domain=nexa-web.site', '--with-sso', '--force', '--no-interaction',
+        ];
+    });
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::MailRemoveDomain)
+        ->and($run->kind->changesMail())->toBeTrue()
+        ->and($run->kind->changesSso())->toBeTrue();
 });

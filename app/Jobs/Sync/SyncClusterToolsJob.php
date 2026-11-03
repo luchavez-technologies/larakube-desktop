@@ -87,7 +87,21 @@ class SyncClusterToolsJob extends SyncJob
                     $host = isset($row['host']) && $row['host'] !== '' ? (string) $row['host'] : null;
                     $seenKeys[] = $tool.'|'.($host ?? '');
 
-                    $wasNew = ! ClusterTool::where('server_id', $server->id)->where('tool', $tool)->where('host', $host)->exists();
+                    $existing = ClusterTool::where('server_id', $server->id)
+                        ->where('tool', $tool)
+                        ->where('host', $host)
+                        ->first();
+                    $wasNew = $existing === null;
+
+                    $preservedData = [];
+                    if ($existing !== null) {
+                        $existingData = $existing->data ?? [];
+                        foreach (['serverInfo', 'queue', 'wiredTools', 'driveInfo', 'extensions', 'status'] as $deepKey) {
+                            if (array_key_exists($deepKey, $existingData)) {
+                                $preservedData[$deepKey] = $existingData[$deepKey];
+                            }
+                        }
+                    }
 
                     $clusterTool = ClusterTool::updateOrCreate(
                         ['server_id' => $server->id, 'tool' => $tool, 'host' => $host],
@@ -96,7 +110,7 @@ class SyncClusterToolsJob extends SyncJob
                             'installed' => (bool) ($row['installed'] ?? false),
                             'multi_instance' => $row['multiInstance'] ?? true,
                             'position' => $position,
-                            'data' => $row,
+                            'data' => [...$preservedData, ...$row],
                             'sync_status' => 'fresh',
                             'last_synced_at' => now(),
                             'last_sync_error' => null,

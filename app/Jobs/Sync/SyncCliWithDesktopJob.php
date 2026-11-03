@@ -27,7 +27,7 @@ use App\Services\Wsl;
  */
 class SyncCliWithDesktopJob extends SyncJob
 {
-    public function __construct(private readonly bool $notify = true) {}
+    public function __construct(public readonly bool $notify = true) {}
 
     protected function uniqueKey(): string
     {

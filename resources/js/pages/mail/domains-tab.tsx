@@ -457,7 +457,8 @@ export default function DomainsTab({
                         <Form
                             action={`/servers/${server.name}/mail/domains`}
                             method="delete"
-                            onSubmit={() => {
+                            disableWhileProcessing
+                            onSuccess={() => {
                                 setRemovingDomain(null);
                                 setRemoveConfirm('');
                             }}
@@ -468,6 +469,30 @@ export default function DomainsTab({
                                 name="domain"
                                 value={removingDomain}
                             />
+
+                            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-paper/60 p-3 text-xs text-ink">
+                                <input
+                                    type="checkbox"
+                                    name="with_sso"
+                                    value="1"
+                                    defaultChecked
+                                    className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                />
+                                <div>
+                                    <div className="font-medium text-ink">
+                                        Also offboard partner organization from
+                                        Zitadel SSO
+                                    </div>
+                                    <div className="mt-0.5 text-[11px] text-soft">
+                                        If a partner organization named{' '}
+                                        <span className="font-mono">
+                                            {removingDomain}
+                                        </span>{' '}
+                                        exists in Zitadel SSO, permanently
+                                        remove it and its users too.
+                                    </div>
+                                </div>
+                            </label>
 
                             <div>
                                 <label className="block text-xs font-medium text-soft">
@@ -539,7 +564,8 @@ export default function DomainsTab({
                         <Form
                             action={`/servers/${server.name}/mail/domains`}
                             method="post"
-                            onSubmit={() => setIsAddOpen(false)}
+                            disableWhileProcessing
+                            onSuccess={() => setIsAddOpen(false)}
                             className="space-y-4"
                         >
                             <div>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\OpenBaoStatus;
@@ -40,9 +41,7 @@ class OpenBaoController extends Controller
             'server' => $stack,
             'servers' => $servers,
             'isInstalled' => $isInstalled,
-            'status' => $isInstalled
-                ? Inertia::defer(fn (): array => $status->status($context), 'status')
-                : ['installed' => false],
+            'status' => $isInstalled ? $status->status($context) : ['installed' => false],
             'openBaoSync' => $status->syncState($context),
         ]);
     }
@@ -249,6 +248,10 @@ class OpenBaoController extends Controller
         $stack = $this->stacks->find($server);
 
         abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
+
+        if (! Server::where('name', $stack['name'])->exists()) {
+            Server::syncFromStack($stack);
+        }
 
         /** @var array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, status: string, account?: ?string} $stack */
         return $stack;

@@ -1,13 +1,16 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncServerBackupJob;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Queue;
 use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 use Native\Desktop\Facades\Shell;
@@ -161,4 +164,86 @@ test('a server is only asked about backups once, until a backup run ends', funct
     event(new ProcessExited($run->alias(), 0));
 
     expect(Cache::has('cluster-status:backup:larakube-do-ams3'))->toBeFalse();
+});
+
+test('/backups redirects to the first ready cloud server', function () {
+    $bin = backupServer();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([
+        ['name' => 'orbstack', 'provider' => 'orbstack', 'kind' => 'discovered', 'region' => 'local', 'ip' => '127.0.0.1', 'context' => 'orbstack', 'status' => 'ready'],
+        ['name' => 'prod-vps', 'provider' => 'digitalocean', 'kind' => 'vps', 'region' => 'ams3', 'ip' => '1.2.3.4', 'context' => 'larakube-do-ams3', 'status' => 'ready'],
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $this->get('/backups')
+        ->assertRedirect(route('servers.backups.index', 'prod-vps'));
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('viewing backups page reads from SQLite first and dispatches SyncServerBackupJob when stale', function () {
+    Queue::fake();
+    $bin = backupServer();
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('all')->andReturn([
+        ['name' => 'prod-vps', 'provider' => 'digitalocean', 'kind' => 'vps', 'region' => 'ams3', 'ip' => '1.2.3.4', 'context' => 'larakube-do-ams3', 'status' => 'ready'],
+    ]);
+    $stacks->shouldReceive('find')->with('prod-vps')->andReturn([
+        'name' => 'prod-vps', 'provider' => 'digitalocean', 'kind' => 'vps', 'region' => 'ams3', 'ip' => '1.2.3.4', 'context' => 'larakube-do-ams3', 'status' => 'ready',
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+        'backup_configured' => true,
+        'backup_data' => [
+            'success' => true,
+            'configured' => true,
+            'destination' => ['endpoint' => 'https://r2.example.com', 'bucket' => 'prod-backups', 'region' => 'auto'],
+        ],
+        'backup_sync_status' => 'stale',
+    ]);
+
+    $this->get(route('servers.backups.index', 'prod-vps'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('backups/index', false)
+            ->where('server.name', 'prod-vps')
+            ->where('backup.configured', true)
+            ->where('backup.destination.bucket', 'prod-backups')
+        );
+
+    Queue::assertPushed(SyncServerBackupJob::class, fn (SyncServerBackupJob $job) => $job->serverId === $server->id);
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('refreshing backups marks the server stale and dispatches SyncServerBackupJob', function () {
+    Queue::fake();
+    $bin = backupServer();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+        'backup_configured' => true,
+        'backup_sync_status' => 'fresh',
+        'backup_last_synced_at' => now(),
+    ]);
+
+    $this->post(route('servers.backups.refresh', 'prod-vps'))
+        ->assertRedirect();
+
+    $server->refresh();
+    expect($server->backup_sync_status)->toBe('syncing');
+
+    Queue::assertPushed(SyncServerBackupJob::class, fn (SyncServerBackupJob $job) => $job->serverId === $server->id);
+
+    File::deleteDirectory(dirname($bin));
 });

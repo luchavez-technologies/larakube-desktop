@@ -17,7 +17,7 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
-import { serverStatus } from '@/lib/servers';
+import { serverEndpointLabel, serverStatus } from '@/lib/servers';
 import { create, show } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
 import type { Server } from '@/types/larakube';
@@ -184,11 +184,10 @@ export default function ServersIndex({
                                                                     }
                                                                     kind="ip"
                                                                 />
-                                                            ) : server.kind ===
-                                                              'managed' ? (
-                                                                'Managed Cluster'
                                                             ) : (
-                                                                '—'
+                                                                serverEndpointLabel(
+                                                                    server,
+                                                                )
                                                             )}
                                                         </div>
                                                     </td>
@@ -327,11 +326,10 @@ export default function ServersIndex({
                                                                     }
                                                                     kind="ip"
                                                                 />
-                                                            ) : server.kind ===
-                                                              'managed' ? (
-                                                                'Managed Cluster'
                                                             ) : (
-                                                                '—'
+                                                                serverEndpointLabel(
+                                                                    server,
+                                                                )
                                                             )}
                                                         </div>
                                                     </div>

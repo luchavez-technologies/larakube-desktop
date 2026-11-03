@@ -597,7 +597,7 @@ class ToolLocator
         $isWindows = $windows ?? (PHP_OS_FAMILY === 'Windows');
 
         if ($isWindows) {
-            return (string) ($_SERVER['USERPROFILE'] ?? getenv('USERPROFILE') ?: (getenv('HOMEDRIVE') && getenv('HOMEPATH') ? getenv('HOMEDRIVE').getenv('HOMEPATH') : ''));
+            return (string) (getenv('USERPROFILE') ?: ($_SERVER['USERPROFILE'] ?? (getenv('HOMEDRIVE') && getenv('HOMEPATH') ? getenv('HOMEDRIVE').getenv('HOMEPATH') : '')));
         }
 
         return self::home();

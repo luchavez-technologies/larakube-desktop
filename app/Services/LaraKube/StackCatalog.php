@@ -41,11 +41,27 @@ class StackCatalog
      *
      * @return list<array{name: string, provider: string, kind: string, region: ?string, ip: ?string, port?: ?int, context: ?string, sshKey?: ?string, bindings?: list<string>, account: ?string, projectId: ?string, status: string, role?: string, isCurrent?: bool}>|null
      */
-    public function all(bool $fresh = false): ?array
+    public function all(bool $fresh = false, bool $includeDemoHidden = false): ?array
     {
         $everything = $this->everything($fresh);
 
-        return $everything === null ? null : array_values(array_filter($everything, fn (array $stack): bool => ($stack['role'] ?? 'deploy') !== 'dev'));
+        if ($everything === null) {
+            return null;
+        }
+
+        $deployStacks = array_values(array_filter($everything, fn (array $stack): bool => ($stack['role'] ?? 'deploy') !== 'dev'));
+
+        if (! $includeDemoHidden && app(GlobalSettings::class)->demoMode()) {
+            $hidden = app(GlobalSettings::class)->demoHiddenServers();
+            if ($hidden !== []) {
+                $deployStacks = array_values(array_filter(
+                    $deployStacks,
+                    fn (array $stack): bool => ! in_array($stack['name'], $hidden, true),
+                ));
+            }
+        }
+
+        return $deployStacks;
     }
 
     /**

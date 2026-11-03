@@ -50,3 +50,27 @@ export function isLocalServer(
 
     return false;
 }
+
+/**
+ * Fallback endpoint label when a server does not have a dedicated IPv4 address:
+ * local clusters (OrbStack, k3d, Docker Desktop) and managed Kubernetes clusters
+ * (GKE, DOKS, EKS, AKS) never have a static VPS IP, so showing "Provisioning IP…"
+ * for them is misleading.
+ */
+export function serverEndpointLabel(
+    server?: Pick<Server, 'provider' | 'region' | 'ip' | 'kind'> | null,
+): string {
+    if (!server) return '—';
+    if (server.ip) return server.ip;
+    if (isLocalServer(server)) return 'Local Cluster';
+
+    const kind = (server.kind ?? '').toLowerCase();
+    if (['managed', 'doks', 'gke', 'eks', 'aks', 'cluster'].includes(kind)) {
+        return 'Managed Cluster';
+    }
+    if (kind === 'discovered') {
+        return 'External Cluster';
+    }
+
+    return 'Provisioning IP…';
+}

@@ -132,10 +132,10 @@ export default function SimulatorIndex({
         : null;
     const backHref = originatingProject
         ? `/projects/${originatingProject.id}`
-        : '/dashboard';
+        : '/help';
     const backLabel = originatingProject
         ? `Back to ${originatingProject.name}`
-        : 'Exit to Dashboard';
+        : 'Back to Help';
 
     // Generate dynamic scenarios for target
     const scenariosMap = useMemo(() => {

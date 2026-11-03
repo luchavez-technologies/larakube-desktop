@@ -54,6 +54,23 @@ class SyncMailJob extends SyncJob
             return;
         }
 
+        if ($mailTool->installed && empty($info['installed'])) {
+            $fallbackInfo = is_array($mailTool->data['serverInfo'] ?? null) ? $mailTool->data['serverInfo'] : [];
+            $fallbackInfo['installed'] = true;
+            $fallbackInfo['host'] ??= $mailTool->host;
+            if (is_string($fallbackInfo['host'] ?? null) && $fallbackInfo['host'] !== '') {
+                $fallbackInfo['adminUrl'] ??= "https://{$fallbackInfo['host']}/admin";
+            }
+
+            $mailTool->update([
+                'data' => [...$mailTool->data, 'serverInfo' => $fallbackInfo],
+                'sync_status' => 'error',
+                'last_sync_error' => 'Stalwart deployment is installed, but mail:show reported not installed. Rebuild the CLI binary if needed.',
+            ]);
+
+            return;
+        }
+
         /** @var list<array{id?: string, name: string, accounts?: int}> $domains */
         $domains = is_array($domainsData['domains'] ?? null) ? array_values($domainsData['domains']) : [];
         /** @var list<array{email: string, name?: string, role?: string, quotaBytes?: int, usedBytes?: int}> $accounts */

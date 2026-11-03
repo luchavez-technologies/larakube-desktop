@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\LaraKube\GlobalSettings;
 use Illuminate\Support\Facades\Cache;
 use Native\Desktop\Events\AutoUpdater\CheckingForUpdate;
 use Native\Desktop\Events\AutoUpdater\DownloadProgress;
@@ -19,7 +20,7 @@ class AppUpdates
 {
     private const KEY = 'app-updates';
 
-    /** @return array{enabled: bool, version: string, state: 'idle'|'checking'|'downloading'|'ready'|'current'|'error', latest: ?string, percent: int, message: ?string} */
+    /** @return array{enabled: bool, version: string, channel: string, state: 'idle'|'checking'|'downloading'|'ready'|'current'|'error', latest: ?string, percent: int, message: ?string} */
     public function status(): array
     {
         $known = $this->known();
@@ -27,6 +28,7 @@ class AppUpdates
         return [
             'enabled' => $this->enabled(),
             'version' => (string) config('nativephp.version'),
+            'channel' => app(GlobalSettings::class)->releaseChannel(),
             'state' => $known['state'],
             'latest' => $known['latest'],
             'percent' => $known['percent'],
@@ -41,6 +43,12 @@ class AppUpdates
 
     public function check(): void
     {
+        $channel = app(GlobalSettings::class)->releaseChannel();
+        config([
+            'nativephp.updater.providers.github.channel' => $channel === 'canary' ? 'canary' : 'latest',
+            'nativephp.updater.providers.github.releaseType' => $channel === 'canary' ? 'prerelease' : 'release',
+        ]);
+
         $this->remember('checking');
         AutoUpdater::checkForUpdates();
     }

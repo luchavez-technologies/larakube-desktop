@@ -156,9 +156,7 @@ function TrackedRun({
             ) {
                 forgetToolStatus();
             }
-            router.reload({
-                only: ['activeRuns', 'recentRuns', 'notifications'],
-            });
+            router.reload();
         }
         wasRunning.current = stream.status === 'running';
         // eslint-disable-next-line react-hooks/exhaustive-deps

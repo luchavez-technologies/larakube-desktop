@@ -106,7 +106,10 @@ export default function DriveIndex({
     );
 
     const shouldPoll =
-        isInstalled && (driveSync.status === 'syncing' || isDriveRunning);
+        isInstalled &&
+        (driveSync.status === 'syncing' ||
+            driveSync.status === 'stale' ||
+            isDriveRunning);
 
     const { start, stop } = usePoll(
         2000,

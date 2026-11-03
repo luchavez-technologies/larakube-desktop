@@ -122,10 +122,13 @@ class SsoStatus
             return $tool;
         }
 
-        if ($tool === null || $tool->sync_status !== 'fresh') {
+        if ($tool === null || (! $tool->installed && $tool->sync_status !== 'fresh')) {
             SyncClusterToolsJob::dispatch($server->id);
 
-            return $server->ssoTool();
+            $tool = $server->ssoTool();
+            if ($tool === null) {
+                return null;
+            }
         }
 
         if (! $tool->installed) {
@@ -133,7 +136,8 @@ class SsoStatus
         }
 
         $everSynced = isset($tool->data['status']);
-        $fresh = $tool->last_synced_at !== null
+        $fresh = $tool->sync_status === 'fresh'
+            && $tool->last_synced_at !== null
             && $tool->last_synced_at->gt(now()->subSeconds(SyncSsoJob::FRESH_SECONDS));
 
         if (! $everSynced || ! $fresh) {

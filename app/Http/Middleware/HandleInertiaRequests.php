@@ -80,6 +80,48 @@ class HandleInertiaRequests extends Middleware
                 ];
             },
             'localTld' => fn () => rescue(fn () => app(GlobalSettings::class)->getLocalTld(), 'test', report: false),
+            'theme' => fn () => rescue(fn () => app(GlobalSettings::class)->getTheme(), 'system', report: false),
+            'hideProjects' => fn () => app(GlobalSettings::class)->hideProjects(),
+            'experimental' => fn () => app(GlobalSettings::class)->experimental(),
+            'demoMode' => fn () => app(GlobalSettings::class)->demoMode(),
+            'versions' => fn () => rescue(function () {
+                $channel = app(GlobalSettings::class)->releaseChannel();
+                $cliRaw = app(ReadinessCheck::class)->status('larakube')['version'] ?? null;
+                $cliClean = null;
+                if ($cliRaw) {
+                    $cliClean = trim((string) preg_replace('/^LaraKube\s+/i', '', $cliRaw));
+                    if (preg_match('/^[a-f0-9]{40}$/i', $cliClean)) {
+                        $cliClean = substr($cliClean, 0, 7);
+                    }
+                }
+
+                $cliDetectedChannel = null;
+                if ($cliClean !== null && $cliClean !== '') {
+                    if (strtolower($cliClean) === 'local' || strtolower($cliClean) === 'vlocal') {
+                        $cliDetectedChannel = 'local';
+                    } elseif (preg_match('/^v?\d+\.\d+\.\d+$/', $cliClean)) {
+                        $cliDetectedChannel = 'stable';
+                    } else {
+                        $cliDetectedChannel = 'canary';
+                    }
+                }
+
+                return [
+                    'desktop' => (string) config('nativephp.version', '1.0.0'),
+                    'cli' => $cliClean,
+                    'channel' => $channel,
+                    'cliDetectedChannel' => $cliDetectedChannel,
+                    'cliChannelMismatch' => $cliDetectedChannel !== null
+                        && $cliDetectedChannel !== 'local'
+                        && $cliDetectedChannel !== $channel,
+                ];
+            }, [
+                'desktop' => (string) config('nativephp.version', '1.0.0'),
+                'cli' => null,
+                'channel' => 'canary',
+                'cliDetectedChannel' => null,
+                'cliChannelMismatch' => false,
+            ], report: false),
             'auth' => [
                 'user' => $request->user(),
             ],
@@ -113,29 +155,7 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             'name' => fn () => config('app.name'),
-            'theme' => fn () => rescue(fn () => app(GlobalSettings::class)->getTheme(), 'system', report: false),
-            'hideProjects' => fn () => app(GlobalSettings::class)->hideProjects(),
-            'experimental' => fn () => app(GlobalSettings::class)->experimental(),
-            'demoMode' => fn () => app(GlobalSettings::class)->demoMode(),
             'untested' => fn () => app(ToolMaturity::class)->untested(),
-            'versions' => fn () => rescue(function () {
-                $cliRaw = app(ReadinessCheck::class)->status('larakube')['version'] ?? null;
-                $cliClean = null;
-                if ($cliRaw) {
-                    $cliClean = trim((string) preg_replace('/^LaraKube\s+/i', '', $cliRaw));
-                    if (preg_match('/^[a-f0-9]{40}$/i', $cliClean)) {
-                        $cliClean = substr($cliClean, 0, 7);
-                    }
-                }
-
-                return [
-                    'desktop' => (string) config('nativephp.version', '1.0.0'),
-                    'cli' => $cliClean,
-                ];
-            }, [
-                'desktop' => (string) config('nativephp.version', '1.0.0'),
-                'cli' => null,
-            ], report: false),
         ];
     }
 }

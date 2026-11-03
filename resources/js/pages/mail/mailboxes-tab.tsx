@@ -279,7 +279,8 @@ export default function MailboxesTab({
                         <Form
                             action={`/servers/${server.name}/mail/accounts`}
                             method="post"
-                            onSubmit={() => setIsCreateOpen(false)}
+                            disableWhileProcessing
+                            onSuccess={() => setIsCreateOpen(false)}
                             className="space-y-4"
                         >
                             <div>
@@ -434,7 +435,8 @@ export default function MailboxesTab({
                         <Form
                             action={`/servers/${server.name}/mail/accounts/password`}
                             method="post"
-                            onSubmit={() => setResetTarget(null)}
+                            disableWhileProcessing
+                            onSuccess={() => setResetTarget(null)}
                             className="space-y-4"
                         >
                             <input
@@ -565,7 +567,8 @@ export default function MailboxesTab({
                         <Form
                             action={`/servers/${server.name}/mail/accounts`}
                             method="delete"
-                            onSubmit={() => setDeleteTarget(null)}
+                            disableWhileProcessing
+                            onSuccess={() => setDeleteTarget(null)}
                             className="mt-6 flex items-center justify-end gap-2"
                         >
                             <input

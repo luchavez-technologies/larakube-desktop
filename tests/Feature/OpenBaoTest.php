@@ -282,3 +282,26 @@ test('a run that changes OpenBao dispatches SyncOpenBaoJob on completion', funct
 
     Queue::assertPushed(SyncOpenBaoJob::class, fn (SyncOpenBaoJob $job) => $job->serverId === $server->id);
 });
+
+test('OpenBaoStatus dispatches SyncOpenBaoJob when installed tool row is stale', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'digitalocean',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+    $server->clusterTools()->create([
+        'tool' => 'openbao',
+        'installed' => true,
+        'data' => ['status' => ['installed' => true, 'bootstrapped' => true, 'sealed' => false]],
+        'sync_status' => 'stale',
+        'last_synced_at' => now()->subMinutes(20),
+    ]);
+
+    expect(app(OpenBaoStatus::class)->isInstalled('larakube-do-ams3'))->toBeTrue();
+
+    Queue::assertPushed(SyncOpenBaoJob::class, fn (SyncOpenBaoJob $job) => $job->serverId === $server->id);
+});

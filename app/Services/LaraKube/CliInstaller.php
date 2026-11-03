@@ -180,6 +180,8 @@ class CliInstaller
                 @file_put_contents($configPath, json_encode(['email' => 'admin@larakube.dev'], JSON_PRETTY_PRINT));
             }
 
+            rescue(fn () => app(ReadinessCheck::class)->forget('larakube'), report: false);
+
             return [
                 'success' => true,
                 'path' => $target,

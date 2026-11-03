@@ -7,6 +7,7 @@ use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
+use App\Models\ServerDomain;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\DomainCatalog;
 use App\Services\LaraKube\FleetMetrics;
@@ -57,8 +58,8 @@ class DashboardController extends Controller
             'stats' => Inertia::defer(function () use ($stacks, $readiness): array {
                 $projectsCount = Project::query()->get()->filter(fn (Project $p): bool => $p->existsOnHost())->count();
 
-                $dbServers = Server::active()->get(['id', 'status']);
-                if ($dbServers->isNotEmpty()) {
+                if (Server::activeUnfiltered()->exists()) {
+                    $dbServers = Server::active()->get(['id', 'status']);
                     $serversCount = $dbServers->count();
                     $readyServersCount = $dbServers->where('status', 'ready')->count();
                 } else {
@@ -104,20 +105,29 @@ class DashboardController extends Controller
 
             'projects' => Inertia::defer(function () use ($inspector): array {
                 return Project::query()
+                    ->with('server:id,name,provider,ip')
                     ->latest('id')
                     ->get()
                     ->filter(fn (Project $p): bool => $p->existsOnHost())
                     ->take(4)
                     ->map(function (Project $p) use ($inspector): array {
                         if ($p->last_inspected_at !== null && $p->name !== null && $p->framework !== null) {
+                            $blueprint = is_array($p->blueprint_cache) ? $p->blueprint_cache : [];
+
                             return [
                                 'id' => $p->id,
                                 'name' => $p->name,
+                                'group' => $p->group,
                                 'path' => $p->path,
                                 'framework' => $p->framework,
                                 'webHost' => $p->web_host,
-                                'serverIp' => null,
+                                'serverName' => $p->server?->name,
+                                'serverProvider' => $p->server?->provider,
+                                'serverIp' => $p->server?->ip,
                                 'serverContext' => null,
+                                'database' => is_string($blueprint['database'] ?? null) ? $blueprint['database'] : null,
+                                'cacheDriver' => is_string($blueprint['cacheDriver'] ?? null) ? $blueprint['cacheDriver'] : null,
+                                'objectStorage' => is_string($blueprint['objectStorage'] ?? null) ? $blueprint['objectStorage'] : null,
                                 'exists' => true,
                                 'initialized' => true,
                                 'deployable' => true,
@@ -125,17 +135,23 @@ class DashboardController extends Controller
                             ];
                         }
 
-                        return ['id' => $p->id] + $inspector->inspect($p->path);
+                        return [
+                            'id' => $p->id,
+                            'group' => $p->group,
+                            'serverName' => $p->server?->name,
+                            'serverProvider' => $p->server?->provider,
+                        ] + $inspector->inspect($p->path);
                     })->values()->all();
             }),
 
             'servers' => Inertia::defer(function () use ($stacks, $domains): array {
-                $dbServers = Server::with(['domains' => fn ($q) => $q->where('external_dns', true)])
-                    ->active()
-                    ->take(4)
-                    ->get();
+                if (Server::activeUnfiltered()->exists()) {
+                    $currentContext = LocalClusterState::current()->context;
+                    $dbServers = Server::with(['domains' => fn ($q) => $q->where('external_dns', true)])
+                        ->active()
+                        ->take(4)
+                        ->get();
 
-                if ($dbServers->isNotEmpty()) {
                     return $dbServers->map(fn (Server $s): array => [
                         'name' => $s->name,
                         'provider' => $s->provider,
@@ -146,15 +162,23 @@ class DashboardController extends Controller
                         'context' => $s->context,
                         'status' => $s->status,
                         'role' => $s->role,
+                        'isCurrent' => $s->context !== null && $s->context === $currentContext,
+                        'backupConfigured' => $s->backup_configured,
                         'hasExternalDns' => $s->domains->isNotEmpty(),
+                        'domains' => $s->domains->map(fn (ServerDomain $d): array => [
+                            'domain' => $d->domain,
+                            'externalDns' => (bool) $d->external_dns,
+                            'dnsProvider' => $d->dns_provider,
+                        ])->values()->all(),
                     ])->all();
                 }
 
                 $allServers = $stacks->all() ?? [];
                 $activeServers = array_values(array_filter($allServers, fn (array $s): bool => $s['status'] !== 'missing'));
                 $activeServers = array_map(function (array $s) use ($domains): array {
-                    $s['hasExternalDns'] = is_string($s['context'] ?? null)
-                        && collect($domains->forContext($s['context']) ?? [])->contains('externalDns', true);
+                    $ctxDomains = is_string($s['context'] ?? null) ? ($domains->forContext($s['context']) ?? []) : [];
+                    $s['hasExternalDns'] = collect($ctxDomains)->contains('externalDns', true);
+                    $s['domains'] = array_values(array_filter($ctxDomains, fn (array $d): bool => ! empty($d['externalDns'])));
 
                     return $s;
                 }, $activeServers);
@@ -163,8 +187,8 @@ class DashboardController extends Controller
             }),
 
             'fleetMetrics' => Inertia::defer(function () use ($stacks, $fleetMetrics): array {
-                $dbServers = Server::active()->get(['name', 'status', 'role']);
-                if ($dbServers->isNotEmpty()) {
+                if (Server::activeUnfiltered()->exists()) {
+                    $dbServers = Server::active()->get(['name', 'status', 'role']);
                     $servers = $dbServers->map(fn (Server $s): array => [
                         'name' => $s->name,
                         'status' => $s->status,
@@ -229,7 +253,7 @@ class DashboardController extends Controller
     private function backupSummary(StackCatalog $stacks, ClusterStatus $clusterStatus): array
     {
         return once(function () use ($stacks, $clusterStatus): array {
-            if (Server::active()->exists()) {
+            if (Server::activeUnfiltered()->exists()) {
                 $cloudServers = Server::active()
                     ->where('status', 'ready')
                     ->whereNotNull('context')

@@ -2,6 +2,8 @@
 
 namespace App\Services\LaraKube;
 
+use App\Jobs\Sync\SyncCliWithDesktopJob;
+use App\Models\Server;
 use App\Services\EditorLauncher;
 use App\Services\Runtime\WslDistro;
 use Native\Desktop\Enums\SystemThemesEnum;
@@ -157,6 +159,16 @@ class GlobalSettings
     }
 
     /**
+     * Unified release channel ('canary' | 'stable') shared between LaraKube Desktop and CLI.
+     */
+    public function releaseChannel(): string
+    {
+        $channel = (string) ($this->readConfig()['cliChannel'] ?? 'canary');
+
+        return in_array($channel, ['canary', 'stable'], true) ? $channel : 'canary';
+    }
+
+    /**
      * Server names to drop from the Servers list (and 404 directly) while
      * demoMode() is on — set ahead of time, independent of whether Demo Mode
      * is currently on, so it's ready the moment it's switched on.
@@ -166,8 +178,15 @@ class GlobalSettings
     public function demoHiddenServers(): array
     {
         $servers = $this->readConfig()['demoHiddenServers'] ?? null;
+        $fromConfig = is_array($servers) ? array_values(array_filter($servers, 'is_string')) : [];
 
-        return is_array($servers) ? array_values(array_filter($servers, 'is_string')) : [];
+        $fromDb = rescue(
+            fn (): array => Server::query()->where('hidden_in_demo', true)->pluck('name')->all(),
+            [],
+            report: false,
+        );
+
+        return array_values(array_unique([...$fromConfig, ...$fromDb]));
     }
 
     /**
@@ -260,9 +279,11 @@ class GlobalSettings
     public function update(array $data): void
     {
         $config = $this->readConfig();
+        $previousChannel = $this->releaseChannel();
 
         if (isset($data['theme']) && in_array($data['theme'], self::THEMES, true)) {
             $this->setTheme((string) $data['theme']);
+            $config['theme'] = (string) $data['theme'];
         }
 
         if (isset($data['localTld']) && in_array($data['localTld'], self::ALLOWED_TLDS, true)) {
@@ -277,7 +298,9 @@ class GlobalSettings
             $config['defaultCloudProvider'] = $data['defaultCloudProvider'];
         }
 
+        $channelChanged = false;
         if (isset($data['cliChannel']) && in_array($data['cliChannel'], ['canary', 'stable'], true)) {
+            $channelChanged = $data['cliChannel'] !== $previousChannel;
             $config['cliChannel'] = $data['cliChannel'];
         }
 
@@ -314,10 +337,29 @@ class GlobalSettings
         }
 
         if (array_key_exists('demoHiddenServers', $data) && is_array($data['demoHiddenServers'])) {
-            $config['demoHiddenServers'] = array_values(array_filter($data['demoHiddenServers'], 'is_string'));
+            $hidden = array_values(array_unique(array_filter($data['demoHiddenServers'], 'is_string')));
+            $config['demoHiddenServers'] = $hidden;
+
+            rescue(function () use ($hidden): void {
+                if ($hidden === []) {
+                    Server::query()->update(['hidden_in_demo' => false]);
+                } else {
+                    Server::query()->whereIn('name', $hidden)->update(['hidden_in_demo' => true]);
+                    Server::query()->whereNotIn('name', $hidden)->update(['hidden_in_demo' => false]);
+                }
+            }, report: false);
         }
 
         $this->writeConfig($config);
+
+        if ($channelChanged) {
+            $newChannel = (string) $config['cliChannel'];
+            config([
+                'nativephp.updater.providers.github.channel' => $newChannel === 'canary' ? 'canary' : 'latest',
+                'nativephp.updater.providers.github.releaseType' => $newChannel === 'canary' ? 'prerelease' : 'release',
+            ]);
+            SyncCliWithDesktopJob::dispatch(notify: true);
+        }
     }
 
     public function bridge(string $agent): bool

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\SsoStatus;
@@ -43,12 +44,8 @@ class SsoController extends Controller
             'server' => $stack,
             'servers' => $servers,
             'isInstalled' => $isInstalled,
-            'status' => $isInstalled
-                ? Inertia::defer(fn (): array => $this->status->status($context), 'status')
-                : ['installed' => false],
-            'grants' => $isInstalled
-                ? Inertia::defer(fn (): array => $this->status->grants($context), 'grants')
-                : [],
+            'status' => $isInstalled ? $this->status->status($context) : ['installed' => false],
+            'grants' => $isInstalled ? $this->status->grants($context) : [],
             'ssoSync' => $this->status->syncState($context),
         ]);
     }
@@ -308,6 +305,42 @@ class SsoController extends Controller
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
+    /** Permanently delete a partner organization from Zitadel SSO. */
+    public function deleteOrg(Request $request, string $server, CliRunner $runner): RedirectResponse
+    {
+        $request->validate([
+            'org' => ['required', 'string', 'max:255'],
+            'confirm' => ['required', 'string'],
+            'with_mail' => ['nullable', 'boolean'],
+        ]);
+
+        $context = (string) $this->readyServer($server)['context'];
+        $org = $request->string('org')->trim()->toString();
+        $confirm = $request->string('confirm')->trim()->toString();
+
+        abort_unless(strcasecmp($confirm, $org) === 0, 422, 'Type the organization name to confirm.');
+
+        $args = ['sso:org-delete', 'production', "--context={$context}", "--org={$org}"];
+        if ($request->boolean('with_mail')) {
+            $args[] = '--with-mail';
+        }
+        $args[] = '--force';
+
+        $run = $runner->start(
+            label: "Remove SSO organization {$org} on {$server}",
+            arguments: $args,
+            kind: RunKind::SsoOrgDelete,
+            subject: $org,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
     /** Prune unused SSO projects. */
     public function prune(Request $request, string $server, CliRunner $runner): RedirectResponse
     {
@@ -351,6 +384,10 @@ class SsoController extends Controller
         $stack = $this->stacks->find($server);
 
         abort_if($stack === null || $stack['status'] !== 'ready' || $stack['context'] === null, 404);
+
+        if (! Server::where('name', $stack['name'])->exists()) {
+            Server::syncFromStack($stack);
+        }
 
         /** @var array{name: string, provider: string, kind: string, region: ?string, ip: ?string, context: ?string, status: string, account?: ?string} $stack */
         return $stack;

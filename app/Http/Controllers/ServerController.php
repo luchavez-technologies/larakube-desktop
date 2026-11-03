@@ -57,7 +57,7 @@ class ServerController extends Controller
      */
     private function serversFromDatabase(): ?array
     {
-        if (! Server::active()->exists()) {
+        if (! Server::activeUnfiltered()->exists()) {
             return null;
         }
 

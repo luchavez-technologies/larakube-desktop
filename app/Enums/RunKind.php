@@ -134,6 +134,7 @@ enum RunKind: string
     case SsoUnwire = 'sso-unwire';
     case SsoOrg = 'sso-org';
     case SsoOrgGrant = 'sso-org-grant';
+    case SsoOrgDelete = 'sso-org-delete';
     case SsoPrune = 'sso-prune';
 
     public function changesBackups(): bool
@@ -148,7 +149,7 @@ enum RunKind: string
 
     public function changesMail(): bool
     {
-        return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailRemoveDomain, self::MailConfigureRelay], true);
+        return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailRemoveDomain, self::MailConfigureRelay, self::SsoOrgDelete], true);
     }
 
     public function changesDrive(): bool
@@ -163,7 +164,7 @@ enum RunKind: string
 
     public function changesSso(): bool
     {
-        return in_array($this, [self::SsoWire, self::SsoUnwire, self::SsoGrant, self::SsoRevoke, self::SsoOrgGrant, self::SsoPrune], true);
+        return in_array($this, [self::SsoWire, self::SsoUnwire, self::SsoGrant, self::SsoRevoke, self::SsoOrg, self::SsoOrgGrant, self::SsoOrgDelete, self::SsoPrune, self::MailRemoveDomain], true);
     }
 
     /**

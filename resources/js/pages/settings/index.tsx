@@ -1,4 +1,4 @@
-import { Deferred, Form, router, useForm } from '@inertiajs/react';
+import { Deferred, Form, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -9,6 +9,8 @@ import {
     Check,
     ChevronDown,
     ChevronRight,
+    Eye,
+    EyeOff,
     Heart,
     Laptop,
     Layers,
@@ -144,15 +146,59 @@ export default function SettingsIndex({
         defaultEditor: settings.defaultEditor ?? 'vscode',
     });
 
+    const { props: sharedProps } = usePage<{
+        demoMode?: boolean;
+        versions?: {
+            desktop: string;
+            cli: string | null;
+            channel?: 'canary' | 'stable';
+            cliDetectedChannel?: string | null;
+            cliChannelMismatch?: boolean;
+        };
+    }>();
+
     const availableSlugs = new Set(availableEditors.map((e) => e.slug));
     const editorsList = allEditors.length > 0 ? allEditors : availableEditors;
 
+    useEffect(() => {
+        if (typeof sharedProps.demoMode === 'boolean') {
+            form.setData('demoMode', sharedProps.demoMode);
+        }
+    }, [sharedProps.demoMode]);
+
+    function toggleDemoModeNow(nextDemoMode: boolean) {
+        form.setData('demoMode', nextDemoMode);
+        router.post(
+            '/settings/demo-mode',
+            {
+                demoMode: nextDemoMode,
+                demoHiddenServers: form.data.demoHiddenServers,
+            },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
+
     function toggleHiddenServer(name: string, hidden: boolean) {
-        form.setData(
-            'demoHiddenServers',
-            hidden
-                ? [...form.data.demoHiddenServers, name]
-                : form.data.demoHiddenServers.filter((n) => n !== name),
+        const nextHidden = hidden
+            ? [...form.data.demoHiddenServers, name]
+            : form.data.demoHiddenServers.filter((n) => n !== name);
+        form.setData('demoHiddenServers', nextHidden);
+        router.post(
+            '/settings/demo-mode',
+            {
+                demoMode: form.data.demoMode,
+                demoHiddenServers: nextHidden,
+            },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
+
+    function selectReleaseChannel(channel: string) {
+        form.setData('cliChannel', channel);
+        router.post(
+            '/settings',
+            { ...form.data, cliChannel: channel },
+            { preserveScroll: true, preserveState: true },
         );
     }
 
@@ -490,33 +536,62 @@ export default function SettingsIndex({
                     </Card>
 
                     {/* Demo Mode */}
-                    <Card label="Demo Mode" action={saveAction}>
+                    <Card
+                        label="Demo Mode"
+                        action={
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="xs"
+                                    variant={
+                                        form.data.demoMode
+                                            ? 'primary'
+                                            : 'secondary'
+                                    }
+                                    onClick={() =>
+                                        toggleDemoModeNow(!form.data.demoMode)
+                                    }
+                                    className="h-6 gap-1 px-2 text-[11px]"
+                                >
+                                    {form.data.demoMode ? (
+                                        <EyeOff className="size-3" />
+                                    ) : (
+                                        <Eye className="size-3" />
+                                    )}
+                                    <span>
+                                        {form.data.demoMode
+                                            ? 'Demo Mode On'
+                                            : 'Enable Demo Mode'}
+                                    </span>
+                                </Button>
+                                {saveAction}
+                            </div>
+                        }
+                    >
                         <div className="space-y-3">
                             <label className="flex cursor-pointer items-start gap-3">
                                 <input
                                     type="checkbox"
                                     checked={form.data.demoMode}
                                     onChange={(e) =>
-                                        form.setData(
-                                            'demoMode',
-                                            e.target.checked,
-                                        )
+                                        toggleDemoModeNow(e.target.checked)
                                     }
                                     className="mt-0.5 size-4 rounded border-line text-brand accent-brand focus:ring-brand"
                                 />
                                 <div>
                                     <span className="block text-xs font-medium text-ink">
-                                        Mask sensitive values on screen
+                                        Mask sensitive values on screen & hide
+                                        selected servers
                                     </span>
                                     <span className="mt-0.5 block text-xs leading-relaxed text-soft">
                                         For presenting on a shared screen. IP
                                         addresses and account identifiers show
                                         as a placeholder with a click-to-reveal
                                         button, and the servers checked below
-                                        drop out of the Servers list entirely.
-                                        Reversible — turn it off and everything
-                                        comes back exactly as it was. Save to
-                                        apply.
+                                        drop out of Dashboard, Servers, and
+                                        service pages entirely. Reversible —
+                                        turn it off and everything comes back
+                                        immediately.
                                     </span>
                                 </div>
                             </label>
@@ -599,17 +674,45 @@ export default function SettingsIndex({
                         </div>
                     </Card>
 
-                    {/* LaraKube CLI Channel */}
+                    {/* Unified Release Channel */}
                     <Card
-                        label="LaraKube CLI Release Channel"
-                        action={saveAction}
+                        label="Release Channel (Desktop & CLI)"
+                        action={
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="xs"
+                                    variant="secondary"
+                                    onClick={() =>
+                                        router.post(
+                                            '/settings/sync-cli',
+                                            {},
+                                            {
+                                                preserveScroll: true,
+                                                preserveState: true,
+                                            },
+                                        )
+                                    }
+                                    className="h-6 gap-1 px-2 text-[11px]"
+                                    title="Re-sync CLI binary with the selected release channel"
+                                >
+                                    <RotateCw className="size-3" />
+                                    <span>Sync CLI</span>
+                                </Button>
+                                {saveAction}
+                            </div>
+                        }
                     >
                         <div className="space-y-3">
                             <p className="text-xs leading-relaxed text-soft">
-                                Choose whether to receive early develop updates
-                                (Canary) or official releases (Stable).
+                                Desktop and the LaraKube CLI are tightly coupled
+                                and share a single unified release channel.
+                                Switching channels updates the Desktop updater
+                                feed and immediately syncs your local CLI binary
+                                in the background so they never drift out of
+                                sync.
                             </p>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <label className="text-xs font-medium text-ink">
                                     Release Channel:
                                 </label>
@@ -617,7 +720,7 @@ export default function SettingsIndex({
                                     value={form.data.cliChannel}
                                     triggerClassName="h-8 py-1.5 text-xs"
                                     onChange={(value) =>
-                                        form.setData('cliChannel', value)
+                                        selectReleaseChannel(value)
                                     }
                                     options={[
                                         {
@@ -631,6 +734,50 @@ export default function SettingsIndex({
                                     ]}
                                 />
                             </div>
+                            {sharedProps.versions?.cliChannelMismatch && (
+                                <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                                    <div className="flex items-center gap-2">
+                                        <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+                                        <span>
+                                            Installed CLI (
+                                            <code className="font-mono font-semibold">
+                                                {sharedProps.versions.cli}
+                                            </code>
+                                            ) appears to be on the{' '}
+                                            <strong className="font-semibold">
+                                                {
+                                                    sharedProps.versions
+                                                        .cliDetectedChannel
+                                                }
+                                            </strong>{' '}
+                                            channel while your unified channel
+                                            is set to{' '}
+                                            <strong className="font-semibold">
+                                                {form.data.cliChannel}
+                                            </strong>
+                                            .
+                                        </span>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="secondary"
+                                        onClick={() =>
+                                            router.post(
+                                                '/settings/sync-cli',
+                                                {},
+                                                {
+                                                    preserveScroll: true,
+                                                    preserveState: true,
+                                                },
+                                            )
+                                        }
+                                    >
+                                        <RotateCw className="size-3" />
+                                        <span>Align CLI Now</span>
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </Card>
 

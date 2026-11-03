@@ -44,6 +44,14 @@ class MailStatus
         /** @var array{installed: bool, host?: ?string, adminUrl?: ?string, adminLogin?: string, adminPassword?: ?string, webmailUrl?: ?string, imap?: ?array{host: string, port: int, tls: bool}, smtp?: ?array{host: string, port: int, tls: bool}, queue?: int, relay?: ?array{configured: bool, provider: string, username?: ?string, region?: ?string, port?: int, host?: string}, sso?: ?array{installed?: bool}} $info */
         $info = $mailTool->data['serverInfo'] ?? ['installed' => $mailTool->installed];
 
+        if ($mailTool->installed && empty($info['installed'])) {
+            $info['installed'] = true;
+            $info['host'] ??= $mailTool->host;
+            if (is_string($info['host'] ?? null) && $info['host'] !== '') {
+                $info['adminUrl'] ??= "https://{$info['host']}/admin";
+            }
+        }
+
         return $info;
     }
 
@@ -201,13 +209,16 @@ class MailStatus
             return $mailTool;
         }
 
-        if ($mailTool === null || $mailTool->sync_status !== 'fresh') {
+        if ($mailTool === null || (! $mailTool->installed && $mailTool->sync_status !== 'fresh')) {
             SyncClusterToolsJob::dispatch($server->id);
 
             // Under the sync queue driver the dispatch above already ran and wrote
             // the row, so re-querying picks it up instead of returning the
             // pre-dispatch snapshot; under a real async worker it's a no-op re-read.
-            return $server->mailTool();
+            $mailTool = $server->mailTool();
+            if ($mailTool === null) {
+                return null;
+            }
         }
 
         if (! $mailTool->installed) {
@@ -217,8 +228,10 @@ class MailStatus
         // Whether mail data has EVER been synced, not whether any mailboxes
         // exist — a server with genuinely zero mailboxes must not look
         // perpetually unsynced and get re-dispatched on every single check.
-        $everSynced = isset($mailTool->data['serverInfo']);
-        $mailFresh = $mailTool->last_synced_at !== null
+        $everSynced = isset($mailTool->data['serverInfo'])
+            && ! empty($mailTool->data['serverInfo']['installed']);
+        $mailFresh = $mailTool->sync_status === 'fresh'
+            && $mailTool->last_synced_at !== null
             && $mailTool->last_synced_at->gt(now()->subSeconds(SyncMailJob::FRESH_SECONDS));
 
         if (! $everSynced || ! $mailFresh) {

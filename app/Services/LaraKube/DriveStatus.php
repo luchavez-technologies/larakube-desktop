@@ -274,10 +274,13 @@ class DriveStatus
             return $driveTool;
         }
 
-        if ($driveTool === null || $driveTool->sync_status !== 'fresh') {
+        if ($driveTool === null || (! $driveTool->installed && $driveTool->sync_status !== 'fresh')) {
             SyncClusterToolsJob::dispatch($server->id);
 
-            return $server->driveTool();
+            $driveTool = $server->driveTool();
+            if ($driveTool === null) {
+                return null;
+            }
         }
 
         if (! $driveTool->installed) {
@@ -285,7 +288,8 @@ class DriveStatus
         }
 
         $everSynced = isset($driveTool->data['driveInfo']);
-        $driveFresh = $driveTool->last_synced_at !== null
+        $driveFresh = $driveTool->sync_status === 'fresh'
+            && $driveTool->last_synced_at !== null
             && $driveTool->last_synced_at->gt(now()->subSeconds(SyncDriveJob::FRESH_SECONDS));
 
         $needsReadiness = false;

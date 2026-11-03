@@ -1,4 +1,4 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import {
     LayoutDashboard,
@@ -16,9 +16,12 @@ import {
     Heart,
     PanelLeftClose,
     PanelLeftOpen,
-    Network,
     KeyRound,
     ShieldCheck,
+    DatabaseBackup,
+    Eye,
+    EyeOff,
+    AlertTriangle,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -71,9 +74,13 @@ const navigation: NavItem[] = [
         active: (url) =>
             url.startsWith('/servers') &&
             !url.includes('/tools') &&
+            !url.includes('/apps') &&
             !url.includes('/mail') &&
             !url.includes('/plex') &&
-            !url.includes('/drive'),
+            !url.includes('/drive') &&
+            !url.includes('/openbao') &&
+            !url.includes('/sso') &&
+            !url.includes('/backups'),
         accent: 'bg-servers',
         icon: Server,
     },
@@ -117,14 +124,6 @@ const navigation: NavItem[] = [
         icon: Layers,
     },
     {
-        label: 'Simulator',
-        description: 'Life of a request',
-        href: '/simulator',
-        active: (url) => url.startsWith('/simulator'),
-        accent: 'bg-cyan-600',
-        icon: Network,
-    },
-    {
         label: 'Mail',
         description: 'Email & mailboxes',
         href: mail().url,
@@ -146,7 +145,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Secrets',
-        description: 'Rotation & backups',
+        description: 'Vault & key rotation',
         href: openbao().url,
         active: (url) =>
             url.startsWith('/openbao') ||
@@ -163,6 +162,17 @@ const navigation: NavItem[] = [
             url.startsWith('/sso') || /^\/servers\/[^/]+\/sso/.test(url),
         accent: 'bg-indigo-600',
         icon: KeyRound,
+        experimental: true,
+    },
+    {
+        label: 'Backups',
+        description: 'Disaster recovery',
+        href: '/backups',
+        active: (url) =>
+            url.startsWith('/backups') ||
+            /^\/servers\/[^/]+\/backups/.test(url),
+        accent: 'bg-teal-600',
+        icon: DatabaseBackup,
         experimental: true,
     },
     {
@@ -193,7 +203,8 @@ const navigation: NavItem[] = [
         label: 'Help',
         description: 'Community & support',
         href: helpShow().url,
-        active: (url) => url.startsWith('/help'),
+        active: (url) =>
+            url.startsWith('/help') || url.startsWith('/simulator'),
         accent: 'bg-rose-600',
         icon: HelpCircle,
     },
@@ -209,13 +220,29 @@ export default function AppLayout({
     const { url, props } = usePage<{
         hideProjects?: boolean;
         experimental?: boolean;
+        demoMode?: boolean;
         theme?: string;
         untested?: Untested;
         versions?: {
             desktop: string;
             cli: string | null;
+            channel?: 'canary' | 'stable';
+            cliDetectedChannel?: string | null;
+            cliChannelMismatch?: boolean;
         };
     }>();
+
+    const demoMode = Boolean(props.demoMode);
+    const channel = props.versions?.channel ?? 'canary';
+    const cliChannelMismatch = Boolean(props.versions?.cliChannelMismatch);
+
+    const toggleDemoMode = () => {
+        router.post(
+            '/settings/demo-mode',
+            { demoMode: !demoMode },
+            { preserveScroll: true, preserveState: true },
+        );
+    };
     useEffect(listenForNotificationClicks, []);
 
     useEffect(() => {
@@ -338,8 +365,19 @@ export default function AppLayout({
                                 className="mt-0.5 size-8 shrink-0 rounded-lg shadow-2xs"
                             />
                             <div className="min-w-0 flex-1 leading-tight">
-                                <span className="block truncate text-[14px] font-semibold tracking-tight text-ink">
-                                    LaraKube
+                                <span className="flex items-center gap-1.5 truncate text-[14px] font-semibold tracking-tight text-ink">
+                                    <span>LaraKube</span>
+                                    <span
+                                        className={cn(
+                                            'rounded px-1 py-0.25 font-mono text-[9px] font-semibold uppercase',
+                                            channel === 'canary'
+                                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                                        )}
+                                        title={`Unified Release Channel: ${channel}`}
+                                    >
+                                        {channel}
+                                    </span>
                                 </span>
                                 <span
                                     className="mt-0.5 block truncate font-mono text-[10px] text-faint"
@@ -349,15 +387,30 @@ export default function AppLayout({
                                     {props.versions?.desktop ?? '1.0.0'}
                                 </span>
                                 <span
-                                    className="block truncate font-mono text-[10px] text-faint"
-                                    title={`CLI ${props.versions?.cli ? (props.versions.cli.startsWith('v') ? props.versions.cli : `v${props.versions.cli}`) : '—'}`}
+                                    className="flex items-center gap-1 truncate font-mono text-[10px] text-faint"
+                                    title={
+                                        cliChannelMismatch
+                                            ? `CLI version (${props.versions?.cli ?? '—'}) does not match the ${channel} channel. Click Settings to sync.`
+                                            : `CLI ${props.versions?.cli ? (props.versions.cli.startsWith('v') ? props.versions.cli : `v${props.versions.cli}`) : '—'}`
+                                    }
                                 >
-                                    CLI{' '}
-                                    {props.versions?.cli
-                                        ? props.versions.cli.startsWith('v')
-                                            ? props.versions.cli
-                                            : `v${props.versions.cli}`
-                                        : '—'}
+                                    <span>
+                                        CLI{' '}
+                                        {props.versions?.cli
+                                            ? props.versions.cli.startsWith('v')
+                                                ? props.versions.cli
+                                                : `v${props.versions.cli}`
+                                            : '—'}
+                                    </span>
+                                    {cliChannelMismatch && (
+                                        <Link
+                                            href="/settings"
+                                            className="inline-flex items-center text-amber-500 hover:text-amber-400"
+                                            title={`CLI channel mismatch (${props.versions?.cliDetectedChannel} CLI on ${channel} channel) — click to sync`}
+                                        >
+                                            <AlertTriangle className="size-3 shrink-0" />
+                                        </Link>
+                                    )}
                                 </span>
                             </div>
                         </div>
@@ -465,6 +518,28 @@ export default function AppLayout({
                 <div className="mt-auto space-y-1 border-t border-line/60 pt-3">
                     {collapsed ? (
                         <>
+                            <button
+                                type="button"
+                                onClick={toggleDemoMode}
+                                className={cn(
+                                    'mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg transition',
+                                    demoMode
+                                        ? 'bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400'
+                                        : 'text-soft hover:bg-paper hover:text-ink',
+                                )}
+                                title={
+                                    demoMode
+                                        ? 'Demo Mode is ON (sensitive values masked & hidden servers filtered) · Click to turn off'
+                                        : 'Toggle Demo Mode (mask sensitive values & hide demo servers)'
+                                }
+                                aria-label="Toggle Demo Mode"
+                            >
+                                {demoMode ? (
+                                    <EyeOff className="size-4" />
+                                ) : (
+                                    <Eye className="size-4" />
+                                )}
+                            </button>
                             <ExternalLinkButton
                                 url="https://github.com/sponsors/luchavez-technologies"
                                 className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
@@ -485,6 +560,40 @@ export default function AppLayout({
                         </>
                     ) : (
                         <>
+                            <button
+                                type="button"
+                                onClick={toggleDemoMode}
+                                className={cn(
+                                    'flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
+                                    demoMode
+                                        ? 'bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400'
+                                        : 'text-soft hover:bg-paper hover:text-ink',
+                                )}
+                                title={
+                                    demoMode
+                                        ? 'Demo Mode is ON · Click to disable'
+                                        : 'Enable Demo Mode to mask sensitive values and hide selected servers'
+                                }
+                            >
+                                <span className="flex items-center gap-2">
+                                    {demoMode ? (
+                                        <EyeOff className="size-3.5" />
+                                    ) : (
+                                        <Eye className="size-3.5" />
+                                    )}
+                                    <span>Demo Mode</span>
+                                </span>
+                                <span
+                                    className={cn(
+                                        'rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase',
+                                        demoMode
+                                            ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                            : 'bg-paper text-faint ring-1 ring-line/50',
+                                    )}
+                                >
+                                    {demoMode ? 'ON' : 'OFF'}
+                                </span>
+                            </button>
                             <ExternalLinkButton
                                 url="https://github.com/sponsors/luchavez-technologies"
                                 className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium text-soft transition hover:bg-paper hover:text-ink"
