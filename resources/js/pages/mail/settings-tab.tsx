@@ -11,8 +11,17 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import ToolLogo from '@/components/tool-logo';
 import { ExternalLinkButton } from '@/lib/open-external';
 import type { Server as ServerType } from '@/types/larakube';
+
+export type WiredToolRow = {
+    tool: string;
+    slug: string;
+    instance: string;
+    host: string | null;
+    wired: boolean;
+};
 
 export type RelayInfo = {
     configured: boolean;
@@ -39,9 +48,10 @@ export type ServerInfo = {
 type Props = {
     server: ServerType;
     info?: ServerInfo | null;
+    wiredTools?: WiredToolRow[];
 };
 
-export default function SettingsTab({ server, info }: Props) {
+export default function SettingsTab({ server, info, wiredTools = [] }: Props) {
     const { demoMode } = usePage<{ demoMode?: boolean }>().props;
     const [showPassword, setShowPassword] = useState(false);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -74,6 +84,84 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
 
     return (
         <div className="space-y-6">
+            {/* Wired Tools */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-[11px] font-medium tracking-[0.06em] text-soft uppercase">
+                        Wired Tools
+                    </h2>
+                </div>
+                <Card className="overflow-hidden p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                            <thead>
+                                <tr className="border-b border-line bg-paper/50 text-soft">
+                                    <th className="px-5 py-3 font-medium">
+                                        Tool
+                                    </th>
+                                    <th className="px-5 py-3 font-medium">
+                                        Instance
+                                    </th>
+                                    <th className="px-5 py-3 font-medium">
+                                        Host
+                                    </th>
+                                    <th className="px-5 py-3 font-medium">
+                                        Wired
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-line text-ink">
+                                {wiredTools.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="px-5 py-8 text-center text-soft"
+                                        >
+                                            No tools are currently wired to
+                                            Stalwart for outbound mail.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    wiredTools.map((row) => (
+                                        <tr
+                                            key={`${row.slug}-${row.instance}`}
+                                            className="transition hover:bg-paper/30"
+                                        >
+                                            <td className="px-5 py-3.5 font-medium">
+                                                <div className="flex items-center gap-2.5">
+                                                    <ToolLogo
+                                                        slug={row.slug}
+                                                        size="sm"
+                                                    />
+                                                    <span>{row.tool}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-soft">
+                                                {row.instance || '—'}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-soft">
+                                                {row.host ?? '—'}
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                {row.wired ? (
+                                                    <span className="text-emerald-600 dark:text-emerald-400">
+                                                        yes
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-soft">
+                                                        no
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
+
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* Client Connection Settings */}
                 <Card label="Mail Client Connection Settings (IMAP / SMTP)">

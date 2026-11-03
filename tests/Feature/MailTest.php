@@ -18,8 +18,11 @@ use Native\Desktop\Events\ChildProcess\ProcessExited;
 use Native\Desktop\Facades\ChildProcess;
 
 /** Fakes the real CLI calls behind MailStatus/SyncClusterToolsJob/SyncMailJob, for tests that don't mock MailStatus. */
-function mailRealFakes(array $accounts = [['email' => 'admin@example.com', 'name' => 'Admin', 'role' => 'admin', 'quota' => '1 GB', 'quotaBytes' => 1_000_000, 'used' => '0 MB', 'usedBytes' => 0]], array $domains = [['id' => 'd1', 'name' => 'example.com', 'accounts' => 1]]): void
-{
+function mailRealFakes(
+    array $accounts = [['email' => 'admin@example.com', 'name' => 'Admin', 'role' => 'admin', 'quota' => '1 GB', 'quotaBytes' => 1_000_000, 'used' => '0 MB', 'usedBytes' => 0]],
+    array $domains = [['id' => 'd1', 'name' => 'example.com', 'accounts' => 1]],
+    array $wiredTools = [['tool' => 'Forgejo (Git Forge & CI/CD)', 'slug' => 'forgejo', 'instance' => 'git-example-com', 'host' => 'git.example.com', 'wired' => true]],
+): void {
     Process::fake([
         '*tool:list*' => Process::result(output: json_encode([
             ['tool' => 'stalwart', 'instance' => '', 'brand' => 'Stalwart', 'installed' => true, 'host' => 'mail.example.com', 'multiInstance' => false],
@@ -27,6 +30,7 @@ function mailRealFakes(array $accounts = [['email' => 'admin@example.com', 'name
         '*mail:show*' => Process::result(output: json_encode(['installed' => true, 'host' => 'mail.example.com'])),
         '*mail:domains*' => Process::result(output: json_encode(['domains' => $domains])),
         '*mail:accounts*' => Process::result(output: json_encode(['accounts' => $accounts, 'queue' => 0])),
+        '*mail:status*' => Process::result(output: json_encode(['success' => true, 'installed' => true, 'wiredTools' => $wiredTools])),
     ]);
 }
 
@@ -103,6 +107,9 @@ test('viewing mail page renders mail/index with installation status', function (
             ['email' => 'admin@example.com', 'name' => 'Admin', 'role' => 'Admin', 'quota' => 'Unlimited', 'used' => '0 MB'],
         ],
         'queue' => 0,
+    ]);
+    $mailStatus->shouldReceive('wiredTools')->with('larakube-do-ams3')->andReturn([
+        ['tool' => 'Forgejo (Git Forge & CI/CD)', 'slug' => 'forgejo', 'instance' => 'git-example-com', 'host' => 'git.example.com', 'wired' => true],
     ]);
     $mailStatus->shouldReceive('syncState')->with('larakube-do-ams3')->andReturn([
         'status' => 'fresh', 'lastSyncedAt' => now()->toAtomString(), 'error' => null,
@@ -390,10 +397,29 @@ test('viewing the mail page syncs real mail accounts and domains into the databa
             ->where('isInstalled', true)
             ->loadDeferredProps(fn ($reload) => $reload
                 ->where('accounts.accounts.0.email', 'admin@example.com')
-                ->where('domains.0.name', 'example.com')));
+                ->where('domains.0.name', 'example.com')
+                ->where('wiredTools.0.slug', 'forgejo')
+                ->where('wiredTools.0.tool', 'Forgejo (Git Forge & CI/CD)')
+                ->where('wiredTools.0.instance', 'git-example-com')
+                ->where('wiredTools.0.host', 'git.example.com')
+                ->where('wiredTools.0.wired', true)));
 
     expect(MailAccount::where('email', 'admin@example.com')->exists())->toBeTrue()
         ->and(MailDomain::where('name', 'example.com')->exists())->toBeTrue();
+});
+
+test('viewing the mail page when stalwart is not installed returns empty wiredTools', function () {
+    mailTestServer();
+    Process::fake([
+        '*tool:list*' => Process::result(output: json_encode([])),
+    ]);
+
+    $this->get(route('servers.mail.index', 'prod-vps'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('mail/index')
+            ->where('isInstalled', false)
+            ->where('wiredTools', []));
 });
 
 test('a finished mailbox-create run re-syncs mail accounts for that server', function () {

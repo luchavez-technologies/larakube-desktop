@@ -128,6 +128,27 @@ class MailStatus
     }
 
     /**
+     * Shipped tools configured to deliver mail through Stalwart.
+     *
+     * @return list<array{tool: string, slug: string, instance: string, host: ?string, wired: bool}>
+     */
+    public function wiredTools(string $context): array
+    {
+        $server = Server::firstWhere('context', $context);
+
+        if ($server === null) {
+            return [];
+        }
+
+        $mailTool = $this->syncIfNeeded($server);
+
+        /** @var list<array{tool: string, slug: string, instance: string, host: ?string, wired: bool}> $wiredTools */
+        $wiredTools = $mailTool?->data['wiredTools'] ?? [];
+
+        return $wiredTools;
+    }
+
+    /**
      * Run live DNS and service reachability verification for a domain.
      *
      * @return array{installed: bool, domain?: string, host?: string, environment?: string, summary?: array{pass: int, warn: int, fail: int}, checks?: list<array{status: string, label: string, hint: string}>, error?: string}|null

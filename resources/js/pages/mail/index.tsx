@@ -14,7 +14,10 @@ import MailEmptyState from './mail-empty-state';
 import MailboxesTab, { type AccountRow } from './mailboxes-tab';
 import DomainsTab, { type DomainRow } from './domains-tab';
 import RelayTab from './relay-tab';
-import SettingsTab, { type ServerInfo } from './settings-tab';
+import SettingsTab, {
+    type ServerInfo,
+    type WiredToolRow,
+} from './settings-tab';
 import type { Server } from '@/types/larakube';
 
 type Props = {
@@ -28,6 +31,7 @@ type Props = {
         accounts: AccountRow[];
         queue: number;
     };
+    wiredTools?: WiredToolRow[];
     mailSync: {
         status: SyncStatus;
         lastSyncedAt: string | null;
@@ -117,6 +121,27 @@ function RelaySkeleton() {
 function SettingsSkeleton() {
     return (
         <div className="space-y-6">
+            <div className="space-y-3">
+                <Pulse className="h-3 w-28" />
+                <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+                    <div className="border-b border-line bg-paper/50 px-5 py-3">
+                        <Pulse className="h-3 w-40" />
+                    </div>
+                    <div className="divide-y divide-line">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className="flex items-center gap-4 px-5 py-3.5"
+                            >
+                                <Pulse className="h-3.5 w-48" />
+                                <Pulse className="h-3.5 w-24" />
+                                <Pulse className="h-3.5 w-32" />
+                                <Pulse className="ml-auto h-3.5 w-12" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
             <div className="grid gap-6 lg:grid-cols-2">
                 {Array.from({ length: 2 }).map((_, i) => (
                     <div
@@ -157,13 +182,22 @@ export default function MailIndex({
     serverInfo,
     domains,
     accounts,
+    wiredTools,
     mailSync,
 }: Props) {
     const [activeTab, setActiveTab] = useState<TabType>('mailboxes');
 
     usePoll(
         2000,
-        { only: ['serverInfo', 'domains', 'accounts', 'mailSync'] },
+        {
+            only: [
+                'serverInfo',
+                'domains',
+                'accounts',
+                'wiredTools',
+                'mailSync',
+            ],
+        },
         { autoStart: isInstalled && mailSync.status === 'syncing' },
     );
 
@@ -173,7 +207,8 @@ export default function MailIndex({
         isInstalled &&
         (serverInfo === undefined ||
             domains === undefined ||
-            accounts === undefined);
+            accounts === undefined ||
+            wiredTools === undefined);
 
     const resolvedDomains = domains ?? [];
     const resolvedAccounts = accounts ?? { accounts: [], queue: 0 };
@@ -354,6 +389,7 @@ export default function MailIndex({
                                     <SettingsTab
                                         server={server}
                                         info={serverInfo}
+                                        wiredTools={wiredTools}
                                     />
                                 )}
                             </>

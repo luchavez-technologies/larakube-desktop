@@ -46,6 +46,7 @@ class SyncMailJob extends SyncJob
         $info = $this->json($locator, ['mail:show', 'production', "--context={$server->context}", '--json']);
         $domainsData = $this->json($locator, ['mail:domains', 'production', "--context={$server->context}", '--json']);
         $accountsData = $this->json($locator, ['mail:accounts', 'production', "--context={$server->context}", '--json']);
+        $statusData = $this->json($locator, ['mail:status', 'production', "--context={$server->context}", '--json']);
 
         if ($info === null) {
             $mailTool->update(['sync_status' => 'error', 'last_sync_error' => 'Could not reach the mail server.']);
@@ -58,8 +59,9 @@ class SyncMailJob extends SyncJob
         /** @var list<array{email: string, name?: string, role?: string, quotaBytes?: int, usedBytes?: int}> $accounts */
         $accounts = is_array($accountsData['accounts'] ?? null) ? array_values($accountsData['accounts']) : [];
         $queue = (int) ($accountsData['queue'] ?? 0);
+        $wiredTools = $statusData['wiredTools'] ?? [];
 
-        DB::transaction(function () use ($server, $mailTool, $info, $domains, $accounts, $queue): void {
+        DB::transaction(function () use ($server, $mailTool, $info, $domains, $accounts, $queue, $wiredTools): void {
             $domainIds = [];
 
             foreach ($domains as $domain) {
@@ -101,7 +103,7 @@ class SyncMailJob extends SyncJob
                 ->delete();
 
             $mailTool->update([
-                'data' => [...$mailTool->data, 'serverInfo' => $info, 'queue' => $queue],
+                'data' => [...$mailTool->data, 'serverInfo' => $info, 'queue' => $queue, 'wiredTools' => $wiredTools],
                 'sync_status' => 'fresh',
                 'last_synced_at' => now(),
                 'last_sync_error' => null,

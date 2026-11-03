@@ -58,6 +58,9 @@ class MailController extends Controller
             'accounts' => $isInstalled
                 ? Inertia::defer(fn (): array => $status->accounts($context), 'accounts')
                 : ['accounts' => [], 'queue' => 0],
+            'wiredTools' => $isInstalled
+                ? Inertia::defer(fn (): array => $status->wiredTools($context), 'wiredTools')
+                : [],
             'mailSync' => $status->syncState($context),
         ]);
     }
