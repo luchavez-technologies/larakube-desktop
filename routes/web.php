@@ -261,6 +261,8 @@ Route::get('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'show
 Route::get('/servers/{server}/apps/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.apps.credentials');
 Route::post('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'store'])->name('servers.apps.store');
 Route::post('/servers/{server}/apps/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.apps.rebind');
+Route::post('/servers/{server}/apps/{tool}/wire', [ClusterToolController::class, 'wire'])->name('servers.apps.wire');
+Route::post('/servers/{server}/apps/{tool}/unwire', [ClusterToolController::class, 'unwire'])->name('servers.apps.unwire');
 Route::delete('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.apps.destroy');
 Route::get('/servers/{server}/apps/{tool}/env', [ClusterToolEnvController::class, 'status'])->name('servers.apps.env.status');
 Route::post('/servers/{server}/apps/{tool}/env', [ClusterToolEnvController::class, 'update'])->name('servers.apps.env.update');
@@ -273,6 +275,8 @@ Route::get('/servers/{server}/domains', [ClusterToolController::class, 'domains'
 Route::post('/servers/{server}/tools/refresh', [ClusterToolController::class, 'refresh'])->name('servers.tools.refresh');
 Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'show'])->name('servers.tools.show');
 Route::get('/servers/{server}/tools/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.tools.credentials');
+Route::post('/servers/{server}/tools/{tool}/wire', [ClusterToolController::class, 'wire'])->name('servers.tools.wire');
+Route::post('/servers/{server}/tools/{tool}/unwire', [ClusterToolController::class, 'unwire'])->name('servers.tools.unwire');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
 Route::post('/servers/{server}/tools/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.tools.rebind');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');

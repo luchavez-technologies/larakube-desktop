@@ -343,6 +343,151 @@ class ClusterToolController extends Controller
         return to_route('runs.show', $run);
     }
 
+    public function wire(Request $request, string $server, string $tool, CliRunner $runner): RedirectResponse
+    {
+        $request->validate([
+            'capability' => ['required', 'string', 'in:sso,mail,rotation,secrets,vpn,meet'],
+            'domain' => ['nullable', 'string'],
+            'engine' => ['nullable', 'string'],
+            'admin_email' => ['nullable', 'email'],
+        ]);
+
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $capability = $request->string('capability')->toString();
+        if ($capability === 'secrets') {
+            $capability = 'rotation';
+        }
+
+        $domain = $request->filled('domain') ? $request->string('domain')->toString() : null;
+        $engine = $request->filled('engine') ? $request->string('engine')->toString() : null;
+
+        $args = match ($capability) {
+            'sso' => ['sso:wire', 'production', "--context={$context}", "--tool={$tool}"],
+            'mail' => ['mail:wire', 'production', "--context={$context}", "--tool={$tool}"],
+            'rotation' => ['secrets:wire', 'production', "--context={$context}", "--tool={$tool}"],
+            'vpn' => ['vpn:wire', 'production', "--context={$context}", "--tool={$tool}"],
+            'meet' => ['meet:wire', 'production', "--context={$context}"],
+        };
+
+        if ($domain !== null && $domain !== '') {
+            $args[] = "--domain={$domain}";
+        }
+        if ($engine !== null && $engine !== '') {
+            $args[] = "--engine={$engine}";
+        }
+        if ($capability === 'sso' && $request->filled('admin_email')) {
+            $adminEmail = $request->string('admin_email')->trim()->lower()->toString();
+            $args[] = "--admin-email={$adminEmail}";
+        }
+
+        $kind = match ($capability) {
+            'sso' => RunKind::SsoWire,
+            'mail' => RunKind::MailWire,
+            'rotation' => RunKind::OpenBaoWire,
+            'vpn' => RunKind::VpnWire,
+            'meet' => RunKind::MeetWire,
+        };
+
+        $label = match ($capability) {
+            'sso' => "Wire {$tool} SSO on {$server}",
+            'mail' => "Wire {$tool} Mail on {$server}",
+            'rotation' => "Wire {$tool} Secrets Rotation on {$server}",
+            'vpn' => "Wire {$tool} VPN on {$server}",
+            'meet' => "Wire Meet on {$server}",
+        };
+
+        $run = $runner->start(
+            label: $label,
+            arguments: $args,
+            kind: $kind,
+            subject: $tool,
+            meta: [
+                'server' => $server,
+                'context' => $context,
+                'tool' => $tool,
+                'domain' => $domain,
+                'capability' => $capability,
+            ],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    public function unwire(Request $request, string $server, string $tool, CliRunner $runner): RedirectResponse
+    {
+        $request->validate([
+            'capability' => ['required', 'string', 'in:sso,mail,rotation,secrets,vpn,meet'],
+            'domain' => ['nullable', 'string'],
+            'engine' => ['nullable', 'string'],
+        ]);
+
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $capability = $request->string('capability')->toString();
+        if ($capability === 'secrets') {
+            $capability = 'rotation';
+        }
+
+        $domain = $request->filled('domain') ? $request->string('domain')->toString() : null;
+        $engine = $request->filled('engine') ? $request->string('engine')->toString() : null;
+
+        $args = match ($capability) {
+            'sso' => ['sso:unwire', 'production', "--context={$context}", "--tool={$tool}", '--force'],
+            'mail' => ['mail:unwire', 'production', "--context={$context}", "--tool={$tool}", '--force'],
+            'rotation' => ['secrets:unwire', 'production', "--context={$context}", "--tool={$tool}", '--force'],
+            'vpn' => ['vpn:unwire', 'production', "--context={$context}", "--tool={$tool}", '--force'],
+            'meet' => ['meet:unwire', 'production', "--context={$context}", '--force'],
+        };
+
+        if ($domain !== null && $domain !== '') {
+            $args[] = "--domain={$domain}";
+        }
+        if ($engine !== null && $engine !== '') {
+            $args[] = "--engine={$engine}";
+        }
+
+        $kind = match ($capability) {
+            'sso' => RunKind::SsoUnwire,
+            'mail' => RunKind::MailUnwire,
+            'rotation' => RunKind::OpenBaoUnwire,
+            'vpn' => RunKind::VpnUnwire,
+            'meet' => RunKind::MeetUnwire,
+        };
+
+        $label = match ($capability) {
+            'sso' => "Unwire {$tool} SSO on {$server}",
+            'mail' => "Unwire {$tool} Mail on {$server}",
+            'rotation' => "Unwire {$tool} Secrets Rotation on {$server}",
+            'vpn' => "Unwire {$tool} VPN on {$server}",
+            'meet' => "Unwire Meet on {$server}",
+        };
+
+        $run = $runner->start(
+            label: $label,
+            arguments: $args,
+            kind: $kind,
+            subject: $tool,
+            meta: [
+                'server' => $server,
+                'context' => $context,
+                'tool' => $tool,
+                'domain' => $domain,
+                'capability' => $capability,
+            ],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
     public function refresh(string $server, ClusterStatus $status): RedirectResponse
     {
         $context = (string) $this->readyServer($server)['context'];

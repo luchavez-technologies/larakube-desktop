@@ -1,4 +1,4 @@
-import { usePage } from '@inertiajs/react';
+import { Form, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ExternalLink,
@@ -6,8 +6,10 @@ import {
     Check,
     Eye,
     EyeOff,
+    Plug,
     Server,
     Terminal,
+    Unlink,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -108,13 +110,16 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                     <th className="px-5 py-3 font-medium">
                                         Wired
                                     </th>
+                                    <th className="px-5 py-3 text-right font-medium">
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-line text-ink">
                                 {wiredTools.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={4}
+                                            colSpan={5}
                                             className="px-5 py-8 text-center text-soft"
                                         >
                                             No tools are currently wired to
@@ -151,6 +156,69 @@ MAIL_FROM_NAME="\${APP_NAME}"`;
                                                     <span className="text-soft">
                                                         no
                                                     </span>
+                                                )}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-right">
+                                                {row.wired ? (
+                                                    <Form
+                                                        action={`/servers/${server.name}/apps/${row.slug || row.tool}/unwire`}
+                                                        method="post"
+                                                        className="inline-block"
+                                                    >
+                                                        <input
+                                                            type="hidden"
+                                                            name="capability"
+                                                            value="mail"
+                                                        />
+                                                        <input
+                                                            type="hidden"
+                                                            name="domain"
+                                                            value={
+                                                                row.host ?? ''
+                                                            }
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            className={buttonClass(
+                                                                'ghost',
+                                                                'xs',
+                                                            )}
+                                                            title={`Unwire ${row.tool} from Mail`}
+                                                        >
+                                                            <Unlink className="size-3.5" />
+                                                            <span>Unwire</span>
+                                                        </button>
+                                                    </Form>
+                                                ) : (
+                                                    <Form
+                                                        action={`/servers/${server.name}/apps/${row.slug || row.tool}/wire`}
+                                                        method="post"
+                                                        className="inline-block"
+                                                    >
+                                                        <input
+                                                            type="hidden"
+                                                            name="capability"
+                                                            value="mail"
+                                                        />
+                                                        <input
+                                                            type="hidden"
+                                                            name="domain"
+                                                            value={
+                                                                row.host ?? ''
+                                                            }
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            className={buttonClass(
+                                                                'secondary',
+                                                                'xs',
+                                                            )}
+                                                            title={`Wire ${row.tool} to Mail`}
+                                                        >
+                                                            <Plug className="size-3.5" />
+                                                            <span>Wire</span>
+                                                        </button>
+                                                    </Form>
                                                 )}
                                             </td>
                                         </tr>

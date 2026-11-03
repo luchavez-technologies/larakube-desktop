@@ -912,3 +912,45 @@ test('rebind dispatches tool:rebind CLI runner with --no-wire-sso when wire_sso 
 
     File::deleteDirectory($bin);
 });
+
+test('wire triggers capability wire command for the app', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.apps.wire', ['server' => 'workshop-demo', 'tool' => 'forgejo']), [
+        'capability' => 'sso',
+        'domain' => 'git.example.com',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::SsoWire)
+        ->and($run->label)->toBe('Wire forgejo SSO on workshop-demo');
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'sso:wire', 'production', '--context=larakube-203.0.113.21', '--tool=forgejo', '--domain=git.example.com', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
+test('unwire triggers capability unwire command for the app', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.apps.unwire', ['server' => 'workshop-demo', 'tool' => 'forgejo']), [
+        'capability' => 'mail',
+        'domain' => 'git.example.com',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $run = Run::sole();
+    expect($run->kind)->toBe(RunKind::MailUnwire)
+        ->and($run->label)->toBe('Unwire forgejo Mail on workshop-demo');
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'mail:unwire', 'production', '--context=larakube-203.0.113.21', '--tool=forgejo', '--force', '--domain=git.example.com', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});

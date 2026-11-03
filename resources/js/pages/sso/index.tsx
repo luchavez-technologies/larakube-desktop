@@ -687,7 +687,7 @@ export default function SsoIndex({
                                                                     )}
                                                                 </td>
                                                                 <td className="px-5 py-3.5 text-right">
-                                                                    {row.wired && (
+                                                                    {row.wired ? (
                                                                         <button
                                                                             type="button"
                                                                             className={buttonClass(
@@ -713,6 +713,47 @@ export default function SsoIndex({
                                                                                 Unwire
                                                                             </span>
                                                                         </button>
+                                                                    ) : (
+                                                                        <Form
+                                                                            action={
+                                                                                sso.wire(
+                                                                                    server.name,
+                                                                                )
+                                                                                    .url
+                                                                            }
+                                                                            method="post"
+                                                                            className="inline-block"
+                                                                        >
+                                                                            <input
+                                                                                type="hidden"
+                                                                                name="tool"
+                                                                                value={
+                                                                                    row.slug ||
+                                                                                    row.tool
+                                                                                }
+                                                                            />
+                                                                            <input
+                                                                                type="hidden"
+                                                                                name="domain"
+                                                                                value={
+                                                                                    row.host ??
+                                                                                    ''
+                                                                                }
+                                                                            />
+                                                                            <button
+                                                                                type="submit"
+                                                                                className={buttonClass(
+                                                                                    'secondary',
+                                                                                    'xs',
+                                                                                )}
+                                                                                title={`Wire ${row.tool} SSO`}
+                                                                            >
+                                                                                <Plug className="size-3.5" />
+                                                                                <span>
+                                                                                    Wire
+                                                                                </span>
+                                                                            </button>
+                                                                        </Form>
                                                                     )}
                                                                 </td>
                                                             </tr>

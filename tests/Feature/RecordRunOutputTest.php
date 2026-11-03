@@ -7,6 +7,7 @@ use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServerTlsJob;
 use App\Listeners\RecordRunOutput;
+use App\Models\ClusterTool;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
@@ -192,3 +193,44 @@ test('granting or revoking cluster access queues a cluster-users re-sync, even t
 
     Queue::assertPushed(fn (SyncServerClusterUsersJob $job): bool => $job->serverId === $server->id);
 })->with([RunKind::ClusterGrant, RunKind::ClusterRevoke]);
+
+test('successful wire and unwire runs update cluster tool wiring data optimistically', function (RunKind $kind, string $capability, string $expectedStatus) {
+    Queue::fake();
+
+    $server = Server::create(['name' => 'cloud-prod', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-cloud-prod', 'status' => 'ready']);
+    $tool = ClusterTool::create([
+        'server_id' => $server->id,
+        'tool' => 'forgejo',
+        'host' => 'git.example.com',
+        'installed' => true,
+        'position' => 0,
+        'data' => ['sso' => 'unwired', 'mail' => 'unwired', 'rotation' => 'unwired'],
+    ]);
+
+    $run = Run::create([
+        'label' => 'Wire run',
+        'kind' => $kind,
+        'subject' => 'forgejo',
+        'meta' => [
+            'server' => 'cloud-prod',
+            'context' => 'ctx-cloud-prod',
+            'tool' => 'forgejo',
+            'domain' => 'git.example.com',
+            'capability' => $capability,
+        ],
+        'context' => 'ctx-cloud-prod',
+        'command' => ['larakube', 'sso:wire'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
+
+    $tool->refresh();
+    expect($tool->data[$capability])->toBe($expectedStatus);
+})->with([
+    [RunKind::SsoWire, 'sso', 'wired'],
+    [RunKind::SsoUnwire, 'sso', 'unwired'],
+    [RunKind::MailWire, 'mail', 'wired'],
+    [RunKind::MailUnwire, 'mail', 'unwired'],
+    [RunKind::OpenBaoWire, 'rotation', 'wired'],
+    [RunKind::OpenBaoUnwire, 'rotation', 'unwired'],
+]);

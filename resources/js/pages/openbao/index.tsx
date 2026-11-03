@@ -6,11 +6,13 @@ import {
     Download,
     FileCode2,
     Lock,
+    Plug,
     RefreshCw,
     RotateCw,
     Search,
     ShieldCheck,
     ShieldOff,
+    Unlink,
     Upload,
     UserMinus,
     UserPlus,
@@ -626,22 +628,58 @@ export default function OpenBaoIndex({
                                                                         )}
                                                                     </td>
                                                                     <td className="px-5 py-3.5 text-right">
-                                                                        {row.wired &&
-                                                                            !sealed && (
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            {row.wired &&
+                                                                                !sealed && (
+                                                                                    <Form
+                                                                                        action={
+                                                                                            openbao.rotate(
+                                                                                                server.name,
+                                                                                            )
+                                                                                                .url
+                                                                                        }
+                                                                                        method="post"
+                                                                                        className="inline-block"
+                                                                                    >
+                                                                                        <input
+                                                                                            type="hidden"
+                                                                                            name="tool"
+                                                                                            value={
+                                                                                                row.tool
+                                                                                            }
+                                                                                        />
+                                                                                        <button
+                                                                                            type="submit"
+                                                                                            className={buttonClass(
+                                                                                                'ghost',
+                                                                                                'xs',
+                                                                                            )}
+                                                                                            title="Rotate now"
+                                                                                        >
+                                                                                            <RotateCw className="size-3.5" />
+                                                                                            <span>
+                                                                                                Rotate
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    </Form>
+                                                                                )}
+                                                                            {row.wired ? (
                                                                                 <Form
-                                                                                    action={
-                                                                                        openbao.rotate(
-                                                                                            server.name,
-                                                                                        )
-                                                                                            .url
-                                                                                    }
+                                                                                    action={`/servers/${server.name}/apps/${row.slug || row.tool}/unwire`}
                                                                                     method="post"
+                                                                                    className="inline-block"
                                                                                 >
                                                                                     <input
                                                                                         type="hidden"
-                                                                                        name="tool"
+                                                                                        name="capability"
+                                                                                        value="rotation"
+                                                                                    />
+                                                                                    <input
+                                                                                        type="hidden"
+                                                                                        name="domain"
                                                                                         value={
-                                                                                            row.tool
+                                                                                            row.instance ||
+                                                                                            ''
                                                                                         }
                                                                                     />
                                                                                     <button
@@ -650,15 +688,51 @@ export default function OpenBaoIndex({
                                                                                             'ghost',
                                                                                             'xs',
                                                                                         )}
-                                                                                        title="Rotate now"
+                                                                                        title={`Unwire ${row.tool} rotation`}
                                                                                     >
-                                                                                        <RotateCw className="size-3.5" />
+                                                                                        <Unlink className="size-3.5" />
                                                                                         <span>
-                                                                                            Rotate
+                                                                                            Unwire
                                                                                         </span>
                                                                                     </button>
                                                                                 </Form>
+                                                                            ) : (
+                                                                                !sealed && (
+                                                                                    <Form
+                                                                                        action={`/servers/${server.name}/apps/${row.slug || row.tool}/wire`}
+                                                                                        method="post"
+                                                                                        className="inline-block"
+                                                                                    >
+                                                                                        <input
+                                                                                            type="hidden"
+                                                                                            name="capability"
+                                                                                            value="rotation"
+                                                                                        />
+                                                                                        <input
+                                                                                            type="hidden"
+                                                                                            name="domain"
+                                                                                            value={
+                                                                                                row.instance ||
+                                                                                                ''
+                                                                                            }
+                                                                                        />
+                                                                                        <button
+                                                                                            type="submit"
+                                                                                            className={buttonClass(
+                                                                                                'secondary',
+                                                                                                'xs',
+                                                                                            )}
+                                                                                            title={`Wire ${row.tool} rotation`}
+                                                                                        >
+                                                                                            <Plug className="size-3.5" />
+                                                                                            <span>
+                                                                                                Wire
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    </Form>
+                                                                                )
                                                                             )}
+                                                                        </div>
                                                                     </td>
                                                                 </tr>
                                                             ),

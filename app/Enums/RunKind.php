@@ -137,6 +137,18 @@ enum RunKind: string
     case SsoOrgDelete = 'sso-org-delete';
     case SsoPrune = 'sso-prune';
 
+    /** Tool wiring & integrations */
+    case MailWire = 'mail-wire';
+    case MailUnwire = 'mail-unwire';
+    case OpenBaoWire = 'openbao-wire';
+    case OpenBaoUnwire = 'openbao-unwire';
+    case VpnWire = 'vpn-wire';
+    case VpnUnwire = 'vpn-unwire';
+    case MeetWire = 'meet-wire';
+    case MeetUnwire = 'meet-unwire';
+    case DataWire = 'data-wire';
+    case DataUnwire = 'data-unwire';
+
     public function changesBackups(): bool
     {
         return in_array($this, [self::BackupInit, self::BackupSchedule, self::BackupUnschedule, self::BackupRun, self::BackupRestore, self::BackupPrune], true);
@@ -144,12 +156,42 @@ enum RunKind: string
 
     public function changesClusterTools(): bool
     {
-        return in_array($this, [self::InstallClusterTool, self::RemoveClusterTool, self::RebindClusterTool, self::ConnectDomain, self::DisconnectDomain, self::QuickLaunchApp], true);
+        return in_array($this, [
+            self::InstallClusterTool,
+            self::RemoveClusterTool,
+            self::RebindClusterTool,
+            self::ConnectDomain,
+            self::DisconnectDomain,
+            self::QuickLaunchApp,
+            self::SsoWire,
+            self::SsoUnwire,
+            self::MailWire,
+            self::MailUnwire,
+            self::OpenBaoWire,
+            self::OpenBaoUnwire,
+            self::VpnWire,
+            self::VpnUnwire,
+            self::MeetWire,
+            self::MeetUnwire,
+            self::DataWire,
+            self::DataUnwire,
+        ], true);
     }
 
     public function changesMail(): bool
     {
-        return in_array($this, [self::MailDeploy, self::MailCreateAccount, self::MailDeleteAccount, self::MailResetPassword, self::MailAddDomain, self::MailRemoveDomain, self::MailConfigureRelay, self::SsoOrgDelete], true);
+        return in_array($this, [
+            self::MailDeploy,
+            self::MailCreateAccount,
+            self::MailDeleteAccount,
+            self::MailResetPassword,
+            self::MailAddDomain,
+            self::MailRemoveDomain,
+            self::MailConfigureRelay,
+            self::MailWire,
+            self::MailUnwire,
+            self::SsoOrgDelete,
+        ], true);
     }
 
     public function changesDrive(): bool
@@ -159,7 +201,16 @@ enum RunKind: string
 
     public function changesOpenBao(): bool
     {
-        return in_array($this, [self::OpenBaoSeal, self::OpenBaoUnseal, self::OpenBaoRotate, self::OpenBaoGrant, self::OpenBaoRevoke, self::OpenBaoImport], true);
+        return in_array($this, [
+            self::OpenBaoSeal,
+            self::OpenBaoUnseal,
+            self::OpenBaoRotate,
+            self::OpenBaoGrant,
+            self::OpenBaoRevoke,
+            self::OpenBaoImport,
+            self::OpenBaoWire,
+            self::OpenBaoUnwire,
+        ], true);
     }
 
     public function changesSso(): bool

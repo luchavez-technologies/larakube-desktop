@@ -10,7 +10,7 @@ import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import AppLayout from '@/layouts/app-layout';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Plug, Unlink } from 'lucide-react';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
 import {
@@ -56,18 +56,58 @@ export default function ShowTool({
     const tagline = toolTagline(tool);
     const cats = toolCategories(tool);
     const url = tool.url?.split(' ')[0] ?? null;
-    const integrations = (
-        [
-            ['Single sign-on', 'Sign in with your SSO account.', tool.sso],
-            ['Email', 'Sends mail through your Mail server.', tool.mail],
-            ['VPN', 'Reachable only over the team VPN.', tool.vpn],
-            [
-                'Secrets',
-                'Database password kept in the secrets vault.',
-                tool.sync,
-            ],
-        ] as const
-    ).filter(([, , value]) => value !== 'N/A' && value !== '—');
+    const integrations = [
+        {
+            key: 'sso',
+            title: 'Single sign-on',
+            detail: 'Sign in with your Zitadel SSO account.',
+            value: tool.sso,
+            wired: tool.sso === 'wired',
+        },
+        {
+            key: 'mail',
+            title: 'Email',
+            detail: 'Sends mail through your Stalwart mail server.',
+            value: tool.mail,
+            wired: tool.mail === 'wired',
+        },
+        {
+            key: 'vpn',
+            title: 'VPN',
+            detail: 'Reachable only over the NetBird team VPN.',
+            value: tool.vpn,
+            wired: tool.vpn === 'mesh',
+        },
+        {
+            key: 'rotation',
+            title: 'Secrets Rotation',
+            detail: 'Database credentials rotated in OpenBao.',
+            value: tool.rotation ?? tool.sync,
+            wired: ['wired', 'OpenBao', 'synced'].includes(
+                tool.rotation ?? tool.sync,
+            ),
+        },
+        {
+            key: 'meet',
+            title: 'LiveKit Meet',
+            detail: 'Team video conferencing rooms.',
+            value: tool.meet,
+            wired: tool.meet === 'wired',
+        },
+    ].filter(
+        (
+            item,
+        ): item is {
+            key: string;
+            title: string;
+            detail: string;
+            value: Wiring;
+            wired: boolean;
+        } =>
+            item.value !== undefined &&
+            item.value !== 'N/A' &&
+            item.value !== '—',
+    );
 
     return (
         <AppLayout title={name}>
@@ -211,14 +251,81 @@ export default function ShowTool({
                     <div className="space-y-5">
                         {integrations.length > 0 && (
                             <Card label="Integrations">
-                                {integrations.map(([title, detail, value]) => (
+                                {integrations.map((item) => (
                                     <ListRow
-                                        key={title}
-                                        action={<WiringPill value={value} />}
+                                        key={item.key}
+                                        action={
+                                            <div className="flex items-center gap-2">
+                                                <WiringPill
+                                                    value={item.value}
+                                                />
+                                                {item.wired ? (
+                                                    <Form
+                                                        action={`/servers/${server.name}/apps/${tool.tool}/unwire`}
+                                                        method="post"
+                                                    >
+                                                        <input
+                                                            type="hidden"
+                                                            name="capability"
+                                                            value={item.key}
+                                                        />
+                                                        <input
+                                                            type="hidden"
+                                                            name="domain"
+                                                            value={
+                                                                tool.host ?? ''
+                                                            }
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            className={buttonClass(
+                                                                'ghost',
+                                                                'xs',
+                                                            )}
+                                                            title={`Disconnect ${item.title}`}
+                                                        >
+                                                            <Unlink className="size-3" />
+                                                            <span>
+                                                                Disconnect
+                                                            </span>
+                                                        </button>
+                                                    </Form>
+                                                ) : (
+                                                    <Form
+                                                        action={`/servers/${server.name}/apps/${tool.tool}/wire`}
+                                                        method="post"
+                                                    >
+                                                        <input
+                                                            type="hidden"
+                                                            name="capability"
+                                                            value={item.key}
+                                                        />
+                                                        <input
+                                                            type="hidden"
+                                                            name="domain"
+                                                            value={
+                                                                tool.host ?? ''
+                                                            }
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            className={buttonClass(
+                                                                'secondary',
+                                                                'xs',
+                                                            )}
+                                                            title={`Connect ${item.title}`}
+                                                        >
+                                                            <Plug className="size-3" />
+                                                            <span>Connect</span>
+                                                        </button>
+                                                    </Form>
+                                                )}
+                                            </div>
+                                        }
                                     >
                                         <TwoLine
-                                            title={title}
-                                            detail={detail}
+                                            title={item.title}
+                                            detail={item.detail}
                                         />
                                     </ListRow>
                                 ))}

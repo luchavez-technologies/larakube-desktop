@@ -18,6 +18,7 @@ use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServerTlsJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Activity;
+use App\Models\ClusterTool;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
@@ -137,6 +138,7 @@ class RecordRunOutput
             SyncClusterToolsJob::dispatch($server->id);
 
             if ($status === RunStatus::Succeeded) {
+                $this->updateClusterToolWiring($run, $server);
                 $this->recordActivity($run, $server);
             }
         }
@@ -314,6 +316,50 @@ class RecordRunOutput
             'title' => $run->label,
             'occurred_at' => now(),
         ]);
+    }
+
+    private function updateClusterToolWiring(Run $run, Server $server): void
+    {
+        $toolSlug = $run->meta['tool'] ?? $run->tool;
+        if ($toolSlug === null) {
+            return;
+        }
+
+        $wiringKind = match ($run->kind) {
+            RunKind::SsoWire => ['sso', 'wired'],
+            RunKind::SsoUnwire => ['sso', 'unwired'],
+            RunKind::MailWire => ['mail', 'wired'],
+            RunKind::MailUnwire => ['mail', 'unwired'],
+            RunKind::OpenBaoWire => ['rotation', 'wired'],
+            RunKind::OpenBaoUnwire => ['rotation', 'unwired'],
+            RunKind::VpnWire => ['vpn', 'wired'],
+            RunKind::VpnUnwire => ['vpn', 'unwired'],
+            RunKind::MeetWire => ['meet', 'wired'],
+            RunKind::MeetUnwire => ['meet', 'unwired'],
+            default => null,
+        };
+
+        if ($wiringKind === null) {
+            return;
+        }
+
+        [$capability, $status] = $wiringKind;
+
+        $query = ClusterTool::where('server_id', $server->id)->where('tool', $toolSlug);
+        $domain = $run->meta['domain'] ?? $run->meta['host'] ?? null;
+        if ($domain !== null && $domain !== '') {
+            $matched = (clone $query)->where('host', $domain)->first();
+            if ($matched !== null) {
+                $query = (clone $query)->where('host', $domain);
+            }
+        }
+
+        $tool = $query->first();
+        if ($tool !== null) {
+            $data = $tool->data ?? [];
+            $data[$capability] = $status;
+            $tool->update(['data' => $data]);
+        }
     }
 
     /**

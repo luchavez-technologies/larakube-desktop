@@ -348,6 +348,7 @@ export type ClusterTool = {
     vpn: Wiring;
     sync: Wiring;
     rotation: Wiring;
+    meet?: Wiring;
     requiresAdminEmail?: boolean;
     /** Whether more than one instance of the tool can run on a server. */
     multiInstance?: boolean;
