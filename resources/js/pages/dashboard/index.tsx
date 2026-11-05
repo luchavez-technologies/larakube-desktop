@@ -685,7 +685,7 @@ export default function DashboardIndex({
                                         : 'grid-cols-1 sm:grid-cols-2',
                                 )}
                             >
-                                {servers.map((server) => (
+                                {servers.slice(0, 4).map((server) => (
                                     <DashboardServerMiniCard
                                         key={server.name}
                                         server={server}

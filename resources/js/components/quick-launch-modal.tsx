@@ -170,6 +170,52 @@ export default function QuickLaunchModal({
     const [clusterLocalTld, setClusterLocalTld] =
         useState<string>(pageLocalTld);
     const activeLocalTld = clusterLocalTld || pageLocalTld || 'kube';
+    const [serverDnsOverrides, setServerDnsOverrides] = useState<
+        Record<string, boolean>
+    >({});
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        const serversNeedingCheck = readyServers.filter(
+            (s) =>
+                !s.hasExternalDns && serverDnsOverrides[s.name] === undefined,
+        );
+
+        if (serversNeedingCheck.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+
+        serversNeedingCheck.forEach(async (server) => {
+            try {
+                const res = await sendJson<{ domains: ServerDomain[] }>(
+                    `/servers/${encodeURIComponent(server.name)}/domains`,
+                    'GET',
+                );
+                if (!cancelled && res.ok && Array.isArray(res.data?.domains)) {
+                    const hasExtDns = res.data.domains.some((d) =>
+                        Boolean(d.externalDns),
+                    );
+                    if (hasExtDns) {
+                        setServerDnsOverrides((prev) => ({
+                            ...prev,
+                            [server.name]: true,
+                        }));
+                    }
+                }
+            } catch {
+                // Ignore background reconciliation errors
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, readyServers, serverDnsOverrides]);
 
     const [currentStep, setCurrentStep] = useState<number>(1);
     const [highestReachedStep, setHighestReachedStep] = useState<number>(1);
@@ -344,6 +390,15 @@ export default function QuickLaunchModal({
             setClusterServices(
                 data.activeCommonsServices.map((s) => s.toLowerCase()),
             );
+        }
+        if (selectedServerName && Array.isArray(data.domains)) {
+            const hasExtDns = data.domains.some((d) => Boolean(d.externalDns));
+            if (hasExtDns) {
+                setServerDnsOverrides((prev) => ({
+                    ...prev,
+                    [selectedServerName]: true,
+                }));
+            }
         }
     };
 
@@ -945,7 +1000,10 @@ export default function QuickLaunchModal({
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                {s.hasExternalDns ? (
+                                                                {(serverDnsOverrides[
+                                                                    s.name
+                                                                ] ??
+                                                                s.hasExternalDns) ? (
                                                                     <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[10px] font-medium text-ok dark:bg-emerald-500/20 dark:text-emerald-300">
                                                                         <Sparkles className="size-2.5" />
                                                                         ExternalDNS

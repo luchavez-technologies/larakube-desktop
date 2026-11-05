@@ -1,9 +1,12 @@
 <?php
 
 use App\Enums\RunKind;
+use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncLocalWorkloadsJob;
+use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
+use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServersJob;
 use App\Jobs\Sync\SyncServerTlsJob;
@@ -269,6 +272,11 @@ test('successful create-server run updates server status to ready and dispatches
         ->and($server->context)->toBe('larakube-34.100.1.2');
 
     Queue::assertPushed(SyncServersJob::class);
+    Queue::assertPushed(SyncServerDomainsJob::class, fn (SyncServerDomainsJob $j) => $j->serverId === $server->id);
+    Queue::assertPushed(SyncServerExternalDnsJob::class, fn (SyncServerExternalDnsJob $j) => $j->serverId === $server->id);
+    Queue::assertPushed(SyncServerTlsJob::class, fn (SyncServerTlsJob $j) => $j->serverId === $server->id);
+    Queue::assertPushed(SyncClusterToolsJob::class, fn (SyncClusterToolsJob $j) => $j->serverId === $server->id);
+    Queue::assertPushed(SyncPlexJob::class, fn (SyncPlexJob $j) => $j->serverId === $server->id);
 });
 
 test('failed create-server run updates server status to failed and dispatches SyncServersJob', function () {

@@ -239,6 +239,12 @@ class RecordRunOutput
                         }
                     }
                     $createdServer->update($update);
+
+                    SyncServerDomainsJob::dispatch($createdServer->id);
+                    SyncServerExternalDnsJob::dispatch($createdServer->id);
+                    SyncServerTlsJob::dispatch($createdServer->id);
+                    SyncClusterToolsJob::dispatch($createdServer->id);
+                    SyncPlexJob::dispatch($createdServer->id);
                 } elseif ($status === RunStatus::Failed) {
                     $createdServer->update(['status' => 'failed']);
                 }

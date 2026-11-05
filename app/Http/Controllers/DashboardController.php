@@ -151,28 +151,40 @@ class DashboardController extends Controller
                     $currentContext = LocalClusterState::current()->context;
                     $dbServers = Server::with(['domains' => fn ($q) => $q->where('external_dns', true)])
                         ->active()
-                        ->take(4)
                         ->get();
 
-                    return $dbServers->map(fn (Server $s): array => [
-                        'name' => $s->name,
-                        'provider' => $s->provider,
-                        'kind' => $s->kind,
-                        'region' => $s->region,
-                        'ip' => $s->ip,
-                        'port' => $s->port,
-                        'context' => $s->context,
-                        'status' => $s->status,
-                        'role' => $s->role,
-                        'isCurrent' => $s->context !== null && $s->context === $currentContext,
-                        'backupConfigured' => $s->backup_configured,
-                        'hasExternalDns' => $s->domains->isNotEmpty(),
-                        'domains' => $s->domains->map(fn (ServerDomain $d): array => [
+                    return $dbServers->map(function (Server $s) use ($currentContext, $domains): array {
+                        $hasExternalDns = $s->domains->isNotEmpty();
+                        $serverDomains = $s->domains->map(fn (ServerDomain $d): array => [
                             'domain' => $d->domain,
                             'externalDns' => (bool) $d->external_dns,
                             'dnsProvider' => $d->dns_provider,
-                        ])->values()->all(),
-                    ])->all();
+                        ])->values()->all();
+
+                        if (! $hasExternalDns && $s->context !== null) {
+                            $ctxDomains = $domains->forContext($s->context) ?? [];
+                            $hasExternalDns = collect($ctxDomains)->contains('externalDns', true);
+                            if ($hasExternalDns && empty($serverDomains)) {
+                                $serverDomains = array_values(array_filter($ctxDomains, fn (array $d): bool => ! empty($d['externalDns'])));
+                            }
+                        }
+
+                        return [
+                            'name' => $s->name,
+                            'provider' => $s->provider,
+                            'kind' => $s->kind,
+                            'region' => $s->region,
+                            'ip' => $s->ip,
+                            'port' => $s->port,
+                            'context' => $s->context,
+                            'status' => $s->status,
+                            'role' => $s->role,
+                            'isCurrent' => $s->context !== null && $s->context === $currentContext,
+                            'backupConfigured' => $s->backup_configured,
+                            'hasExternalDns' => $hasExternalDns,
+                            'domains' => $serverDomains,
+                        ];
+                    })->all();
                 }
 
                 $allServers = $stacks->all() ?? [];
@@ -185,7 +197,7 @@ class DashboardController extends Controller
                     return $s;
                 }, $activeServers);
 
-                return array_slice($activeServers, 0, 4);
+                return $activeServers;
             }),
 
             'fleetMetrics' => Inertia::defer(function () use ($stacks, $fleetMetrics): array {
