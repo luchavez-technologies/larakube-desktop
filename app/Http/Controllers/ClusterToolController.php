@@ -368,6 +368,7 @@ class ClusterToolController extends Controller
             'rotation' => ['secrets:wire', 'production', "--context={$context}", "--tool={$tool}"],
             'vpn' => ['vpn:wire', 'production', "--context={$context}", "--tool={$tool}"],
             'meet' => ['meet:wire', 'production', "--context={$context}"],
+            default => throw new \InvalidArgumentException("Unsupported capability: {$capability}"),
         };
 
         if ($domain !== null && $domain !== '') {
@@ -442,6 +443,7 @@ class ClusterToolController extends Controller
             'rotation' => ['secrets:unwire', 'production', "--context={$context}", "--tool={$tool}", '--force'],
             'vpn' => ['vpn:unwire', 'production', "--context={$context}", "--tool={$tool}", '--force'],
             'meet' => ['meet:unwire', 'production', "--context={$context}", '--force'],
+            default => throw new \InvalidArgumentException("Unsupported capability: {$capability}"),
         };
 
         if ($domain !== null && $domain !== '') {

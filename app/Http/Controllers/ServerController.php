@@ -160,7 +160,7 @@ class ServerController extends Controller
         $project = $request->integer('project') > 0 ? Project::find($request->integer('project')) : null;
 
         return Inertia::render('servers/create', [
-            'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
+            'providers' => $readiness->databaseProviders(),
             'project' => $project ? ['id' => $project->id, 'name' => basename($project->path)] : null,
             'defaultProvider' => $settings->get()['defaultCloudProvider'],
             'detectedKeys' => $inspector->detectCommonKeys(),
@@ -476,7 +476,7 @@ class ServerController extends Controller
                 ? Inertia::defer(fn (): ?array => $context !== null ? $status->diagnose($context) : null, 'diagnosis')
                 : null,
             'providers' => $stack['kind'] === 'vps'
-                ? Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true), 'providers')
+                ? $readiness->databaseProviders()
                 : null,
             'k9sInstalled' => $readiness->status('k9s')['installed'],
         ]);

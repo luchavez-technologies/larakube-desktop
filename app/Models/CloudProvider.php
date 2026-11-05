@@ -105,6 +105,10 @@ class CloudProvider extends Model
      */
     public function toInertiaProvider(): array
     {
+        $sizes = $this->relationLoaded('sizes') ? $this->sizes : $this->sizes()->get();
+        $vpsSizes = $this->relationLoaded('vpsSizes') ? $this->vpsSizes : $sizes->whereIn('target_kind', ['vps', 'both']);
+        $managedSizes = $this->relationLoaded('managedSizes') ? $this->managedSizes : $sizes->whereIn('target_kind', ['managed', 'both']);
+
         return [
             'slug' => $this->slug,
             'label' => $this->label,
@@ -113,12 +117,12 @@ class CloudProvider extends Model
                 'label' => $r->label,
             ])->values()->all(),
             'defaultRegion' => $this->default_region,
-            'vpsSizes' => $this->vpsSizes->map(fn (CloudSize $s): array => [
+            'vpsSizes' => $vpsSizes->map(fn (CloudSize $s): array => [
                 'value' => $s->slug,
                 'label' => $s->label,
             ])->values()->all(),
             'defaultVpsSize' => $this->default_vps_size,
-            'managedSizes' => $this->managedSizes->map(fn (CloudSize $s): array => [
+            'managedSizes' => $managedSizes->map(fn (CloudSize $s): array => [
                 'value' => $s->slug,
                 'label' => $s->label,
             ])->values()->all(),
@@ -129,7 +133,7 @@ class CloudProvider extends Model
             'pricing' => [
                 'source' => $this->source,
                 'asOf' => $this->last_synced_at?->toIso8601String(),
-                'currency' => ($firstSize = $this->sizes->first()) instanceof CloudSize ? $firstSize->currency : 'USD',
+                'currency' => ($firstSize = $sizes->first()) instanceof CloudSize ? $firstSize->currency : 'USD',
                 'priceIsEstimated' => $this->pricing_url !== null,
                 'officialPricingUrl' => $this->pricing_url,
             ],

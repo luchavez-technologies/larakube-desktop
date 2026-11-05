@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunStatus;
+use App\Jobs\Sync\SyncCloudProvidersJob;
 use App\Models\Run;
 use App\Services\GcpSignIn;
 use App\Services\LaraKube\CloudAccount;
@@ -38,6 +39,7 @@ class CloudAuthController extends Controller
         }
 
         $readiness->forget();
+        SyncCloudProvidersJob::dispatch();
 
         if (($result['verified'] ?? null) === false) {
             return back()->withErrors(['aws' => 'AWS credentials saved, but AWS did not accept them. Check the keys.']);
@@ -91,6 +93,7 @@ class CloudAuthController extends Controller
 
         if ($saved) {
             $readiness->forget();
+            SyncCloudProvidersJob::dispatch();
         }
 
         if ($request->expectsJson()) {
@@ -117,6 +120,7 @@ class CloudAuthController extends Controller
 
         if ($saved) {
             $readiness->forget();
+            SyncCloudProvidersJob::dispatch();
         }
 
         if ($request->expectsJson()) {

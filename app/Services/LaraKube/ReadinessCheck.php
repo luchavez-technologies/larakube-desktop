@@ -144,6 +144,21 @@ class ReadinessCheck
     }
 
     /**
+     * Database-first provider catalog. Returns immediately from SQLite (< 2ms),
+     * only falling back to the CLI if the database has not yet been seeded.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function databaseProviders(): array
+    {
+        if (CloudProvider::query()->exists()) {
+            return array_values(CloudProvider::with(['regions', 'sizes'])->get()->map->toInertiaProvider()->all());
+        }
+
+        return $this->providers(statusOnly: true) ?? [];
+    }
+
+    /**
      * Providers, regions, sizes, and credential status straight from the CLI,
      * or null when the CLI is missing or predates `cloud:providers`.
      *

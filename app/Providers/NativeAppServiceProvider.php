@@ -11,6 +11,7 @@ use App\Jobs\Sync\SyncAllServerPlexJob;
 use App\Jobs\Sync\SyncAllServerTlsJob;
 use App\Jobs\Sync\SyncAppIconJob;
 use App\Jobs\Sync\SyncCliWithDesktopJob;
+use App\Jobs\Sync\SyncCloudProvidersJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
@@ -148,6 +149,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         try {
             SyncAppIconJob::dispatch();
             SyncServersJob::dispatch();
+            SyncCloudProvidersJob::dispatch();
             SyncLocalClusterJob::dispatch();
             SyncLocalWorkloadsJob::dispatch();
             SyncAllServerBackupsJob::dispatch();

@@ -17,7 +17,7 @@ test('the create server page is told the default cloud provider, to pre-select i
     app(GlobalSettings::class)->update(['defaultCloudProvider' => 'aws']);
 
     $readiness = mock(ReadinessCheck::class);
-    $readiness->shouldReceive('providers')->andReturn([]);
+    $readiness->shouldReceive('databaseProviders')->andReturn([]);
     app()->instance(ReadinessCheck::class, $readiness);
 
     $this->get(route('servers.create'))
@@ -25,9 +25,7 @@ test('the create server page is told the default cloud provider, to pre-select i
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('servers/create')
             ->where('defaultProvider', 'aws')
-            ->missing('providers')
-            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
-                ->has('providers')));
+            ->has('providers'));
 });
 
 test('provider-catalog endpoint returns catalog for a single provider', function () {
@@ -90,4 +88,35 @@ test('saving a server automatically associates foreign keys for provider, region
         ->and($server->cloudProvider->slug)->toBe('aws')
         ->and($server->cloudRegion->slug)->toBe('us-east-1')
         ->and($server->cloudSize->slug)->toBe('t3.medium');
+});
+
+test('the create server page loads providers directly from the database when present', function () {
+    $provider = CloudProvider::firstOrCreate(
+        ['slug' => 'do'],
+        [
+            'label' => 'DigitalOcean',
+            'default_region' => 'nyc3',
+            'default_vps_size' => 's-2vcpu-4gb',
+            'source' => 'builtin',
+            'credentials_ready' => true,
+        ]
+    );
+
+    CloudRegion::firstOrCreate(
+        ['cloud_provider_id' => $provider->id, 'slug' => 'nyc3'],
+        ['label' => 'New York 3', 'is_recommended' => true]
+    );
+
+    CloudSize::firstOrCreate(
+        ['cloud_provider_id' => $provider->id, 'slug' => 's-2vcpu-4gb', 'target_kind' => 'vps'],
+        ['label' => 's-2vcpu-4gb — 2 vCPU, 4 GB RAM (~$24/mo)', 'vcpu' => 2, 'memory_mb' => 4096, 'currency' => 'USD']
+    );
+
+    $this->get(route('servers.create'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('servers/create')
+            ->has('providers')
+            ->where('providers.0.slug', 'do')
+        );
 });

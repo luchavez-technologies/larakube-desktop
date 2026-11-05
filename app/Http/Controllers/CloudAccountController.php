@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\Sync\SyncCloudProvidersJob;
 use App\Services\LaraKube\CloudAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +24,9 @@ class CloudAccountController extends Controller
         ]);
 
         $success = ($result['success'] ?? false) === true;
+        if ($success) {
+            SyncCloudProvidersJob::dispatch();
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -53,6 +57,9 @@ class CloudAccountController extends Controller
         ]);
 
         $success = ($result['success'] ?? false) === true;
+        if ($success) {
+            SyncCloudProvidersJob::dispatch();
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -80,6 +87,9 @@ class CloudAccountController extends Controller
         ]);
 
         $success = ($result['success'] ?? false) === true;
+        if ($success) {
+            SyncCloudProvidersJob::dispatch();
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
