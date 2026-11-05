@@ -1,6 +1,14 @@
 import { Form } from '@inertiajs/react';
-import { useState } from 'react';
-import { ArrowUpCircle, RotateCw, Trash2, Unplug, Wrench } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+    ArrowUpCircle,
+    RotateCw,
+    Trash2,
+    Unplug,
+    Wrench,
+    XCircle,
+} from 'lucide-react';
 import Button from '@/components/button';
 import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
@@ -8,6 +16,46 @@ import { remove as removeContext } from '@/routes/context';
 import { destroy, repair, resize, restart } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
 import type { Provider, Server } from '@/types/larakube';
+
+function Shell({
+    onClose,
+    children,
+}: {
+    onClose: () => void;
+    children: React.ReactNode;
+}) {
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onClose]);
+
+    const content = (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 whitespace-normal"
+            onClick={onClose}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                className="w-full max-w-[460px] rounded-2xl bg-surface p-7 break-words whitespace-normal shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+            >
+                {children}
+            </div>
+        </div>
+    );
+
+    if (typeof document !== 'undefined') {
+        return createPortal(content, document.body);
+    }
+
+    return content;
+}
 
 export function DestroyServerDialog({
     server,
@@ -20,104 +68,69 @@ export function DestroyServerDialog({
     const provider = providerLabels[server.provider] ?? server.provider;
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
-            onClick={onClose}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                className="w-full max-w-[460px] rounded-2xl bg-surface p-7 shadow-2xl"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                    Destroy {server.name}?
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-soft">
-                    This deletes the {provider} server
-                    {server.ip && (
-                        <>
-                            {' '}
-                            <Redactable value={server.ip} kind="ip" />
-                        </>
-                    )}
-                    , its firewall rules, and every Cluster Tool and app running
-                    on it. It can't be undone.
-                </p>
-                <Form action={destroy(server.name)} className="mt-4">
-                    {({ errors, processing }) => (
-                        <>
-                            <label className="block">
-                                <span className="mb-1.5 block text-xs font-medium text-soft">
-                                    Type {server.name} to confirm
+        <Shell onClose={onClose}>
+            <h2 className="text-xl font-semibold tracking-[-0.02em] text-ink">
+                Destroy {server.name}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed break-words whitespace-normal text-soft">
+                This deletes the {provider} server
+                {server.ip && (
+                    <>
+                        {' '}
+                        <Redactable value={server.ip} kind="ip" />
+                    </>
+                )}
+                , its firewall rules, and every Cluster Tool and app running on
+                it. It can't be undone.
+            </p>
+            <Form action={destroy(server.name)} className="mt-4">
+                {({ errors, processing }) => (
+                    <>
+                        <label className="block">
+                            <span className="mb-1.5 block text-xs font-medium text-soft">
+                                Type {server.name} to confirm
+                            </span>
+                            <input
+                                name="confirm"
+                                value={typed}
+                                onChange={(event) =>
+                                    setTyped(event.target.value)
+                                }
+                                autoFocus
+                                autoComplete="off"
+                                spellCheck={false}
+                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                            />
+                            {errors.confirm && (
+                                <span className="mt-1 block text-xs text-accent">
+                                    {errors.confirm}
                                 </span>
-                                <input
-                                    name="confirm"
-                                    value={typed}
-                                    onChange={(event) =>
-                                        setTyped(event.target.value)
-                                    }
-                                    autoFocus
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                                />
-                                {errors.confirm && (
-                                    <span className="mt-1 block text-xs text-accent">
-                                        {errors.confirm}
-                                    </span>
-                                )}
-                            </label>
-                            <div className="mt-5 flex justify-end gap-2.5">
-                                <Button variant="secondary" onClick={onClose}>
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="dangerFill"
-                                    disabled={
-                                        typed !== server.name || processing
-                                    }
-                                >
-                                    <Trash2 className="size-4" />
-                                    <span>
-                                        {processing
-                                            ? 'Starting…'
-                                            : server.status === 'ready'
-                                              ? 'Destroy server'
-                                              : 'Destroy leftovers'}
-                                    </span>
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </Form>
-            </div>
-        </div>
-    );
-}
-
-function Shell({
-    onClose,
-    children,
-}: {
-    onClose: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6"
-            onClick={onClose}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                className="w-full max-w-[460px] rounded-2xl bg-surface p-7 shadow-2xl"
-                onClick={(event) => event.stopPropagation()}
-            >
-                {children}
-            </div>
-        </div>
+                            )}
+                        </label>
+                        <div className="mt-5 flex justify-end gap-2.5">
+                            <Button variant="secondary" onClick={onClose}>
+                                <XCircle className="size-4" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="dangerFill"
+                                disabled={typed !== server.name || processing}
+                            >
+                                <Trash2 className="size-4" />
+                                <span>
+                                    {processing
+                                        ? 'Starting…'
+                                        : server.status === 'ready'
+                                          ? 'Destroy server'
+                                          : 'Destroy leftovers'}
+                                </span>
+                            </Button>
+                        </div>
+                    </>
+                )}
+            </Form>
+        </Shell>
     );
 }
 
@@ -145,7 +158,8 @@ export function RestartServerDialog({
                 {({ processing }) => (
                     <>
                         <Button variant="secondary" onClick={onClose}>
-                            Cancel
+                            <XCircle className="size-4" />
+                            <span>Cancel</span>
                         </Button>
                         <Button type="submit" disabled={processing}>
                             <RotateCw className="size-4" />
@@ -186,7 +200,8 @@ export function RepairServerDialog({
                 {({ processing }) => (
                     <>
                         <Button variant="secondary" onClick={onClose}>
-                            Cancel
+                            <XCircle className="size-4" />
+                            <span>Cancel</span>
                         </Button>
                         <Button type="submit" disabled={processing}>
                             <Wrench className="size-4" />
@@ -248,7 +263,8 @@ export function ResizeServerDialog({
                 {({ processing }) => (
                     <>
                         <Button variant="secondary" onClick={onClose}>
-                            Cancel
+                            <XCircle className="size-4" />
+                            <span>Cancel</span>
                         </Button>
                         <Button
                             type="submit"
@@ -296,7 +312,8 @@ export function RemoveContextDialog({
                             value={server.context ?? server.name}
                         />
                         <Button variant="secondary" onClick={onClose}>
-                            Cancel
+                            <XCircle className="size-4" />
+                            <span>Cancel</span>
                         </Button>
                         <Button
                             type="submit"
