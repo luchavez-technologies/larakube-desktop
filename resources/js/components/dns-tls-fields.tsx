@@ -1,5 +1,20 @@
-import { type ChangeEvent, type ReactNode } from 'react';
-import { CheckCircle2, FlaskConical, Key, Server, Upload } from 'lucide-react';
+import {
+    type ChangeEvent,
+    type ReactNode,
+    useCallback,
+    useEffect,
+    useState,
+} from 'react';
+import {
+    AlertCircle,
+    CheckCircle2,
+    FlaskConical,
+    Key,
+    RotateCw,
+    Server,
+    ShieldCheck,
+    Upload,
+} from 'lucide-react';
 import { usePage } from '@inertiajs/react';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import GcpPolicyHelper from '@/components/gcp-policy-helper';
@@ -7,6 +22,7 @@ import SelectMenu, { type SelectMenuOption } from '@/components/select-menu';
 import ExperimentalBadge from '@/components/experimental-badge';
 import ProviderLogo from '@/components/provider-logo';
 import { buttonClass } from '@/components/button';
+import { sendJson } from '@/lib/http';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { cn } from '@/lib/utils';
 import type { Untested } from '@/types/larakube';
@@ -91,6 +107,7 @@ export interface DnsTlsFieldsProps {
     showGroupField?: boolean;
     copyAwsKeys?: () => void;
     copyGcpProjectId?: () => void;
+    onCloudflareVerified?: (valid: boolean | null) => void;
 }
 
 function Field({
@@ -132,6 +149,7 @@ export default function DnsTlsFields({
     showGroupField = false,
     copyAwsKeys,
     copyGcpProjectId,
+    onCloudflareVerified,
 }: DnsTlsFieldsProps) {
     const { untested } = usePage<{ untested?: Untested }>().props;
 
@@ -139,6 +157,79 @@ export default function DnsTlsFields({
         lockedProvider ||
         values.dns_provider ||
         (values.cloudflare_token ? 'cloudflare' : '');
+
+    const [verifying, setVerifying] = useState(false);
+    const [verificationStatus, setVerificationStatus] = useState<{
+        valid: boolean;
+        error?: string;
+        warning?: string;
+        zones?: string[];
+    } | null>(null);
+
+    const handleVerify = useCallback(
+        async (tokenToVerify?: string) => {
+            const token = (tokenToVerify ?? values.cloudflare_token).trim();
+            if (!token) {
+                setVerificationStatus(null);
+                onCloudflareVerified?.(null);
+                return;
+            }
+
+            setVerifying(true);
+            try {
+                const { ok, data } = await sendJson<{
+                    valid: boolean;
+                    error?: string;
+                    warning?: string;
+                    zones?: string[];
+                }>('/cloudflare/verify-token', 'POST', { token });
+
+                if (ok && data.valid) {
+                    setVerificationStatus({
+                        valid: true,
+                        warning: data.warning,
+                        zones: data.zones ?? [],
+                    });
+                    onCloudflareVerified?.(true);
+                } else {
+                    setVerificationStatus({
+                        valid: false,
+                        error:
+                            data.error ||
+                            data.message ||
+                            'Cloudflare API token verification failed.',
+                        zones: data.zones,
+                    });
+                    onCloudflareVerified?.(false);
+                }
+            } catch {
+                setVerificationStatus({
+                    valid: false,
+                    error: 'Could not connect to Cloudflare API. Please check your network connection.',
+                });
+                onCloudflareVerified?.(false);
+            } finally {
+                setVerifying(false);
+            }
+        },
+        [values.cloudflare_token, onCloudflareVerified],
+    );
+
+    // Auto-verify on paste/typing when token looks complete (Cloudflare tokens are 40 chars)
+    useEffect(() => {
+        const token = values.cloudflare_token.trim();
+        if (token.length < 35) {
+            setVerificationStatus(null);
+            onCloudflareVerified?.(null);
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            void handleVerify(token);
+        }, 600);
+
+        return () => clearTimeout(timer);
+    }, [values.cloudflare_token, handleVerify, onCloudflareVerified]);
 
     const handleGcpFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -278,25 +369,94 @@ export default function DnsTlsFields({
 
                     {activeProvider === 'cloudflare' && (
                         <div className="space-y-3">
-                            <p className="text-xs text-soft">
-                                Create a token with the{' '}
-                                <strong>Edit zone DNS</strong> template covering
-                                your domains, plus{' '}
-                                <strong>Zone → Zone Settings → Read</strong>{' '}
-                                (not included in that template) so LaraKube can
-                                confirm SSL/TLS mode before proxying a host
-                                through Cloudflare, at{' '}
-                                <ExternalLinkButton
-                                    url="https://dash.cloudflare.com/profile/api-tokens"
-                                    showIcon
-                                    className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
-                                >
-                                    Cloudflare API Tokens
-                                </ExternalLinkButton>
-                                .
-                            </p>
+                            <div className="space-y-2.5 rounded-xl border border-line bg-surface/80 p-3.5">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Key className="size-4 shrink-0 text-servers" />
+                                        <span className="text-xs font-semibold text-ink">
+                                            Required Cloudflare Token
+                                            Permissions
+                                        </span>
+                                    </div>
+                                    <ExternalLinkButton
+                                        url="https://dash.cloudflare.com/profile/api-tokens"
+                                        showIcon
+                                        className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-servers hover:underline"
+                                    >
+                                        Cloudflare API Tokens
+                                    </ExternalLinkButton>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                                    <div className="flex items-start gap-2 rounded-lg bg-paper/90 p-2.5 ring-1 ring-line/60">
+                                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-ok" />
+                                        <div>
+                                            <span className="font-semibold text-ink">
+                                                1. Zone → DNS → Edit
+                                            </span>
+                                            <p className="mt-0.5 text-[11px] leading-relaxed text-soft">
+                                                (From <em>Edit zone DNS</em>{' '}
+                                                template) — lets ExternalDNS
+                                                create and manage records.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2 rounded-lg bg-paper/90 p-2.5 ring-1 ring-line/60">
+                                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-ok" />
+                                        <div>
+                                            <span className="font-semibold text-ink">
+                                                2. Zone → Zone Settings → Read
+                                            </span>
+                                            <p className="mt-0.5 text-[11px] leading-relaxed text-soft">
+                                                <strong>
+                                                    Must add manually
+                                                </strong>{' '}
+                                                via <em>+ Add more</em> — lets
+                                                LaraKube verify SSL/TLS mode.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-lg bg-paper/60 px-3 py-1.5 text-[11px] text-soft ring-1 ring-line/40">
+                                    <span className="font-semibold text-ink">
+                                        Zone Resources:
+                                    </span>{' '}
+                                    Set to <strong>Include → All zones</strong>{' '}
+                                    (or your specific domain).
+                                </div>
+                            </div>
+
                             <Field
-                                label="Cloudflare API token"
+                                label={
+                                    <div className="flex w-full items-center justify-between">
+                                        <span>Cloudflare API token</span>
+                                        {values.cloudflare_token.trim() && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    void handleVerify()
+                                                }
+                                                disabled={verifying}
+                                                className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-servers hover:underline disabled:opacity-50"
+                                            >
+                                                {verifying ? (
+                                                    <>
+                                                        <RotateCw className="size-3 animate-spin" />
+                                                        <span>Verifying…</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ShieldCheck className="size-3" />
+                                                        <span>
+                                                            Verify token
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+                                }
                                 hint="Used for this run only. Stored securely on your cluster."
                                 error={errors.cloudflare_token}
                             >
@@ -304,17 +464,103 @@ export default function DnsTlsFields({
                                     type="password"
                                     name="cloudflare_token"
                                     value={values.cloudflare_token}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
                                         onChange(
                                             'cloudflare_token',
                                             e.target.value,
-                                        )
-                                    }
+                                        );
+                                        setVerificationStatus(null);
+                                    }}
                                     autoComplete="off"
                                     placeholder="Paste your Cloudflare API token"
-                                    className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                    className={cn(
+                                        'w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers',
+                                        verificationStatus?.valid === true &&
+                                            'ring-ok focus:ring-ok',
+                                        verificationStatus?.valid === false &&
+                                            'ring-accent focus:ring-accent',
+                                    )}
                                 />
                             </Field>
+
+                            {verifying && (
+                                <div className="flex items-center gap-2 rounded-lg bg-paper p-2.5 text-xs text-soft ring-1 ring-line">
+                                    <RotateCw className="size-3.5 shrink-0 animate-spin text-servers" />
+                                    <span>
+                                        Verifying permissions with Cloudflare
+                                        API…
+                                    </span>
+                                </div>
+                            )}
+
+                            {verificationStatus?.valid === true && (
+                                <div className="space-y-1 rounded-lg border border-ok/30 bg-ok-tint/20 p-3 text-xs text-ok">
+                                    <div className="flex items-center gap-2 font-semibold">
+                                        <CheckCircle2 className="size-4 shrink-0 text-ok" />
+                                        <span>
+                                            Cloudflare API token verified &amp;
+                                            active!
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-soft">
+                                        Confirmed{' '}
+                                        <strong>Zone → DNS → Edit</strong> and{' '}
+                                        <strong>
+                                            Zone → Zone Settings → Read
+                                        </strong>{' '}
+                                        permissions.
+                                    </p>
+                                    {verificationStatus.zones &&
+                                        verificationStatus.zones.length > 0 && (
+                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 border-t border-ok/20 pt-1.5">
+                                                <span className="text-[10px] font-medium text-soft">
+                                                    Accessible zones:
+                                                </span>
+                                                {verificationStatus.zones.map(
+                                                    (zone) => (
+                                                        <span
+                                                            key={zone}
+                                                            className="rounded bg-ok-tint px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ok ring-1 ring-ok/30"
+                                                        >
+                                                            {zone}
+                                                        </span>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
+                                    {verificationStatus.warning && (
+                                        <p className="mt-1 text-[11px] font-medium text-amber-500">
+                                            ⚠️ {verificationStatus.warning}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {verificationStatus?.valid === false && (
+                                <div className="space-y-1.5 rounded-lg border border-accent/40 bg-accent-tint/30 p-3 text-xs">
+                                    <div className="flex items-start gap-2 font-semibold text-accent">
+                                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                                        <span>{verificationStatus.error}</span>
+                                    </div>
+                                    <p className="text-[11px] text-soft">
+                                        ExternalDNS and automatic TLS require
+                                        both <strong>Zone → DNS → Edit</strong>{' '}
+                                        and{' '}
+                                        <strong>
+                                            Zone → Zone Settings → Read
+                                        </strong>
+                                        . Update your token permissions in{' '}
+                                        <ExternalLinkButton
+                                            url="https://dash.cloudflare.com/profile/api-tokens"
+                                            showIcon
+                                            className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
+                                        >
+                                            Cloudflare API Tokens
+                                        </ExternalLinkButton>
+                                        .
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
 

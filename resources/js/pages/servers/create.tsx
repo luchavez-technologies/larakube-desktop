@@ -200,6 +200,9 @@ function ServerForm({
     const [highestReachedStep, setHighestReachedStep] = useState(1);
     const [overrideAwsKeys, setOverrideAwsKeys] = useState(false);
     const [showAccountModal, setShowAccountModal] = useState(false);
+    const [cloudflareVerified, setCloudflareVerified] = useState<
+        boolean | null
+    >(null);
 
     const [inspectingKey, setInspectingKey] = useState(false);
     const [keyInfo, setKeyInfo] = useState<{
@@ -330,6 +333,9 @@ function ServerForm({
     const hasValidDnsCredentials = (() => {
         if (!form.data.dns_provider) return true;
         if (form.data.dns_provider === 'cloudflare') {
+            if (cloudflareVerified === false) {
+                return false;
+            }
             return form.data.cloudflare_token.trim() !== '';
         }
         if (form.data.dns_provider === 'route53') {
@@ -1520,7 +1526,11 @@ function ServerForm({
                 {/* Step 3: Automate DNS & SSL (Regular Server Only) */}
                 {!devBox && currentStep === 3 && (
                     <div>
-                        <DnsAutomationStep form={form} provider={provider} />
+                        <DnsAutomationStep
+                            form={form}
+                            provider={provider}
+                            onCloudflareVerified={setCloudflareVerified}
+                        />
 
                         <div className="mt-6 flex items-center justify-between gap-4">
                             <p className="text-[13px] text-soft">
@@ -1653,9 +1663,11 @@ function ago(iso: string | null): string {
 function DnsAutomationStep({
     form,
     provider,
+    onCloudflareVerified,
 }: {
     form: ReturnType<typeof useForm<any>>;
     provider: Provider;
+    onCloudflareVerified?: (valid: boolean | null) => void;
 }) {
     return (
         <div className="space-y-4 rounded-2xl bg-surface p-5.5 ring-1 ring-line ring-inset">
@@ -1694,6 +1706,7 @@ function DnsAutomationStep({
                 serverProvider={provider.slug}
                 serverRegion={form.data.region}
                 allowEmptyProvider={true}
+                onCloudflareVerified={onCloudflareVerified}
                 copyAwsKeys={() => {
                     form.setData(
                         'dns_aws_access_key_id',

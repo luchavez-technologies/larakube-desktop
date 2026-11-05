@@ -1247,6 +1247,9 @@ function ConfigureDnsTlsDialog({
         hasDnsGroups && initialMode === 'ssl',
     );
     const [selectedGroup, setSelectedGroup] = useState(firstGroup?.group ?? '');
+    const [cloudflareVerified, setCloudflareVerified] = useState<
+        boolean | null
+    >(null);
 
     const [values, setValues] = useState<DnsTlsValues>({
         dns_provider: defaultProvider,
@@ -1289,6 +1292,7 @@ function ConfigureDnsTlsDialog({
 
         if (effectiveProvider === 'cloudflare') {
             if (isSslOnly && hasDnsGroups) return true;
+            if (cloudflareVerified === false) return false;
             return values.cloudflare_token.trim() !== '';
         }
         if (effectiveProvider === 'route53') {
@@ -1540,6 +1544,9 @@ function ConfigureDnsTlsDialog({
                                             }
                                             showToggles={!hasDnsGroups}
                                             showGroupField={true}
+                                            onCloudflareVerified={
+                                                setCloudflareVerified
+                                            }
                                         />
                                         {hasDnsGroups && mode === 'domain' && (
                                             <div className="rounded-lg bg-surface/40 p-2.5 ring-1 ring-line/50">
