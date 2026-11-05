@@ -34,6 +34,7 @@ import ToolLogo from '@/components/tool-logo';
 import ProviderLogo from '@/components/provider-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import StatusPill from '@/components/status-pill';
+import QrCodePopover from '@/components/qr-code-popover';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { sendJson } from '@/lib/http';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
@@ -1870,17 +1871,24 @@ function LaunchedRunPanel({
                                             {adminUrl}
                                         </span>
                                     </div>
-                                    <ExternalLinkButton
-                                        url={adminUrl}
-                                        title="Open in default browser"
-                                        className={buttonClass(
-                                            'secondary',
-                                            'sm',
-                                        )}
-                                    >
-                                        <ExternalLink className="size-3.5" />
-                                        <span>Open</span>
-                                    </ExternalLinkButton>
+                                    <div className="flex shrink-0 items-center gap-1.5">
+                                        <ExternalLinkButton
+                                            url={adminUrl}
+                                            title="Open in default browser"
+                                            className={buttonClass(
+                                                'secondary',
+                                                'sm',
+                                            )}
+                                        >
+                                            <ExternalLink className="size-3.5" />
+                                            <span>Open</span>
+                                        </ExternalLinkButton>
+                                        <QrCodePopover
+                                            url={adminUrl}
+                                            title={appName}
+                                            description={`Scan to open ${appName} on your mobile device`}
+                                        />
+                                    </div>
                                 </div>
                             );
                         })()}
