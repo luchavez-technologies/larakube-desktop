@@ -1,4 +1,5 @@
-import { ExternalLink, PlayCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ExternalLink, PlayCircle, X } from 'lucide-react';
 import { SiYoutube } from '@icons-pack/react-simple-icons';
 import Card from '@/components/card';
 import { buttonClass } from '@/components/button';
@@ -12,14 +13,20 @@ export type HowToVideo = {
 };
 
 /**
- * The "How To's" playlist is still being filmed — add entries here once
- * videos are published. Each one only needs its title and YouTube ID; the
- * thumbnail and link are derived automatically.
+ * How-To videos covering common LaraKube workflows.
  */
-export const HOW_TO_VIDEOS: HowToVideo[] = [];
+export const HOW_TO_VIDEOS: HowToVideo[] = [
+    {
+        title: 'LaraKube Desktop: Deploy a Kubernetes Server in 3 Minutes',
+        youtubeId: 'VVXIGK9IUzE',
+        description:
+            'Deploy a single-node k3s Kubernetes cluster on GCP with automated DNS and wildcard SSL certificates in 3 minutes.',
+    },
+];
 
 /** Set once the playlist exists, so "Watch full playlist" has somewhere to go. */
-export const HOW_TO_PLAYLIST_URL: string | null = null;
+export const HOW_TO_PLAYLIST_URL: string | null =
+    'https://www.youtube.com/@luchtechdotdev/videos';
 
 function youtubeWatchUrl(youtubeId: string): string {
     return `https://www.youtube.com/watch?v=${youtubeId}`;
@@ -29,32 +36,41 @@ function youtubeThumbnailUrl(youtubeId: string): string {
     return `https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`;
 }
 
-function HowToVideoThumbnail({ video }: { video: HowToVideo }) {
+function HowToVideoThumbnail({
+    video,
+    onPlay,
+}: {
+    video: HowToVideo;
+    onPlay: () => void;
+}) {
     return (
-        <ExternalLinkButton
-            url={youtubeWatchUrl(video.youtubeId)}
+        <button
+            type="button"
+            onClick={onPlay}
             className="group block w-full cursor-pointer text-left"
         >
             <span className="relative block aspect-video w-full overflow-hidden rounded-xl bg-paper ring-1 ring-line">
                 <img
                     src={youtubeThumbnailUrl(video.youtubeId)}
-                    alt=""
-                    className="size-full object-cover transition group-hover:opacity-90"
+                    alt={video.title}
+                    className="size-full object-cover transition duration-300 group-hover:scale-105 group-hover:opacity-90"
                     loading="lazy"
                 />
-                <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
-                    <PlayCircle className="size-9 text-white opacity-90 drop-shadow-sm transition group-hover:scale-110 group-hover:opacity-100" />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition duration-300 group-hover:bg-black/40">
+                    <span className="flex size-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-xs transition duration-200 group-hover:scale-110 group-hover:bg-[#FF0000]">
+                        <PlayCircle className="size-7" />
+                    </span>
                 </span>
             </span>
-            <span className="mt-1.5 block truncate text-xs font-medium text-ink">
+            <span className="mt-2 line-clamp-1 block text-xs font-medium text-ink transition group-hover:text-brand">
                 {video.title}
             </span>
             {video.description ? (
-                <span className="block truncate text-[10px] text-soft">
+                <span className="mt-0.5 line-clamp-2 block text-[11px] text-soft">
                     {video.description}
                 </span>
             ) : null}
-        </ExternalLinkButton>
+        </button>
     );
 }
 
@@ -66,41 +82,119 @@ function HowToVideosEmptyState() {
                 Video walkthroughs are coming soon
             </p>
             <p className="max-w-xs text-[11px] text-soft">
-                We're filming a "How To's" playlist covering common LaraKube
-                workflows. This space will fill in as videos go live.
+                We're filming a &quot;How To&apos;s&quot; playlist covering
+                common LaraKube workflows. This space will fill in as videos go
+                live.
             </p>
         </div>
     );
 }
 
 export default function HelpVideosCard() {
-    return (
-        <Card
-            label="How-To Videos"
-            action={
-                HOW_TO_PLAYLIST_URL ? (
-                    <ExternalLinkButton
-                        url={HOW_TO_PLAYLIST_URL}
-                        className={buttonClass('secondary', 'sm')}
-                    >
-                        <ExternalLink className="size-3.5" />
-                        <span>Watch full playlist</span>
-                    </ExternalLinkButton>
-                ) : undefined
+    const [playingVideo, setPlayingVideo] = useState<HowToVideo | null>(null);
+
+    useEffect(() => {
+        if (!playingVideo) {
+            return;
+        }
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setPlayingVideo(null);
             }
-        >
-            {HOW_TO_VIDEOS.length === 0 ? (
-                <HowToVideosEmptyState />
-            ) : (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                    {HOW_TO_VIDEOS.map((video) => (
-                        <HowToVideoThumbnail
-                            key={video.youtubeId}
-                            video={video}
-                        />
-                    ))}
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [playingVideo]);
+
+    return (
+        <>
+            <Card
+                label="How-To Videos"
+                action={
+                    HOW_TO_PLAYLIST_URL ? (
+                        <ExternalLinkButton
+                            url={HOW_TO_PLAYLIST_URL}
+                            className={buttonClass('secondary', 'sm')}
+                        >
+                            <ExternalLink className="size-3.5" />
+                            <span>More videos</span>
+                        </ExternalLinkButton>
+                    ) : undefined
+                }
+            >
+                {HOW_TO_VIDEOS.length === 0 ? (
+                    <HowToVideosEmptyState />
+                ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {HOW_TO_VIDEOS.map((video) => (
+                            <HowToVideoThumbnail
+                                key={video.youtubeId}
+                                video={video}
+                                onPlay={() => setPlayingVideo(video)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </Card>
+
+            {playingVideo && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+                    onClick={() => setPlayingVideo(null)}
+                >
+                    <div
+                        className="relative w-full max-w-3xl overflow-hidden rounded-2xl bg-paper shadow-2xl ring-1 ring-line"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                            <div className="min-w-0 flex-1 pr-4">
+                                <h3 className="truncate text-sm font-semibold text-ink">
+                                    {playingVideo.title}
+                                </h3>
+                                {playingVideo.description && (
+                                    <p className="truncate text-xs text-soft">
+                                        {playingVideo.description}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <ExternalLinkButton
+                                    url={youtubeWatchUrl(
+                                        playingVideo.youtubeId,
+                                    )}
+                                    className={buttonClass('secondary', 'xs')}
+                                >
+                                    <ExternalLink className="size-3.5" />
+                                    <span>Watch on YouTube</span>
+                                </ExternalLinkButton>
+                                <button
+                                    type="button"
+                                    onClick={() => setPlayingVideo(null)}
+                                    className="hover:bg-hover cursor-pointer rounded-lg p-1 text-soft transition hover:text-ink"
+                                    aria-label="Close"
+                                >
+                                    <X className="size-5" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="aspect-video w-full bg-black">
+                            <iframe
+                                src={`https://www.youtube.com/embed/${playingVideo.youtubeId}?autoplay=1`}
+                                title={playingVideo.title}
+                                className="size-full border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerPolicy="strict-origin-when-cross-origin"
+                                allowFullScreen
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
-        </Card>
+        </>
     );
 }

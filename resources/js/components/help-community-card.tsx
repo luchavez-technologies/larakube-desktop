@@ -4,6 +4,7 @@ import {
     SiFacebook,
     SiGithub,
     SiInstagram,
+    SiYoutube,
 } from '@icons-pack/react-simple-icons';
 import type { ReactNode } from 'react';
 import Card from '@/components/card';
@@ -68,6 +69,12 @@ const SOURCE: HelpLink[] = [
 ];
 
 const FOLLOW: HelpLink[] = [
+    {
+        label: 'YouTube',
+        detail: '@luchtechdotdev',
+        href: 'https://www.youtube.com/@luchtechdotdev',
+        icon: <SiYoutube className="size-4" color="#FF0000" />,
+    },
     {
         label: 'Facebook',
         detail: 'facebook.luchtech.dev',
