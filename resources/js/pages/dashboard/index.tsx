@@ -227,15 +227,6 @@ export default function DashboardIndex({
                             <Plus className="size-4" />
                             <span>Create Server</span>
                         </Link>
-                        {hideProjects && (
-                            <Link
-                                href={toolsRoute().url}
-                                className={buttonClass('secondary')}
-                            >
-                                <LayoutGrid className="size-4" />
-                                <span>Apps Catalog</span>
-                            </Link>
-                        )}
                     </div>
                 }
             />
@@ -315,7 +306,7 @@ export default function DashboardIndex({
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
                                         <p className="text-xs font-medium text-soft group-hover:text-ink">
-                                            Cluster Apps & Tools
+                                            Cluster Apps
                                         </p>
                                         <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
                                             {stats.installedToolsCount ?? 0}
@@ -326,7 +317,7 @@ export default function DashboardIndex({
                                     </div>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between text-[11px] text-soft">
-                                    <span>Active companion services</span>
+                                    <span>Active cluster apps</span>
                                     <span className="inline-flex items-center gap-0.5 font-medium text-brand group-hover:underline">
                                         Browse apps
                                         <ChevronRight className="size-3" />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { Rocket, Sparkles, X, Zap, ArrowRight } from 'lucide-react';
+import { ArrowRight, LayoutGrid, Rocket, Sparkles, X, Zap } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import FrameworkLogo from '@/components/framework-logo';
@@ -176,7 +176,7 @@ export default function WelcomeOnboarding({
                 <div className="flex items-center gap-2 text-xs text-soft">
                     <Sparkles className="size-3.5 text-brand" />
                     <span>
-                        New to LaraKube? 1-Click deploy companion apps or follow
+                        New to LaraKube? 1-Click deploy cluster apps or follow
                         the quickstart journey.
                     </span>
                 </div>
@@ -261,7 +261,7 @@ export default function WelcomeOnboarding({
                                 <span>Quickstart Journey</span>
                             </span>
                             <span className="text-xs text-soft">
-                                1-Click Companions & Infrastructure
+                                1-Click Cluster Apps & Infrastructure
                             </span>
                         </div>
                         <h2 className="mt-1 text-lg font-bold tracking-tight text-ink sm:text-xl">
@@ -269,8 +269,8 @@ export default function WelcomeOnboarding({
                         </h2>
                         <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-soft">
                             {hideProjects
-                                ? 'Launch production-grade companion applications with instant wildcard DNS, shared Commons, and cluster-wide tools.'
-                                : 'Launch production-grade companion applications with instant wildcard DNS and shared Commons, or provision clusters and deploy Laravel apps.'}
+                                ? 'Launch production-grade cluster applications with instant wildcard DNS, shared Commons, and high-availability storage.'
+                                : 'Launch production-grade cluster applications with instant wildcard DNS and shared Commons, or provision clusters and deploy Laravel apps.'}
                         </p>
                     </div>
 
@@ -289,7 +289,8 @@ export default function WelcomeOnboarding({
                             href={toolsRoute().url}
                             className={buttonClass('secondary', 'sm', 'gap-1')}
                         >
-                            <span>Tools Catalog</span>
+                            <LayoutGrid className="size-3.5" />
+                            <span>Apps Catalog</span>
                             <ArrowRight className="size-3" />
                         </Link>
                     </div>
@@ -299,14 +300,14 @@ export default function WelcomeOnboarding({
                 <div className="mt-5 flex items-center justify-between">
                     <p className="text-xs font-semibold text-ink">
                         {mode === 'tools'
-                            ? '1-Click Companion Apps'
+                            ? '1-Click Cluster Apps'
                             : 'Quick Launch Projects'}
                     </p>
                     {!hideProjects && (
                         <div className="inline-flex items-center rounded-lg bg-paper p-0.5 ring-1 ring-line">
                             {(
                                 [
-                                    { id: 'tools', label: 'Tools' },
+                                    { id: 'tools', label: 'Cluster Apps' },
                                     { id: 'projects', label: 'Projects' },
                                 ] as const
                             ).map((tab) => (
@@ -461,15 +462,9 @@ export default function WelcomeOnboarding({
                 {/* Helpful Footnote */}
                 <div className="mt-3.5 flex items-center justify-between text-[11px] text-soft">
                     <span>
-                        💡 Once deployed, manage and inspect all cluster tools,
-                        mailboxes, and routing in the Tools page.
+                        💡 Once deployed, manage and inspect all cluster apps,
+                        mailboxes, and routing in the Apps page.
                     </span>
-                    <Link
-                        href={toolsRoute().url}
-                        className="font-medium text-brand hover:underline"
-                    >
-                        Browse all companion tools →
-                    </Link>
                 </div>
             </div>
 
