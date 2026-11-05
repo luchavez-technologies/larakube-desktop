@@ -1038,38 +1038,48 @@ function DomainRow({
                 {groups.map((group) => (
                     <li
                         key={group.group}
-                        className="flex items-center gap-3 rounded-lg bg-paper px-3 py-2"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2"
                     >
-                        <span className="w-28 shrink-0 truncate font-mono text-xs font-medium">
-                            {group.group}
-                        </span>
-                        <span className="rounded bg-line/60 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-soft uppercase">
-                            {dnsProviderLabel(group.provider)}
-                        </span>
-                        <span className="min-w-0 flex-1 text-xs text-soft">
-                            {group.zones.join(', ')}
-                        </span>
-                        {!group.ready && (
-                            <StatusPill
-                                tone="warn"
-                                title="ExternalDNS pod is starting up in the cluster"
-                            >
-                                Starting up…
-                            </StatusPill>
-                        )}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={disabled || disconnecting === group.group}
-                            onClick={() => handleDisconnect(group)}
-                            title={`Disconnect ${group.group}`}
-                            className="text-soft hover:text-red-500"
-                        >
-                            <Trash2 className="size-3.5" />
-                            <span className="sr-only">
-                                Disconnect {group.group}
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-ink">
+                                {group.zones.join(', ')}
                             </span>
-                        </Button>
+                            <span className="rounded bg-line/60 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-soft uppercase">
+                                {dnsProviderLabel(group.provider)}
+                            </span>
+                            {group.group &&
+                                group.group !==
+                                    group.zones[0]?.replace(/\./g, '-') && (
+                                    <span className="rounded bg-badge px-1.5 py-0.5 font-mono text-[10px] text-faint">
+                                        group: {group.group}
+                                    </span>
+                                )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {!group.ready && (
+                                <StatusPill
+                                    tone="warn"
+                                    title="ExternalDNS pod is starting up in the cluster"
+                                >
+                                    Starting up…
+                                </StatusPill>
+                            )}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={
+                                    disabled || disconnecting === group.group
+                                }
+                                onClick={() => handleDisconnect(group)}
+                                title={`Disconnect ${group.group}`}
+                                className="text-soft hover:text-red-500"
+                            >
+                                <Trash2 className="size-3.5" />
+                                <span className="sr-only">
+                                    Disconnect {group.group}
+                                </span>
+                            </Button>
+                        </div>
                     </li>
                 ))}
             </ul>
