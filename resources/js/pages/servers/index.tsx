@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Deferred, Link, Form } from '@inertiajs/react';
+import { Deferred, Link, Form, usePage } from '@inertiajs/react';
 import {
     Plus,
     ChevronRight,
@@ -27,6 +27,7 @@ export default function ServersIndex({
 }: {
     servers?: Server[] | null;
 }) {
+    const { hideProjects } = usePage<{ hideProjects?: boolean }>().props;
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [showImport, setShowImport] = useState(false);
 
@@ -88,9 +89,9 @@ export default function ServersIndex({
                         Servers
                     </h1>
                     <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        Kubernetes clusters and VPS servers you manage with
-                        LaraKube. Host Cluster Apps and deploy your projects
-                        across managed Kubernetes or lightweight k3s nodes.
+                        {hideProjects
+                            ? 'Kubernetes clusters and VPS servers you manage with LaraKube. Host Cluster Apps across managed Kubernetes or lightweight k3s nodes.'
+                            : 'Kubernetes clusters and VPS servers you manage with LaraKube. Host Cluster Apps and deploy your projects across managed Kubernetes or lightweight k3s nodes.'}
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5">

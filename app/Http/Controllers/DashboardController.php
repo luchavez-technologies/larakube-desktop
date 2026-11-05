@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Models\ClusterTool;
 use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Run;
@@ -77,6 +78,7 @@ class DashboardController extends Controller
                     'serversCount' => $serversCount,
                     'readyServersCount' => $readyServersCount,
                     'missingToolsCount' => count($missingRequired),
+                    'installedToolsCount' => ClusterTool::where('installed', true)->count(),
                 ];
             }),
 

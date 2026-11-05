@@ -122,7 +122,9 @@ export default function ShowServer({
     providers?: Provider[] | null;
     k9sInstalled: boolean;
 }) {
-    const { url, errors } = usePage().props;
+    const { url, errors, hideProjects } = usePage<{
+        hideProjects?: boolean;
+    }>().props;
     const [openingTerminal, setOpeningTerminal] = useState<
         'kubectl' | 'ssh' | null
     >(null);
@@ -295,129 +297,140 @@ export default function ShowServer({
                         </Deferred>
                     </Card>
 
-                    <Card
-                        label={`Hosted Projects${projects && projects.length > 0 ? ` · ${projects.length}` : ''}`}
-                        action={
-                            ready ? (
-                                <Link
-                                    href={projectsIndex().url}
-                                    className={buttonClass('ghost', 'sm')}
-                                >
-                                    View all
-                                </Link>
-                            ) : null
-                        }
-                    >
-                        {!projects || projects.length === 0 ? (
-                            <div className="py-6 text-center">
-                                <FolderGit2 className="mx-auto mb-2 size-8 text-faint" />
-                                <p className="text-sm font-medium text-ink">
-                                    No projects hosted on this server yet
-                                </p>
-                                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
-                                    Deploy an app from your workspace or create
-                                    a new one and link it to {server.name}.
-                                </p>
-                                {ready && (
-                                    <div className="mt-4 flex items-center justify-center gap-2.5">
-                                        <Link
-                                            href={projectsIndex().url}
-                                            className={buttonClass(
-                                                'secondary',
-                                                'sm',
-                                            )}
-                                        >
-                                            <FolderGit2 className="size-3.5" />
-                                            <span>Browse Projects</span>
-                                        </Link>
-                                        <Link
-                                            href={projectsCreate().url}
-                                            className={buttonClass(
-                                                'primary',
-                                                'sm',
-                                            )}
-                                        >
-                                            <Plus className="size-3.5" />
-                                            <span>New Project</span>
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-line">
-                                {projects.map((project) => {
-                                    const matchingEnvs = Object.values(
-                                        project.environments ?? {},
-                                    ).filter(
-                                        (env) =>
-                                            (server.ip &&
-                                                env.serverIp === server.ip) ||
-                                            (server.context &&
-                                                env.serverContext ===
-                                                    server.context),
-                                    );
-
-                                    return (
-                                        <div
-                                            key={project.id}
-                                            className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
-                                        >
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <Link
-                                                        href={
-                                                            showProject(
-                                                                project.id,
-                                                            ).url
-                                                        }
-                                                        className="truncate text-sm font-semibold hover:underline"
-                                                    >
-                                                        {project.name}
-                                                    </Link>
-                                                    <span className="rounded bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize">
-                                                        {project.framework ??
-                                                            'laravel'}
-                                                    </span>
-                                                    {matchingEnvs.map((env) => (
-                                                        <span
-                                                            key={env.name}
-                                                            className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft"
-                                                        >
-                                                            {env.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                                <div className="mt-0.5 flex items-center gap-3 text-xs text-soft">
-                                                    {project.webHost ? (
-                                                        <span className="font-mono text-ink">
-                                                            {project.webHost}
-                                                        </span>
-                                                    ) : (
-                                                        <span>
-                                                            No web host
-                                                            configured
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
+                    {!hideProjects && (
+                        <Card
+                            label={`Hosted Projects${projects && projects.length > 0 ? ` · ${projects.length}` : ''}`}
+                            action={
+                                ready ? (
+                                    <Link
+                                        href={projectsIndex().url}
+                                        className={buttonClass('ghost', 'sm')}
+                                    >
+                                        View all
+                                    </Link>
+                                ) : null
+                            }
+                        >
+                            {!projects || projects.length === 0 ? (
+                                <div className="py-6 text-center">
+                                    <FolderGit2 className="mx-auto mb-2 size-8 text-faint" />
+                                    <p className="text-sm font-medium text-ink">
+                                        No projects hosted on this server yet
+                                    </p>
+                                    <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
+                                        Deploy an app from your workspace or
+                                        create a new one and link it to{' '}
+                                        {server.name}.
+                                    </p>
+                                    {ready && (
+                                        <div className="mt-4 flex items-center justify-center gap-2.5">
                                             <Link
-                                                href={
-                                                    showProject(project.id).url
-                                                }
+                                                href={projectsIndex().url}
                                                 className={buttonClass(
                                                     'secondary',
                                                     'sm',
                                                 )}
                                             >
-                                                <span>Manage</span>
-                                                <ArrowRight className="size-3.5" />
+                                                <FolderGit2 className="size-3.5" />
+                                                <span>Browse Projects</span>
+                                            </Link>
+                                            <Link
+                                                href={projectsCreate().url}
+                                                className={buttonClass(
+                                                    'primary',
+                                                    'sm',
+                                                )}
+                                            >
+                                                <Plus className="size-3.5" />
+                                                <span>New Project</span>
                                             </Link>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </Card>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-line">
+                                    {projects.map((project) => {
+                                        const matchingEnvs = Object.values(
+                                            project.environments ?? {},
+                                        ).filter(
+                                            (env) =>
+                                                (server.ip &&
+                                                    env.serverIp ===
+                                                        server.ip) ||
+                                                (server.context &&
+                                                    env.serverContext ===
+                                                        server.context),
+                                        );
+
+                                        return (
+                                            <div
+                                                key={project.id}
+                                                className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <Link
+                                                            href={
+                                                                showProject(
+                                                                    project.id,
+                                                                ).url
+                                                            }
+                                                            className="truncate text-sm font-semibold hover:underline"
+                                                        >
+                                                            {project.name}
+                                                        </Link>
+                                                        <span className="rounded bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize">
+                                                            {project.framework ??
+                                                                'laravel'}
+                                                        </span>
+                                                        {matchingEnvs.map(
+                                                            (env) => (
+                                                                <span
+                                                                    key={
+                                                                        env.name
+                                                                    }
+                                                                    className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft"
+                                                                >
+                                                                    {env.name}
+                                                                </span>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-soft">
+                                                        {project.webHost ? (
+                                                            <span className="font-mono text-ink">
+                                                                {
+                                                                    project.webHost
+                                                                }
+                                                            </span>
+                                                        ) : (
+                                                            <span>
+                                                                No web host
+                                                                configured
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <Link
+                                                    href={
+                                                        showProject(project.id)
+                                                            .url
+                                                    }
+                                                    className={buttonClass(
+                                                        'secondary',
+                                                        'sm',
+                                                    )}
+                                                >
+                                                    <span>Manage</span>
+                                                    <ArrowRight className="size-3.5" />
+                                                </Link>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </Card>
+                    )}
 
                     <Card
                         label={`Apps${installedTools && installedTools.length > 0 ? ` · ${installedTools.length}` : ''}`}

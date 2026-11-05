@@ -1,4 +1,4 @@
-import { Deferred, Link } from '@inertiajs/react';
+import { Deferred, Link, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowRight,
@@ -9,6 +9,7 @@ import {
     FolderTree,
     Globe,
     HardDrive,
+    LayoutGrid,
     Plus,
     RotateCw,
     ShieldAlert,
@@ -32,12 +33,13 @@ import Redactable from '@/components/redactable';
 import StatusPill from '@/components/status-pill';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import {
     isLocalServer,
     serverEndpointLabel,
     serverStatus,
 } from '@/lib/servers';
-import { readiness } from '@/routes';
+import { readiness, tools as toolsRoute } from '@/routes';
 import {
     create as createProject,
     index as indexProjects,
@@ -78,6 +80,7 @@ type DashboardProps = {
         serversCount: number;
         readyServersCount: number;
         missingToolsCount: number;
+        installedToolsCount?: number;
     };
     projects?: Project[];
     servers?: Server[];
@@ -162,6 +165,8 @@ export default function DashboardIndex({
     projectDevBoxes,
     defaultProjectParent,
 }: DashboardProps) {
+    const { hideProjects } = usePage<{ hideProjects?: boolean }>().props;
+
     // Derived from `stats` so we never trigger a second subprocess tool scan.
     const toolsReady =
         stats !== undefined ? stats.missingToolsCount === 0 : undefined;
@@ -203,21 +208,34 @@ export default function DashboardIndex({
                 meta={<span>LaraKube Fleet Overview</span>}
                 actions={
                     <div className="flex items-center gap-2.5">
-                        <Link
-                            href={createProject().url}
-                            className={buttonClass('primary')}
-                        >
-                            <Plus className="size-4" />
-                            <span>New Project</span>
-                        </Link>
+                        {!hideProjects && (
+                            <Link
+                                href={createProject().url}
+                                className={buttonClass('primary')}
+                            >
+                                <Plus className="size-4" />
+                                <span>New Project</span>
+                            </Link>
+                        )}
                         <Link
                             href={createServer().url}
                             prefetch
-                            className={buttonClass('secondary')}
+                            className={buttonClass(
+                                hideProjects ? 'primary' : 'secondary',
+                            )}
                         >
                             <Plus className="size-4" />
                             <span>Create Server</span>
                         </Link>
+                        {hideProjects && (
+                            <Link
+                                href={toolsRoute().url}
+                                className={buttonClass('secondary')}
+                            >
+                                <LayoutGrid className="size-4" />
+                                <span>Apps Catalog</span>
+                            </Link>
+                        )}
                     </div>
                 }
             />
@@ -288,54 +306,83 @@ export default function DashboardIndex({
             >
                 {stats && localCluster && (
                     <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {/* 1. Projects & Workspaces */}
-                        <Link
-                            href={indexProjects().url}
-                            className="group flex flex-col justify-between rounded-2xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <p className="text-xs font-medium text-soft group-hover:text-ink">
-                                        Projects & Workspaces
-                                    </p>
-                                    <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-                                        {stats.projectsCount}
-                                    </p>
-                                </div>
-                                {projects && projects.length > 0 ? (
-                                    <div className="flex -space-x-1.5 overflow-hidden p-0.5">
-                                        {Array.from(
-                                            new Set(
-                                                projects
-                                                    .map((p) => p.framework)
-                                                    .filter((f): f is string =>
-                                                        Boolean(f),
-                                                    ),
-                                            ),
-                                        )
-                                            .slice(0, 3)
-                                            .map((fw) => (
-                                                <div
-                                                    key={fw}
-                                                    className="flex size-7 items-center justify-center rounded-lg bg-paper ring-2 ring-surface"
-                                                >
-                                                    <FrameworkLogo
-                                                        slug={fw}
-                                                        size="xs"
-                                                    />
-                                                </div>
-                                            ))}
+                        {/* 1. Projects or Cluster Tools */}
+                        {hideProjects ? (
+                            <Link
+                                href={toolsRoute().url}
+                                className="group flex flex-col justify-between rounded-2xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="text-xs font-medium text-soft group-hover:text-ink">
+                                            Cluster Apps & Tools
+                                        </p>
+                                        <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                                            {stats.installedToolsCount ?? 0}
+                                        </p>
                                     </div>
-                                ) : null}
-                            </div>
-                            <div className="mt-3 flex items-center justify-between text-[11px] text-soft">
-                                <span>Active local & cloud apps</span>
-                                <span className="inline-flex items-center gap-0.5 font-medium text-brand group-hover:underline">
-                                    View all
-                                    <ChevronRight className="size-3" />
-                                </span>
-                            </div>
-                        </Link>
+                                    <div className="flex size-7 items-center justify-center rounded-lg bg-tools/10 text-tools">
+                                        <LayoutGrid className="size-4" />
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between text-[11px] text-soft">
+                                    <span>Active companion services</span>
+                                    <span className="inline-flex items-center gap-0.5 font-medium text-brand group-hover:underline">
+                                        Browse apps
+                                        <ChevronRight className="size-3" />
+                                    </span>
+                                </div>
+                            </Link>
+                        ) : (
+                            <Link
+                                href={indexProjects().url}
+                                className="group flex flex-col justify-between rounded-2xl bg-surface p-4 ring-1 ring-line transition-all ring-inset hover:ring-faint"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="text-xs font-medium text-soft group-hover:text-ink">
+                                            Projects & Workspaces
+                                        </p>
+                                        <p className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+                                            {stats.projectsCount}
+                                        </p>
+                                    </div>
+                                    {projects && projects.length > 0 ? (
+                                        <div className="flex -space-x-1.5 overflow-hidden p-0.5">
+                                            {Array.from(
+                                                new Set(
+                                                    projects
+                                                        .map((p) => p.framework)
+                                                        .filter(
+                                                            (f): f is string =>
+                                                                Boolean(f),
+                                                        ),
+                                                ),
+                                            )
+                                                .slice(0, 3)
+                                                .map((fw) => (
+                                                    <div
+                                                        key={fw}
+                                                        className="flex size-7 items-center justify-center rounded-lg bg-paper ring-2 ring-surface"
+                                                    >
+                                                        <FrameworkLogo
+                                                            slug={fw}
+                                                            size="xs"
+                                                        />
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    ) : null}
+                                </div>
+                                <div className="mt-3 flex items-center justify-between text-[11px] text-soft">
+                                    <span>Active local & cloud apps</span>
+                                    <span className="inline-flex items-center gap-0.5 font-medium text-brand group-hover:underline">
+                                        View all
+                                        <ChevronRight className="size-3" />
+                                    </span>
+                                </div>
+                            </Link>
+                        )}
 
                         {/* 2. Cluster Fleet & Health */}
                         <Link
@@ -535,59 +582,68 @@ export default function DashboardIndex({
             )}
 
             {/* Core Fleet Workloads: Rich Mini-Cards for Projects & Servers */}
-            <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+            <div
+                className={cn(
+                    'grid items-start gap-5',
+                    hideProjects ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-2',
+                )}
+            >
                 {/* Projects Section */}
-                <Card>
-                    <div className="mb-3.5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-xs font-semibold tracking-[0.06em] text-soft uppercase">
-                                Projects
-                            </h2>
-                            {stats?.projectsCount !== undefined && (
-                                <span className="rounded-full bg-paper px-2 py-0.5 font-mono text-[11px] font-medium text-soft ring-1 ring-line/60">
-                                    {stats.projectsCount}
-                                </span>
-                            )}
+                {!hideProjects && (
+                    <Card>
+                        <div className="mb-3.5 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-xs font-semibold tracking-[0.06em] text-soft uppercase">
+                                    Projects
+                                </h2>
+                                {stats?.projectsCount !== undefined && (
+                                    <span className="rounded-full bg-paper px-2 py-0.5 font-mono text-[11px] font-medium text-soft ring-1 ring-line/60">
+                                        {stats.projectsCount}
+                                    </span>
+                                )}
+                            </div>
+                            <Link
+                                href={indexProjects().url}
+                                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                            >
+                                <span>View all</span>
+                                <ArrowRight className="size-3" />
+                            </Link>
                         </div>
-                        <Link
-                            href={indexProjects().url}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
-                        >
-                            <span>View all</span>
-                            <ArrowRight className="size-3" />
-                        </Link>
-                    </div>
 
-                    <Deferred
-                        data="projects"
-                        fallback={<MiniCardGridSkeleton count={4} />}
-                    >
-                        {!projects || projects.length === 0 ? (
-                            <div className="rounded-xl bg-paper/40 py-8 text-center ring-1 ring-line/60">
-                                <p className="text-sm text-soft">
-                                    No projects registered yet.
-                                </p>
-                                <Link
-                                    href={createProject().url}
-                                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
-                                >
-                                    <Plus className="size-3.5" />
-                                    <span>Create or add your first app</span>
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                {projects.map((project) => (
-                                    <DashboardProjectMiniCard
-                                        key={project.id}
-                                        project={project}
-                                        home={defaultProjectParent}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </Deferred>
-                </Card>
+                        <Deferred
+                            data="projects"
+                            fallback={<MiniCardGridSkeleton count={4} />}
+                        >
+                            {!projects || projects.length === 0 ? (
+                                <div className="rounded-xl bg-paper/40 py-8 text-center ring-1 ring-line/60">
+                                    <p className="text-sm text-soft">
+                                        No projects registered yet.
+                                    </p>
+                                    <Link
+                                        href={createProject().url}
+                                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                                    >
+                                        <Plus className="size-3.5" />
+                                        <span>
+                                            Create or add your first app
+                                        </span>
+                                    </Link>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    {projects.map((project) => (
+                                        <DashboardProjectMiniCard
+                                            key={project.id}
+                                            project={project}
+                                            home={defaultProjectParent}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </Deferred>
+                    </Card>
+                )}
 
                 {/* Servers Section */}
                 <Card>
@@ -630,7 +686,14 @@ export default function DashboardIndex({
                                 </Link>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div
+                                className={cn(
+                                    'grid gap-3',
+                                    hideProjects
+                                        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                                        : 'grid-cols-1 sm:grid-cols-2',
+                                )}
+                            >
                                 {servers.map((server) => (
                                     <DashboardServerMiniCard
                                         key={server.name}

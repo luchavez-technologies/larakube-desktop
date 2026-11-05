@@ -268,9 +268,9 @@ export default function WelcomeOnboarding({
                             Get started with your Kubernetes fleet
                         </h2>
                         <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-soft">
-                            Launch production-grade companion applications with
-                            instant wildcard DNS and shared Commons, or
-                            provision clusters and deploy Laravel apps.
+                            {hideProjects
+                                ? 'Launch production-grade companion applications with instant wildcard DNS, shared Commons, and cluster-wide tools.'
+                                : 'Launch production-grade companion applications with instant wildcard DNS and shared Commons, or provision clusters and deploy Laravel apps.'}
                         </p>
                     </div>
 

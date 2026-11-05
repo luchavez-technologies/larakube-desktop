@@ -11,6 +11,7 @@ use App\Jobs\Sync\SyncServerBackupJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServerTlsJob;
+use App\Models\ClusterTool;
 use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Server;
@@ -662,6 +663,41 @@ test('destroyed and missing servers are excluded from active fleet count and hea
                 ->where('fleetMetrics.totalServers', 2)
                 ->where('fleetMetrics.readyServers', 2)
                 ->where('fleetMetrics.fleetHealthScore', 100)
+            )
+        );
+
+    File::deleteDirectory($bin);
+});
+
+test('dashboard includes installedToolsCount in stats', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $server = Server::create(['name' => 'active-tool-srv', 'role' => 'deploy', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']);
+    ClusterTool::create([
+        'server_id' => $server->id,
+        'tool' => 'pocketbase',
+        'installed' => true,
+        'data' => [],
+    ]);
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldNotReceive('all');
+    app()->instance(StackCatalog::class, $stacks);
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('stats.installedToolsCount', 1)
             )
         );
 
