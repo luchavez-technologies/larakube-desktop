@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
 import {
     isLocalServer,
     serverEndpointLabel,
-    serverStatus,
+    getServerStatusBadge,
 } from '@/lib/servers';
 import { readiness, tools as toolsRoute } from '@/routes';
 import {
@@ -876,10 +876,7 @@ function DashboardProjectMiniCard({
 }
 
 function DashboardServerMiniCard({ server }: { server: Server }) {
-    const [statusLabel, statusTone] = serverStatus[server.status] ?? [
-        server.status,
-        'muted',
-    ];
+    const [statusLabel, statusTone] = getServerStatusBadge(server.status);
     const isLocal = isLocalServer(server);
     const endpoint = serverEndpointLabel(server);
 

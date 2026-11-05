@@ -15,6 +15,7 @@ use App\Jobs\Sync\SyncServerBackupJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServersJob;
 use App\Jobs\Sync\SyncServerTlsJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Activity;
@@ -222,6 +223,35 @@ class RecordRunOutput
             if ($server !== null) {
                 SyncClusterToolsJob::dispatch($server->id);
             }
+        }
+
+        if (in_array($run->kind, [RunKind::CreateServer, RunKind::CreateDevBox], true)) {
+            $createdServer = $server ?? ($run->server_name ? Server::where('name', $run->server_name)->first() : null);
+            if ($createdServer !== null) {
+                if ($status === RunStatus::Succeeded) {
+                    $update = ['status' => 'ready', 'sync_status' => 'fresh'];
+                    if (is_array($result)) {
+                        if (! empty($result['ip'])) {
+                            $update['ip'] = (string) $result['ip'];
+                        }
+                        if (! empty($result['context'])) {
+                            $update['context'] = (string) $result['context'];
+                        }
+                    }
+                    $createdServer->update($update);
+                } elseif ($status === RunStatus::Failed) {
+                    $createdServer->update(['status' => 'failed']);
+                }
+            }
+            SyncServersJob::dispatch();
+        }
+
+        if ($run->kind === RunKind::DestroyServer) {
+            $destroyedServer = $server ?? ($run->server_name ? Server::where('name', $run->server_name)->first() : null);
+            if ($destroyedServer !== null && $status === RunStatus::Succeeded) {
+                $destroyedServer->update(['status' => 'destroyed']);
+            }
+            SyncServersJob::dispatch();
         }
 
         if ($server !== null && $run->kind?->changesMail()) {

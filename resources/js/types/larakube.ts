@@ -252,7 +252,15 @@ export type DevBoxProject = {
     local: 'running' | 'stopped';
 };
 
-export type ServerStatus = 'ready' | 'incomplete' | 'unfinished';
+export type ServerStatus =
+    | 'ready'
+    | 'incomplete'
+    | 'unfinished'
+    | 'provisioning'
+    | 'failed'
+    | 'missing'
+    | 'destroyed'
+    | (string & {});
 
 export type Server = {
     name: string;

@@ -5,7 +5,41 @@ export const serverStatus: Record<ServerStatus, [string, Tone]> = {
     ready: ['Ready', 'ok'],
     incomplete: ['Setup incomplete', 'warn'],
     unfinished: ['Unfinished', 'warn'],
+    provisioning: ['Provisioning…', 'busy'],
+    failed: ['Failed', 'bad'],
+    missing: ['Missing', 'muted'],
+    destroyed: ['Destroyed', 'muted'],
 };
+
+/**
+ * Returns a robust [label, tone] tuple for a server, devbox, or raw status string.
+ * Folds the live reachability check into one coherent badge: an unreachable ready
+ * server is rendered as ['Unreachable', 'warn'] instead of contradictory 'Ready'.
+ */
+export function getServerStatusBadge(
+    serverOrStatus?: Pick<Server, 'status'> | ServerStatus | null,
+    isReachable?: boolean,
+): [string, Tone] {
+    const status =
+        typeof serverOrStatus === 'object' && serverOrStatus !== null
+            ? serverOrStatus.status
+            : (serverOrStatus ?? '');
+
+    if (status === 'ready' && isReachable === false) {
+        return ['Unreachable', 'warn'];
+    }
+
+    if (status && status in serverStatus) {
+        return serverStatus[status];
+    }
+
+    if (!status) {
+        return ['Unknown', 'muted'];
+    }
+
+    const label = status.charAt(0).toUpperCase() + status.slice(1);
+    return [label, 'muted'];
+}
 
 export const runStatus: Record<RunStatus, [string, Tone]> = {
     running: ['Running', 'busy'],

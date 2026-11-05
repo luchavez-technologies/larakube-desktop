@@ -42,7 +42,7 @@ import StatusPill, { type Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import AppLayout from '@/layouts/app-layout';
-import { serverStatus } from '@/lib/servers';
+import { getServerStatusBadge } from '@/lib/servers';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
@@ -158,9 +158,10 @@ export default function ShowServer({
     const [revokingUser, setRevokingUser] = useState<ClusterUser | null>(null);
     const ready = server.status === 'ready';
     const unreachable = ready && reachable === false;
-    const [label, tone]: [string, Tone] = unreachable
-        ? ['Unreachable', 'warn']
-        : serverStatus[server.status];
+    const [label, tone]: [string, Tone] = getServerStatusBadge(
+        server,
+        reachable,
+    );
 
     const allTools = verifiedTools ?? lastVerifiedTools;
     const installedTools = allTools

@@ -11,7 +11,7 @@ import ExperimentalBadge from '@/components/experimental-badge';
 import StatusPill from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
-import { serverStatus } from '@/lib/servers';
+import { getServerStatusBadge } from '@/lib/servers';
 import { create, show } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
 import { index as workspacesIndex } from '@/routes/workspaces';
@@ -183,7 +183,7 @@ function DevBoxList({
         return (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
                 {boxes.map((box) => {
-                    const [label, tone] = serverStatus[box.status];
+                    const [label, tone] = getServerStatusBadge(box.status);
 
                     return (
                         <div
@@ -256,7 +256,7 @@ function DevBoxList({
                 </thead>
                 <tbody>
                     {boxes.map((box) => {
-                        const [label, tone] = serverStatus[box.status];
+                        const [label, tone] = getServerStatusBadge(box.status);
 
                         return (
                             <tr key={box.name} className="border-t border-line">

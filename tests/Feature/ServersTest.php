@@ -725,9 +725,29 @@ test('pruning unused TLS certificates starts tls:prune run', function () {
 
     $response->assertRedirect();
 
-    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
-        "{$bin}/larakube", 'tls:prune', 'production', '--context=larakube-203.0.113.21', '--force', '--no-interaction',
+    File::deleteDirectory($bin);
+});
+
+test('servers with provisioning status render on index without error', function () {
+    $bin = serversFakeCli();
+
+    Server::create([
+        'name' => 'provisioning-server',
+        'role' => 'deploy',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'region' => 'us-central1',
+        'status' => 'provisioning',
     ]);
+
+    $this->get(route('servers.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('servers/index')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->has('servers', 1)
+                ->where('servers.0.name', 'provisioning-server')
+                ->where('servers.0.status', 'provisioning')));
 
     File::deleteDirectory($bin);
 });

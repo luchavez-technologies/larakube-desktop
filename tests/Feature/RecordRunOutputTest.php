@@ -5,6 +5,7 @@ use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServersJob;
 use App\Jobs\Sync\SyncServerTlsJob;
 use App\Listeners\RecordRunOutput;
 use App\Models\ClusterTool;
@@ -234,3 +235,93 @@ test('successful wire and unwire runs update cluster tool wiring data optimistic
     [RunKind::OpenBaoWire, 'rotation', 'wired'],
     [RunKind::OpenBaoUnwire, 'rotation', 'unwired'],
 ]);
+
+test('successful create-server run updates server status to ready and dispatches SyncServersJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'new-vps',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'status' => 'provisioning',
+    ]);
+
+    $run = Run::create([
+        'label' => 'Create server new-vps',
+        'kind' => RunKind::CreateServer,
+        'server_name' => 'new-vps',
+        'target_name' => 'new-vps',
+        'stdout' => json_encode([
+            'success' => true,
+            'stackName' => 'new-vps',
+            'kind' => 'vps',
+            'ip' => '34.100.1.2',
+            'context' => 'larakube-34.100.1.2',
+        ]),
+        'command' => ['larakube', 'cloud:create'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
+
+    $server->refresh();
+    expect($server->status)->toBe('ready')
+        ->and($server->ip)->toBe('34.100.1.2')
+        ->and($server->context)->toBe('larakube-34.100.1.2');
+
+    Queue::assertPushed(SyncServersJob::class);
+});
+
+test('failed create-server run updates server status to failed and dispatches SyncServersJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'failing-vps',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'status' => 'provisioning',
+    ]);
+
+    $run = Run::create([
+        'label' => 'Create server failing-vps',
+        'kind' => RunKind::CreateServer,
+        'server_name' => 'failing-vps',
+        'target_name' => 'failing-vps',
+        'stdout' => json_encode(['success' => false, 'error' => 'Quota exceeded']),
+        'command' => ['larakube', 'cloud:create'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 1));
+
+    $server->refresh();
+    expect($server->status)->toBe('failed');
+
+    Queue::assertPushed(SyncServersJob::class);
+});
+
+test('successful destroy-server run updates server status to destroyed and dispatches SyncServersJob', function () {
+    Queue::fake();
+
+    $server = Server::create([
+        'name' => 'old-vps',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'ctx-old-vps',
+        'status' => 'ready',
+    ]);
+
+    $run = Run::create([
+        'label' => 'Destroy server old-vps',
+        'kind' => RunKind::DestroyServer,
+        'server_name' => 'old-vps',
+        'target_name' => 'old-vps',
+        'stdout' => json_encode(['success' => true]),
+        'command' => ['larakube', 'cloud:destroy'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
+
+    $server->refresh();
+    expect($server->status)->toBe('destroyed');
+
+    Queue::assertPushed(SyncServersJob::class);
+});

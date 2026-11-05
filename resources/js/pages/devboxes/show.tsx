@@ -33,7 +33,7 @@ import {
 } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
 import AppLayout from '@/layouts/app-layout';
-import { serverStatus } from '@/lib/servers';
+import { getServerStatusBadge } from '@/lib/servers';
 import { index, shareDomainPage, updateCli } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
 import {
@@ -57,7 +57,7 @@ export default function ShowDevBox({
     cluster?: Cluster;
     collaborators?: Collaborator[] | null;
 }) {
-    const [label, tone] = serverStatus[box.status];
+    const [label, tone] = getServerStatusBadge(box.status);
     const ready = box.status === 'ready';
     const ssh = `ssh ${box.name}`;
     const [exportOpen, setExportOpen] = useState(false);

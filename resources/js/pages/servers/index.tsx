@@ -17,7 +17,7 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import AppLayout from '@/layouts/app-layout';
-import { serverEndpointLabel, serverStatus } from '@/lib/servers';
+import { getServerStatusBadge, serverEndpointLabel } from '@/lib/servers';
 import { create, show } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
 import type { Server } from '@/types/larakube';
@@ -77,9 +77,7 @@ export default function ServersIndex({
     // into one coherent badge instead of showing both at once, which read as
     // a contradiction (a green "Ready" pill next to an "Unreachable" badge).
     const statusBadge = (server: Server): [string, Tone] =>
-        server.status === 'ready' && reachable(server) === false
-            ? ['Unreachable', 'warn']
-            : serverStatus[server.status];
+        getServerStatusBadge(server, reachable(server));
 
     return (
         <AppLayout title="Servers">
