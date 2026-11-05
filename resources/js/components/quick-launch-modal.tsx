@@ -38,7 +38,11 @@ import ExperimentalBadge from '@/components/experimental-badge';
 import { sendJson } from '@/lib/http';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
-import { isLocalServer as isLocalServerCheck, runStatus } from '@/lib/servers';
+import {
+    isLocalServer as isLocalServerCheck,
+    runStatus,
+    serverEndpointLabel,
+} from '@/lib/servers';
 import { create as createServer } from '@/routes/servers';
 import { show as showRunRoute } from '@/routes/runs';
 import { cn } from '@/lib/utils';
@@ -985,16 +989,20 @@ export default function QuickLaunchModal({
                                                                         )}
                                                                     </div>
                                                                     <p className="mt-0.5 font-mono text-[11px] text-soft">
-                                                                        IP:{' '}
                                                                         {s.ip ? (
-                                                                            <Redactable
-                                                                                value={
-                                                                                    s.ip
-                                                                                }
-                                                                                kind="ip"
-                                                                            />
+                                                                            <>
+                                                                                IP:{' '}
+                                                                                <Redactable
+                                                                                    value={
+                                                                                        s.ip
+                                                                                    }
+                                                                                    kind="ip"
+                                                                                />
+                                                                            </>
                                                                         ) : (
-                                                                            'local'
+                                                                            serverEndpointLabel(
+                                                                                s,
+                                                                            )
                                                                         )}
                                                                     </p>
                                                                 </div>
@@ -1447,14 +1455,19 @@ export default function QuickLaunchModal({
                                                 </span>
                                                 <span className="block font-mono text-[11px] text-soft">
                                                     {currentServer?.ip ? (
-                                                        <Redactable
-                                                            value={
-                                                                currentServer.ip
-                                                            }
-                                                            kind="ip"
-                                                        />
+                                                        <>
+                                                            IP:{' '}
+                                                            <Redactable
+                                                                value={
+                                                                    currentServer.ip
+                                                                }
+                                                                kind="ip"
+                                                            />
+                                                        </>
                                                     ) : (
-                                                        'local'
+                                                        serverEndpointLabel(
+                                                            currentServer,
+                                                        )
                                                     )}
                                                 </span>
                                             </div>
