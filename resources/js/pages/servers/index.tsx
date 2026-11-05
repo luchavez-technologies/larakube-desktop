@@ -108,6 +108,7 @@ export default function ServersIndex({
                     </Button>
                     <Link
                         href={create().url}
+                        prefetch
                         className={buttonClass('primary')}
                     >
                         <Plus className="size-4" />
@@ -456,9 +457,11 @@ function EmptyState() {
             </p>
             <Link
                 href={create().url}
+                prefetch
                 className={buttonClass('primary', 'md', 'mt-5')}
             >
-                Create server
+                <Plus className="size-4" />
+                <span>Create server</span>
             </Link>
         </div>
     );

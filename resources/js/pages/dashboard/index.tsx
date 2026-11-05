@@ -212,6 +212,7 @@ export default function DashboardIndex({
                         </Link>
                         <Link
                             href={createServer().url}
+                            prefetch
                             className={buttonClass('secondary')}
                         >
                             <Plus className="size-4" />
@@ -621,6 +622,7 @@ export default function DashboardIndex({
                                 </p>
                                 <Link
                                     href={createServer().url}
+                                    prefetch
                                     className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
                                 >
                                     <Plus className="size-3.5" />

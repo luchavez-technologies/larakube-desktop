@@ -57,7 +57,7 @@ class DevBoxController extends Controller
 
         return Inertia::render('servers/create', [
             'kind' => 'dev-box',
-            'providers' => $readiness->providers(statusOnly: true),
+            'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
             'project' => null,
         ]);
     }

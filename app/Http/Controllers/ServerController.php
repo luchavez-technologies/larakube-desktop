@@ -160,7 +160,7 @@ class ServerController extends Controller
         $project = $request->integer('project') > 0 ? Project::find($request->integer('project')) : null;
 
         return Inertia::render('servers/create', [
-            'providers' => $readiness->providers(statusOnly: true),
+            'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
             'project' => $project ? ['id' => $project->id, 'name' => basename($project->path)] : null,
             'defaultProvider' => $settings->get()['defaultCloudProvider'],
             'detectedKeys' => $inspector->detectCommonKeys(),

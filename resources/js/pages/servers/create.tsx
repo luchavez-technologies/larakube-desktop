@@ -1,4 +1,4 @@
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Deferred, Link, useForm, usePage } from '@inertiajs/react';
 import { useState, useEffect, type FormEvent, type ReactNode } from 'react';
 import {
     ArrowLeft,
@@ -54,6 +54,57 @@ const existingProvider: Provider = {
     credentials: { ready: true, hint: null },
 };
 
+function CreateServerSkeleton() {
+    return (
+        <div className="max-w-3xl animate-pulse">
+            {/* Stepper Navigation Header Skeleton */}
+            <div className="mb-6 flex items-center justify-between gap-2 border-b border-line pb-5">
+                {[1, 2, 3].map((step) => (
+                    <div key={step} className="flex flex-1 items-center gap-3">
+                        <div className="size-8 rounded-full bg-paper" />
+                        <div className="space-y-1.5">
+                            <div className="h-3 w-12 rounded bg-paper" />
+                            <div className="h-3.5 w-24 rounded bg-paper" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Provider Cards Skeleton */}
+            <div className="space-y-6">
+                <div>
+                    <div className="mb-3 h-4 w-28 rounded bg-paper" />
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                            <div
+                                key={i}
+                                className="flex h-24 flex-col justify-between rounded-xl border border-line bg-surface p-4"
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    <div className="size-6 rounded-md bg-paper" />
+                                    <div className="h-3.5 w-20 rounded bg-paper" />
+                                </div>
+                                <div className="h-3 w-14 rounded bg-paper" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <div className="h-3.5 w-24 rounded bg-paper" />
+                        <div className="h-9 w-full rounded-lg bg-paper" />
+                    </div>
+                    <div className="space-y-2">
+                        <div className="h-3.5 w-24 rounded bg-paper" />
+                        <div className="h-9 w-full rounded-lg bg-paper" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function CreateServer({
     providers,
     project,
@@ -90,19 +141,21 @@ export default function CreateServer({
                     be linked to this new server.
                 </p>
             )}
-            {providers && providers.length > 0 ? (
-                <ServerForm
-                    providers={providers}
-                    projectId={project?.id ?? null}
-                    devBox={devBox}
-                    defaultProvider={defaultProvider}
-                    detectedKeys={detectedKeys}
-                />
-            ) : (
-                <p className="text-sm text-soft">
-                    The LaraKube CLI isn't ready yet. Finish Setup first.
-                </p>
-            )}
+            <Deferred data="providers" fallback={<CreateServerSkeleton />}>
+                {providers && providers.length > 0 ? (
+                    <ServerForm
+                        providers={providers}
+                        projectId={project?.id ?? null}
+                        devBox={devBox}
+                        defaultProvider={defaultProvider}
+                        detectedKeys={detectedKeys}
+                    />
+                ) : (
+                    <p className="text-sm text-soft">
+                        The LaraKube CLI isn't ready yet. Finish Setup first.
+                    </p>
+                )}
+            </Deferred>
         </AppLayout>
     );
 }

@@ -25,7 +25,9 @@ test('the create server page is told the default cloud provider, to pre-select i
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('servers/create')
             ->where('defaultProvider', 'aws')
-            ->has('providers'));
+            ->missing('providers')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->has('providers')));
 });
 
 test('provider-catalog endpoint returns catalog for a single provider', function () {
