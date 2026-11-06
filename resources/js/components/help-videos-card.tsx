@@ -22,6 +22,12 @@ export const HOW_TO_VIDEOS: HowToVideo[] = [
         description:
             'Deploy a single-node k3s Kubernetes cluster on GCP with automated DNS and wildcard SSL certificates in 3 minutes.',
     },
+    {
+        title: 'LaraKube Desktop: Install n8n with One Click',
+        youtubeId: 'x3Xjpdr4yZs',
+        description:
+            'Deploy an n8n workflow automation instance with custom domains and automated SSL in under a minute.',
+    },
 ];
 
 /** Set once the playlist exists, so "Watch full playlist" has somewhere to go. */
