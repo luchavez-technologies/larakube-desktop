@@ -8,6 +8,8 @@ import {
     Terminal,
     SquareTerminal,
     Clock,
+    Pause,
+    Play,
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
@@ -15,6 +17,7 @@ import CopyButton from '@/components/copy-button';
 import LogPanel from '@/components/log-panel';
 import StatusPill from '@/components/status-pill';
 import { cn } from '@/lib/utils';
+import { start, stop } from '@/routes/projects';
 import type { PodInfo, Project } from '@/types/larakube';
 
 export default function WorkloadsPodsCard({
@@ -44,6 +47,43 @@ export default function WorkloadsPodsCard({
     );
     const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(10);
     const [liveLogs, setLiveLogs] = useState<boolean>(true);
+    const [pausing, setPausing] = useState(false);
+    const [resuming, setResuming] = useState(false);
+
+    // Only re-fetches the same light props the page's existing run-status
+    // poll already uses (see usePoll in show.tsx) — stop/start kick off a
+    // background CLI run, so that poll picks up its completion (and, since
+    // 'pods' rides along on it too) within a second, with no extra reload
+    // of the whole page or card needed here.
+    const runPollProps = ['runs', 'latestRun', 'project', 'server', 'pods'];
+
+    const handlePause = () => {
+        setPausing(true);
+        router.post(
+            stop(project.id).url,
+            { environment: activeEnv },
+            {
+                only: runPollProps,
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setPausing(false),
+            },
+        );
+    };
+
+    const handleResume = () => {
+        setResuming(true);
+        router.post(
+            start(project.id).url,
+            { environment: activeEnv },
+            {
+                only: runPollProps,
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setResuming(false),
+            },
+        );
+    };
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -168,6 +208,31 @@ export default function WorkloadsPodsCard({
                 label="Workloads & Pods"
                 action={
                     <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={pausing || resuming}
+                            onClick={handlePause}
+                            className="gap-1.5 text-xs font-medium"
+                            title={`Pause ${activeEnv} — scale every Deployment to zero to free resources; data (PVCs, databases) is kept. Remembers the real replica count to restore on Resume.`}
+                        >
+                            <Pause className="size-3.5" />
+                            <span>{pausing ? 'Pausing…' : 'Pause'}</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={pausing || resuming}
+                            onClick={handleResume}
+                            className="gap-1.5 text-xs font-medium"
+                            title={`Resume ${activeEnv} — scale back up to its prior pod count`}
+                        >
+                            <Play className="size-3.5" />
+                            <span>{resuming ? 'Resuming…' : 'Resume'}</span>
+                        </Button>
+
                         {onOpenK9s && (
                             <Button
                                 type="button"

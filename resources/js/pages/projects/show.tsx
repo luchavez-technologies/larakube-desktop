@@ -210,7 +210,7 @@ export default function ShowProject({
 
     const { start, stop } = usePoll(
         1000,
-        { only: ['runs', 'latestRun', 'project', 'server'] },
+        { only: ['runs', 'latestRun', 'project', 'server', 'pods'] },
         { autoStart: isRunning },
     );
 

@@ -176,6 +176,13 @@ export default function SettingsIndex({
         }
     }, [sharedProps.demoMode]);
 
+    // Scoped to just 'settings' — the available-choices lists
+    // (serverNames/projectGroupNames/projectPaths) don't change from toggling
+    // which ones are hidden, and serverNames in particular shells out to the
+    // CLI, so re-fetching it on every checkbox click is both pointless and
+    // the reason this used to visibly reload the whole page/section.
+    const demoModeOnly = ['settings'];
+
     function toggleDemoModeNow(nextDemoMode: boolean) {
         form.setData('demoMode', nextDemoMode);
         router.post(
@@ -186,7 +193,7 @@ export default function SettingsIndex({
                 demoHiddenProjectGroups: form.data.demoHiddenProjectGroups,
                 demoHiddenProjects: form.data.demoHiddenProjects,
             },
-            { preserveScroll: true, preserveState: true },
+            { only: demoModeOnly, preserveScroll: true, preserveState: true },
         );
     }
 
@@ -203,7 +210,7 @@ export default function SettingsIndex({
                 demoHiddenProjectGroups: form.data.demoHiddenProjectGroups,
                 demoHiddenProjects: form.data.demoHiddenProjects,
             },
-            { preserveScroll: true, preserveState: true },
+            { only: demoModeOnly, preserveScroll: true, preserveState: true },
         );
     }
 
@@ -220,7 +227,7 @@ export default function SettingsIndex({
                 demoHiddenProjectGroups: nextHidden,
                 demoHiddenProjects: form.data.demoHiddenProjects,
             },
-            { preserveScroll: true, preserveState: true },
+            { only: demoModeOnly, preserveScroll: true, preserveState: true },
         );
     }
 
@@ -237,7 +244,7 @@ export default function SettingsIndex({
                 demoHiddenProjectGroups: form.data.demoHiddenProjectGroups,
                 demoHiddenProjects: nextHidden,
             },
-            { preserveScroll: true, preserveState: true },
+            { only: demoModeOnly, preserveScroll: true, preserveState: true },
         );
     }
 
