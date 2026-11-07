@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\Sync\SyncCliWithDesktopJob;
+use App\Models\Project;
+use App\Models\ProjectGroup;
 use App\Models\Server;
 use App\Services\EditorLauncher;
 use App\Services\LaraKube\GlobalSettings;
@@ -65,6 +67,12 @@ class SettingsController extends Controller
 
                     return $stacks === null ? null : array_map(fn (array $stack): string => $stack['name'], $stacks);
                 }),
+            'projectGroupNames' => ProjectGroup::query()->orderBy('name')->pluck('name')->all(),
+            'projectPaths' => Project::query()
+                ->orderBy('name')
+                ->get(['path', 'name'])
+                ->map(fn (Project $p): array => ['path' => $p->path, 'label' => $p->name ? "{$p->name} ({$p->path})" : $p->path])
+                ->all(),
         ]);
     }
 
@@ -84,6 +92,10 @@ class SettingsController extends Controller
             'demoMode' => ['nullable', 'boolean'],
             'demoHiddenServers' => ['nullable', 'array'],
             'demoHiddenServers.*' => ['string'],
+            'demoHiddenProjectGroups' => ['nullable', 'array'],
+            'demoHiddenProjectGroups.*' => ['string'],
+            'demoHiddenProjects' => ['nullable', 'array'],
+            'demoHiddenProjects.*' => ['string'],
         ]);
 
         $settings->update($validated);
@@ -108,6 +120,10 @@ class SettingsController extends Controller
             'demoMode' => ['nullable', 'boolean'],
             'demoHiddenServers' => ['nullable', 'array'],
             'demoHiddenServers.*' => ['string'],
+            'demoHiddenProjectGroups' => ['nullable', 'array'],
+            'demoHiddenProjectGroups.*' => ['string'],
+            'demoHiddenProjects' => ['nullable', 'array'],
+            'demoHiddenProjects.*' => ['string'],
         ]);
 
         $nextMode = array_key_exists('demoMode', $validated) && $validated['demoMode'] !== null
@@ -117,6 +133,12 @@ class SettingsController extends Controller
         $payload = ['demoMode' => $nextMode];
         if (array_key_exists('demoHiddenServers', $validated) && is_array($validated['demoHiddenServers'])) {
             $payload['demoHiddenServers'] = $validated['demoHiddenServers'];
+        }
+        if (array_key_exists('demoHiddenProjectGroups', $validated) && is_array($validated['demoHiddenProjectGroups'])) {
+            $payload['demoHiddenProjectGroups'] = $validated['demoHiddenProjectGroups'];
+        }
+        if (array_key_exists('demoHiddenProjects', $validated) && is_array($validated['demoHiddenProjects'])) {
+            $payload['demoHiddenProjects'] = $validated['demoHiddenProjects'];
         }
 
         $settings->update($payload);

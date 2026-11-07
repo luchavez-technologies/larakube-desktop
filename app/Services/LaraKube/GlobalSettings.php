@@ -3,6 +3,8 @@
 namespace App\Services\LaraKube;
 
 use App\Jobs\Sync\SyncCliWithDesktopJob;
+use App\Models\Project;
+use App\Models\ProjectGroup;
 use App\Models\Server;
 use App\Services\EditorLauncher;
 use App\Services\Runtime\WslDistro;
@@ -38,6 +40,8 @@ class GlobalSettings
      *     experimental: bool,
      *     demoMode: bool,
      *     demoHiddenServers: list<string>,
+     *     demoHiddenProjectGroups: list<string>,
+     *     demoHiddenProjects: list<string>,
      *     cliChannel: string,
      *     usage: ?string,
      *     intendedProviders: list<string>,
@@ -81,6 +85,8 @@ class GlobalSettings
             'experimental' => (bool) ($config['experimental'] ?? false),
             'demoMode' => (bool) ($config['demoMode'] ?? false),
             'demoHiddenServers' => $this->demoHiddenServers(),
+            'demoHiddenProjectGroups' => $this->demoHiddenProjectGroups(),
+            'demoHiddenProjects' => $this->demoHiddenProjects(),
             'cliChannel' => (string) ($config['cliChannel'] ?? 'canary'),
             'usage' => in_array($config['usage'] ?? null, self::USAGES, true) ? $config['usage'] : null,
             'intendedProviders' => $this->intendedProviders(),
@@ -182,6 +188,48 @@ class GlobalSettings
 
         $fromDb = rescue(
             fn (): array => Server::query()->where('hidden_in_demo', true)->pluck('name')->all(),
+            [],
+            report: false,
+        );
+
+        return array_values(array_unique([...$fromConfig, ...$fromDb]));
+    }
+
+    /**
+     * Project Group names to drop from the Projects list (cascading to every
+     * project in that group) while demoMode() is on — same shape as
+     * demoHiddenServers().
+     *
+     * @return list<string>
+     */
+    public function demoHiddenProjectGroups(): array
+    {
+        $groups = $this->readConfig()['demoHiddenProjectGroups'] ?? null;
+        $fromConfig = is_array($groups) ? array_values(array_filter($groups, 'is_string')) : [];
+
+        $fromDb = rescue(
+            fn (): array => ProjectGroup::query()->where('hidden_in_demo', true)->pluck('name')->all(),
+            [],
+            report: false,
+        );
+
+        return array_values(array_unique([...$fromConfig, ...$fromDb]));
+    }
+
+    /**
+     * Project paths to drop from the Projects list while demoMode() is on —
+     * keyed by path, not name, since a project's name can collide across
+     * groups but its path is unique.
+     *
+     * @return list<string>
+     */
+    public function demoHiddenProjects(): array
+    {
+        $paths = $this->readConfig()['demoHiddenProjects'] ?? null;
+        $fromConfig = is_array($paths) ? array_values(array_filter($paths, 'is_string')) : [];
+
+        $fromDb = rescue(
+            fn (): array => Project::query()->where('hidden_in_demo', true)->pluck('path')->all(),
             [],
             report: false,
         );
@@ -346,6 +394,34 @@ class GlobalSettings
                 } else {
                     Server::query()->whereIn('name', $hidden)->update(['hidden_in_demo' => true]);
                     Server::query()->whereNotIn('name', $hidden)->update(['hidden_in_demo' => false]);
+                }
+            }, report: false);
+        }
+
+        if (array_key_exists('demoHiddenProjectGroups', $data) && is_array($data['demoHiddenProjectGroups'])) {
+            $hiddenGroups = array_values(array_unique(array_filter($data['demoHiddenProjectGroups'], 'is_string')));
+            $config['demoHiddenProjectGroups'] = $hiddenGroups;
+
+            rescue(function () use ($hiddenGroups): void {
+                if ($hiddenGroups === []) {
+                    ProjectGroup::query()->update(['hidden_in_demo' => false]);
+                } else {
+                    ProjectGroup::query()->whereIn('name', $hiddenGroups)->update(['hidden_in_demo' => true]);
+                    ProjectGroup::query()->whereNotIn('name', $hiddenGroups)->update(['hidden_in_demo' => false]);
+                }
+            }, report: false);
+        }
+
+        if (array_key_exists('demoHiddenProjects', $data) && is_array($data['demoHiddenProjects'])) {
+            $hiddenProjects = array_values(array_unique(array_filter($data['demoHiddenProjects'], 'is_string')));
+            $config['demoHiddenProjects'] = $hiddenProjects;
+
+            rescue(function () use ($hiddenProjects): void {
+                if ($hiddenProjects === []) {
+                    Project::query()->update(['hidden_in_demo' => false]);
+                } else {
+                    Project::query()->whereIn('path', $hiddenProjects)->update(['hidden_in_demo' => true]);
+                    Project::query()->whereNotIn('path', $hiddenProjects)->update(['hidden_in_demo' => false]);
                 }
             }, report: false);
         }

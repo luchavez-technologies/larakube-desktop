@@ -3323,6 +3323,17 @@ function ProjectTldForm({ project }: { project: Project }) {
 function ProjectSettingsCard({ project }: { project: Project }) {
     const [confirmHealOpen, setConfirmHealOpen] = useState(false);
     const [healing, setHealing] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [deleteFolder, setDeleteFolder] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDelete = () => {
+        setDeleting(true);
+        router.delete(destroy(project.id).url, {
+            data: { delete_folder: deleteFolder },
+            onFinish: () => setDeleting(false),
+        });
+    };
 
     const handleHeal = () => {
         setHealing(true);
@@ -3372,22 +3383,20 @@ function ProjectSettingsCard({ project }: { project: Project }) {
                 </div>
 
                 <div className="border-t border-line pt-3">
-                    <Link
-                        href={destroy(project.id).url}
-                        method="delete"
-                        as="button"
-                        className={buttonClass(
-                            'danger',
-                            'sm',
-                            'w-full justify-center gap-1.5',
-                        )}
+                    <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setConfirmDeleteOpen(true)}
+                        className="w-full justify-center gap-1.5"
                     >
                         <Trash2 className="size-3.5" />
                         <span>Remove from LaraKube Desktop</span>
-                    </Link>
+                    </Button>
                     <p className="mt-2 text-center text-xs leading-relaxed text-soft">
-                        Only forgets the project in Desktop. Your local files,
-                        database, and cloud servers stay untouched.
+                        Only forgets the project in Desktop by default. Your
+                        local files, database, and cloud servers stay untouched
+                        unless you choose to delete the folder too.
                     </p>
                 </div>
             </div>
@@ -3460,6 +3469,88 @@ function ProjectSettingsCard({ project }: { project: Project }) {
                                     {healing
                                         ? 'Healing…'
                                         : 'Heal Infrastructure'}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal for Remove / Delete */}
+            {confirmDeleteOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-tint text-accent ring-1 ring-accent-line">
+                                <Trash2 className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Remove "{project.name ?? project.path}" from
+                                    LaraKube Desktop?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    Only forgets the project in Desktop. Your
+                                    local files, database, and cloud servers
+                                    stay untouched — unless you check the box
+                                    below.
+                                </p>
+
+                                <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg bg-paper p-3 ring-1 ring-line">
+                                    <input
+                                        type="checkbox"
+                                        checked={deleteFolder}
+                                        onChange={(e) =>
+                                            setDeleteFolder(e.target.checked)
+                                        }
+                                        className="mt-0.5 size-3.5 rounded border-line text-accent accent-accent focus:ring-accent"
+                                    />
+                                    <span className="text-xs leading-relaxed text-ink">
+                                        Also permanently delete the local folder
+                                        at{' '}
+                                        <span className="font-mono text-ink">
+                                            {project.path}
+                                        </span>
+                                        {deleteFolder && (
+                                            <span className="mt-1 block font-medium text-accent">
+                                                This cannot be undone.
+                                            </span>
+                                        )}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={deleting}
+                                onClick={() => {
+                                    setConfirmDeleteOpen(false);
+                                    setDeleteFolder(false);
+                                }}
+                                className="gap-1.5 text-xs"
+                            >
+                                <XCircle className="size-3.5" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="dangerFill"
+                                size="sm"
+                                disabled={deleting}
+                                onClick={handleDelete}
+                                className="gap-1.5 text-xs"
+                            >
+                                <Trash2 className="size-3.5" />
+                                <span>
+                                    {deleting
+                                        ? 'Removing…'
+                                        : deleteFolder
+                                          ? 'Remove & Delete Folder'
+                                          : 'Remove'}
                                 </span>
                             </Button>
                         </div>

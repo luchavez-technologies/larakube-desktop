@@ -162,6 +162,29 @@ test('global settings gets and sets demo mode and its hidden-server list', funct
     File::deleteDirectory($home);
 });
 
+test('global settings gets and sets demo-hidden project groups and demo-hidden projects', function () {
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+
+    $settings = app(GlobalSettings::class);
+
+    expect($settings->demoHiddenProjectGroups())->toBe([])
+        ->and($settings->demoHiddenProjects())->toBe([]);
+
+    $settings->update([
+        'demoHiddenProjectGroups' => ['Internal'],
+        'demoHiddenProjects' => ['/tmp/some-test-app'],
+    ]);
+
+    expect($settings->demoHiddenProjectGroups())->toBe(['Internal'])
+        ->and($settings->demoHiddenProjects())->toBe(['/tmp/some-test-app'])
+        ->and($settings->get()['demoHiddenProjectGroups'])->toBe(['Internal'])
+        ->and($settings->get()['demoHiddenProjects'])->toBe(['/tmp/some-test-app']);
+
+    File::deleteDirectory($home);
+});
+
 test('demo mode is shared to every Inertia page like hideProjects and experimental', function () {
     $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($home);

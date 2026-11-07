@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $web_host
  * @property array<string, mixed>|null $blueprint_cache
  * @property Carbon|null $last_inspected_at
+ * @property bool $hidden_in_demo
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Server|null $server
@@ -40,6 +43,7 @@ class Project extends Model
         'web_host',
         'blueprint_cache',
         'last_inspected_at',
+        'hidden_in_demo',
     ];
 
     /**
@@ -50,6 +54,7 @@ class Project extends Model
         return [
             'blueprint_cache' => 'array',
             'last_inspected_at' => 'datetime',
+            'hidden_in_demo' => 'boolean',
         ];
     }
 
@@ -94,5 +99,41 @@ class Project extends Model
         }
 
         return $this->path !== '' && is_dir($this->hostPath());
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Project $project): void {
+            if (! array_key_exists('hidden_in_demo', $project->getAttributes()) && $project->path !== '') {
+                $project->hidden_in_demo = in_array(
+                    $project->path,
+                    rescue(fn (): array => app(GlobalSettings::class)->demoHiddenProjects(), [], report: false),
+                    true,
+                );
+            }
+        });
+    }
+
+    /**
+     * Scope a query to exclude projects (and projects in a hidden group) marked hidden in Demo Mode while Demo Mode is active.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        $settings = app(GlobalSettings::class);
+        if (! $settings->demoMode()) {
+            return $query;
+        }
+
+        $hiddenPaths = $settings->demoHiddenProjects();
+        $hiddenGroups = $settings->demoHiddenProjectGroups();
+
+        return $query->where('hidden_in_demo', false)
+            ->when($hiddenPaths !== [], fn (Builder $q): Builder => $q->whereNotIn('path', $hiddenPaths))
+            ->when($hiddenGroups !== [], fn (Builder $q): Builder => $q->where(
+                fn (Builder $q2): Builder => $q2->whereNull('group')->orWhereNotIn('group', $hiddenGroups)
+            ));
     }
 }

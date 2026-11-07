@@ -56,6 +56,8 @@ type SettingsProps = {
         cliChannel?: string;
         demoMode?: boolean;
         demoHiddenServers?: string[];
+        demoHiddenProjectGroups?: string[];
+        demoHiddenProjects?: string[];
         defaultEditor?: string;
         detectedAgents: Record<string, AgentInfo>;
     };
@@ -68,6 +70,8 @@ type SettingsProps = {
     windows?: boolean;
     wsl?: WslState | null;
     serverNames?: string[] | null;
+    projectGroupNames?: string[];
+    projectPaths?: { path: string; label: string }[];
 };
 
 type SettingsForm = {
@@ -81,6 +85,8 @@ type SettingsForm = {
     cliChannel: string;
     demoMode: boolean;
     demoHiddenServers: string[];
+    demoHiddenProjectGroups: string[];
+    demoHiddenProjects: string[];
     defaultEditor: string;
 };
 
@@ -121,6 +127,8 @@ export default function SettingsIndex({
     windows = false,
     wsl = null,
     serverNames,
+    projectGroupNames = [],
+    projectPaths = [],
 }: SettingsProps) {
     const [activeTheme, setActiveTheme] = useState<ThemeMode>(
         settings.theme ?? 'system',
@@ -143,6 +151,8 @@ export default function SettingsIndex({
         cliChannel: settings.cliChannel ?? 'canary',
         demoMode: settings.demoMode ?? false,
         demoHiddenServers: settings.demoHiddenServers ?? [],
+        demoHiddenProjectGroups: settings.demoHiddenProjectGroups ?? [],
+        demoHiddenProjects: settings.demoHiddenProjects ?? [],
         defaultEditor: settings.defaultEditor ?? 'vscode',
     });
 
@@ -173,6 +183,8 @@ export default function SettingsIndex({
             {
                 demoMode: nextDemoMode,
                 demoHiddenServers: form.data.demoHiddenServers,
+                demoHiddenProjectGroups: form.data.demoHiddenProjectGroups,
+                demoHiddenProjects: form.data.demoHiddenProjects,
             },
             { preserveScroll: true, preserveState: true },
         );
@@ -188,6 +200,42 @@ export default function SettingsIndex({
             {
                 demoMode: form.data.demoMode,
                 demoHiddenServers: nextHidden,
+                demoHiddenProjectGroups: form.data.demoHiddenProjectGroups,
+                demoHiddenProjects: form.data.demoHiddenProjects,
+            },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
+
+    function toggleHiddenProjectGroup(name: string, hidden: boolean) {
+        const nextHidden = hidden
+            ? [...form.data.demoHiddenProjectGroups, name]
+            : form.data.demoHiddenProjectGroups.filter((n) => n !== name);
+        form.setData('demoHiddenProjectGroups', nextHidden);
+        router.post(
+            '/settings/demo-mode',
+            {
+                demoMode: form.data.demoMode,
+                demoHiddenServers: form.data.demoHiddenServers,
+                demoHiddenProjectGroups: nextHidden,
+                demoHiddenProjects: form.data.demoHiddenProjects,
+            },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
+
+    function toggleHiddenProject(path: string, hidden: boolean) {
+        const nextHidden = hidden
+            ? [...form.data.demoHiddenProjects, path]
+            : form.data.demoHiddenProjects.filter((p) => p !== path);
+        form.setData('demoHiddenProjects', nextHidden);
+        router.post(
+            '/settings/demo-mode',
+            {
+                demoMode: form.data.demoMode,
+                demoHiddenServers: form.data.demoHiddenServers,
+                demoHiddenProjectGroups: form.data.demoHiddenProjectGroups,
+                demoHiddenProjects: nextHidden,
             },
             { preserveScroll: true, preserveState: true },
         );
@@ -645,6 +693,81 @@ export default function SettingsIndex({
                                         </div>
                                     )}
                                 </Deferred>
+                            </div>
+
+                            <div className="border-t border-line/60 pt-3">
+                                <span className="mb-1.5 block text-xs font-medium text-ink">
+                                    Hide these project groups while Demo Mode is
+                                    on
+                                </span>
+                                {projectGroupNames.length === 0 ? (
+                                    <p className="text-xs text-soft">
+                                        No project groups yet.
+                                    </p>
+                                ) : (
+                                    <div className="max-h-44 space-y-1.5 overflow-y-auto">
+                                        {projectGroupNames.map((name) => (
+                                            <label
+                                                key={name}
+                                                className="flex cursor-pointer items-center gap-2.5 text-xs"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.data.demoHiddenProjectGroups.includes(
+                                                        name,
+                                                    )}
+                                                    onChange={(e) =>
+                                                        toggleHiddenProjectGroup(
+                                                            name,
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                    className="size-3.5 rounded border-line text-brand accent-brand focus:ring-brand"
+                                                />
+                                                <span className="font-mono text-ink">
+                                                    {name}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-line/60 pt-3">
+                                <span className="mb-1.5 block text-xs font-medium text-ink">
+                                    Hide these projects while Demo Mode is on
+                                </span>
+                                {projectPaths.length === 0 ? (
+                                    <p className="text-xs text-soft">
+                                        No projects yet.
+                                    </p>
+                                ) : (
+                                    <div className="max-h-44 space-y-1.5 overflow-y-auto">
+                                        {projectPaths.map(({ path, label }) => (
+                                            <label
+                                                key={path}
+                                                className="flex cursor-pointer items-center gap-2.5 text-xs"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.data.demoHiddenProjects.includes(
+                                                        path,
+                                                    )}
+                                                    onChange={(e) =>
+                                                        toggleHiddenProject(
+                                                            path,
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                    className="size-3.5 rounded border-line text-brand accent-brand focus:ring-brand"
+                                                />
+                                                <span className="font-mono text-ink">
+                                                    {label}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </Card>

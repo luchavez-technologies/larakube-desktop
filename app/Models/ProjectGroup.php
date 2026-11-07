@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\LaraKube\GlobalSettings;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -12,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $id
  * @property string $name
  * @property string|null $color
+ * @property bool $hidden_in_demo
  */
 class ProjectGroup extends Model
 {
@@ -31,5 +34,47 @@ class ProjectGroup extends Model
     protected $fillable = [
         'name',
         'color',
+        'hidden_in_demo',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'hidden_in_demo' => 'boolean',
+        ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (ProjectGroup $group): void {
+            if (! array_key_exists('hidden_in_demo', $group->getAttributes()) && $group->name !== '') {
+                $group->hidden_in_demo = in_array(
+                    $group->name,
+                    rescue(fn (): array => app(GlobalSettings::class)->demoHiddenProjectGroups(), [], report: false),
+                    true,
+                );
+            }
+        });
+    }
+
+    /**
+     * Scope a query to exclude project groups marked hidden in Demo Mode while Demo Mode is active.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        if (app(GlobalSettings::class)->demoMode()) {
+            $hiddenNames = app(GlobalSettings::class)->demoHiddenProjectGroups();
+
+            return $query->where('hidden_in_demo', false)
+                ->when($hiddenNames !== [], fn (Builder $q): Builder => $q->whereNotIn('name', $hiddenNames));
+        }
+
+        return $query;
+    }
 }

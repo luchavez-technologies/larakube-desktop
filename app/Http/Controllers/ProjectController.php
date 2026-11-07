@@ -37,6 +37,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -106,7 +107,7 @@ class ProjectController extends Controller
         $stackByIp = collect($stacks)->filter(fn (array $s): bool => ! empty($s['ip']))->keyBy('ip');
         $stackByContext = collect($stacks)->filter(fn (array $s): bool => ! empty($s['context']))->keyBy('context');
 
-        $projects = Project::query()->with('server')->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads, $serverByIp, $serverByContext, $stackByIp, $stackByContext): array {
+        $projects = Project::query()->visible()->with('server')->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads, $serverByIp, $serverByContext, $stackByIp, $stackByContext): array {
             $inspection = $this->inspector->inspect($project->path);
             $activeRun = $activeRuns->get($project->id);
 
@@ -144,7 +145,7 @@ class ProjectController extends Controller
 
         return Inertia::render('projects/index', [
             'projects' => $projects,
-            'groupColors' => ProjectGroup::query()->whereNotNull('color')->pluck('color', 'name'),
+            'groupColors' => ProjectGroup::query()->visible()->whereNotNull('color')->pluck('color', 'name'),
             'hasActiveRuns' => $activeRuns->isNotEmpty(),
             // Dev boxes to switch to (experimental), and the apps on the chosen one, asked of the box itself.
             'devBoxes' => Inertia::defer(fn (): array => $this->readyDevBoxNames(), 'devBoxes'),
@@ -577,7 +578,10 @@ class ProjectController extends Controller
         ReadinessCheck $readiness,
         ProjectPods $projectPods,
         LocalCluster $localCluster,
+        GlobalSettings $settings,
     ): Response {
+        $this->abortIfDemoHidden($project, $settings);
+
         $scaffold = $this->lastScaffold($project);
 
         $inspection = $this->inspector->inspect($project->path);
@@ -757,8 +761,10 @@ class ProjectController extends Controller
     }
 
     /** Shows the project's folder in Finder or File Explorer. On Windows a project inside the distro is reached through its network share. */
-    public function showFolder(Project $project, ToolLocator $locator): RedirectResponse
+    public function showFolder(Project $project, ToolLocator $locator, GlobalSettings $settings): RedirectResponse
     {
+        $this->abortIfDemoHidden($project, $settings);
+
         $path = $locator->isWindows() ? WslDistro::toWindows($project->path) : $project->path;
 
         Shell::showInFolder($path);
@@ -766,11 +772,55 @@ class ProjectController extends Controller
         return back();
     }
 
-    public function destroy(Project $project): RedirectResponse
+    /** 404s direct access to a project Demo Mode is currently hiding — mirrors ServerController's equivalent show() guard. */
+    private function abortIfDemoHidden(Project $project, GlobalSettings $settings): void
     {
+        abort_if(
+            $settings->demoMode() && (
+                in_array($project->path, $settings->demoHiddenProjects(), true)
+                || ($project->group !== null && in_array($project->group, $settings->demoHiddenProjectGroups(), true))
+            ),
+            404,
+        );
+    }
+
+    public function destroy(Request $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validate([
+            'delete_folder' => ['nullable', 'boolean'],
+        ]);
+
+        if (! empty($validated['delete_folder'])) {
+            $this->deleteProjectFolder($project);
+        }
+
         $project->delete();
 
         return to_route('projects.index');
+    }
+
+    /**
+     * Best-effort delete of the project's own folder on disk. Guarded against
+     * deleting an empty path, the user's home directory itself, or a folder
+     * that's already gone (treated as success, not an error — the DB record
+     * should still be removable either way).
+     */
+    private function deleteProjectFolder(Project $project): void
+    {
+        $path = $project->path;
+
+        if ($path === '' || $path === '/' || $path === ToolLocator::home()) {
+            report(new \RuntimeException("Refused to delete unsafe project path: {$path}"));
+
+            return;
+        }
+
+        $hostPath = $project->hostPath();
+        if (! is_dir($hostPath)) {
+            return;
+        }
+
+        rescue(fn () => File::deleteDirectory($hostPath), report: true);
     }
 
     public function init(Request $request, Project $project, CliRunner $runner, LaravelOptions $laravel, FrameworkCatalog $frameworks): RedirectResponse
@@ -1334,7 +1384,7 @@ class ProjectController extends Controller
     {
         $environment = (string) $request->input('environment', 'local');
 
-        foreach (Project::query()->where('group', $group)->get() as $project) {
+        foreach (Project::query()->visible()->where('group', $group)->get() as $project) {
             $this->run($runner, $project, RunKind::UpProject, "Up {$this->name($project)} ({$environment})", ['up', $environment, '--no-console', '--no-test'], $environment);
         }
 
@@ -1346,7 +1396,7 @@ class ProjectController extends Controller
     {
         $environment = (string) $request->input('environment', 'local');
 
-        foreach (Project::query()->where('group', $group)->get() as $project) {
+        foreach (Project::query()->visible()->where('group', $group)->get() as $project) {
             $this->run($runner, $project, RunKind::DownProject, "Down {$this->name($project)} ({$environment})", ['down', $environment, '--force'], $environment);
         }
 
@@ -1356,7 +1406,7 @@ class ProjectController extends Controller
     public function startGroup(Request $request, string $group, CliRunner $runner): RedirectResponse
     {
         $environment = (string) $request->input('environment', 'local');
-        $projects = Project::query()->where('group', $group)->get();
+        $projects = Project::query()->visible()->where('group', $group)->get();
 
         foreach ($projects as $project) {
             $this->run($runner, $project, RunKind::StartProject, "Start {$this->name($project)} ({$environment})", ['start', $environment], $environment);
@@ -1368,7 +1418,7 @@ class ProjectController extends Controller
     public function stopGroup(Request $request, string $group, CliRunner $runner): RedirectResponse
     {
         $environment = (string) $request->input('environment', 'local');
-        $projects = Project::query()->where('group', $group)->get();
+        $projects = Project::query()->visible()->where('group', $group)->get();
 
         foreach ($projects as $project) {
             $this->run($runner, $project, RunKind::StopProject, "Stop {$this->name($project)} ({$environment})", ['stop', $environment], $environment);
