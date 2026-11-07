@@ -1,4 +1,4 @@
-import { Form, Link, usePage } from '@inertiajs/react';
+import { Form, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     RotateCw,
@@ -12,6 +12,8 @@ import {
     Sparkles,
     XCircle,
     Download,
+    Pause,
+    Play,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
@@ -39,6 +41,8 @@ import {
     refresh,
     show as showTool,
     store,
+    pause as pauseTool,
+    resume as resumeTool,
 } from '@/routes/servers/tools';
 import { isLocalServer as isLocalServerCheck } from '@/lib/servers';
 import {
@@ -1119,6 +1123,21 @@ function InstalledCard({
     const tagline = toolTagline(tool);
     const cats = toolCategories(tool);
     const stack = toolStack(tool);
+    const paused = tool.paused ?? false;
+    const [togglingPause, setTogglingPause] = useState(false);
+
+    function handleTogglePause() {
+        if (!tool.host) {
+            return;
+        }
+        setTogglingPause(true);
+        const action = paused ? resumeTool : pauseTool;
+        router.post(
+            action({ server: server.name, tool: tool.tool }).url,
+            { domain: tool.host },
+            { preserveScroll: true, onFinish: () => setTogglingPause(false) },
+        );
+    }
 
     return (
         <article className="group relative flex flex-col justify-between rounded-2xl bg-surface p-5 shadow-2xs ring-1 ring-line transition-all duration-150 hover:shadow-md hover:ring-line/80">
@@ -1170,7 +1189,14 @@ function InstalledCard({
                             )}
                         </div>
                     </div>
-                    <StatusPill tone="ok">Installed</StatusPill>
+                    {paused ? (
+                        <StatusPill tone="warn">
+                            <Pause className="size-3" />
+                            Paused
+                        </StatusPill>
+                    ) : (
+                        <StatusPill tone="ok">Installed</StatusPill>
+                    )}
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-badge/50 px-3.5 py-2.5 text-xs ring-1 ring-line/60">
@@ -1248,6 +1274,30 @@ function InstalledCard({
                         <ArrowUpCircle className="size-3.5" />
                         <span>Update</span>
                     </button>
+                    {tool.host && (
+                        <button
+                            type="button"
+                            disabled={togglingPause}
+                            onClick={handleTogglePause}
+                            title={
+                                paused
+                                    ? 'Resume — scale back up to its prior pod count'
+                                    : 'Pause — scale pods to zero to free RAM; data (PVCs, Secrets) is kept'
+                            }
+                            className={buttonClass(
+                                'secondary',
+                                'sm',
+                                'h-8 px-3 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
+                            )}
+                        >
+                            {paused ? (
+                                <Play className="size-3.5" />
+                            ) : (
+                                <Pause className="size-3.5" />
+                            )}
+                            <span>{paused ? 'Resume' : 'Pause'}</span>
+                        </button>
+                    )}
                     {onManage ? (
                         <button
                             type="button"

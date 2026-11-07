@@ -366,6 +366,8 @@ export type ClusterTool = {
     commonsCapabilities?: ToolCommonsCapabilities;
     /** The names THIS instance actually holds on the shared Commons — empty for an instance that bypassed it (--no-plex), even when the tool itself can join one. */
     commons?: { databases: string[]; redis: string[]; buckets: string[] };
+    /** Scaled to zero via `tool:pause` (data preserved) — false on a `--registry-only` read until the verified pass confirms it. */
+    paused?: boolean;
 };
 
 export function toolCategories(tool: {

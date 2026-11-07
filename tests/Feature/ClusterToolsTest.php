@@ -913,6 +913,67 @@ test('rebind dispatches tool:rebind CLI runner with --no-wire-sso when wire_sso 
     File::deleteDirectory($bin);
 });
 
+test('pause dispatches tool:pause CLI runner for the installed tool', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.pause', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'domain' => 'sso.example.com',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube",
+        'tool:pause',
+        'production',
+        '--context=larakube-203.0.113.21',
+        '--domain=sso.example.com',
+        '--no-interaction',
+    ]);
+
+    expect(Run::sole())
+        ->label->toBe('Pause SSO on workshop-demo')
+        ->kind->toBe(RunKind::PauseClusterTool);
+
+    File::deleteDirectory($bin);
+});
+
+test('resume dispatches tool:resume CLI runner for the installed tool', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.resume', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'domain' => 'sso.example.com',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube",
+        'tool:resume',
+        'production',
+        '--context=larakube-203.0.113.21',
+        '--domain=sso.example.com',
+        '--no-interaction',
+    ]);
+
+    expect(Run::sole())
+        ->label->toBe('Resume SSO on workshop-demo')
+        ->kind->toBe(RunKind::ResumeClusterTool);
+
+    File::deleteDirectory($bin);
+});
+
+test('pause 404s for a tool that is not installed', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->post(route('servers.tools.pause', ['server' => 'workshop-demo', 'tool' => 'crm']), [
+        'domain' => '',
+    ])->assertNotFound();
+
+    File::deleteDirectory($bin);
+});
+
 test('wire triggers capability wire command for the app', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();

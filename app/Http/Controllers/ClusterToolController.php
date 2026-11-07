@@ -343,6 +343,48 @@ class ClusterToolController extends Controller
         return to_route('runs.show', $run);
     }
 
+    public function pause(Request $request, string $server, string $tool): RedirectResponse
+    {
+        return $this->togglePause($request, $server, $tool, pausing: true);
+    }
+
+    public function resume(Request $request, string $server, string $tool): RedirectResponse
+    {
+        return $this->togglePause($request, $server, $tool, pausing: false);
+    }
+
+    /** Scale an installed tool's pods to zero (or back up) via `tool:pause`/`tool:resume` — never touches PVCs, Secrets, or the registry. */
+    private function togglePause(Request $request, string $server, string $tool, bool $pausing): RedirectResponse
+    {
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $domain = $request->string('domain')->toString() ?: $request->string('host')->toString() ?: $request->string('instance')->toString();
+        $row = $this->tools->find($context, $tool, $domain);
+
+        abort_if($row === null || ! ($row['installed'] ?? false), 404);
+
+        $host = is_string($row['host'] ?? null) ? $row['host'] : '';
+        abort_if($host === '', 404);
+
+        $displayName = $this->displayName($row);
+        $command = $pausing ? 'tool:pause' : 'tool:resume';
+
+        $run = app(CliRunner::class)->start(
+            label: ($pausing ? 'Pause ' : 'Resume ').$displayName.' on '.$server,
+            arguments: [$command, 'production', "--context={$context}", "--domain={$host}"],
+            kind: $pausing ? RunKind::PauseClusterTool : RunKind::ResumeClusterTool,
+            subject: $tool,
+            meta: ['server' => $server, 'context' => $context, 'tool' => $tool, 'host' => $host],
+            targetType: 'tool',
+            targetName: $displayName,
+            serverName: $server,
+            context: $context,
+            tool: $tool,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     public function wire(Request $request, string $server, string $tool, CliRunner $runner): RedirectResponse
     {
         $request->validate([

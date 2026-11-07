@@ -42,6 +42,9 @@ enum RunKind: string
     case InstallClusterTool = 'install-cluster-tool';
     case RemoveClusterTool = 'remove-cluster-tool';
     case RebindClusterTool = 'rebind-cluster-tool';
+    /** Scale an installed Cluster Tool's pods to zero to free RAM, and back up to their prior count later. Data (PVCs, Secrets) is untouched. */
+    case PauseClusterTool = 'pause-cluster-tool';
+    case ResumeClusterTool = 'resume-cluster-tool';
     case QuickLaunchApp = 'quick-launch-app';
     case ConnectDomain = 'connect-domain';
     case DisconnectDomain = 'disconnect-domain';
@@ -160,6 +163,8 @@ enum RunKind: string
             self::InstallClusterTool,
             self::RemoveClusterTool,
             self::RebindClusterTool,
+            self::PauseClusterTool,
+            self::ResumeClusterTool,
             self::ConnectDomain,
             self::DisconnectDomain,
             self::QuickLaunchApp,

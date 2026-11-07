@@ -281,6 +281,8 @@ Route::post('/servers/{server}/tools/{tool}/wire', [ClusterToolController::class
 Route::post('/servers/{server}/tools/{tool}/unwire', [ClusterToolController::class, 'unwire'])->name('servers.tools.unwire');
 Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
 Route::post('/servers/{server}/tools/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.tools.rebind');
+Route::post('/servers/{server}/tools/{tool}/pause', [ClusterToolController::class, 'pause'])->name('servers.tools.pause');
+Route::post('/servers/{server}/tools/{tool}/resume', [ClusterToolController::class, 'resume'])->name('servers.tools.resume');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');
 Route::get('/servers/{server}/tools/{tool}/env', [ClusterToolEnvController::class, 'status'])->name('servers.tools.env.status');
 Route::post('/servers/{server}/tools/{tool}/env', [ClusterToolEnvController::class, 'update'])->name('servers.tools.env.update');
