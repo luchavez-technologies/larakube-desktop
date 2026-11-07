@@ -1914,6 +1914,11 @@ function LaunchedRunPanel({
                                         value={credentials.admin_password}
                                     />
                                 )}
+                                <p className="text-[11px] text-soft">
+                                    Shown here once, in plain text — change this
+                                    password on first login if anyone else could
+                                    have seen your screen or logs.
+                                </p>
                             </div>
                         )}
 

@@ -149,6 +149,23 @@ class ToolCatalog
     }
 
     /**
+     * Whether a re-sync for this server is pending or in flight — 'stale'
+     * the instant Refresh is clicked (before the queued job has even
+     * started), 'syncing' once it has — so the Refresh button can show a
+     * visible syncing state and disable itself instead of inviting repeat
+     * clicks while the user waits. Deliberately broader than the private
+     * isSyncing() above, which only means "syncing", and must stay that way:
+     * it also gates whether forContext() dispatches a new job at all, and
+     * 'stale' there has to still be eligible to dispatch one.
+     */
+    public function contextIsSyncing(string $context): bool
+    {
+        $server = Server::firstWhere('context', $context);
+
+        return $server !== null && $server->clusterTools()->whereIn('sync_status', ['stale', 'syncing'])->exists();
+    }
+
+    /**
      * @return array{tools: list<array<string, mixed>>, checkedAt: int|null}|null
      */
     private function lastVerifiedForServer(Server $server): ?array

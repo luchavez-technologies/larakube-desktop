@@ -60,6 +60,10 @@ class ClusterToolController extends Controller
             'tools' => $last !== null && $this->tools->isFresh($last)
                 ? $last['tools']
                 : Inertia::defer(fn (): ?array => $this->tools->forContext($context), 'tools'),
+            // Lets the Refresh button show a visible syncing state and
+            // disable itself instead of inviting repeat clicks while a
+            // background re-sync is in flight.
+            'toolsSyncing' => $this->tools->contextIsSyncing($context),
             'installing' => $this->installingTools($server),
             // An instant DB read — domains used to block on a live CLI
             // round-trip (ExternalDNS + TLS + kubectl) the first time a

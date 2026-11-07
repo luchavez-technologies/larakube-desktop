@@ -120,6 +120,24 @@ class Server extends Model
 
     protected static function booted(): void
     {
+        // A server missing from the CLI's own stacks listing (SyncServersJob)
+        // is marked status=missing, and a destroyed one status=destroyed —
+        // neither is ever hard-deleted, since cluster_tools and activities
+        // referencing it would otherwise lose their history. But nothing
+        // else should ever resolve TO one of those dead rows: when a second
+        // server record ends up sharing the same context/IP as an old
+        // missing or destroyed one (a rename, or the cloud provider
+        // reassigning a freed IP to a new droplet), every lookup across the
+        // app keyed by context (ToolCatalog, Mail/SSO/Drive/OpenBao/Plex
+        // status, domains) picked whichever row matched first — silently the
+        // dead one, if its id happened to be lower. scopeActiveUnfiltered()
+        // already excludes this same pair for a different purpose; apply it
+        // globally too. Call withMissing() for the one place (SyncServersJob's
+        // own revive-on-reappear upsert) that must still see a missing row.
+        static::addGlobalScope('excludingDeadServers', function (Builder $query): void {
+            $query->whereNotIn('status', ['missing', 'destroyed']);
+        });
+
         static::creating(function (Server $server): void {
             if (! array_key_exists('hidden_in_demo', $server->getAttributes()) && $server->name !== '') {
                 $server->hidden_in_demo = in_array(
@@ -152,6 +170,21 @@ class Server extends Model
                 }
             }
         });
+    }
+
+    /**
+     * Opts back into seeing missing/destroyed rows — for the handful of
+     * places that must still find or revive one: SyncServersJob's own
+     * upsert (so a server that reappears under its old name updates the
+     * existing row instead of creating a duplicate), and anything that
+     * lists every server regardless of status.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeWithMissing(Builder $query): Builder
+    {
+        return $query->withoutGlobalScope('excludingDeadServers');
     }
 
     /**

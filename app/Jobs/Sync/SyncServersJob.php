@@ -37,9 +37,13 @@ class SyncServersJob extends SyncJob
                 $name = (string) $row['name'];
                 $seenNames[] = $name;
 
-                $wasNew = ! Server::where('name', $name)->exists();
+                // withMissing(): a server that reappears under a name that
+                // was previously marked missing must revive that row, not
+                // collide with it on the unique `name` constraint by trying
+                // to insert a second one.
+                $wasNew = ! Server::withMissing()->where('name', $name)->exists();
 
-                $server = Server::updateOrCreate(['name' => $name], [
+                $server = Server::withMissing()->updateOrCreate(['name' => $name], [
                     'role' => $row['role'] ?? 'deploy',
                     'provider' => $row['provider'],
                     'kind' => $row['kind'],

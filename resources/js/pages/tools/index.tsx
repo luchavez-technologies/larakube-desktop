@@ -1,4 +1,4 @@
-import { Form, Link, router, usePage } from '@inertiajs/react';
+import { Form, Link, router, usePage, usePoll } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     RotateCw,
@@ -68,6 +68,7 @@ type Props = {
     lastVerified: ClusterTool[] | null;
     checkedAt: string | null;
     tools?: ClusterTool[] | null;
+    toolsSyncing: boolean;
     installing: Record<string, number>;
     domains?: ServerDomain[] | null;
     activeCommonsServices?: string[] | null;
@@ -141,6 +142,7 @@ export default function ToolsIndex({
     lastVerified,
     checkedAt,
     tools: verifiedTools,
+    toolsSyncing,
     installing,
     domains,
     activeCommonsServices,
@@ -160,6 +162,41 @@ export default function ToolsIndex({
             setLandedAt(new Date().toISOString());
         }
     }
+    // Refresh button: `refreshing` covers the moment between the click and the
+    // redirect landing; `toolsSyncing` (from the server) covers the
+    // background job after that, so the button + spinner stay visible for
+    // the whole re-sync instead of just the initial request. Reset on a
+    // server switch — this page component is reused across ServerSwitcher
+    // navigations, so a stale `refreshing` from server A must not leave the
+    // button disabled on server B.
+    const [refreshing, setRefreshing] = useState(false);
+    useEffect(() => {
+        setRefreshing(false);
+    }, [server.name]);
+    const isSyncing = refreshing || toolsSyncing;
+
+    const { start: startPoll, stop: stopPoll } = usePoll(
+        2000,
+        { only: ['tools', 'toolsSyncing', 'checkedAt', 'lastVerified'] },
+        { autoStart: toolsSyncing },
+    );
+    useEffect(() => {
+        if (toolsSyncing) {
+            startPoll();
+        } else {
+            stopPoll();
+        }
+    }, [toolsSyncing, startPoll, stopPoll]);
+
+    function handleRefresh() {
+        setRefreshing(true);
+        router.post(
+            refresh(server.name).url,
+            {},
+            { preserveScroll: true, onFinish: () => setRefreshing(false) },
+        );
+    }
+
     const [installingTool, setInstallingTool] = useState<ClusterTool | null>(
         null,
     );
@@ -333,15 +370,22 @@ export default function ToolsIndex({
                         <ExternalLink className="size-3.5" />
                         <span>Open server</span>
                     </Link>
-                    <Link
-                        href={refresh(server.name).url}
-                        method="post"
-                        as="button"
+                    <button
+                        type="button"
+                        onClick={handleRefresh}
+                        disabled={isSyncing}
                         className={buttonClass('secondary')}
+                        title={
+                            isSyncing
+                                ? 'Checking the cluster for changes…'
+                                : 'Check the cluster for changes'
+                        }
                     >
-                        <RotateCw className="size-3.5" />
-                        <span>Refresh</span>
-                    </Link>
+                        <RotateCw
+                            className={`size-3.5 ${isSyncing ? 'animate-spin' : ''}`}
+                        />
+                        <span>{isSyncing ? 'Syncing…' : 'Refresh'}</span>
+                    </button>
                 </div>
             </header>
 

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Process;
 
 /**
  * One tool's bootstrap credentials (admin email/password, when it has any),
- * read live via `tool:show --json`. Deliberately NOT cached or synced into
+ * read live via `{tool}:show --json`. Deliberately NOT cached or synced into
  * cluster_tools: this is asked for once, right after a successful install,
  * the same "live, uncached probe" shape as ClusterStatus::checkDns() — not a
  * steady-state picture worth a background job.
@@ -29,8 +29,7 @@ class ToolCredentials
         }
 
         $isolated = $this->locator->isolate([
-            $cli, 'tool:show', 'local',
-            "--tool={$tool}",
+            $cli, "{$tool}:show", 'local',
             "--domain={$domain}",
             "--context={$context}",
             '--json',
@@ -45,6 +44,16 @@ class ToolCredentials
 
         $decoded = json_decode(trim($result->output()), true);
 
-        return is_array($decoded) ? $decoded : null;
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        // `{tool}:show --json` returns the tool's whole detail object
+        // (tool/instance/host/wirings/components/credentials); callers here
+        // only ever want the bootstrap credentials themselves, flat
+        // (admin_email/admin_password), the same shape the frontend reads.
+        $credentials = $decoded['credentials'] ?? null;
+
+        return is_array($credentials) ? $credentials : null;
     }
 }

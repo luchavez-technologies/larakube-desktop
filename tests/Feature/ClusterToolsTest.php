@@ -145,11 +145,23 @@ test('forgetting a server marks its verified list stale but keeps it to show mea
     $last = app(ToolCatalog::class)->lastVerified('ctx');
 
     expect($server->clusterTools()->sole()->sync_status)->toBe('stale')
+        // contextIsSyncing() treats 'stale' as syncing too — true the instant
+        // Refresh is clicked, not only once the queued job actually starts.
+        ->and(app(ToolCatalog::class)->contextIsSyncing('ctx'))->toBeTrue()
         ->and($last['checkedAt'])->toBeNull()
         ->and($last['tools'][0])->toMatchArray(['tool' => 'sso', 'installed' => false])
         ->and(Cache::has('cluster-tools:ctx:registered'))->toBeFalse();
 
     Queue::assertPushed(SyncClusterToolsJob::class, fn ($job): bool => $job->serverId === $server->id);
+});
+
+test('contextIsSyncing reports false once the sync has finished', function () {
+    $server = clusterToolsSeed('ctx-done', clusterToolsRows(), now()->getTimestamp());
+
+    expect(app(ToolCatalog::class)->contextIsSyncing('ctx-done'))->toBeFalse();
+
+    $server->clusterTools()->update(['sync_status' => 'syncing']);
+    expect(app(ToolCatalog::class)->contextIsSyncing('ctx-done'))->toBeTrue();
 });
 
 test('a fresh verified list renders at once, with no live check', function () {
@@ -453,7 +465,7 @@ test('check-dns endpoint returns resolution status for a domain', function () {
     File::deleteDirectory($bin);
 });
 
-test('credentials endpoint fetches bootstrap credentials live via tool:show --json', function () {
+test('credentials endpoint fetches bootstrap credentials live via {tool}:show --json', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
 
@@ -461,7 +473,7 @@ test('credentials endpoint fetches bootstrap credentials live via tool:show --js
         '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
             ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
         ]])),
-        '*tool:show*' => Process::result(output: json_encode([
+        '*pocketbase:show*' => Process::result(output: json_encode([
             'tool' => 'pocketbase', 'instance' => '', 'environment' => 'local', 'installed' => true,
             'namespace' => 'larakube-shared', 'host' => 'data.example.com', 'url' => 'https://data.example.com',
             'wirings' => [], 'components' => [],
@@ -469,13 +481,13 @@ test('credentials endpoint fetches bootstrap credentials live via tool:show --js
         ])),
     ]);
 
+    // The frontend reads credentials.admin_email/credentials.admin_password
+    // directly (flat) — the endpoint must unwrap {tool}:show --json's
+    // "credentials" field, not hand back its whole detail object.
     $this->getJson(route('servers.tools.credentials', ['server' => 'workshop-demo', 'tool' => 'pocketbase', 'domain' => 'data.example.com']))
         ->assertOk()
-        ->assertJson(['credentials' => [
-            'tool' => 'pocketbase', 'instance' => '', 'environment' => 'local', 'installed' => true,
-            'namespace' => 'larakube-shared', 'host' => 'data.example.com', 'url' => 'https://data.example.com',
-            'wirings' => [], 'components' => [],
-            'credentials' => ['admin_email' => 'admin@example.com', 'admin_password' => 's3cret'],
+        ->assertExactJson(['credentials' => [
+            'admin_email' => 'admin@example.com', 'admin_password' => 's3cret',
         ]]);
 
     File::deleteDirectory($bin);
@@ -488,12 +500,35 @@ test('credentials endpoint reports null when the CLI call fails', function () {
         '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
             ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
         ]])),
-        '*tool:show*' => Process::result(output: 'not json', exitCode: 1),
+        '*pocketbase:show*' => Process::result(output: 'not json', exitCode: 1),
     ]);
 
     $this->getJson(route('servers.tools.credentials', ['server' => 'workshop-demo', 'tool' => 'pocketbase', 'domain' => 'data.example.com']))
         ->assertOk()
         ->assertJson(['credentials' => null]);
+
+    File::deleteDirectory($bin);
+});
+
+test('credentials endpoint reports null (not the whole detail object) for a tool with no bootstrap credentials', function () {
+    $bin = clusterToolsFakeCli();
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => [
+            ['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'account' => null, 'projectId' => null, 'status' => 'ready'],
+        ]])),
+        '*n8n:show*' => Process::result(output: json_encode([
+            'tool' => 'n8n', 'instance' => 'flow-example-com', 'environment' => 'local', 'installed' => true,
+            'namespace' => 'larakube-shared', 'host' => 'flow.example.com', 'url' => 'https://flow.example.com',
+            'wirings' => [], 'components' => [],
+            // n8n seeds no admin account — the first visitor claims it.
+            'credentials' => null,
+        ])),
+    ]);
+
+    $this->getJson(route('servers.tools.credentials', ['server' => 'workshop-demo', 'tool' => 'n8n', 'domain' => 'flow.example.com']))
+        ->assertOk()
+        ->assertExactJson(['credentials' => null]);
 
     File::deleteDirectory($bin);
 });
