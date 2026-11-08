@@ -1131,6 +1131,36 @@ class ProjectController extends Controller
         return $this->run($runner, $project, RunKind::ReloadProject, "Reload workers for {$this->name($project)} ({$environment})", $args, $environment);
     }
 
+    public function previewUp(Project $project, CliRunner $runner): RedirectResponse
+    {
+        $inspection = $this->inspector->inspect($project->path);
+        abort_unless($inspection['exists'], 404);
+
+        return $this->run(
+            $runner,
+            $project,
+            RunKind::PreviewUpProject,
+            "Start production preview for {$this->name($project)}",
+            ['preview:up'],
+            'local',
+        );
+    }
+
+    public function previewDown(Project $project, CliRunner $runner): RedirectResponse
+    {
+        $inspection = $this->inspector->inspect($project->path);
+        abort_unless($inspection['exists'], 404);
+
+        return $this->run(
+            $runner,
+            $project,
+            RunKind::PreviewDownProject,
+            "Stop production preview for {$this->name($project)}",
+            ['preview:down'],
+            'local',
+        );
+    }
+
     /**
      * Opens a new terminal window running k9s scoped to this project's
      * environment context and namespace.
@@ -1794,7 +1824,7 @@ class ProjectController extends Controller
             return strtolower(trim($matches[1]));
         }
 
-        if (in_array($run->kind, [RunKind::UpProject, RunKind::HealProject, RunKind::ReloadProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
+        if (in_array($run->kind, [RunKind::UpProject, RunKind::HealProject, RunKind::ReloadProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::PreviewUpProject, RunKind::PreviewDownProject, RunKind::InitProject, RunKind::NewProject, RunKind::CloneProject], true)) {
             return 'local';
         }
 

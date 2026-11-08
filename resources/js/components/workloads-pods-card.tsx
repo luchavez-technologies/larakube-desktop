@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { router } from '@inertiajs/react';
 import {
     Layers,
@@ -18,12 +18,15 @@ import LogPanel from '@/components/log-panel';
 import StatusPill from '@/components/status-pill';
 import { cn } from '@/lib/utils';
 import { start, stop } from '@/routes/projects';
+import type { RecentRun } from '@/components/recent-runs-card';
 import type { PodInfo, Project } from '@/types/larakube';
 
 export default function WorkloadsPodsCard({
     project,
     activeEnv,
     pods = [],
+    runs = [],
+    serverName,
     k9sInstalled = false,
     onOpenK9s,
     launchingK9s = false,
@@ -31,6 +34,8 @@ export default function WorkloadsPodsCard({
     project: Project;
     activeEnv: string;
     pods?: PodInfo[];
+    runs?: RecentRun[];
+    serverName?: string;
     k9sInstalled?: boolean;
     onOpenK9s?: () => void;
     launchingK9s?: boolean;
@@ -49,16 +54,48 @@ export default function WorkloadsPodsCard({
     const [liveLogs, setLiveLogs] = useState<boolean>(true);
     const [pausing, setPausing] = useState(false);
     const [resuming, setResuming] = useState(false);
+    const [confirmPauseOpen, setConfirmPauseOpen] = useState(false);
 
-    // Only re-fetches the same light props the page's existing run-status
-    // poll already uses (see usePoll in show.tsx) — stop/start kick off a
-    // background CLI run, so that poll picks up its completion (and, since
-    // 'pods' rides along on it too) within a second, with no extra reload
-    // of the whole page or card needed here.
+    const activeWorkloadRun = runs.find(
+        (run) =>
+            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            run.status === 'running' &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const latestWorkloadRun = runs.find(
+        (run) =>
+            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            ['succeeded', 'running'].includes(run.status) &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const isPaused = useMemo(() => {
+        if (
+            latestWorkloadRun?.kind === 'stop-project' &&
+            latestWorkloadRun.status === 'succeeded'
+        ) {
+            return true;
+        }
+        if (
+            latestWorkloadRun?.kind === 'start-project' &&
+            latestWorkloadRun.status === 'succeeded'
+        ) {
+            return false;
+        }
+        if (pods.length === 0 && latestWorkloadRun) {
+            return true;
+        }
+        return false;
+    }, [pods.length, latestWorkloadRun]);
+
     const runPollProps = ['runs', 'latestRun', 'project', 'server', 'pods'];
 
     const handlePause = () => {
         setPausing(true);
+        setConfirmPauseOpen(false);
         router.post(
             stop(project.id).url,
             { environment: activeEnv },
@@ -208,30 +245,26 @@ export default function WorkloadsPodsCard({
                 label="Workloads & Pods"
                 action={
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            disabled={pausing || resuming}
-                            onClick={handlePause}
-                            className="gap-1.5 text-xs font-medium"
-                            title={`Pause ${activeEnv} — scale every Deployment to zero to free resources; data (PVCs, databases) is kept. Remembers the real replica count to restore on Resume.`}
-                        >
-                            <Pause className="size-3.5" />
-                            <span>{pausing ? 'Pausing…' : 'Pause'}</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            disabled={pausing || resuming}
-                            onClick={handleResume}
-                            className="gap-1.5 text-xs font-medium"
-                            title={`Resume ${activeEnv} — scale back up to its prior pod count`}
-                        >
-                            <Play className="size-3.5" />
-                            <span>{resuming ? 'Resuming…' : 'Resume'}</span>
-                        </Button>
+                        {activeEnv !== 'local' && pods.length > 0 && (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={
+                                    pausing ||
+                                    resuming ||
+                                    Boolean(activeWorkloadRun)
+                                }
+                                onClick={() => setConfirmPauseOpen(true)}
+                                className="gap-1.5 text-xs font-medium text-amber-600 hover:border-amber-500/50 hover:bg-amber-500/10 dark:text-amber-400"
+                                title={`Pause ${activeEnv} — scale deployments to zero to free resources; databases and storage are kept (larakube stop ${activeEnv})`}
+                            >
+                                <Pause className="size-3.5" />
+                                <span>
+                                    {pausing ? 'Pausing…' : 'Pause Workloads'}
+                                </span>
+                            </Button>
+                        )}
 
                         {onOpenK9s && (
                             <Button
@@ -310,7 +343,47 @@ export default function WorkloadsPodsCard({
                     </div>
                 }
             >
-                {pods.length === 0 ? (
+                {isPaused ? (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-start gap-3.5">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400">
+                                    <Pause className="size-5" />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-ink">
+                                        Workloads are currently paused
+                                        {serverName ? ` on ${serverName}` : ''}
+                                    </h4>
+                                    <p className="mt-1 text-xs text-soft">
+                                        All deployment replicas are scaled to
+                                        zero. Public traffic is halted, while
+                                        databases and persistent volumes (PVCs)
+                                        remain completely safe.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={
+                                    resuming || Boolean(activeWorkloadRun)
+                                }
+                                onClick={handleResume}
+                                className="shrink-0 gap-1.5 bg-emerald-600 font-medium text-white hover:bg-emerald-700"
+                                title={`Resume ${activeEnv} — scale workloads back up to prior replica count (larakube start ${activeEnv})`}
+                            >
+                                <Play className="size-3.5 fill-current" />
+                                <span>
+                                    {resuming
+                                        ? 'Resuming…'
+                                        : 'Resume Workloads'}
+                                </span>
+                            </Button>
+                        </div>
+                    </div>
+                ) : pods.length === 0 ? (
                     <div className="py-6 text-center">
                         <Layers className="mx-auto size-7 text-faint" />
                         <p className="mt-2 text-xs font-medium text-ink">
@@ -644,6 +717,64 @@ export default function WorkloadsPodsCard({
                                 className="h-[400px] max-h-[55vh]"
                                 follow={true}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal for Cloud Workload Pause */}
+            {confirmPauseOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+                        <div className="flex items-start gap-3.5">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/20">
+                                <Pause className="size-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-semibold text-ink">
+                                    Pause {activeEnv.toUpperCase()} Workloads?
+                                </h3>
+                                <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                    This will run{' '}
+                                    <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                        larakube stop {activeEnv}
+                                    </code>
+                                    {serverName ? ` on ${serverName}` : ''}. All
+                                    public-facing web and worker pods will be
+                                    scaled to zero, halting public traffic.
+                                </p>
+                                <p className="mt-2 text-[11px] text-faint">
+                                    Persistent databases, storage volumes
+                                    (PVCs), and configurations remain completely
+                                    safe and untouched. You can resume at any
+                                    time.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2.5">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={pausing}
+                                onClick={() => setConfirmPauseOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={pausing}
+                                onClick={handlePause}
+                                className="gap-1.5"
+                            >
+                                <Pause className="size-3.5" />
+                                <span>
+                                    {pausing
+                                        ? 'Pausing…'
+                                        : `Pause ${activeEnv.toUpperCase()} Workloads`}
+                                </span>
+                            </Button>
                         </div>
                     </div>
                 </div>

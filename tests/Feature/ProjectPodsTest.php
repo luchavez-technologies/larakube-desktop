@@ -147,3 +147,58 @@ test('ProjectPods::restartPod deletes the pod so the deployment rolls a fresh on
     unlink("{$directory}/kubectl");
     rmdir($directory);
 });
+
+test('ProjectPods::pods resolves web-preview pod with Production Preview (Caddy) label', function () {
+    $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    mkdir($directory, 0755, true);
+    file_put_contents("{$directory}/kubectl", "#!/bin/sh\n");
+    chmod("{$directory}/kubectl", 0755);
+
+    $locator = new ToolLocator([$directory]);
+    $service = new ProjectPods($locator);
+
+    $fakeJson = json_encode([
+        'items' => [
+            [
+                'metadata' => [
+                    'name' => 'portal-web-preview-6f5d889b9d-4x8z1',
+                    'creationTimestamp' => now()->subMinutes(5)->toIso8601String(),
+                    'labels' => ['app' => 'web-preview'],
+                ],
+                'spec' => [
+                    'containers' => [['name' => 'caddy']],
+                ],
+                'status' => [
+                    'phase' => 'Running',
+                    'containerStatuses' => [
+                        [
+                            'name' => 'caddy',
+                            'ready' => true,
+                            'restartCount' => 0,
+                            'state' => ['running' => ['startedAt' => now()->subMinutes(5)->toIso8601String()]],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    Process::fake([
+        '*get*pods*' => Process::result(output: $fakeJson),
+        '*' => Process::result(),
+    ]);
+
+    $pods = $service->pods('k3d-larakube', 'portal-local', fresh: true);
+
+    expect($pods)->toHaveCount(1);
+
+    $preview = $pods[0];
+    expect($preview['component'])->toBe('web-preview')
+        ->and($preview['componentLabel'])->toBe('Production Preview (Caddy)')
+        ->and($preview['statusText'])->toBe('Running')
+        ->and($preview['statusTone'])->toBe('ok')
+        ->and($preview['ready'])->toBe('1/1');
+
+    unlink("{$directory}/kubectl");
+    rmdir($directory);
+});

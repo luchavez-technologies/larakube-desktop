@@ -73,6 +73,8 @@ enum RunKind: string
     case DownProject = 'down-project';
     case StartProject = 'start-project';
     case StopProject = 'stop-project';
+    case PreviewUpProject = 'preview-up-project';
+    case PreviewDownProject = 'preview-down-project';
     case PlexInit = 'plex-init';
     case PlexStart = 'plex-start';
     case PlexStop = 'plex-stop';

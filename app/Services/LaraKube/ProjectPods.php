@@ -10,6 +10,7 @@ use Throwable;
 class ProjectPods
 {
     public const COMPONENT_LABELS = [
+        'web-preview' => 'Production Preview (Caddy)',
         'web' => 'Web Server',
         'node' => 'Vite / Asset Server',
         'horizon' => 'Horizon Queue',
@@ -194,7 +195,7 @@ class ProjectPods
         }
 
         $name = (string) ($item['metadata']['name'] ?? '');
-        if (preg_match('/^(?:[a-z0-9-]+-)?(web|node|queue|queues|horizon|reverb|scheduler|ssr|postgres|mysql|mariadb|redis)(?:-[a-z0-9]+)*$/', $name, $m)) {
+        if (preg_match('/^(?:[a-z0-9-]+-)?(web-preview|web|node|queue|queues|horizon|reverb|scheduler|ssr|postgres|mysql|mariadb|redis)(?:-[a-z0-9]+)*$/', $name, $m)) {
             return $m[1];
         }
 

@@ -91,6 +91,10 @@ import {
     tld as setProjectTld,
     up,
 } from '@/routes/projects';
+import {
+    up as previewUpRoute,
+    down as previewDownRoute,
+} from '@/routes/projects/preview';
 import { join as joinPlex, leave as leavePlex } from '@/routes/projects/plex';
 import { show as showRun } from '@/routes/runs';
 import { create as createServer, show as showServer } from '@/routes/servers';
@@ -446,6 +450,7 @@ export default function ShowProject({
                                         <LocalClusterCard
                                             project={project}
                                             runs={runs}
+                                            pods={pods?.local ?? []}
                                             healthMetrics={
                                                 healthMetrics?.local ?? null
                                             }
@@ -490,6 +495,7 @@ export default function ShowProject({
                                                 project={project}
                                                 activeEnv="local"
                                                 pods={pods?.local ?? []}
+                                                runs={runs}
                                                 k9sInstalled={k9sInstalled}
                                                 onOpenK9s={() =>
                                                     handleOpenK9s('local')
@@ -553,6 +559,7 @@ export default function ShowProject({
                                         activeHost={activeHost}
                                         readyServers={readyServers}
                                         runs={runs}
+                                        pods={pods?.[activeEnv] ?? []}
                                         domains={domains?.[activeEnv] ?? null}
                                         onOpenDeploy={() =>
                                             setDeployModalOpen(true)
@@ -572,6 +579,8 @@ export default function ShowProject({
                                             project={project}
                                             activeEnv={activeEnv}
                                             pods={pods?.[activeEnv] ?? []}
+                                            runs={runs}
+                                            serverName={activeServer?.name}
                                             k9sInstalled={k9sInstalled}
                                             onOpenK9s={() =>
                                                 handleOpenK9s(activeEnv)
@@ -931,6 +940,7 @@ function CloudEnvironmentOverviewCard({
     activeHost,
     readyServers,
     runs,
+    pods = [],
     domains,
     onOpenDeploy,
     onOpenCi: _onOpenCi,
@@ -943,6 +953,7 @@ function CloudEnvironmentOverviewCard({
     activeHost: string | null;
     readyServers: ReadyServer[];
     runs: RecentRun[];
+    pods?: PodInfo[];
     domains?: ServerDomain[] | null;
     onOpenDeploy: () => void;
     onOpenCi?: () => void;
@@ -979,13 +990,63 @@ function CloudEnvironmentOverviewCard({
                 (!run.label.includes('(') && activeEnv === 'production')),
     );
 
+    const activeWorkloadRun = runs.find(
+        (run) =>
+            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            run.status === 'running' &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const latestWorkloadRun = runs.find(
+        (run) =>
+            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            ['succeeded', 'running'].includes(run.status) &&
+            (run.label.includes(`(${activeEnv})`) ||
+                (!run.label.includes('(') && activeEnv === 'production')),
+    );
+
+    const hasPods = Boolean(pods && pods.length > 0);
+
+    const isPaused = useMemo(() => {
+        if (
+            latestWorkloadRun?.kind === 'stop-project' &&
+            latestWorkloadRun.status === 'succeeded'
+        ) {
+            return true;
+        }
+        if (
+            latestWorkloadRun?.kind === 'start-project' &&
+            latestWorkloadRun.status === 'succeeded'
+        ) {
+            return false;
+        }
+        if (
+            !hasPods &&
+            (hasSucceededDeploy ||
+                Boolean(activeCi?.hasWorkflow) ||
+                latestWorkloadRun)
+        ) {
+            return true;
+        }
+        return false;
+    }, [hasPods, latestWorkloadRun, hasSucceededDeploy, activeCi]);
+
     const headerPill = activeDeploy ? (
         <StatusPill tone="busy">{`Deploying (${activeEnv})`}</StatusPill>
-    ) : hasSucceededDeploy ? (
+    ) : activeWorkloadRun ? (
+        <StatusPill tone="busy">{`${activeWorkloadRun.label}…`}</StatusPill>
+    ) : hasPods ? (
         <StatusPill tone="ok">
             {activeServer?.name
-                ? `Deployed · ${activeServer.name}`
-                : `Deployed (${activeEnv})`}
+                ? `Running · ${activeServer.name}`
+                : `Running (${activeEnv})`}
+        </StatusPill>
+    ) : isPaused ? (
+        <StatusPill tone="warn">
+            {activeServer?.name
+                ? `Stopped (Paused) · ${activeServer.name}`
+                : `Stopped (Paused) (${activeEnv})`}
         </StatusPill>
     ) : activeServer ? (
         <StatusPill tone="muted">{`Server: ${activeServer.name}`}</StatusPill>
@@ -1233,18 +1294,22 @@ function CloudEnvironmentOverviewCard({
                     initialSection={settingsSection}
                 />
 
-                {/* Deploy Action Banner */}
+                {/* Deploy & Workload Action Banner */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                     <p className="text-xs text-soft">
                         {activeDeploy
                             ? 'Building and shipping app containers to cluster…'
-                            : activeCi?.hasWorkflow
-                              ? `Automated CI/CD is active on ${activeCi.branch ?? 'main'}. Push commits to Git to deploy, or trigger a manual deploy from this Mac.`
-                              : hasSucceededDeploy
-                                ? `Last deployment to ${activeServer?.name ?? 'server'} succeeded.`
-                                : activeServer
-                                  ? `Ready to deploy to ${activeServer.name}. Click Deploy to ship.`
-                                  : 'Configure server and host to ship this environment.'}
+                            : activeWorkloadRun
+                              ? 'Scaling workloads on cluster…'
+                              : isPaused
+                                ? `Workloads on ${activeServer?.name ?? activeEnv} are currently paused (stopped). Click Resume to bring them back up.`
+                                : activeCi?.hasWorkflow
+                                  ? `Automated CI/CD is active on ${activeCi.branch ?? 'main'}. Push commits to Git to deploy, or trigger a manual deploy from this Mac.`
+                                  : hasSucceededDeploy
+                                    ? `Last deployment to ${activeServer?.name ?? 'server'} succeeded.`
+                                    : activeServer
+                                      ? `Ready to deploy to ${activeServer.name}. Click Deploy to ship.`
+                                      : 'Configure server and host to ship this environment.'}
                     </p>
                     <div className="flex items-center gap-2">
                         <Button
@@ -2918,15 +2983,37 @@ function InitStatus({ latestRun }: { latestRun: ProjectRun | null }) {
 function LocalClusterCard({
     project,
     runs,
+    pods = [],
     healthMetrics,
     podMetrics,
 }: {
     project: Project;
     runs: RecentRun[];
+    pods?: PodInfo[];
     healthMetrics?: HealthMetrics | null;
     podMetrics?: PodMetrics | null;
 }) {
     const [confirmDownOpen, setConfirmDownOpen] = useState(false);
+
+    const PREVIEWABLE_FRAMEWORKS = ['astro', 'vite', 'docusaurus', 'nextjs'];
+    const isPreviewable = PREVIEWABLE_FRAMEWORKS.includes(
+        project.framework ?? '',
+    );
+
+    const activePreviewLifecycle = runs.find(
+        (run) =>
+            ['preview-up-project', 'preview-down-project'].includes(
+                run.kind ?? '',
+            ) && run.status === 'running',
+    );
+    const isPreviewBusy = Boolean(activePreviewLifecycle);
+
+    const previewPod = pods?.find(
+        (p) => p.component === 'web-preview' || p.name.includes('web-preview'),
+    );
+    const isPreviewActive = Boolean(
+        previewPod && previewPod.phase === 'Running',
+    );
 
     const activeLifecycle = runs.find(
         (run) =>
@@ -2935,7 +3022,11 @@ function LocalClusterCard({
                 'down-project',
                 'start-project',
                 'stop-project',
-            ].includes(run.kind ?? '') && run.status === 'running',
+            ].includes(run.kind ?? '') &&
+            run.status === 'running' &&
+            (run.environment === 'local' ||
+                run.label.includes('(local)') ||
+                !run.label.includes('(')),
     );
 
     const latestLifecycleRun = runs.find(
@@ -2946,8 +3037,16 @@ function LocalClusterCard({
                 'start-project',
                 'stop-project',
             ].includes(run.kind ?? '') &&
-            ['succeeded', 'running'].includes(run.status),
+            ['succeeded', 'running'].includes(run.status) &&
+            (run.environment === 'local' ||
+                run.label.includes('(local)') ||
+                !run.label.includes('(')),
     );
+
+    const hasRunningPods = Boolean(
+        pods && pods.some((p) => p.phase === 'Running'),
+    );
+    const hasAnyPods = Boolean(pods && pods.length > 0);
 
     const isLiveUp = Boolean(healthMetrics?.isUp);
     const hasActivePods = Boolean(
@@ -2959,30 +3058,50 @@ function LocalClusterCard({
 
     const status: 'running' | 'stopped' | 'down' | 'busy' = useMemo(() => {
         if (activeLifecycle) return 'busy';
-        if (
-            latestLifecycleRun?.kind === 'down-project' &&
-            latestLifecycleRun?.status === 'succeeded'
-        ) {
-            return 'down';
+
+        // 1. Live pod truth: If pods are currently running in the cluster, the workload is running!
+        if (hasRunningPods || isLiveUp || hasActivePods) {
+            return 'running';
         }
+
+        // 2. If pods exist in cluster but aren't in Running phase yet (e.g. ContainerCreating), it's starting/running
+        if (hasAnyPods) {
+            return 'running';
+        }
+
+        // 3. When there are no pods, derive state from the latest local lifecycle run:
         if (
             latestLifecycleRun?.kind === 'stop-project' &&
             latestLifecycleRun?.status === 'succeeded'
         ) {
             return 'stopped';
         }
-        if (isLiveUp || hasActivePods) {
-            return 'running';
-        }
+
         if (
-            latestLifecycleRun?.kind === 'up-project' &&
+            latestLifecycleRun?.kind === 'down-project' &&
+            latestLifecycleRun?.status === 'succeeded'
+        ) {
+            return 'down';
+        }
+
+        if (
+            ['up-project', 'start-project'].includes(
+                latestLifecycleRun?.kind ?? '',
+            ) &&
             latestLifecycleRun?.status === 'succeeded'
         ) {
             return 'running';
         }
 
         return 'down';
-    }, [activeLifecycle, latestLifecycleRun, isLiveUp, hasActivePods]);
+    }, [
+        activeLifecycle,
+        hasRunningPods,
+        isLiveUp,
+        hasActivePods,
+        hasAnyPods,
+        latestLifecycleRun,
+    ]);
 
     const effectiveTld =
         project.effectiveTld || project.localTld || project.globalTld || 'kube';
@@ -3198,6 +3317,134 @@ function LocalClusterCard({
                         </Button>
                     </div>
                 </div>
+
+                {/* Production Preview for UI Frameworks */}
+                {isPreviewable && (
+                    <div className="border-t border-line pt-3.5">
+                        {isPreviewActive ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/20 bg-brand/5 px-3.5 py-3">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-mono text-xs font-semibold text-ink">
+                                            https://preview.{project.name}.
+                                            {effectiveTld}
+                                        </span>
+                                        <ExternalLinkButton
+                                            url={`https://preview.${project.name}.${effectiveTld}`}
+                                            className="inline-flex cursor-pointer items-center gap-1 text-xs text-brand hover:underline"
+                                        >
+                                            <span>Open</span>
+                                            <ExternalLink className="size-3" />
+                                        </ExternalLinkButton>
+                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                            <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                                            Preview Active (Caddy)
+                                        </span>
+                                    </div>
+                                    <p className="mt-0.5 text-[11px] text-soft">
+                                        Running alongside dev server · Static
+                                        bundle with production cache & security
+                                        headers
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Form action={previewUpRoute(project.id)}>
+                                        {({ processing }) => (
+                                            <Button
+                                                type="submit"
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={
+                                                    isPreviewBusy || processing
+                                                }
+                                                title="Rebuild static bundle and restart preview container (larakube preview:up)"
+                                                className="gap-1.5"
+                                            >
+                                                <RotateCw
+                                                    className={cn(
+                                                        'size-3.5',
+                                                        (processing ||
+                                                            isPreviewBusy) &&
+                                                            'animate-spin',
+                                                    )}
+                                                />
+                                                <span>
+                                                    {processing || isPreviewBusy
+                                                        ? 'Rebuilding…'
+                                                        : 'Rebuild'}
+                                                </span>
+                                            </Button>
+                                        )}
+                                    </Form>
+                                    <Form action={previewDownRoute(project.id)}>
+                                        {({ processing }) => (
+                                            <Button
+                                                type="submit"
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={
+                                                    isPreviewBusy || processing
+                                                }
+                                                title="Stop and tear down preview workload (larakube preview:down)"
+                                                className="gap-1.5 hover:border-accent/40 hover:text-accent"
+                                            >
+                                                <PowerOff className="size-3.5" />
+                                                <span>
+                                                    {processing
+                                                        ? 'Stopping…'
+                                                        : 'Stop Preview'}
+                                                </span>
+                                            </Button>
+                                        )}
+                                    </Form>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/60 bg-paper/40 px-3.5 py-2.5">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface text-soft ring-1 ring-line">
+                                        <Eye className="size-3.5" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-semibold text-ink">
+                                                Production Preview
+                                            </span>
+                                            <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                Caddy
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-soft">
+                                            Rehearse static production bundle
+                                            with production headers locally
+                                        </p>
+                                    </div>
+                                </div>
+                                <Form action={previewUpRoute(project.id)}>
+                                    {({ processing }) => (
+                                        <Button
+                                            type="submit"
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={
+                                                isPreviewBusy || processing
+                                            }
+                                            title="Build production bundle and serve with Caddy at preview URL (larakube preview:up)"
+                                            className="gap-1.5"
+                                        >
+                                            <Eye className="size-3.5" />
+                                            <span>
+                                                {processing || isPreviewBusy
+                                                    ? 'Starting Preview…'
+                                                    : 'Preview Production Build'}
+                                            </span>
+                                        </Button>
+                                    )}
+                                </Form>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="border-t border-line pt-2.5">
                     <ProjectTldForm project={project} />

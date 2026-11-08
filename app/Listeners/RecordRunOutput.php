@@ -126,7 +126,7 @@ class RecordRunOutput
         // recurring tick — the latter is exactly what flips a project's
         // Projects-page badge between Running/Paused/Down right after this run.
         if ($run->environment === 'local'
-            && in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject], true)
+            && in_array($run->kind, [RunKind::UpProject, RunKind::DownProject, RunKind::StartProject, RunKind::StopProject, RunKind::PreviewUpProject, RunKind::PreviewDownProject], true)
         ) {
             SyncLocalClusterJob::dispatch();
             SyncLocalWorkloadsJob::dispatch();
