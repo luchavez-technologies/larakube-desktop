@@ -158,6 +158,10 @@ export default function LocalDevCompanionsCard({
     companionCredentials?: CompanionCredential[] | null;
     localTld?: string;
 }) {
+    if (companions === undefined) {
+        return <LocalDevCompanionsCardSkeleton localTld={localTld} />;
+    }
+
     const list = companions ?? DEFAULT_COMPANIONS;
     const runningCount = list.filter((c) => c.installed && c.running).length;
     const credentialFor = (name: string): CompanionCredential | undefined =>
@@ -459,6 +463,146 @@ export default function LocalDevCompanionsCard({
                             </div>
                         );
                     })}
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+export function LocalDevCompanionsCardSkeleton({
+    localTld = 'test',
+}: {
+    localTld?: string;
+}) {
+    return (
+        <Card
+            label="Local Dev Companions"
+            action={
+                <div className="flex animate-pulse items-center gap-1.5 rounded-full bg-paper px-2.5 py-0.5 ring-1 ring-line">
+                    <Laptop className="size-3 text-faint" />
+                    <div className="h-3 w-12 rounded bg-line" />
+                </div>
+            }
+        >
+            <div className="space-y-4">
+                <div className="rounded-xl border border-line bg-paper/50 p-3 text-xs leading-relaxed text-soft">
+                    Zero-configuration database and cache web GUIs running
+                    directly in{' '}
+                    <code className="font-mono text-ink">
+                        larakube-companions
+                    </code>{' '}
+                    on your local cluster. Accessible over secure local domains
+                    (e.g.{' '}
+                    <code className="font-mono text-ink">
+                        https://adminer.{localTld}
+                    </code>
+                    ).
+                </div>
+
+                {/* Mailpit catches every local outbound email unconditionally — it's core cluster infra */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+                    <div className="flex items-center gap-3">
+                        <ToolLogo slug="mailpit" size="md" />
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <h4 className="text-sm font-semibold text-ink">
+                                    Mailpit
+                                </h4>
+                                <StatusPill tone="ok">
+                                    Always running
+                                </StatusPill>
+                            </div>
+                            <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                                Catches every outbound email from your local
+                                apps — nothing actually leaves your machine.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <QrCodePopover
+                            url={`https://mailpit.${localTld}`}
+                            title="Mailpit"
+                            description="Scan to open Mailpit on phone"
+                        />
+                        <ExternalLinkButton
+                            url={`https://mailpit.${localTld}`}
+                            className={buttonClass('secondary', 'sm', 'gap-1')}
+                        >
+                            <ExternalLink className="size-3" />
+                            <span>Open</span>
+                        </ExternalLinkButton>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {[
+                        {
+                            nameW: 'w-20',
+                            descW1: 'w-full',
+                            descW2: 'w-4/5',
+                            urlW: 'w-24',
+                        },
+                        {
+                            nameW: 'w-24',
+                            descW1: 'w-full',
+                            descW2: 'w-3/4',
+                            urlW: 'w-28',
+                        },
+                        {
+                            nameW: 'w-20',
+                            descW1: 'w-full',
+                            descW2: 'w-5/6',
+                            urlW: 'w-32',
+                        },
+                        {
+                            nameW: 'w-24',
+                            descW1: 'w-full',
+                            descW2: 'w-4/5',
+                            urlW: 'w-28',
+                        },
+                        {
+                            nameW: 'w-28',
+                            descW1: 'w-full',
+                            descW2: 'w-2/3',
+                            urlW: 'w-32',
+                        },
+                    ].map((item, idx) => (
+                        <div
+                            key={idx}
+                            className="flex animate-pulse flex-col justify-between rounded-xl border border-line bg-paper/60 p-4"
+                        >
+                            <div>
+                                <div className="flex items-start justify-between gap-2.5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="size-10 rounded-xl bg-line/80 ring-1 ring-line" />
+                                        <div>
+                                            <div
+                                                className={`h-4 ${item.nameW} rounded bg-line`}
+                                            />
+                                            <div className="mt-1.5 h-4 w-16 rounded-full bg-line/70" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 space-y-1.5">
+                                    <div
+                                        className={`h-3 ${item.descW1} rounded bg-line/70`}
+                                    />
+                                    <div
+                                        className={`h-3 ${item.descW2} rounded bg-line/70`}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
+                                <div
+                                    className={`h-3 ${item.urlW} rounded bg-line/60 font-mono`}
+                                />
+                                <div className="h-7 w-18 rounded-lg bg-line/80 ring-1 ring-line" />
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </Card>

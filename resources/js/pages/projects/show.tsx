@@ -48,7 +48,9 @@ import EnvironmentSettingsDrawer, {
 import HostPicker from '@/components/host-picker';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
-import LocalDevCompanionsCard from '@/components/local-dev-companions-card';
+import LocalDevCompanionsCard, {
+    LocalDevCompanionsCardSkeleton,
+} from '@/components/local-dev-companions-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import WorkloadsPodsCard, {
     WorkloadsPodsCardSkeleton,
@@ -529,7 +531,9 @@ export default function ShowProject({
                                     <Deferred
                                         data="companions"
                                         fallback={
-                                            <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                            <LocalDevCompanionsCardSkeleton
+                                                localTld={localTld}
+                                            />
                                         }
                                     >
                                         <LocalDevCompanionsCard
