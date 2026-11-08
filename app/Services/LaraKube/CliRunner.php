@@ -15,7 +15,12 @@ use RuntimeException;
  */
 class CliRunner
 {
-    public function __construct(private ToolLocator $locator, private Elevation $elevation) {}
+    private LocalDnsCoverage $dns;
+
+    public function __construct(private ToolLocator $locator, private Elevation $elevation, ?LocalDnsCoverage $dns = null)
+    {
+        $this->dns = $dns ?? new LocalDnsCoverage;
+    }
 
     /**
      * @param  list<string>  $arguments  CLI arguments after the binary, without secrets
@@ -98,7 +103,7 @@ class CliRunner
         // actual passwordless sudo on the machine running the suite. Confirmed
         // live: this fired from the ordinary test suite the day this guard was
         // added, through a route test that never touched Elevation at all.
-        if (! app()->runningUnitTests() && $this->needsElevation($kind, $environment, $tool)) {
+        if (! app()->runningUnitTests() && $this->needsElevation($kind, $environment, $tool, $this->localDnsAlreadyCovers($kind, $environment, $cwd))) {
             $this->elevation->grant();
         }
 
@@ -186,10 +191,58 @@ class CliRunner
      * it would otherwise just fail outright rather than hang, but still fail).
      * Pulled out so it can be unit-tested on its own, without ever exercising
      * the real Elevation::grant() call it gates.
+     *
+     * A local `up` only needs it when $localDnsAlreadyCovers is false — when
+     * dnsmasq already wildcards the project's TLD, the CLI's own
+     * ensureHostsAreSet()/syncClusterServiceHosts() skip /etc/hosts and
+     * `sudo` entirely for that run, so granting elevation would pop the GUI
+     * password prompt for a run that was never going to use it.
      */
-    public function needsElevation(?RunKind $kind, ?string $environment, ?string $tool): bool
+    public function needsElevation(?RunKind $kind, ?string $environment, ?string $tool, bool $localDnsAlreadyCovers = false): bool
     {
-        return ($kind === RunKind::UpProject && $environment === 'local')
-            || ($kind === RunKind::InstallTool && in_array($tool, ['dnsmasq', 'gcloud'], true));
+        if ($kind === RunKind::UpProject && $environment === 'local') {
+            return ! $localDnsAlreadyCovers;
+        }
+
+        return $kind === RunKind::InstallTool && in_array($tool, ['dnsmasq', 'gcloud'], true);
+    }
+
+    /**
+     * Whether dnsmasq already covers every TLD this local `up` run would
+     * touch — the project's own `localTld` override (read straight from its
+     * `.larakube.json`) and the global default TLD that
+     * syncClusterServiceHosts() wildcards for shared cluster services. Only
+     * called when $kind/$environment already match a local `up`, so it
+     * costs nothing on every other run kind.
+     */
+    private function localDnsAlreadyCovers(?RunKind $kind, ?string $environment, ?string $cwd): bool
+    {
+        if ($kind !== RunKind::UpProject || $environment !== 'local') {
+            return false;
+        }
+
+        $globalTld = app(GlobalSettings::class)->getLocalTld();
+        $projectTld = $this->projectLocalTld($cwd);
+
+        foreach (array_unique(array_filter([$globalTld, $projectTld])) as $tld) {
+            if (! $this->dns->covers($tld)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** The project's own `localTld` override from its `.larakube.json`, or null without one. */
+    private function projectLocalTld(?string $cwd): ?string
+    {
+        if ($cwd === null) {
+            return null;
+        }
+
+        $decoded = json_decode((string) @file_get_contents("{$cwd}/.larakube.json"), true);
+        $tld = is_array($decoded) ? ($decoded['localTld'] ?? null) : null;
+
+        return is_string($tld) && $tld !== '' ? $tld : null;
     }
 }

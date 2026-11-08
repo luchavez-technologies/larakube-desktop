@@ -94,6 +94,13 @@ test('needsElevation covers a local up run and a dnsmasq install/update, nothing
         ->and($runner->needsElevation(RunKind::DeployApp, 'production', null))->toBeFalse();
 });
 
+test('needsElevation skips a local up run once dnsmasq already covers the TLD', function () {
+    $runner = new CliRunner(new ToolLocator([$this->fakeBinDir]), new Elevation);
+
+    expect($runner->needsElevation(RunKind::UpProject, 'local', null, localDnsAlreadyCovers: true))->toBeFalse()
+        ->and($runner->needsElevation(RunKind::UpProject, 'local', null, localDnsAlreadyCovers: false))->toBeTrue();
+});
+
 test('elevation is never requested while the test suite is running, no matter the run kind', function () {
     // CRITICAL safety test — do not weaken or remove this guard. Without the
     // runningUnitTests() check in CliRunner::start(), a local `up` run (here

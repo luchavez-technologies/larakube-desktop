@@ -15,7 +15,11 @@ test('on Windows there is nothing to grant, because the distro user already has 
 });
 
 test('on native macOS, administrator access is requested via osascript, the same GUI prompt pkexec gives on Linux', function () {
-    Process::fake(['*command -v*osascript*' => Process::result('/usr/bin/osascript'), '*' => Process::result()]);
+    Process::fake([
+        '*sudo -n true*' => Process::result('', exitCode: 1),
+        '*command -v*osascript*' => Process::result('/usr/bin/osascript'),
+        '*' => Process::result(),
+    ]);
     $elevation = new Elevation(user: 'student', windows: false, darwin: true);
 
     expect($elevation->method())->toBe('osascript')
@@ -26,6 +30,19 @@ test('on native macOS, administrator access is requested via osascript, the same
         && str_contains($process->command[2], 'with administrator privileges')
         && str_contains($process->command[2], 'student ALL=(ALL) NOPASSWD:ALL')
         && str_contains($process->command[2], Elevation::SUDOERS_FILE));
+});
+
+test('grant skips the osascript prompt entirely when passwordless sudo already works', function () {
+    Process::fake([
+        '*sudo -n true*' => Process::result(),
+        '*command -v*osascript*' => Process::result('/usr/bin/osascript'),
+        '*' => Process::result('', exitCode: 1),
+    ]);
+    $elevation = new Elevation(user: 'student', windows: false, darwin: true);
+
+    expect($elevation->grant())->toBeTrue();
+
+    Process::assertNotRan(fn ($process) => $process->command[0] === 'osascript');
 });
 
 test('revoking on native macOS removes the sudoers entry via osascript too', function () {
@@ -41,7 +58,11 @@ test('revoking on native macOS removes the sudoers entry via osascript too', fun
 });
 
 test('without osascript on the PATH, macOS has no elevation method and grant refuses rather than hanging on a password prompt', function () {
-    Process::fake(['*osascript*' => Process::result('', exitCode: 1), '*' => Process::result()]);
+    Process::fake([
+        '*sudo -n true*' => Process::result('', exitCode: 1),
+        '*osascript*' => Process::result('', exitCode: 1),
+        '*' => Process::result(),
+    ]);
     $elevation = new Elevation(user: 'student', windows: false, darwin: true);
 
     expect($elevation->method())->toBeNull()

@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\Process;
  * the signed-in user passwordless sudo, and it is removed when the run ends. Inside WSL
  * the file is written through `wsl.exe -u root`, which needs no password; on Linux a
  * graphical `pkexec` prompt asks for one; on native macOS `osascript`'s "do shell
- * script ... with administrator privileges" asks for one the same way.
+ * script ... with administrator privileges" asks for one the same way. grant()
+ * skips that prompt entirely when `sudo -n true` already succeeds, so a run
+ * that lands inside an existing grant (or a machine with its own passwordless
+ * sudo) never sees it.
  */
 class Elevation
 {
@@ -56,6 +59,19 @@ class Elevation
     public function grant(): bool
     {
         if ($this->onWindows()) {
+            return true;
+        }
+
+        // Only osascript/pkexec actually pop an interactive GUI prompt, so only
+        // they benefit from skipping it. `wsl.exe -u root` never prompts at all
+        // (root needs no password inside WSL), and `sudo -n true` on the
+        // Windows/WSL host it runs from is meaningless anyway — there's no
+        // `sudo` binary there to answer it. A run that follows another local
+        // `up`/`trust` within the same revoke cycle (or a user who already has
+        // their own passwordless sudo rule) needs no new osascript/pkexec
+        // prompt — asking again would pop the GUI dialog on every single run
+        // instead of only when sudo actually requires a password.
+        if (in_array($this->method(), ['osascript', 'pkexec'], true) && $this->alreadyGranted()) {
             return true;
         }
 
@@ -114,6 +130,12 @@ class Elevation
         $script = 'do shell script "'.$appleScriptLiteral.'" with administrator privileges';
 
         return Process::timeout(120)->run(['osascript', '-e', $script])->successful();
+    }
+
+    /** Whether `sudo` already runs without a password right now, with no need to grant anything. */
+    private function alreadyGranted(): bool
+    {
+        return Process::run('sudo -n true')->successful();
     }
 
     /** The signed-in account, only when it is safe to put in a sudoers file. */

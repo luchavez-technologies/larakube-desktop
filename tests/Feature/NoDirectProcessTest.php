@@ -17,6 +17,9 @@ test('processes are launched only through ToolLocator, apart from the few files 
         'app/Services/TerminalLauncher.php',
         // Inspects local SSH keys on the host machine and queries host ssh-agent (SSH_AUTH_SOCK).
         'app/Services/SshKeyInspector.php',
+        // Probes the HOST's own dnsmasq/resolver setup (brew --prefix, dscacheutil, getent) —
+        // a property of the host network stack, not something the WSL distro would run instead.
+        'app/Services/LaraKube/LocalDnsCoverage.php',
     ];
 
     $found = [];
