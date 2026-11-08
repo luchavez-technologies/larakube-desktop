@@ -1,4 +1,4 @@
-import { Deferred, Link, usePage } from '@inertiajs/react';
+import { Deferred, Head, Link, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowRight,
@@ -32,7 +32,6 @@ import QrCodePopover from '@/components/qr-code-popover';
 import Redactable from '@/components/redactable';
 import StatusPill from '@/components/status-pill';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
-import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import {
     isLocalServer,
@@ -202,7 +201,8 @@ export default function DashboardIndex({
     }
 
     return (
-        <AppLayout title="Dashboard">
+        <>
+            <Head title="Dashboard" />
             <PageHeader
                 title="Fleet Dashboard"
                 meta={<span>LaraKube Fleet Overview</span>}
@@ -696,7 +696,7 @@ export default function DashboardIndex({
                     </Deferred>
                 </Card>
             </div>
-        </AppLayout>
+        </>
     );
 }
 

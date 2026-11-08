@@ -18,7 +18,6 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ExperimentalBadge from '@/components/experimental-badge';
@@ -195,7 +194,7 @@ export default function BackupsIndex({
     ];
 
     return (
-        <AppLayout title={`Backups · ${server.name}`}>
+        <>
             <Head title={`Backups · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
@@ -938,7 +937,7 @@ export default function BackupsIndex({
                         onClose={() => setDialog(null)}
                     />
                 )}
-        </AppLayout>
+        </>
     );
 }
 

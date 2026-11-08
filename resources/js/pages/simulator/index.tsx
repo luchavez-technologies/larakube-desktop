@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import {
     Background,
     BackgroundVariant,
@@ -11,7 +11,6 @@ import {
     type Node,
 } from '@xyflow/react';
 import { ArrowLeft, Network, PanelRight, Sparkles } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
 import Button, { buttonClass } from '@/components/button';
 import { cn } from '@/lib/utils';
 import { InfrastructureNode } from '@/components/simulator/nodes/infrastructure-node';
@@ -257,13 +256,15 @@ export default function SimulatorIndex({
     }, [activeScenario, currentStepIndex]);
 
     return (
-        <AppLayout title="Request Simulator — LaraKube">
+        <>
+            <Head title="Request Simulator — LaraKube" />
             <div className="flex h-[calc(100vh-4.5rem)] flex-col gap-3 p-4">
                 {/* Header bar with Prominent Exit / Back Navigation */}
                 <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
                         <Link
                             href={backHref}
+                            preserveScroll
                             className={cn(
                                 buttonClass('secondary', 'sm'),
                                 'gap-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-brand/40',
@@ -401,6 +402,6 @@ export default function SimulatorIndex({
                     }
                 />
             </div>
-        </AppLayout>
+        </>
     );
 }

@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState, type ReactNode } from 'react';
 import Button from '@/components/button';
 import { buttonClass } from '@/components/button';
@@ -6,7 +6,6 @@ import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import {
     domains as findDomains,
     index,
@@ -76,7 +75,8 @@ export default function ShareDomain({
     };
 
     return (
-        <AppLayout title="Share">
+        <>
+            <Head title="Share" />
             <PageHeader
                 title="Share"
                 subtitle={`Public names for ${project} on ${box} that stay the same: the app, Vite hot reload, Reverb and file storage, under a domain you own on Cloudflare.`}
@@ -172,10 +172,14 @@ export default function ShareDomain({
                     Cloudflare Access if it should not be public.
                 </p>
             </Card>
-            <Link href={index().url} className={buttonClass('ghost', 'sm')}>
+            <Link
+                href={index().url}
+                preserveScroll
+                className={buttonClass('ghost', 'sm')}
+            >
                 Back to dev boxes
             </Link>
-        </AppLayout>
+        </>
     );
 }
 

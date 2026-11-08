@@ -954,3 +954,5 @@ export default function OnboardingIndex({
         </div>
     );
 }
+
+OnboardingIndex.layout = (page: React.ReactNode) => page;

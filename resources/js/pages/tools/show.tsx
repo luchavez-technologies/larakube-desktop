@@ -1,4 +1,4 @@
-import { Form, Link } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
@@ -9,7 +9,6 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
-import AppLayout from '@/layouts/app-layout';
 import { ExternalLink, Plug, Unlink } from 'lucide-react';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
@@ -110,9 +109,11 @@ export default function ShowTool({
     );
 
     return (
-        <AppLayout title={name}>
+        <>
+            <Head title={name} />
             <Link
                 href={toolsIndex(server.name).url}
+                preserveScroll
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
                 ← Apps on {server.name}
@@ -387,7 +388,7 @@ export default function ShowTool({
                     </div>
                 </div>
             )}
-        </AppLayout>
+        </>
     );
 }
 

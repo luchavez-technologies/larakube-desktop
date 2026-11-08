@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
-import { Deferred, Link } from '@inertiajs/react';
+import { Deferred, Head, Link } from '@inertiajs/react';
 import {
     ArrowUpCircle,
     Check,
@@ -32,7 +32,6 @@ import {
     ServerActions,
 } from '@/components/server-dialogs';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import { getServerStatusBadge } from '@/lib/servers';
 import { index, shareDomainPage, updateCli } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
@@ -67,9 +66,11 @@ export default function ShowDevBox({
     >(null);
 
     return (
-        <AppLayout title={box.name}>
+        <>
+            <Head title={box.name} />
             <Link
                 href={index().url}
+                preserveScroll
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
                 ← Dev Boxes
@@ -403,7 +404,7 @@ export default function ShowDevBox({
                 onClose={() => setGrantOpen(false)}
                 box={box.name}
             />
-        </AppLayout>
+        </>
     );
 }
 

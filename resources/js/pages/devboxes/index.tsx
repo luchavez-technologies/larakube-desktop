@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Deferred, Link, usePage } from '@inertiajs/react';
+import { Deferred, Head, Link, usePage } from '@inertiajs/react';
 import { ChevronRight, Download, Plus, Settings } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import DevBoxImportModal from '@/components/devbox-import-modal';
@@ -10,7 +10,6 @@ import { ServerActions } from '@/components/server-dialogs';
 import ExperimentalBadge from '@/components/experimental-badge';
 import StatusPill from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
-import AppLayout from '@/layouts/app-layout';
 import { getServerStatusBadge } from '@/lib/servers';
 import { create, show } from '@/routes/devboxes';
 import { show as settingsShow } from '@/routes/settings';
@@ -43,7 +42,8 @@ export default function DevBoxes({
 
     if (disabled) {
         return (
-            <AppLayout title="Dev Boxes">
+            <>
+                <Head title="Dev Boxes" />
                 <PageHeader
                     title="Dev Boxes"
                     badge={
@@ -70,12 +70,13 @@ export default function DevBoxes({
                         <span>Open Settings</span>
                     </Link>
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
     return (
-        <AppLayout title="Dev Boxes">
+        <>
+            <Head title="Dev Boxes" />
             <PageHeader
                 title="Dev Boxes"
                 badge={
@@ -168,7 +169,7 @@ export default function DevBoxes({
                 </Link>{' '}
                 (advanced).
             </p>
-        </AppLayout>
+        </>
     );
 }
 

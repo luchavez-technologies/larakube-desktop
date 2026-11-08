@@ -18,7 +18,6 @@ import {
     UserPlus,
     XCircle,
 } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ServerSwitcher from '@/components/server-switcher';
@@ -265,7 +264,7 @@ export default function OpenBaoIndex({
     ];
 
     return (
-        <AppLayout title={`OpenBao · ${server.name}`}>
+        <>
             <Head title={`OpenBao · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
@@ -1221,6 +1220,6 @@ export default function OpenBaoIndex({
                     </div>
                 )}
             </div>
-        </AppLayout>
+        </>
     );
 }

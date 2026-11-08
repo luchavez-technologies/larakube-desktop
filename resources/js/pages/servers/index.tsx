@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Deferred, Link, Form, usePage } from '@inertiajs/react';
+import { Deferred, Head, Link, Form, usePage } from '@inertiajs/react';
 import {
     Plus,
     ChevronRight,
@@ -16,7 +16,6 @@ import Redactable from '@/components/redactable';
 import { ServerActions } from '@/components/server-dialogs';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
-import AppLayout from '@/layouts/app-layout';
 import { getServerStatusBadge, serverEndpointLabel } from '@/lib/servers';
 import { create, show } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
@@ -80,7 +79,8 @@ export default function ServersIndex({
         getServerStatusBadge(server, reachable(server));
 
     return (
-        <AppLayout title="Servers">
+        <>
+            <Head title="Servers" />
             <header className="mb-5 flex items-center justify-between gap-6">
                 <div>
                     <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
@@ -440,7 +440,7 @@ export default function ServersIndex({
             {showImport && (
                 <ImportKubeconfigModal onClose={() => setShowImport(false)} />
             )}
-        </AppLayout>
+        </>
     );
 }
 

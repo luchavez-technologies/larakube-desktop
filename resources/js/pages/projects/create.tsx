@@ -1,4 +1,4 @@
-import { Link, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -22,7 +22,6 @@ import FrameworkFields, {
 } from '@/components/framework-fields';
 import PageHeader from '@/components/page-header';
 import ExperimentalBadge from '@/components/experimental-badge';
-import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import {
     chooseFolder,
@@ -230,9 +229,11 @@ export default function CreateProject({
     }
 
     return (
-        <AppLayout title="New project">
+        <>
+            <Head title="New project" />
             <Link
                 href={index().url}
+                preserveScroll
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
                 ← Projects
@@ -788,7 +789,7 @@ export default function CreateProject({
                     </div>
                 </div>
             </form>
-        </AppLayout>
+        </>
     );
 }
 

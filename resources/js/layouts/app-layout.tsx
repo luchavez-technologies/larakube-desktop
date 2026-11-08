@@ -210,11 +210,13 @@ const navigation: NavItem[] = [
     },
 ];
 
+export const defaultLayout = (page: ReactNode) => <AppLayout>{page}</AppLayout>;
+
 export default function AppLayout({
     title,
     children,
 }: {
-    title: string;
+    title?: string;
     children: ReactNode;
 }) {
     const { url, props } = usePage<{
@@ -332,7 +334,7 @@ export default function AppLayout({
 
     return (
         <div className="flex h-screen overflow-hidden">
-            <Head title={title} />
+            {title ? <Head title={title} /> : null}
             <aside
                 className={cn(
                     'z-30 flex h-full shrink-0 flex-col border-r border-line bg-surface py-5 transition-[width,padding] duration-200 ease-in-out',

@@ -12,7 +12,6 @@ import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { index as mailIndex } from '@/routes/servers/mail';
-import AppLayout from '@/layouts/app-layout';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
@@ -278,7 +277,7 @@ export default function MailIndex({
     ];
 
     return (
-        <AppLayout title={`Mail · ${server.name}`}>
+        <>
             <Head title={`Mail · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
@@ -451,6 +450,6 @@ export default function MailIndex({
                     </div>
                 )}
             </div>
-        </AppLayout>
+        </>
     );
 }

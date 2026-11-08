@@ -1,4 +1,4 @@
-import { Form, Link, router, usePage, usePoll } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage, usePoll } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     RotateCw,
@@ -30,7 +30,6 @@ import ToolLogo from '@/components/tool-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import ManageToolDrawer from '@/components/manage-tool-drawer';
-import AppLayout from '@/layouts/app-layout';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import { open } from '@/routes';
@@ -339,7 +338,8 @@ export default function ToolsIndex({
     );
 
     return (
-        <AppLayout title="Apps">
+        <>
+            <Head title="Apps" />
             <header className="mb-6 flex items-center justify-between gap-6">
                 <div>
                     <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
@@ -1050,7 +1050,7 @@ export default function ToolsIndex({
                     onDeployAnother={handleAddInstance}
                 />
             )}
-        </AppLayout>
+        </>
     );
 }
 

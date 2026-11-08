@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { Network, PlayCircle, Sparkles } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
@@ -6,11 +6,11 @@ import PageHeader from '@/components/page-header';
 import HelpCommunityCard from '@/components/help-community-card';
 import HelpVideosCard from '@/components/help-videos-card';
 import SponsorCard from '@/components/sponsor-card';
-import AppLayout from '@/layouts/app-layout';
 
 export default function Help() {
     return (
-        <AppLayout title="Help">
+        <>
+            <Head title="Help" />
             <PageHeader
                 title="Help & Community"
                 subtitle="Reach out, follow along, watch how-to videos, or see how LaraKube is built."
@@ -60,6 +60,6 @@ export default function Help() {
                     <HelpCommunityCard />
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }

@@ -1,4 +1,4 @@
-import { Deferred, Form, Link, router, usePage } from '@inertiajs/react';
+import { Deferred, Form, Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
     Activity,
@@ -41,7 +41,6 @@ import SelectMenu from '@/components/select-menu';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
-import AppLayout from '@/layouts/app-layout';
 import { getServerStatusBadge } from '@/lib/servers';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
@@ -180,9 +179,11 @@ export default function ShowServer({
     }, [hasUnreadyDns]);
 
     return (
-        <AppLayout title={server.name}>
+        <>
+            <Head title={server.name} />
             <Link
                 href={index().url}
+                preserveScroll
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
                 ← Servers
@@ -822,7 +823,7 @@ export default function ShowServer({
                     onClose={() => setRevokingUser(null)}
                 />
             )}
-        </AppLayout>
+        </>
     );
 }
 

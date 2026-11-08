@@ -11,7 +11,6 @@ import {
 import { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
 import { ExternalLinkButton } from '@/lib/open-external';
-import AppLayout from '@/layouts/app-layout';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
@@ -168,7 +167,7 @@ export default function DriveIndex({
     ];
 
     return (
-        <AppLayout title={`Drive · ${server.name}`}>
+        <>
             <Head title={`Drive · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
@@ -342,6 +341,6 @@ export default function DriveIndex({
                     </>
                 )}
             </div>
-        </AppLayout>
+        </>
     );
 }

@@ -16,7 +16,6 @@ import {
     Users,
     XCircle,
 } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ServerSwitcher from '@/components/server-switcher';
@@ -279,7 +278,7 @@ export default function SsoIndex({
     ];
 
     return (
-        <AppLayout title={`Zitadel SSO · ${server.name}`}>
+        <>
             <Head title={`Zitadel SSO · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
@@ -1754,6 +1753,6 @@ export default function SsoIndex({
                     </div>
                 )}
             </div>
-        </AppLayout>
+        </>
     );
 }

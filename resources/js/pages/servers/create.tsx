@@ -1,4 +1,4 @@
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useState, useEffect, type FormEvent, type ReactNode } from 'react';
 import {
     ArrowLeft,
@@ -30,7 +30,6 @@ import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { readiness } from '@/routes';
 import { sendJson } from '@/lib/http';
@@ -75,7 +74,8 @@ export default function CreateServer({
     const devBox = kind === 'dev-box';
 
     return (
-        <AppLayout title={devBox ? 'Create a dev box' : 'Create a server'}>
+        <>
+            <Head title={devBox ? 'Create a dev box' : 'Create a server'} />
             <PageHeader
                 title={devBox ? 'Create a dev box' : 'Create a server'}
                 subtitle={
@@ -103,7 +103,7 @@ export default function CreateServer({
                     The LaraKube CLI isn't ready yet. Finish Setup first.
                 </p>
             )}
-        </AppLayout>
+        </>
     );
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     Activity,
     AlertCircle,
@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import { runStatus } from '@/lib/servers';
 import { show } from '@/routes/runs';
 import type { RunStatus, RunSummary, RunTargetType } from '@/types/larakube';
@@ -205,7 +204,8 @@ export default function RunsIndex({ runs }: { runs: RunSummary[] }) {
     };
 
     return (
-        <AppLayout title="Activity">
+        <>
+            <Head title="Activity" />
             <PageHeader
                 title="Activity"
                 subtitle="Everything LaraKube Desktop has run on this machine, newest first."
@@ -657,6 +657,6 @@ export default function RunsIndex({ runs }: { runs: RunSummary[] }) {
                     ))}
                 </div>
             )}
-        </AppLayout>
+        </>
     );
 }

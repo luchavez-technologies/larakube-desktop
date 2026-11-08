@@ -1,4 +1,4 @@
-import { Deferred, Form, Link, router, usePoll } from '@inertiajs/react';
+import { Deferred, Form, Head, Link, router, usePoll } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
     Laptop,
@@ -33,7 +33,6 @@ import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
-import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { show as showBox, shareDomainPage } from '@/routes/devboxes';
@@ -154,9 +153,11 @@ export default function ShowDevBoxProject({
     const cloudEnvs = Object.values(environments).filter((e) => !e.isLocal);
 
     return (
-        <AppLayout title={`${name} · ${box}`}>
+        <>
+            <Head title={`${name} · ${box}`} />
             <Link
                 href={index({ query: { box } }).url}
+                preserveScroll
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
                 ← Projects
@@ -415,7 +416,7 @@ export default function ShowDevBoxProject({
                     </Card>
                 )}
             </Deferred>
-        </AppLayout>
+        </>
     );
 }
 

@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Deferred, Link, router, usePage, usePoll } from '@inertiajs/react';
+import {
+    Deferred,
+    Head,
+    Link,
+    router,
+    usePage,
+    usePoll,
+} from '@inertiajs/react';
 import {
     ChevronRight,
     Database,
@@ -34,7 +41,6 @@ import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import QrCodePopover from '@/components/qr-code-popover';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
-import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { show as showDevBox } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
@@ -167,7 +173,8 @@ export default function ProjectsIndex({
     };
 
     return (
-        <AppLayout title="Projects">
+        <>
+            <Head title="Projects" />
             <PageHeader
                 title="Projects"
                 subtitle="Your app folders. Link one to a server and deploy it: Laravel, Statamic, WordPress, Next.js, Vite, Astro and Docusaurus."
@@ -564,7 +571,7 @@ export default function ProjectsIndex({
                 existingGroups={existingGroups}
                 onAssign={handleUpdateProjectGroup}
             />
-        </AppLayout>
+        </>
     );
 }
 

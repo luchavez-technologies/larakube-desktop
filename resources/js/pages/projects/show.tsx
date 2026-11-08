@@ -1,6 +1,7 @@
 import {
     Deferred,
     Form,
+    Head,
     Link,
     router,
     useForm,
@@ -72,7 +73,6 @@ import FrameworkFields, {
 import PageHeader from '@/components/page-header';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import QrCodePopover from '@/components/qr-code-popover';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -316,9 +316,11 @@ export default function ShowProject({
         (activeEnv === 'production' ? project.webHost : null);
 
     return (
-        <AppLayout title={project.name}>
+        <>
+            <Head title={project.name} />
             <Link
                 href={index().url}
+                preserveScroll
                 className="mb-3 inline-block text-xs text-soft hover:text-ink"
             >
                 ← Projects
@@ -770,7 +772,7 @@ export default function ShowProject({
                     )}
                 </div>
             )}
-        </AppLayout>
+        </>
     );
 }
 

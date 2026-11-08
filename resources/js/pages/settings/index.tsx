@@ -1,4 +1,11 @@
-import { Deferred, Form, router, useForm, usePage } from '@inertiajs/react';
+import {
+    Deferred,
+    Form,
+    Head,
+    router,
+    useForm,
+    usePage,
+} from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -31,7 +38,6 @@ import { forgetToolStatus } from '@/lib/tool-status';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import EditorLogo from '@/components/editor-logo';
 import WslCheck, { type WslState } from '@/components/setup/wsl-check';
 import type { Editor } from '@/types/larakube';
@@ -304,7 +310,8 @@ export default function SettingsIndex({
     );
 
     return (
-        <AppLayout title="Settings">
+        <>
+            <Head title="Settings" />
             <PageHeader
                 title="Settings"
                 meta={
@@ -1037,7 +1044,7 @@ export default function SettingsIndex({
                     <UninstallCard windows={windows} />
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }
 

@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { Deferred, Link, router, useForm, usePage } from '@inertiajs/react';
+import {
+    Deferred,
+    Head,
+    Link,
+    router,
+    useForm,
+    usePage,
+} from '@inertiajs/react';
 import {
     Key,
     RefreshCw,
@@ -19,7 +26,6 @@ import ProviderLogo from '@/components/provider-logo';
 import SelectMenu from '@/components/select-menu';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import { create as createServer } from '@/routes/servers';
 import CliMissing from '@/components/setup/cli-missing';
 import UsageChoice from '@/components/setup/usage-choice';
@@ -85,7 +91,8 @@ export default function Readiness({
             : null;
 
     return (
-        <AppLayout title="Setup">
+        <>
+            <Head title="Setup" />
             <PageHeader
                 title="Setup"
                 subtitle="Everything LaraKube Desktop needs on this computer. Required tools must be installed before you can create a server."
@@ -276,7 +283,7 @@ export default function Readiness({
                     )}
                 />
             )}
-        </AppLayout>
+        </>
     );
 }
 

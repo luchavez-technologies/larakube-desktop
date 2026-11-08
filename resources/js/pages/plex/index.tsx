@@ -1,4 +1,4 @@
-import { Link, usePoll } from '@inertiajs/react';
+import { Head, Link, usePoll } from '@inertiajs/react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -18,7 +18,6 @@ import ServerSwitcher from '@/components/server-switcher';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
-import AppLayout from '@/layouts/app-layout';
 import { isLocalServer } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import { show as showServer } from '@/routes/servers';
@@ -217,7 +216,8 @@ export default function PlexIndex({
     // 1. Loading Skeleton State (ADR 0009)
     if (plex === undefined || awaitingFirstSync) {
         return (
-            <AppLayout title="Plex Commons">
+            <>
+                <Head title="Plex Commons" />
                 <PlexPageHeader server={server} servers={servers} />
                 {/* Responsive skeleton shaped like the new Command Center */}
                 <div className="space-y-6">
@@ -265,14 +265,15 @@ export default function PlexIndex({
                         </div>
                     </Card>
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
     // 2. Unreachable Error State
     if (plex === null) {
         return (
-            <AppLayout title="Plex Commons">
+            <>
+                <Head title="Plex Commons" />
                 <PlexPageHeader server={server} servers={servers} />
                 <Card label="Plex Commons" tone="error">
                     <div className="flex items-center gap-3 py-2 text-accent">
@@ -284,7 +285,7 @@ export default function PlexIndex({
                         </p>
                     </div>
                 </Card>
-            </AppLayout>
+            </>
         );
     }
 
@@ -311,7 +312,8 @@ export default function PlexIndex({
     }
 
     return (
-        <AppLayout title="Plex Commons">
+        <>
+            <Head title="Plex Commons" />
             <PlexPageHeader
                 server={server}
                 servers={servers}
@@ -492,6 +494,6 @@ export default function PlexIndex({
                 driver={quickConnectDriver}
                 services={services}
             />
-        </AppLayout>
+        </>
     );
 }

@@ -1,4 +1,11 @@
-import { Deferred, Link, router, useForm, usePoll } from '@inertiajs/react';
+import {
+    Deferred,
+    Head,
+    Link,
+    router,
+    useForm,
+    usePoll,
+} from '@inertiajs/react';
 import { ExternalLink, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import type { FormEvent } from 'react';
 import Button, { buttonClass } from '@/components/button';
@@ -10,7 +17,6 @@ import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { create as createServer } from '@/routes/servers';
 import {
@@ -99,7 +105,8 @@ export default function Workspaces({
     );
 
     return (
-        <AppLayout title="Workspaces">
+        <>
+            <Head title="Workspaces" />
             <PageHeader
                 title="Workspaces"
                 badge={<StatusPill tone="warn">Experimental</StatusPill>}
@@ -206,7 +213,7 @@ export default function Workspaces({
                     </Deferred>
                 </div>
             )}
-        </AppLayout>
+        </>
     );
 }
 

@@ -1324,3 +1324,5 @@ export default function TrayIndex(initialProps: TrayProps) {
         </TrayLayout>
     );
 }
+
+TrayIndex.layout = (page: React.ReactNode) => page;

@@ -8,7 +8,7 @@ import LogPanel from '@/components/log-panel';
 import Redactable from '@/components/redactable';
 import RunSteps from '@/components/run-steps';
 import StatusPill from '@/components/status-pill';
-import AppLayout from '@/layouts/app-layout';
+import { defaultLayout } from '@/layouts/app-layout';
 import { celebratesOnSuccess } from '@/lib/run-kinds';
 import { runStatus } from '@/lib/servers';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
@@ -180,6 +180,7 @@ export default function ShowRun({ run }: { run: Run }) {
             {!isDetached && (
                 <Link
                     href={backLink(run).href}
+                    preserveScroll
                     className="mb-3 inline-block text-xs text-soft hover:text-ink"
                 >
                     ← {backLink(run).label}
@@ -451,8 +452,23 @@ export default function ShowRun({ run }: { run: Run }) {
         );
     }
 
-    return <AppLayout title={run.label}>{content}</AppLayout>;
+    return (
+        <>
+            <Head title={run.label} />
+            {content}
+        </>
+    );
 }
+
+ShowRun.layout = (page: React.ReactNode) => {
+    if (
+        typeof window !== 'undefined' &&
+        window.location.search.includes('detached=1')
+    ) {
+        return page;
+    }
+    return defaultLayout(page);
+};
 
 const serviceLabels: Record<string, string> = {
     hmr: 'Vite hot reload',
