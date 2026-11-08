@@ -782,3 +782,65 @@ export default function WorkloadsPodsCard({
         </>
     );
 }
+
+export function WorkloadsPodsCardSkeleton() {
+    return (
+        <Card
+            label="Workloads & Pods"
+            action={
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="h-7 w-20 animate-pulse rounded-lg bg-paper ring-1 ring-line/60" />
+                    <div className="h-7 w-28 animate-pulse rounded-lg bg-paper ring-1 ring-line/60" />
+                    <div className="h-7 w-16 animate-pulse rounded-lg bg-paper ring-1 ring-line/60" />
+                </div>
+            }
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                    <thead>
+                        <tr className="border-b border-line text-[11px] font-medium tracking-wider text-soft uppercase">
+                            <th className="pb-2.5">Workload / Pod</th>
+                            <th className="pb-2.5">Status</th>
+                            <th className="pb-2.5">Ready</th>
+                            <th className="pb-2.5">Restarts</th>
+                            <th className="pb-2.5">Age</th>
+                            <th className="pb-2.5 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line/60">
+                        {[1, 2].map((i) => (
+                            <tr key={i} className="animate-pulse">
+                                <td className="py-3 pr-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-4 w-24 rounded bg-paper" />
+                                        <div className="h-4 w-10 rounded bg-paper" />
+                                    </div>
+                                    <div className="mt-1.5 h-3 w-36 rounded bg-paper" />
+                                </td>
+                                <td className="py-3 pr-3">
+                                    <div className="h-5 w-20 rounded-full bg-paper" />
+                                </td>
+                                <td className="py-3 pr-3">
+                                    <div className="h-4 w-6 rounded bg-paper" />
+                                </td>
+                                <td className="py-3 pr-3">
+                                    <div className="h-4 w-4 rounded bg-paper" />
+                                </td>
+                                <td className="py-3 pr-3">
+                                    <div className="h-4 w-8 rounded bg-paper" />
+                                </td>
+                                <td className="py-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <div className="h-7 w-18 rounded-lg bg-paper ring-1 ring-line/60" />
+                                        <div className="h-7 w-14 rounded-lg bg-paper ring-1 ring-line/60" />
+                                        <div className="h-7 w-16 rounded-lg bg-paper ring-1 ring-line/60" />
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </Card>
+    );
+}

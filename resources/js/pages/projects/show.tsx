@@ -49,7 +49,9 @@ import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
 import LocalDevCompanionsCard from '@/components/local-dev-companions-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
-import WorkloadsPodsCard from '@/components/workloads-pods-card';
+import WorkloadsPodsCard, {
+    WorkloadsPodsCardSkeleton,
+} from '@/components/workloads-pods-card';
 import ProjectFeaturesCard from '@/components/project-features-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
 import ProjectTerminalCard, {
@@ -488,7 +490,7 @@ export default function ShowProject({
                                         <Deferred
                                             data="pods"
                                             fallback={
-                                                <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                                <WorkloadsPodsCardSkeleton />
                                             }
                                         >
                                             <WorkloadsPodsCard
@@ -571,9 +573,7 @@ export default function ShowProject({
 
                                     <Deferred
                                         data="pods"
-                                        fallback={
-                                            <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
-                                        }
+                                        fallback={<WorkloadsPodsCardSkeleton />}
                                     >
                                         <WorkloadsPodsCard
                                             project={project}

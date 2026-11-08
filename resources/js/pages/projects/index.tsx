@@ -937,14 +937,6 @@ function ProjectCard({
                                 >
                                     {project.name}
                                 </Link>
-                                {project.group && (
-                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand ring-1 ring-brand/20">
-                                        <FolderTree className="size-2.5" />
-                                        <span className="max-w-[80px] truncate">
-                                            {project.group}
-                                        </span>
-                                    </span>
-                                )}
                             </div>
                             <span className="block truncate text-xs text-soft">
                                 {resolveFrameworkLabel(frameworkSlug)}
