@@ -44,7 +44,8 @@ Help them determine:
 2. Architecture & Workload Needs: A single-node VPS (cost-effective k3s) vs. a multi-node managed cluster (DOKS/GKE/EKS) with HA control plane.
 3. Region & Machine Size: Recommend balanced defaults (e.g. e2-standard-4 for GCP, s-4vcpu-8gb for DigitalOcean, cpx31 for Hetzner).
 4. Desired Companion Tools: Inquire if they need workflow tools (n8n), CMS (WordPress), databases (PocketBase), email (Stalwart), or secrets vault (Vaultwarden).
-5. Once aligned, call `create-server` with their chosen parameters, followed by `install-cluster-tool` for any companion tools requested.
+5. Domain & DNS Automation: Inquire if they wish to configure automated DNS and SSL (e.g. Cloudflare ExternalDNS). Advise them they can set LARAKUBE_CLOUDFLARE_TOKEN in their shell environment or in LaraKube Desktop so they never have to paste sensitive API tokens directly into chat.
+6. Once aligned, call `create-server` with their chosen parameters, followed by `connect-domain` and `install-cluster-tool` for any companion tools requested.
 EOT;
 
         return Response::text($prompt);

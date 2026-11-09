@@ -30,6 +30,7 @@ class McpHttpServer
         'remove-cluster-tool',
         'create-server',
         'delete-server',
+        'connect-domain',
     ];
 
     /** @var resource|null */

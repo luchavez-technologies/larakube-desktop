@@ -59,6 +59,18 @@ class CreateServerTool extends Tool implements Completable
         $nodeCount = $request->get('node_count') !== null ? (int) $request->get('node_count') : 1;
         $ha = (bool) $request->get('ha', false);
         $dnsProvider = (string) $request->get('dns_provider');
+        $cloudflareToken = trim((string) $request->get('cloudflare_token'));
+        if ($cloudflareToken === '' && ($dnsProvider === 'cloudflare' || $dnsProvider === '')) {
+            $cloudflareToken = trim((string) (getenv('LARAKUBE_CLOUDFLARE_TOKEN') ?: getenv('CLOUDFLARE_API_TOKEN') ?: ''));
+        }
+
+        $secretEnv = [];
+        if ($cloudflareToken !== '') {
+            $secretEnv['LARAKUBE_CLOUDFLARE_TOKEN'] = $cloudflareToken;
+            if ($dnsProvider === '') {
+                $dnsProvider = 'cloudflare';
+            }
+        }
 
         // Custom VPS specific parameters
         $ip = (string) $request->get('ip');
@@ -113,6 +125,7 @@ class CreateServerTool extends Tool implements Completable
             $run = app(CliRunner::class)->start(
                 label: "Initialize server {$stackName}",
                 arguments: $arguments,
+                secretEnvironment: $secretEnv,
                 kind: RunKind::CreateServer,
                 subject: $stackName,
                 meta: ['targetKind' => 'vps', 'provider' => $provider],
@@ -195,6 +208,7 @@ class CreateServerTool extends Tool implements Completable
         $run = app(CliRunner::class)->start(
             label: $targetKind === 'managed' ? "Create managed cluster {$stackName}" : "Create server {$stackName}",
             arguments: $arguments,
+            secretEnvironment: $secretEnv,
             kind: RunKind::CreateServer,
             subject: $stackName,
             meta: ['targetKind' => $targetKind, 'provider' => $provider],
@@ -280,6 +294,7 @@ class CreateServerTool extends Tool implements Completable
             'node_count' => $schema->integer()->description('Number of worker nodes if target_kind is "managed" (default: 1)')->nullable(),
             'ha' => $schema->boolean()->description('Whether to enable High Availability for managed control plane (default: false)')->nullable(),
             'dns_provider' => $schema->string()->description('DNS provider (e.g. cloudflare, google, route53) (optional)')->nullable(),
+            'cloudflare_token' => $schema->string()->description('Cloudflare API token for automatic ExternalDNS and SSL. Optional; auto-detected from LARAKUBE_CLOUDFLARE_TOKEN or CLOUDFLARE_API_TOKEN in environment if omitted.')->nullable(),
             'ip' => $schema->string()->description('IP address for custom/existing VPS (required only if provider is custom)')->nullable(),
             'ssh_user' => $schema->string()->description('SSH user for custom VPS (default: root)')->nullable(),
             'ssh_key' => $schema->string()->description('SSH private key path or key name for custom VPS')->nullable(),

@@ -9,6 +9,7 @@ use App\Mcp\Resources\ProjectBlueprintResource;
 use App\Mcp\Resources\ProjectListResource;
 use App\Mcp\Resources\ServerDetailResource;
 use App\Mcp\Resources\ServerListResource;
+use App\Mcp\Tools\ConnectDomainTool;
 use App\Mcp\Tools\CreateServerTool;
 use App\Mcp\Tools\DeleteServerTool;
 use App\Mcp\Tools\GetRunStatusTool;
@@ -87,6 +88,7 @@ class LaraKubeDesktopServer extends Server
         ListServersTool::class,
         ShowServerTool::class,
         CreateServerTool::class,
+        ConnectDomainTool::class,
         DeleteServerTool::class,
         ListClusterToolsTool::class,
         ProjectUpTool::class,

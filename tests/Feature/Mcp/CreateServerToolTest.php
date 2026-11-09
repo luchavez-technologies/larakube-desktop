@@ -182,3 +182,56 @@ test('times out gracefully returning status provisioning and run_id', function (
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('passes cloudflare token into secretEnvironment and sets --cloudflare', function () {
+    $sandbox = createServerSandbox();
+    $fake = ChildProcess::fake();
+    Sleep::fake();
+    createServerFinishLatestRunOnSleep();
+
+    $response = LaraKubeDesktopServer::tool(CreateServerTool::class, [
+        'provider' => 'gcp',
+        'stack_name' => 'gcp-cf',
+        'cloudflare_token' => 'cf-secret-token-123',
+    ]);
+
+    $response->assertOk();
+
+    $run = Run::sole();
+    expect($run->command)->toContain('--cloudflare');
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => in_array('--cloudflare', (array) $cmd, true) &&
+        ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'cf-secret-token-123'
+    );
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('auto-detects LARAKUBE_CLOUDFLARE_TOKEN from environment when omitted in request', function () {
+    $sandbox = createServerSandbox();
+    $fake = ChildProcess::fake();
+    Sleep::fake();
+    createServerFinishLatestRunOnSleep();
+
+    putenv('LARAKUBE_CLOUDFLARE_TOKEN=env-cf-token-456');
+
+    try {
+        $response = LaraKubeDesktopServer::tool(CreateServerTool::class, [
+            'provider' => 'gcp',
+            'stack_name' => 'gcp-env-cf',
+        ]);
+
+        $response->assertOk();
+
+        $run = Run::sole();
+        expect($run->command)->toContain('--cloudflare');
+
+        $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest): bool => in_array('--cloudflare', (array) $cmd, true) &&
+            ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'env-cf-token-456'
+        );
+    } finally {
+        putenv('LARAKUBE_CLOUDFLARE_TOKEN');
+    }
+
+    File::deleteDirectory($sandbox['home']);
+});
