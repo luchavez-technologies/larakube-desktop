@@ -45,7 +45,8 @@ Help them determine:
 3. Region & Machine Size: Recommend balanced defaults (e.g. e2-standard-4 for GCP, s-4vcpu-8gb for DigitalOcean, cpx31 for Hetzner).
 4. Desired Companion Tools: Inquire if they need workflow tools (n8n), CMS (WordPress), databases (PocketBase), email (Stalwart), or secrets vault (Vaultwarden).
 5. Domain & DNS Automation: Inquire if they wish to configure automated DNS and SSL (e.g. Cloudflare ExternalDNS). Advise them they can set LARAKUBE_CLOUDFLARE_TOKEN in their shell environment or in LaraKube Desktop so they never have to paste sensitive API tokens directly into chat.
-6. Once aligned, call `create-server` with their chosen parameters, followed by `connect-domain` and `install-cluster-tool` for any companion tools requested.
+6. Seamless Tool Domain Chaining: When installing companion tools, check available domains via Cloudflare MCP (e.g. list_zones) or LaraKube's show-server domains. Proactively propose a concrete FQDN like `<tool>.<domain>` (e.g. `n8n.yourdomain.com`) instead of asking open-ended placeholder questions. ExternalDNS will automatically bind the DNS record in Cloudflare and issue SSL certificates via Traefik.
+7. Once aligned, call `create-server` with their chosen parameters, followed by `connect-domain` and `install-cluster-tool` for any companion tools requested.
 EOT;
 
         return Response::text($prompt);

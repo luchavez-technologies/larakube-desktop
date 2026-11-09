@@ -35,10 +35,29 @@ class ShowServerTool extends Tool implements Completable
     public function handle(Request $request): Response
     {
         $name = (string) $request->get('name');
-        $server = app(StackCatalog::class)->find($name);
+        $serverData = app(StackCatalog::class)->find($name);
+        $serverModel = Server::where('name', $name)->orWhere('ip', $name)->with('domains')->first();
 
-        if ($server === null) {
+        if ($serverData === null && $serverModel === null) {
             return Response::error("No server found named '{$name}'.");
+        }
+
+        $server = $serverData ?? [];
+        if ($serverModel !== null) {
+            $server['name'] = $server['name'] ?? $serverModel->name;
+            $server['provider'] = $server['provider'] ?? $serverModel->provider;
+            $server['kind'] = $server['kind'] ?? $serverModel->kind;
+            $server['ip'] = $server['ip'] ?? $serverModel->ip;
+            $server['context'] = $server['context'] ?? $serverModel->context;
+            $server['status'] = $server['status'] ?? $serverModel->status;
+            $server['domains'] = $serverModel->domains->map(fn ($d): array => [
+                'domain' => $d->domain,
+                'external_dns' => (bool) $d->external_dns,
+                'dns_provider' => $d->dns_provider,
+                'tls' => (bool) $d->tls,
+            ])->all();
+        } else {
+            $server['domains'] = [];
         }
 
         return Response::text(json_encode($server, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));

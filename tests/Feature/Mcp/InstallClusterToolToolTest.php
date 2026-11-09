@@ -6,6 +6,7 @@ use App\Mcp\Servers\LaraKubeDesktopServer;
 use App\Mcp\Tools\InstallClusterToolTool;
 use App\Models\Run;
 use App\Models\Server;
+use App\Models\ServerDomain;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Sleep;
@@ -132,4 +133,35 @@ test('returns error when context cannot be resolved and is not provided', functi
     ]);
 
     $response->assertHasErrors(['Could not resolve Kubernetes context']);
+});
+
+test('autocompletes domain based on server connected domains and selected tool', function () {
+    $server = Server::create([
+        'name' => 'cf-server',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-cf-server',
+        'status' => 'ready',
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'mybrand.dev',
+        'external_dns' => true,
+        'dns_provider' => 'cloudflare',
+        'tls' => true,
+        'in_use' => true,
+    ]);
+
+    $tool = new InstallClusterToolTool;
+
+    $completion = $tool->complete('domain', '', [
+        'arguments' => [
+            'server' => 'cf-server',
+            'tool' => 'n8n',
+        ],
+    ])->resolve('');
+
+    $values = $completion->toArray()['values'];
+    expect($values)->toContain('n8n.mybrand.dev');
 });

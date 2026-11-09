@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Enums\RunKind;
 use App\Models\ClusterTool;
 use App\Models\Server;
+use App\Models\ServerDomain;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -39,6 +40,28 @@ class InstallClusterToolTool extends Tool implements Completable
             $fromDb = ClusterTool::distinct()->pluck('tool')->filter()->values()->all();
 
             return CompletionResponse::match(array_values(array_unique(array_merge($known, $fromDb))));
+        }
+
+        if ($argument === 'domain') {
+            $arguments = is_array($context['arguments'] ?? null) ? $context['arguments'] : [];
+            $serverName = (string) ($arguments['server'] ?? '');
+            $toolName = (string) ($arguments['tool'] ?? 'app');
+
+            $server = Server::where('name', $serverName)->orWhere('ip', $serverName)->first();
+            $domains = $server !== null
+                ? $server->domains->pluck('domain')->all()
+                : ServerDomain::distinct()->pluck('domain')->all();
+
+            $suggestions = [];
+            foreach ($domains as $baseDomain) {
+                if (is_string($baseDomain) && $baseDomain !== '') {
+                    $suggestions[] = "{$toolName}.{$baseDomain}";
+                }
+            }
+
+            if (! empty($suggestions)) {
+                return CompletionResponse::match(array_values(array_unique($suggestions)));
+            }
         }
 
         return CompletionResponse::empty();
