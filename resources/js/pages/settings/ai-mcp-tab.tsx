@@ -1,4 +1,4 @@
-import { Form, router } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     AlertTriangle,
@@ -16,10 +16,10 @@ import type { AgentInfo, McpHttpSettings } from './types';
 
 type AiMcpTabProps = {
     mcpHttp?: McpHttpSettings;
-    detectedAgents: Record<string, AgentInfo>;
+    detectedAgents?: Record<string, AgentInfo>;
 };
 
-export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
+export default function AiMcpTab({ mcpHttp }: AiMcpTabProps) {
     const isEnabled = mcpHttp?.enabled ?? false;
     const allowEdits = mcpHttp?.allowEdits ?? false;
     const port = mcpHttp?.port ?? 47821;
@@ -383,73 +383,6 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
                             </div>
                         </div>
                     )}
-                </div>
-            </Card>
-
-            {/* AI Agent Bridge Card (stdio) */}
-            <Card label="AI Agent Bridge (stdio)">
-                <div className="space-y-3">
-                    <p className="text-xs leading-relaxed text-soft">
-                        Direct process bridging writes local configuration files
-                        for supported desktop AI tools to spawn LaraKube's
-                        desktop server via stdio:
-                    </p>
-                    <div className="space-y-1.5 rounded-lg border border-line bg-paper p-2.5 text-[11px]">
-                        <p className="font-semibold text-ink">
-                            🖥 larakube-desktop
-                        </p>
-                        <p className="text-soft">
-                            Lists your Projects, Servers, and Cluster Tools, and
-                            can bring projects up/down, heal them, and
-                            install/remove tools.
-                        </p>
-                    </div>
-
-                    <div className="border-t border-line pt-3">
-                        <p className="mb-2 text-xs font-medium text-ink">
-                            Detected AI Agents
-                        </p>
-                        <div className="space-y-2">
-                            {Object.entries(detectedAgents).map(
-                                ([slug, agent]) => (
-                                    <div
-                                        key={slug}
-                                        className="flex items-center justify-between gap-2 rounded-lg border border-line bg-paper px-2.5 py-2 text-xs"
-                                    >
-                                        <div className="min-w-0">
-                                            <p className="truncate font-medium text-ink">
-                                                {agent.name}
-                                            </p>
-                                            <p className="text-[10px] text-soft">
-                                                {agent.bridged
-                                                    ? 'MCP Configured'
-                                                    : agent.installed
-                                                      ? 'Installed'
-                                                      : 'Not detected'}
-                                            </p>
-                                        </div>
-                                        <Form
-                                            method="post"
-                                            action={`/settings/bridge/${slug}`}
-                                        >
-                                            {({ processing }) => (
-                                                <Button
-                                                    type="submit"
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    disabled={processing}
-                                                >
-                                                    {agent.bridged
-                                                        ? 'Re-link'
-                                                        : 'Connect'}
-                                                </Button>
-                                            )}
-                                        </Form>
-                                    </div>
-                                ),
-                            )}
-                        </div>
-                    </div>
                 </div>
             </Card>
         </div>

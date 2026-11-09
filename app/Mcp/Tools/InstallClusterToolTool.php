@@ -7,6 +7,7 @@ use App\Models\ClusterTool;
 use App\Models\Server;
 use App\Models\ServerDomain;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\StackCatalog;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -72,15 +73,35 @@ class InstallClusterToolTool extends Tool implements Completable
         $server = (string) $request->get('server');
         $context = trim((string) $request->get('context'));
         $tool = (string) $request->get('tool');
-        $domain = (string) $request->get('domain');
+        $domain = trim((string) $request->get('domain'));
         $adminEmail = $request->get('admin_email');
         $wireSso = (bool) $request->get('wire_sso', false);
         $wireMail = (bool) $request->get('wire_mail', false);
 
+        $serverModel = Server::where('name', $server)->orWhere('ip', $server)->first();
+
         if ($context === '') {
-            $serverModel = Server::where('name', $server)->orWhere('ip', $server)->first();
             $stack = app(StackCatalog::class)->find($server);
             $context = (string) ($serverModel instanceof Server ? $serverModel->context : ($stack['context'] ?? ''));
+        }
+
+        if ($domain === '') {
+            $connectedDomains = $serverModel instanceof Server ? $serverModel->domains->pluck('domain')->all() : [];
+
+            if (empty($connectedDomains) && $context !== '') {
+                $liveDomains = app(ClusterStatus::class)->domains($context);
+                $connectedDomains = array_column($liveDomains, 'domain');
+            }
+
+            if (count($connectedDomains) === 1) {
+                $domain = "{$tool}.{$connectedDomains[0]}";
+            } elseif (count($connectedDomains) > 1) {
+                $candidates = implode(', ', array_map(fn ($d): string => "{$tool}.{$d}", $connectedDomains));
+
+                return Response::error("Please specify a 'domain' parameter. Server '{$server}' has multiple connected domains: {$candidates}");
+            } else {
+                return Response::error("Please specify a 'domain' parameter (e.g. {$tool}.yourdomain.com). No connected base domains were found on server '{$server}'.");
+            }
         }
 
         if ($context === '') {
@@ -115,7 +136,7 @@ class InstallClusterToolTool extends Tool implements Completable
             'server' => $schema->string()->description('The server/stack name, from list-servers'),
             'context' => $schema->string()->description("The server's kube context (optional; auto-resolved from server name if omitted)")->nullable(),
             'tool' => $schema->string()->description('The tool slug to install, e.g. from list-cluster-tools (e.g. n8n, wordpress, pocketbase)'),
-            'domain' => $schema->string()->description('The domain/host to install the tool under (e.g. n8n.example.com)'),
+            'domain' => $schema->string()->description('The domain/host to install the tool under (e.g. n8n.example.com). Optional; auto-derived as <tool>.<domain> if the server has a connected domain.')->nullable(),
             'admin_email' => $schema->string()->description('An admin email, for tools that need one')->nullable(),
             'wire_sso' => $schema->boolean()->description('Whether to wire SSO (Zitadel) for this tool if available (default: false)')->nullable(),
             'wire_mail' => $schema->boolean()->description('Whether to wire mail (Stalwart) for this tool if available (default: false)')->nullable(),

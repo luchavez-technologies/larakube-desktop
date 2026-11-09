@@ -125,14 +125,69 @@ test('auto-resolves context from server name when omitted', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
-test('returns error when context cannot be resolved and is not provided', function () {
-    $response = LaraKubeDesktopServer::tool(InstallClusterToolTool::class, [
-        'server' => 'nonexistent-server-xyz',
-        'tool' => 'n8n',
-        'domain' => 'n8n.example.com',
+test('auto-derives domain when domain is omitted and server has one connected domain', function () {
+    $sandbox = installClusterToolSandbox();
+    ChildProcess::fake();
+    Sleep::fake();
+    installFinishLatestRunOnSleep();
+
+    $server = Server::create([
+        'name' => 'single-domain-server',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-single-domain',
+        'status' => 'ready',
     ]);
 
-    $response->assertHasErrors(['Could not resolve Kubernetes context']);
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'luchtech.dev',
+        'external_dns' => true,
+        'dns_provider' => 'cloudflare',
+        'tls' => true,
+        'in_use' => true,
+    ]);
+
+    $response = LaraKubeDesktopServer::tool(InstallClusterToolTool::class, [
+        'server' => 'single-domain-server',
+        'tool' => 'n8n',
+    ]);
+
+    $response->assertOk();
+
+    $run = Run::sole();
+    expect($run->command)->toContain('--domain=n8n.luchtech.dev');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('errors with candidate domains when domain is omitted and server has multiple connected domains', function () {
+    $server = Server::create([
+        'name' => 'multi-domain-server',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'larakube-multi-domain',
+        'status' => 'ready',
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'alpha.com',
+        'external_dns' => true,
+    ]);
+
+    ServerDomain::create([
+        'server_id' => $server->id,
+        'domain' => 'beta.com',
+        'external_dns' => true,
+    ]);
+
+    $response = LaraKubeDesktopServer::tool(InstallClusterToolTool::class, [
+        'server' => 'multi-domain-server',
+        'tool' => 'n8n',
+    ]);
+
+    $response->assertHasErrors(['n8n.alpha.com', 'n8n.beta.com']);
 });
 
 test('autocompletes domain based on server connected domains and selected tool', function () {
