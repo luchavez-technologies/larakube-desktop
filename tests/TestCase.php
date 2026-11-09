@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Services\Elevation;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\File;
@@ -30,6 +31,8 @@ abstract class TestCase extends BaseTestCase
         $_SERVER['HOME'] = realpath($this->sandboxHome);
 
         app()->instance(ToolLocator::class, new ToolLocator([]));
+        app()->singleton(Elevation::class, fn () => new Elevation(windows: true));
+        app()->singleton(Elevation::class, fn () => new Elevation(windows: true));
     }
 
     protected function tearDown(): void

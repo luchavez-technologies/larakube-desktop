@@ -39,6 +39,10 @@ class TerminalLauncher
     {
         $this->failure = null;
 
+        if (app()->runningUnitTests() && ! Process::isRecording()) {
+            return true;
+        }
+
         return match (true) {
             $this->isDarwin() => $this->openDarwin($command),
             $this->isWindows() => $this->openWindows($command),

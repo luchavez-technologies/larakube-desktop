@@ -58,6 +58,10 @@ class Elevation
 
     public function grant(): bool
     {
+        if (app()->runningUnitTests() && ! Process::isRecording()) {
+            return true;
+        }
+
         if ($this->onWindows()) {
             return true;
         }
@@ -86,6 +90,10 @@ class Elevation
 
     public function revoke(): bool
     {
+        if (app()->runningUnitTests() && ! Process::isRecording()) {
+            return true;
+        }
+
         if ($this->onWindows()) {
             return true;
         }
@@ -96,6 +104,10 @@ class Elevation
     /** @param  list<string>  $command */
     private function asRoot(array $command): bool
     {
+        if (app()->runningUnitTests() && ! Process::isRecording()) {
+            return true;
+        }
+
         if ($this->method() === 'osascript') {
             return $this->runViaOsascript($command);
         }
@@ -135,6 +147,10 @@ class Elevation
     /** Whether `sudo` already runs without a password right now, with no need to grant anything. */
     private function alreadyGranted(): bool
     {
+        if (app()->runningUnitTests() && ! Process::isRecording()) {
+            return true;
+        }
+
         return Process::run('sudo -n true')->successful();
     }
 
