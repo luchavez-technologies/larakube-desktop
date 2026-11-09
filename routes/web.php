@@ -321,6 +321,8 @@ Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('s
 Route::post('/settings/demo-mode', [SettingsController::class, 'toggleDemoMode'])->name('settings.demo-mode');
 Route::post('/settings/sync-cli', [SettingsController::class, 'syncCli'])->name('settings.sync-cli');
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');
+Route::post('/settings/mcp-http', [SettingsController::class, 'updateMcpHttp'])->name('settings.mcp-http');
+Route::post('/settings/mcp-http/regenerate-token', [SettingsController::class, 'regenerateMcpHttpToken'])->name('settings.mcp-http.regenerate-token');
 Route::post('/uninstall', [UninstallController::class, 'execute'])->name('uninstall.execute');
 
 Route::get('/tray', [TrayController::class, 'index'])->name('tray.index');

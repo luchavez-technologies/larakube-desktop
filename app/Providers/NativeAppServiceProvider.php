@@ -50,6 +50,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->syncTheme();
         $this->syncCliOnDesktopUpdate();
         $this->startScheduler();
+        $this->startMcpHttpServerIfEnabled();
         $this->warmSync();
 
         AppMenu::register();
@@ -140,6 +141,23 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             }
         } catch (\Throwable $e) {
             Log::warning('Could not start the scheduler child process: '.$e->getMessage());
+        }
+    }
+
+    private function startMcpHttpServerIfEnabled(): void
+    {
+        try {
+            $mcpHttp = app(GlobalSettings::class)->mcpHttp();
+
+            if (! $mcpHttp['enabled']) {
+                return;
+            }
+
+            if (ChildProcess::get('mcp-http') === null) {
+                ChildProcess::artisan('mcp:serve-http', alias: 'mcp-http', persistent: true);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Could not start the MCP HTTP child process: '.$e->getMessage());
         }
     }
 

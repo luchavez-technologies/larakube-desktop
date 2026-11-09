@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Process;
 use Inertia\Inertia;
 use Inertia\Response;
+use Native\Desktop\Facades\ChildProcess;
 
 class SettingsController extends Controller
 {
@@ -162,5 +163,56 @@ class SettingsController extends Controller
         }
 
         return back()->withErrors(['bridge' => "Failed to bridge {$agent}."]);
+    }
+
+    public function updateMcpHttp(Request $request, GlobalSettings $settings): RedirectResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['nullable', 'boolean'],
+            'allowEdits' => ['nullable', 'boolean'],
+            'port' => ['nullable', 'integer', 'min:1024', 'max:65535'],
+        ]);
+
+        if (array_key_exists('enabled', $validated) && $validated['enabled'] !== null) {
+            $settings->setMcpHttpEnabled((bool) $validated['enabled']);
+        }
+
+        if (array_key_exists('allowEdits', $validated) && $validated['allowEdits'] !== null) {
+            $settings->setMcpHttpAllowEdits((bool) $validated['allowEdits']);
+        }
+
+        if (array_key_exists('port', $validated) && $validated['port'] !== null) {
+            $settings->setMcpHttpPort((int) $validated['port']);
+        }
+
+        $fresh = $settings->mcpHttp();
+
+        try {
+            if ($fresh['enabled']) {
+                ChildProcess::stop('mcp-http');
+                ChildProcess::artisan('mcp:serve-http', alias: 'mcp-http', persistent: true);
+            } else {
+                ChildProcess::stop('mcp-http');
+            }
+        } catch (\Throwable) {
+        }
+
+        return back()->with('success', 'MCP HTTP server settings updated.');
+    }
+
+    public function regenerateMcpHttpToken(GlobalSettings $settings): RedirectResponse
+    {
+        $settings->regenerateMcpHttpToken();
+        $fresh = $settings->mcpHttp();
+
+        try {
+            if ($fresh['enabled']) {
+                ChildProcess::stop('mcp-http');
+                ChildProcess::artisan('mcp:serve-http', alias: 'mcp-http', persistent: true);
+            }
+        } catch (\Throwable) {
+        }
+
+        return back()->with('success', 'MCP HTTP token regenerated. All existing clients have been disconnected.');
     }
 }

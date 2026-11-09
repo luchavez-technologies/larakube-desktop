@@ -389,3 +389,43 @@ test('versions prop detects cliChannelMismatch when CLI version channel differs 
 
     File::deleteDirectory($home);
 });
+
+test('mcp http settings can be updated via dedicated endpoint', function () {
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+
+    $this->post(route('settings.mcp-http'), [
+        'enabled' => true,
+        'allowEdits' => true,
+        'port' => 48123,
+    ])->assertRedirect()
+        ->assertSessionHas('success', 'MCP HTTP server settings updated.');
+
+    $mcpHttp = app(GlobalSettings::class)->mcpHttp();
+    expect($mcpHttp['enabled'])->toBeTrue()
+        ->and($mcpHttp['allowEdits'])->toBeTrue()
+        ->and($mcpHttp['port'])->toBe(48123)
+        ->and($mcpHttp['token'])->toBeString();
+
+    File::deleteDirectory($home);
+});
+
+test('mcp http token can be regenerated via dedicated endpoint', function () {
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+
+    $settings = app(GlobalSettings::class);
+    $initialToken = $settings->setMcpHttpEnabled(true);
+
+    $this->post(route('settings.mcp-http.regenerate-token'))
+        ->assertRedirect()
+        ->assertSessionHas('success', 'MCP HTTP token regenerated. All existing clients have been disconnected.');
+
+    $freshToken = $settings->mcpHttp()['token'];
+    expect($freshToken)->toBeString()
+        ->and($freshToken)->not->toBe($initialToken);
+
+    File::deleteDirectory($home);
+});

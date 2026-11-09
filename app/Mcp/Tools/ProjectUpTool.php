@@ -1,0 +1,55 @@
+<?php
+
+namespace App\Mcp\Tools;
+
+use App\Enums\RunKind;
+use App\Models\Project;
+use App\Services\LaraKube\CliRunner;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Attributes\Title;
+use Laravel\Mcp\Server\Tool;
+
+#[Name('project-up')]
+#[Title('Bring Project Up')]
+#[Description('Brings a project up in the given environment (defaults to local). Reversible — safe to call without confirmation.')]
+class ProjectUpTool extends Tool
+{
+    use PollsRun;
+
+    private const int TIMEOUT_SECONDS = 120;
+
+    public function handle(Request $request): Response
+    {
+        $projectId = (int) $request->get('project_id');
+        $project = Project::query()->find($projectId);
+
+        if ($project === null) {
+            return Response::error("No project found with id {$projectId}.");
+        }
+
+        $environment = $request->get('environment') ?? 'local';
+
+        $run = app(CliRunner::class)->start(
+            label: "Up {$project->name} ({$environment})",
+            arguments: ['up', $environment, '--no-console', '--no-test'],
+            kind: RunKind::UpProject,
+            projectId: $project->id,
+            projectName: $project->name,
+            environment: $environment,
+        );
+
+        return $this->pollRun($run, self::TIMEOUT_SECONDS);
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'project_id' => $schema->integer()->description('The project ID from list-projects'),
+            'environment' => $schema->string()->description('Environment to bring up, e.g. local or production. Defaults to local.')->nullable(),
+        ];
+    }
+}

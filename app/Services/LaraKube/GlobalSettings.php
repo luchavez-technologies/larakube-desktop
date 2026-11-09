@@ -8,6 +8,7 @@ use App\Models\ProjectGroup;
 use App\Models\Server;
 use App\Services\EditorLauncher;
 use App\Services\Runtime\WslDistro;
+use Illuminate\Support\Str;
 use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Settings;
 use Native\Desktop\Facades\System;
@@ -94,6 +95,7 @@ class GlobalSettings
             'wslShutdownMode' => $this->wslShutdownMode(),
             'defaultEditor' => $this->getDefaultEditor(),
             'detectedAgents' => $agents,
+            'mcpHttp' => $this->mcpHttp(),
         ];
     }
 
@@ -448,6 +450,13 @@ class GlobalSettings
                 'command' => $binary,
                 'args' => ['mcp:start', 'mcp'],
             ],
+            'larakube-desktop' => [
+                // PHP_BINARY is whatever binary is currently running this very process —
+                // the bundled static PHP in a packaged build, or the host's PHP in dev —
+                // so it is always the correct binary to hand a client for respawning it.
+                'command' => PHP_BINARY,
+                'args' => [base_path('artisan'), 'mcp:start', 'desktop'],
+            ],
         ];
 
         return match ($agent) {
@@ -457,6 +466,63 @@ class GlobalSettings
             'opencode' => $this->writeMcpFile("{$home}/.config/opencode/mcp.json", $mcpConfig),
             default => false,
         };
+    }
+
+    public const int MCP_HTTP_DEFAULT_PORT = 47821;
+
+    /**
+     * @return array{enabled: bool, allowEdits: bool, port: int, token: ?string}
+     */
+    public function mcpHttp(): array
+    {
+        $config = $this->readConfig();
+
+        return [
+            'enabled' => (bool) ($config['mcpHttpEnabled'] ?? false),
+            'allowEdits' => (bool) ($config['mcpHttpAllowEdits'] ?? false),
+            'port' => (int) ($config['mcpHttpPort'] ?? self::MCP_HTTP_DEFAULT_PORT),
+            'token' => is_string($config['mcpHttpToken'] ?? null) ? $config['mcpHttpToken'] : null,
+        ];
+    }
+
+    /** Generates a token on first enable, so the UI always has one to show as soon as the toggle is flipped on. */
+    public function setMcpHttpEnabled(bool $enabled): string
+    {
+        $config = $this->readConfig();
+        $config['mcpHttpEnabled'] = $enabled;
+
+        if ($enabled && ! is_string($config['mcpHttpToken'] ?? null)) {
+            $config['mcpHttpToken'] = Str::random(40);
+        }
+
+        $this->writeConfig($config);
+
+        return (string) $config['mcpHttpToken'];
+    }
+
+    public function setMcpHttpAllowEdits(bool $allow): void
+    {
+        $config = $this->readConfig();
+        $config['mcpHttpAllowEdits'] = $allow;
+        $this->writeConfig($config);
+    }
+
+    public function setMcpHttpPort(int $port): void
+    {
+        $config = $this->readConfig();
+        $config['mcpHttpPort'] = $port;
+        $this->writeConfig($config);
+    }
+
+    /** Disconnects every client set up with the old token — the UI must say so before calling this. */
+    public function regenerateMcpHttpToken(): string
+    {
+        $config = $this->readConfig();
+        $token = Str::random(40);
+        $config['mcpHttpToken'] = $token;
+        $this->writeConfig($config);
+
+        return $token;
     }
 
     /**
@@ -545,7 +611,7 @@ class GlobalSettings
 
         $content = (string) file_get_contents($configPath);
 
-        return str_contains($content, 'larakube-cli');
+        return str_contains($content, 'larakube-cli') && str_contains($content, 'larakube-desktop');
     }
 
     /**
