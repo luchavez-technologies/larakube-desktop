@@ -58,36 +58,49 @@ export default function WorkloadsPodsCard({
 
     const activeWorkloadRun = runs.find(
         (run) =>
-            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            [
+                'start-project',
+                'stop-project',
+                'up-project',
+                'down-project',
+                'heal-project',
+            ].includes(run.kind ?? '') &&
             run.status === 'running' &&
-            (run.label.includes(`(${activeEnv})`) ||
+            (run.environment === activeEnv ||
+                run.label.includes(`(${activeEnv})`) ||
                 (!run.label.includes('(') && activeEnv === 'production')),
     );
 
     const latestWorkloadRun = runs.find(
         (run) =>
-            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            [
+                'up-project',
+                'down-project',
+                'start-project',
+                'stop-project',
+                'heal-project',
+                'reload-project',
+            ].includes(run.kind ?? '') &&
             ['succeeded', 'running'].includes(run.status) &&
-            (run.label.includes(`(${activeEnv})`) ||
+            (run.environment === activeEnv ||
+                run.label.includes(`(${activeEnv})`) ||
                 (!run.label.includes('(') && activeEnv === 'production')),
     );
 
     const isPaused = useMemo(() => {
+        // 1. Live pod truth: If there are pods running or starting, workloads are NOT paused
+        if (pods.length > 0) {
+            return false;
+        }
+
+        // 2. When pods are 0, check if the latest lifecycle run was stop-project (pause)
         if (
             latestWorkloadRun?.kind === 'stop-project' &&
             latestWorkloadRun.status === 'succeeded'
         ) {
             return true;
         }
-        if (
-            latestWorkloadRun?.kind === 'start-project' &&
-            latestWorkloadRun.status === 'succeeded'
-        ) {
-            return false;
-        }
-        if (pods.length === 0 && latestWorkloadRun) {
-            return true;
-        }
+
         return false;
     }, [pods.length, latestWorkloadRun]);
 

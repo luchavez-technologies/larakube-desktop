@@ -1006,7 +1006,13 @@ function CloudEnvironmentOverviewCard({
 
     const latestWorkloadRun = runs.find(
         (run) =>
-            ['start-project', 'stop-project'].includes(run.kind ?? '') &&
+            [
+                'deploy-app',
+                'up-project',
+                'down-project',
+                'start-project',
+                'stop-project',
+            ].includes(run.kind ?? '') &&
             ['succeeded', 'running'].includes(run.status) &&
             (run.label.includes(`(${activeEnv})`) ||
                 (!run.label.includes('(') && activeEnv === 'production')),
@@ -1015,6 +1021,11 @@ function CloudEnvironmentOverviewCard({
     const hasPods = Boolean(pods && pods.length > 0);
 
     const isPaused = useMemo(() => {
+        // 1. Live pod truth: If there are pods running or starting, workloads are NOT paused
+        if (hasPods) {
+            return false;
+        }
+
         if (
             latestWorkloadRun?.kind === 'stop-project' &&
             latestWorkloadRun.status === 'succeeded'
@@ -1031,7 +1042,7 @@ function CloudEnvironmentOverviewCard({
             !hasPods &&
             (hasSucceededDeploy ||
                 Boolean(activeCi?.hasWorkflow) ||
-                latestWorkloadRun)
+                latestWorkloadRun?.kind === 'stop-project')
         ) {
             return true;
         }
