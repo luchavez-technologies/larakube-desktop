@@ -89,7 +89,12 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
         );
     }
 
+    const maskedToken = '•'.repeat(token.length > 0 ? token.length : 32);
+    const displayToken = showToken ? token : maskedToken;
+
     const claudeSnippet = `claude mcp add --transport http larakube-desktop http://127.0.0.1:${port}/mcp --header "Authorization: Bearer ${token}"`;
+    const claudeSnippetDisplay = `claude mcp add --transport http larakube-desktop http://127.0.0.1:${port}/mcp --header "Authorization: Bearer ${displayToken}"`;
+
     const openCodeSnippet = JSON.stringify(
         {
             mcpServers: {
@@ -104,8 +109,27 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
         null,
         2,
     );
+    const openCodeSnippetDisplay = JSON.stringify(
+        {
+            mcpServers: {
+                'larakube-desktop': {
+                    url: `http://127.0.0.1:${port}/mcp`,
+                    headers: {
+                        Authorization: `Bearer ${displayToken}`,
+                    },
+                },
+            },
+        },
+        null,
+        2,
+    );
+
     const curlSnippet = `curl -s -X POST http://127.0.0.1:${port}/mcp \\
   -H "Authorization: Bearer ${token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`;
+    const curlSnippetDisplay = `curl -s -X POST http://127.0.0.1:${port}/mcp \\
+  -H "Authorization: Bearer ${displayToken}" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`;
 
@@ -328,7 +352,7 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
                                         <CopyButton value={claudeSnippet} />
                                     </div>
                                     <pre className="overflow-x-auto rounded-lg bg-term p-2.5 font-mono text-[11px] whitespace-pre-wrap text-term-bright">
-                                        {claudeSnippet}
+                                        {claudeSnippetDisplay}
                                     </pre>
                                 </div>
 
@@ -342,7 +366,7 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
                                         <CopyButton value={openCodeSnippet} />
                                     </div>
                                     <pre className="overflow-x-auto rounded-lg bg-term p-2.5 font-mono text-[11px] whitespace-pre-wrap text-term-bright">
-                                        {openCodeSnippet}
+                                        {openCodeSnippetDisplay}
                                     </pre>
                                 </div>
 
@@ -353,7 +377,7 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
                                         <CopyButton value={curlSnippet} />
                                     </div>
                                     <pre className="overflow-x-auto rounded-lg bg-term p-2.5 font-mono text-[11px] whitespace-pre-wrap text-term-bright">
-                                        {curlSnippet}
+                                        {curlSnippetDisplay}
                                     </pre>
                                 </div>
                             </div>
