@@ -89,7 +89,7 @@ test('hideProjects preference can be saved to config', function () {
     ])->assertRedirect();
 });
 
-test('global settings bridges only larakube-cli without larakube-console', function () {
+test('global settings bridges larakube-desktop', function () {
     $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists("{$home}/.gemini");
     $_SERVER['HOME'] = realpath($home);
@@ -99,7 +99,10 @@ test('global settings bridges only larakube-cli without larakube-console', funct
 
     expect($bridged)->toBeTrue();
     $config = json_decode((string) File::get("{$home}/.gemini/antigravity.json"), true);
-    expect($config['mcpServers'])->toHaveKey('larakube-cli')
+    expect($config['mcpServers'])->toHaveKey('larakube-desktop')
+        ->and($config['mcpServers']['larakube-desktop']['command'])->toBe(PHP_BINARY)
+        ->and($config['mcpServers']['larakube-desktop']['args'])->toBe([base_path('artisan'), 'mcp:start', 'desktop'])
+        ->and($config['mcpServers'])->not->toHaveKey('larakube-cli')
         ->and($config['mcpServers'])->not->toHaveKey('larakube-console');
 
     File::deleteDirectory($home);

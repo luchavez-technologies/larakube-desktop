@@ -392,15 +392,8 @@ export default function AiMcpTab({ mcpHttp, detectedAgents }: AiMcpTabProps) {
                     <p className="text-xs leading-relaxed text-soft">
                         Direct process bridging writes local configuration files
                         for supported desktop AI tools to spawn LaraKube's
-                        servers via stdio:
+                        desktop server via stdio:
                     </p>
-                    <div className="space-y-1.5 rounded-lg border border-line bg-paper p-2.5 text-[11px]">
-                        <p className="font-semibold text-ink">🛠 larakube-cli</p>
-                        <p className="text-soft">
-                            Inspects architectural DNA, patches blueprints, and
-                            runs orchestration verbs.
-                        </p>
-                    </div>
                     <div className="space-y-1.5 rounded-lg border border-line bg-paper p-2.5 text-[11px]">
                         <p className="font-semibold text-ink">
                             🖥 larakube-desktop

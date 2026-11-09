@@ -443,13 +443,8 @@ class GlobalSettings
     public function bridge(string $agent): bool
     {
         $home = ToolLocator::hostProfile($this->locator->isWindows());
-        $binary = $this->locator->find('larakube') ?? 'larakube';
 
         $mcpConfig = [
-            'larakube-cli' => [
-                'command' => $binary,
-                'args' => ['mcp:start', 'mcp'],
-            ],
             'larakube-desktop' => [
                 // PHP_BINARY is whatever binary is currently running this very process —
                 // the bundled static PHP in a packaged build, or the host's PHP in dev —
@@ -611,7 +606,7 @@ class GlobalSettings
 
         $content = (string) file_get_contents($configPath);
 
-        return str_contains($content, 'larakube-cli') && str_contains($content, 'larakube-desktop');
+        return str_contains($content, 'larakube-desktop');
     }
 
     /**
