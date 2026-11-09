@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\RunKind;
+use App\Models\ClusterTool;
 use App\Models\Server;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\StackCatalog;
@@ -12,16 +13,36 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
+use Laravel\Mcp\Server\Completions\CompletionResponse;
+use Laravel\Mcp\Server\Contracts\Completable;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('install-cluster-tool')]
 #[Title('Install Cluster Tool')]
 #[Description('Installs a Cluster Tool on a server. Additive — safe to call without confirmation.')]
-class InstallClusterToolTool extends Tool
+#[IsIdempotent]
+class InstallClusterToolTool extends Tool implements Completable
 {
     use PollsRun;
 
     private const int TIMEOUT_SECONDS = 120;
+
+    public function complete(string $argument, string $value, array $context): CompletionResponse
+    {
+        if ($argument === 'server') {
+            return CompletionResponse::match(Server::pluck('name')->all());
+        }
+
+        if ($argument === 'tool') {
+            $known = ['n8n', 'stalwart', 'vaultwarden', 'uptime-kuma', 'glitchtip', 'netbird', 'authentik', 'pocketbase', 'wordpress', 'penpot', 'forgejo', 'mattermost', 'twenty', 'plausible', 'roundcube', 'minio'];
+            $fromDb = ClusterTool::distinct()->pluck('tool')->filter()->values()->all();
+
+            return CompletionResponse::match(array_values(array_unique(array_merge($known, $fromDb))));
+        }
+
+        return CompletionResponse::empty();
+    }
 
     public function handle(Request $request): Response
     {
@@ -35,7 +56,8 @@ class InstallClusterToolTool extends Tool
 
         if ($context === '') {
             $serverModel = Server::where('name', $server)->orWhere('ip', $server)->first();
-            $context = (string) ($serverModel?->context ?? app(StackCatalog::class)->find($server)['context'] ?? '');
+            $stack = app(StackCatalog::class)->find($server);
+            $context = (string) ($serverModel instanceof Server ? $serverModel->context : ($stack['context'] ?? ''));
         }
 
         if ($context === '') {

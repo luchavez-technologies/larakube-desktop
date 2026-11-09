@@ -12,10 +12,12 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('project-heal')]
 #[Title('Heal Project')]
 #[Description('Reconciles/repairs a project back to its blueprint. Not destructive — safe to call without confirmation.')]
+#[IsIdempotent]
 class ProjectHealTool extends Tool
 {
     use PollsRun;

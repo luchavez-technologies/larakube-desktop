@@ -11,10 +11,12 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('get-run-status')]
 #[Title('Get Run Status')]
 #[Description('Checks the status of a run started by project-up, project-down, project-heal, install-cluster-tool, or remove-cluster-tool. Use this when one of those tools times out.')]
+#[IsReadOnly]
 class GetRunStatusTool extends Tool
 {
     public function handle(Request $request): Response

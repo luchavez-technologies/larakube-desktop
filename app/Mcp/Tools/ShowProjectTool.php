@@ -10,13 +10,26 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
+use Laravel\Mcp\Server\Completions\CompletionResponse;
+use Laravel\Mcp\Server\Contracts\Completable;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('show-project')]
 #[Title('Show Project')]
 #[Description('Shows architectural detail for one project: framework, git, blueprint DNA for a given environment.')]
-class ShowProjectTool extends Tool
+#[IsReadOnly]
+class ShowProjectTool extends Tool implements Completable
 {
+    public function complete(string $argument, string $value, array $context): CompletionResponse
+    {
+        if ($argument === 'environment') {
+            return CompletionResponse::match(['production', 'local', 'staging']);
+        }
+
+        return CompletionResponse::empty();
+    }
+
     public function handle(Request $request): Response
     {
         $projectId = (int) $request->get('project_id');

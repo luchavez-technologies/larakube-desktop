@@ -10,10 +10,12 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('list-servers')]
 #[Title('List Servers')]
 #[Description('Lists every known server/stack LaraKube Desktop manages, with status, context, and provider.')]
+#[IsReadOnly]
 class ListServersTool extends Tool
 {
     public function handle(Request $request): Response

@@ -10,10 +10,12 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('list-cluster-tools')]
 #[Title('List Cluster Tools')]
 #[Description("Lists the Cluster Tools installed on a server's kube context.")]
+#[IsReadOnly]
 class ListClusterToolsTool extends Tool
 {
     public function handle(Request $request): Response

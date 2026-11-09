@@ -11,16 +11,29 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
+use Laravel\Mcp\Server\Completions\CompletionResponse;
+use Laravel\Mcp\Server\Contracts\Completable;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 
 #[Name('project-down')]
 #[Title('Bring Project Down')]
 #[Description("Brings a project down in the given environment (defaults to local). Plain down is reversible. Setting purge: true also deletes the project's data volumes permanently and requires confirm: true.")]
-class ProjectDownTool extends Tool
+#[IsDestructive]
+class ProjectDownTool extends Tool implements Completable
 {
     use PollsRun;
 
     private const int TIMEOUT_SECONDS = 60;
+
+    public function complete(string $argument, string $value, array $context): CompletionResponse
+    {
+        if ($argument === 'environment') {
+            return CompletionResponse::match(['local', 'production', 'staging']);
+        }
+
+        return CompletionResponse::empty();
+    }
 
     public function handle(Request $request): Response
     {

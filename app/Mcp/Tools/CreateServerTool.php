@@ -18,14 +18,35 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
+use Laravel\Mcp\Server\Completions\CompletionResponse;
+use Laravel\Mcp\Server\Contracts\Completable;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('create-server')]
 #[Title('Create Server')]
 #[Description('Provisions a new cloud server or managed cluster (GCP, DigitalOcean, Hetzner, AWS) via LaraKube.')]
-class CreateServerTool extends Tool
+#[IsIdempotent]
+class CreateServerTool extends Tool implements Completable
 {
     private const int POLL_TIMEOUT_SECONDS = 120;
+
+    public function complete(string $argument, string $value, array $context): CompletionResponse
+    {
+        if ($argument === 'provider') {
+            return CompletionResponse::match(['gcp', 'do', 'hetzner', 'aws', 'custom']);
+        }
+
+        if ($argument === 'target_kind') {
+            return CompletionResponse::match(['vps', 'managed']);
+        }
+
+        if ($argument === 'dns_provider') {
+            return CompletionResponse::match(['cloudflare', 'digitalocean', 'route53', 'google', 'none']);
+        }
+
+        return CompletionResponse::empty();
+    }
 
     public function handle(Request $request): Response
     {
@@ -122,16 +143,17 @@ class CreateServerTool extends Tool
 
         // Resolve smart defaults for region and size if omitted
         if ($region === '') {
-            $region = (string) ($catalog['defaultRegion'] ?? $providerModel?->default_region ?? '');
+            $region = (string) ($catalog['defaultRegion'] ?? ($providerModel instanceof CloudProvider ? $providerModel->default_region : ''));
         }
 
         if ($size === '') {
-            $size = (string) ($targetKind === 'managed'
-                ? ($catalog['defaultManagedSize'] ?? $providerModel?->default_managed_size ?? $catalog['defaultSize'] ?? $providerModel?->default_vps_size ?? '')
-                : ($catalog['defaultSize'] ?? $providerModel?->default_vps_size ?? ''));
+            $defaultVps = $catalog['defaultSize'] ?? ($providerModel instanceof CloudProvider ? $providerModel->default_vps_size : '');
+            $defaultManaged = $catalog['defaultManagedSize'] ?? ($providerModel instanceof CloudProvider ? $providerModel->default_managed_size : $defaultVps);
+
+            $size = (string) ($targetKind === 'managed' ? $defaultManaged : $defaultVps);
         }
 
-        if ($account === '' && $providerModel?->active_account) {
+        if ($account === '' && $providerModel instanceof CloudProvider && $providerModel->active_account) {
             $account = (string) $providerModel->active_account;
         }
 
@@ -207,13 +229,24 @@ class CreateServerTool extends Tool
                 if ($run->status === RunStatus::Succeeded) {
                     $server = Server::where('name', $stackName)->first() ?? app(StackCatalog::class)->find($stackName);
 
+                    $resolvedContext = "larakube-{$stackName}";
+                    $resolvedIp = null;
+
+                    if ($server instanceof Server) {
+                        $resolvedContext = (string) ($server->context ?? $resolvedContext);
+                        $resolvedIp = $server->ip;
+                    } elseif (is_array($server)) {
+                        $resolvedContext = (string) ($server['context'] ?? $resolvedContext);
+                        $resolvedIp = isset($server['ip']) ? (string) $server['ip'] : null;
+                    }
+
                     return Response::text(json_encode([
                         'status' => 'ready',
                         'server' => $stackName,
                         'provider' => $provider,
                         'kind' => $targetKind,
-                        'context' => $server?->context ?? ($server['context'] ?? "larakube-{$stackName}"),
-                        'ip' => $server?->ip ?? ($server['ip'] ?? null),
+                        'context' => $resolvedContext,
+                        'ip' => $resolvedIp,
                         'run_id' => $run->id,
                         'output' => Str::limit($run->output, 4000),
                     ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));

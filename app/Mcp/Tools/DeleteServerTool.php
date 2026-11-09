@@ -12,16 +12,29 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
+use Laravel\Mcp\Server\Completions\CompletionResponse;
+use Laravel\Mcp\Server\Contracts\Completable;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 
 #[Name('delete-server')]
 #[Title('Delete Server')]
 #[Description('Permanently tears down and destroys a cloud server and its cluster workloads. Destructive — requires confirm: true.')]
-class DeleteServerTool extends Tool
+#[IsDestructive]
+class DeleteServerTool extends Tool implements Completable
 {
     use PollsRun;
 
     private const int TIMEOUT_SECONDS = 120;
+
+    public function complete(string $argument, string $value, array $context): CompletionResponse
+    {
+        if ($argument === 'name') {
+            return CompletionResponse::match(Server::pluck('name')->all());
+        }
+
+        return CompletionResponse::empty();
+    }
 
     public function handle(Request $request): Response
     {
