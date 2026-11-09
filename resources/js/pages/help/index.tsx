@@ -4,10 +4,14 @@ import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import PageHeader from '@/components/page-header';
 import HelpCommunityCard from '@/components/help-community-card';
-import HelpVideosCard from '@/components/help-videos-card';
+import HelpVideosCard, { type HowToVideo } from '@/components/help-videos-card';
 import SponsorCard from '@/components/sponsor-card';
 
-export default function Help() {
+type HelpProps = {
+    howToVideos?: HowToVideo[] | null;
+};
+
+export default function Help({ howToVideos }: HelpProps) {
     return (
         <>
             <Head title="Help" />
@@ -53,7 +57,7 @@ export default function Help() {
                             </div>
                         </div>
                     </Card>
-                    <HelpVideosCard />
+                    <HelpVideosCard videos={howToVideos} />
                     <SponsorCard />
                 </div>
                 <div>

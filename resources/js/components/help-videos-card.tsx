@@ -13,20 +13,35 @@ export type HowToVideo = {
 };
 
 /**
- * How-To videos covering common LaraKube workflows.
+ * Bundled fallback list — shown instantly on first paint, and whenever the
+ * live playlist fetch (HelpController's `howToVideos` deferred prop) comes
+ * back empty or the machine has no connectivity. Keep this in sync with
+ * the actual playlist by hand; it's the safety net, not the source of truth.
  */
 export const HOW_TO_VIDEOS: HowToVideo[] = [
     {
         title: 'LaraKube Desktop: Deploy a Kubernetes Server in 3 Minutes',
-        youtubeId: 'VVXIGK9IUzE',
+        youtubeId: '9qw4NPD-Jz4',
         description:
             'Deploy a single-node k3s Kubernetes cluster on GCP with automated DNS and wildcard SSL certificates in 3 minutes.',
     },
     {
         title: 'LaraKube Desktop: Install n8n with One Click',
-        youtubeId: 'x3Xjpdr4yZs',
+        youtubeId: 'kO4ouF1c0zc',
         description:
             'Deploy an n8n workflow automation instance with custom domains and automated SSL in under a minute.',
+    },
+    {
+        title: 'LaraKube Desktop: Install PocketBase (Self-Hosted Backend) in One Click',
+        youtubeId: 'aj7jBycASs4',
+        description:
+            'Deploy a PocketBase backend with its own embedded database, auth, and file storage, with DNS and SSL handled automatically.',
+    },
+    {
+        title: 'LaraKube Desktop: Install WordPress (Zero-Config CMS) in One Click',
+        youtubeId: 'W-pbvrJv8Fk',
+        description:
+            'Deploy WordPress with its MySQL database, admin login, and SSL ready to go — no manual config needed.',
     },
 ];
 
@@ -96,8 +111,14 @@ function HowToVideosEmptyState() {
     );
 }
 
-export default function HelpVideosCard() {
+export default function HelpVideosCard({
+    videos,
+}: {
+    /** Live-fetched playlist from the server; undefined while loading, null/empty falls back to HOW_TO_VIDEOS. */
+    videos?: HowToVideo[] | null;
+}) {
     const [playingVideo, setPlayingVideo] = useState<HowToVideo | null>(null);
+    const activeVideos = videos && videos.length > 0 ? videos : HOW_TO_VIDEOS;
 
     useEffect(() => {
         if (!playingVideo) {
@@ -133,11 +154,11 @@ export default function HelpVideosCard() {
                     ) : undefined
                 }
             >
-                {HOW_TO_VIDEOS.length === 0 ? (
+                {activeVideos.length === 0 ? (
                     <HowToVideosEmptyState />
                 ) : (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {HOW_TO_VIDEOS.map((video) => (
+                        {activeVideos.map((video) => (
                             <HowToVideoThumbnail
                                 key={video.youtubeId}
                                 video={video}
