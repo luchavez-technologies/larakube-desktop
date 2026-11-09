@@ -12,6 +12,14 @@ function sendMcpHttpRequest(McpHttpServer $server, string $method, string $path,
 
     [$client, $conn] = $pair;
 
+    // Expand buffer so multi-kilobyte JSON responses don't block synchronous handleConnection()
+    $sockConn = socket_import_stream($conn);
+    $sockClient = socket_import_stream($client);
+    if ($sockConn && $sockClient) {
+        socket_set_option($sockConn, SOL_SOCKET, SO_SNDBUF, 131072);
+        socket_set_option($sockClient, SOL_SOCKET, SO_RCVBUF, 131072);
+    }
+
     $headerLines = ["{$method} {$path} HTTP/1.1", 'Host: 127.0.0.1', 'Connection: close'];
     foreach ($headers as $k => $v) {
         $headerLines[] = "{$k}: {$v}";
@@ -95,6 +103,27 @@ test('rejects write tools with 403 when allowEdits is false', function (): void 
     expect($response)->toContain('HTTP/1.1 403 Forbidden')
         ->and($response)->toContain('This MCP HTTP server is read-only')
         ->and($response)->toContain('-32000');
+
+    // Also verify create-server and delete-server are rejected
+    foreach (['create-server', 'delete-server'] as $writeTool) {
+        $writePayload = json_encode([
+            'jsonrpc' => '2.0',
+            'id' => 43,
+            'method' => 'tools/call',
+            'params' => [
+                'name' => $writeTool,
+                'arguments' => ['stack_name' => 'test-box', 'name' => 'test-box'],
+            ],
+        ]);
+
+        $res = sendMcpHttpRequest($server, 'POST', '/mcp', [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer secret-token',
+        ], (string) $writePayload);
+
+        expect($res)->toContain('HTTP/1.1 403 Forbidden')
+            ->and($res)->toContain('This MCP HTTP server is read-only');
+    }
 });
 
 test('allows write tools when allowEdits is true', function (): void {

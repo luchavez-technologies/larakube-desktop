@@ -2,6 +2,8 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\CreateServerTool;
+use App\Mcp\Tools\DeleteServerTool;
 use App\Mcp\Tools\GetRunStatusTool;
 use App\Mcp\Tools\InstallClusterToolTool;
 use App\Mcp\Tools\ListClusterToolsTool;
@@ -20,7 +22,7 @@ use Laravel\Mcp\Server\Attributes\Version;
 
 #[Name('LaraKube Desktop Server')]
 #[Version('0.1.0')]
-#[Instructions('You are the LaraKube Desktop assistant. You can see every registered Project, Server, and installed Cluster Tool, and can bring projects up/down, heal them, and install/remove cluster tools. Destructive actions (purging a project or a cluster tool\'s data) require an explicit confirm: true.')]
+#[Instructions('You are the LaraKube Desktop assistant. You can see and manage every registered Project, Server, and installed Cluster Tool. You can create or destroy servers, bring projects up/down, heal them, and install/remove cluster tools. Destructive actions (deleting a server, purging a project or a cluster tool\'s data) require an explicit confirm: true.')]
 class LaraKubeDesktopServer extends Server
 {
     protected array $tools = [
@@ -28,6 +30,8 @@ class LaraKubeDesktopServer extends Server
         ShowProjectTool::class,
         ListServersTool::class,
         ShowServerTool::class,
+        CreateServerTool::class,
+        DeleteServerTool::class,
         ListClusterToolsTool::class,
         ProjectUpTool::class,
         ProjectDownTool::class,

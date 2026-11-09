@@ -3,7 +3,9 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\RunKind;
+use App\Models\Server;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\StackCatalog;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -24,13 +26,22 @@ class InstallClusterToolTool extends Tool
     public function handle(Request $request): Response
     {
         $server = (string) $request->get('server');
-        $context = (string) $request->get('context');
+        $context = trim((string) $request->get('context'));
         $tool = (string) $request->get('tool');
         $domain = (string) $request->get('domain');
         $adminEmail = $request->get('admin_email');
+        $wireSso = (bool) $request->get('wire_sso', false);
+        $wireMail = (bool) $request->get('wire_mail', false);
 
-        // No UI form exists behind this tool to resolve per-tool option flags or SSO/mail
-        // wiring choices, so it always installs with the safe, no-extra-wiring defaults.
+        if ($context === '') {
+            $serverModel = Server::where('name', $server)->orWhere('ip', $server)->first();
+            $context = (string) ($serverModel?->context ?? app(StackCatalog::class)->find($server)['context'] ?? '');
+        }
+
+        if ($context === '') {
+            return Response::error("Could not resolve Kubernetes context for server '{$server}'. Please provide an explicit 'context' parameter.");
+        }
+
         $run = app(CliRunner::class)->start(
             label: "Install {$tool} on {$server}",
             arguments: [
@@ -39,8 +50,8 @@ class InstallClusterToolTool extends Tool
                 "--context={$context}",
                 "--domain={$domain}",
                 ...($adminEmail ? ["--admin-email={$adminEmail}"] : []),
-                '--no-wire-sso',
-                '--no-wire-mail',
+                $wireSso ? '--wire-sso' : '--no-wire-sso',
+                $wireMail ? '--wire-mail' : '--no-wire-mail',
                 '--force',
             ],
             kind: RunKind::InstallClusterTool,
@@ -57,10 +68,12 @@ class InstallClusterToolTool extends Tool
     {
         return [
             'server' => $schema->string()->description('The server/stack name, from list-servers'),
-            'context' => $schema->string()->description("The server's kube context, from show-server's output"),
-            'tool' => $schema->string()->description('The tool slug to install, e.g. from list-cluster-tools'),
-            'domain' => $schema->string()->description('The domain/host to install the tool under'),
+            'context' => $schema->string()->description("The server's kube context (optional; auto-resolved from server name if omitted)")->nullable(),
+            'tool' => $schema->string()->description('The tool slug to install, e.g. from list-cluster-tools (e.g. n8n, wordpress, pocketbase)'),
+            'domain' => $schema->string()->description('The domain/host to install the tool under (e.g. n8n.example.com)'),
             'admin_email' => $schema->string()->description('An admin email, for tools that need one')->nullable(),
+            'wire_sso' => $schema->boolean()->description('Whether to wire SSO (Zitadel) for this tool if available (default: false)')->nullable(),
+            'wire_mail' => $schema->boolean()->description('Whether to wire mail (Stalwart) for this tool if available (default: false)')->nullable(),
         ];
     }
 }

@@ -5,6 +5,7 @@ use App\Enums\RunStatus;
 use App\Mcp\Servers\LaraKubeDesktopServer;
 use App\Mcp\Tools\InstallClusterToolTool;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Sleep;
@@ -88,4 +89,47 @@ test('includes an admin email flag when one is given', function () {
     expect(Run::sole()->command)->toContain('--admin-email=admin@example.com');
 
     File::deleteDirectory($sandbox['home']);
+});
+
+test('auto-resolves context from server name when omitted', function () {
+    $sandbox = installClusterToolSandbox();
+    ChildProcess::fake();
+    Sleep::fake();
+    installFinishLatestRunOnSleep();
+
+    Server::create([
+        'name' => 'gcp-prod',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'context' => 'gke_project_us-central1_gcp-prod',
+        'status' => 'ready',
+    ]);
+
+    $response = LaraKubeDesktopServer::tool(InstallClusterToolTool::class, [
+        'server' => 'gcp-prod',
+        'tool' => 'n8n',
+        'domain' => 'n8n.example.com',
+        'wire_sso' => true,
+        'wire_mail' => true,
+    ]);
+
+    $response->assertOk();
+
+    $run = Run::sole();
+    expect($run->context)->toBe('gke_project_us-central1_gcp-prod')
+        ->and($run->command)->toContain('--context=gke_project_us-central1_gcp-prod')
+        ->and($run->command)->toContain('--wire-sso')
+        ->and($run->command)->toContain('--wire-mail');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('returns error when context cannot be resolved and is not provided', function () {
+    $response = LaraKubeDesktopServer::tool(InstallClusterToolTool::class, [
+        'server' => 'nonexistent-server-xyz',
+        'tool' => 'n8n',
+        'domain' => 'n8n.example.com',
+    ]);
+
+    $response->assertHasErrors(['Could not resolve Kubernetes context']);
 });

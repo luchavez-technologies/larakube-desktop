@@ -28,6 +28,8 @@ class McpHttpServer
         'project-heal',
         'install-cluster-tool',
         'remove-cluster-tool',
+        'create-server',
+        'delete-server',
     ];
 
     /** @var resource|null */
