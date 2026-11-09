@@ -138,8 +138,16 @@ class McpHttpServer
 
         $body = '';
         $contentLength = (int) ($headers['content-length'] ?? 0);
-        if ($contentLength > 0) {
-            $body = fread($connection, $contentLength) ?: '';
+        while (strlen($body) < $contentLength && ! feof($connection)) {
+            $remaining = $contentLength - strlen($body);
+            if ($remaining <= 0) {
+                break;
+            }
+            $chunk = fread($connection, min(8192, $remaining));
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $body .= $chunk;
         }
 
         [$method, $uri] = $this->parseRequestLine($requestLine);
@@ -237,6 +245,14 @@ class McpHttpServer
             ."Connection: close\r\n\r\n"
             .$body;
 
-        fwrite($connection, $response);
+        $totalLength = strlen($response);
+        $written = 0;
+        while ($written < $totalLength) {
+            $n = @fwrite($connection, substr($response, $written));
+            if ($n === false || $n === 0) {
+                break;
+            }
+            $written += $n;
+        }
     }
 }

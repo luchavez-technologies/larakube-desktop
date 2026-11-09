@@ -53,8 +53,18 @@ class LaraKubeDesktopServer extends Server
         self::CAPABILITY_PROMPTS => [
             'listChanged' => false,
         ],
-        self::CAPABILITY_COMPLETIONS => [],
     ];
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function resolvedCapabilities(): array
+    {
+        $capabilities = parent::resolvedCapabilities();
+        $capabilities[self::CAPABILITY_COMPLETIONS] = (object) [];
+
+        return $capabilities;
+    }
 
     protected array $methods = [
         'tools/list' => ListTools::class,
