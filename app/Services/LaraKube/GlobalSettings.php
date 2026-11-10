@@ -463,7 +463,7 @@ class GlobalSettings
         };
     }
 
-    public const int MCP_HTTP_DEFAULT_PORT = 47821;
+    public const int MCP_HTTP_DEFAULT_PORT = 22222;
 
     /**
      * @return array{enabled: bool, allowEdits: bool, port: int, token: ?string}

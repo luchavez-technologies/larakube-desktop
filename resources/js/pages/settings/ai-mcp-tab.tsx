@@ -22,7 +22,7 @@ type AiMcpTabProps = {
 export default function AiMcpTab({ mcpHttp }: AiMcpTabProps) {
     const isEnabled = mcpHttp?.enabled ?? false;
     const allowEdits = mcpHttp?.allowEdits ?? false;
-    const port = mcpHttp?.port ?? 47821;
+    const port = mcpHttp?.port ?? 22222;
     const token = mcpHttp?.token ?? '';
 
     const [portInput, setPortInput] = useState<number>(port);
@@ -242,7 +242,7 @@ export default function AiMcpTab({ mcpHttp }: AiMcpTabProps) {
                                     )}
                                 </div>
                                 <p className="text-[11px] text-soft">
-                                    Default port is 47821. Restarting the server
+                                    Default port is 22222. Restarting the server
                                     will apply any changes immediately.
                                 </p>
                             </div>
