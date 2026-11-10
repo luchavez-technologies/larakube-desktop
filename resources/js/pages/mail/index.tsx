@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
+import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { index as mailIndex } from '@/routes/servers/mail';
 import SyncStatusBadge, {
@@ -246,23 +247,18 @@ export default function MailIndex({
     const resolvedDomains = domains ?? [];
     const resolvedAccounts = accounts ?? { accounts: [], queue: 0 };
 
-    const tabs: Array<{
-        id: TabType;
-        label: string;
-        icon: typeof Inbox;
-        count?: number;
-    }> = [
+    const tabs: Array<StickyTabItem<TabType>> = [
         {
             id: 'mailboxes',
             label: 'Mailboxes',
             icon: Inbox,
-            count: resolvedAccounts.accounts.length,
+            badge: resolvedAccounts.accounts.length,
         },
         {
             id: 'domains',
             label: 'Domains & DNS',
             icon: Globe,
-            count: resolvedDomains.length,
+            badge: resolvedDomains.length,
         },
         {
             id: 'relay',
@@ -370,44 +366,11 @@ export default function MailIndex({
                     />
                 ) : (
                     <div className="space-y-6">
-                        {/* Tab Navigation */}
-                        <div className="flex border-b border-line">
-                            <div className="flex gap-2">
-                                {tabs.map((tab) => {
-                                    const Icon = tab.icon;
-                                    const isActive = activeTab === tab.id;
-
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setActiveTab(tab.id)}
-                                            className={`relative flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${
-                                                isActive
-                                                    ? 'text-brand'
-                                                    : 'text-soft hover:text-ink'
-                                            }`}
-                                        >
-                                            <Icon className="h-4 w-4" />
-                                            <span>{tab.label}</span>
-                                            {typeof tab.count === 'number' && (
-                                                <span
-                                                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                                                        isActive
-                                                            ? 'bg-brand/10 text-brand'
-                                                            : 'text-muted bg-paper'
-                                                    }`}
-                                                >
-                                                    {tab.count}
-                                                </span>
-                                            )}
-                                            {isActive && (
-                                                <div className="absolute inset-x-0 bottom-0 h-0.5 bg-brand" />
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <StickyTabs
+                            tabs={tabs}
+                            activeTab={activeTab}
+                            onChange={setActiveTab}
+                        />
 
                         {/* Active Tab Content */}
                         {loading ? (

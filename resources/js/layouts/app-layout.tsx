@@ -629,9 +629,11 @@ export default function AppLayout({
             </aside>
             <main
                 scroll-region="true"
-                className="min-w-0 flex-1 overflow-y-auto px-6 py-6 md:px-8 lg:px-10 lg:py-8"
+                className="min-w-0 flex-1 overflow-y-auto"
             >
-                {children}
+                <div className="min-h-full px-6 py-6 md:px-8 lg:px-10 lg:py-8">
+                    {children}
+                </div>
             </main>
             <RunDrawer />
         </div>

@@ -21,6 +21,7 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ServerSwitcher from '@/components/server-switcher';
+import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import ExperimentalBadge from '@/components/experimental-badge';
 import ToolLogo from '@/components/tool-logo';
 import SyncStatusBadge, {
@@ -227,12 +228,7 @@ export default function OpenBaoIndex({
         );
     }, [customEnv, customEnvSearch]);
 
-    const tabs: Array<{
-        id: TabType;
-        label: string;
-        icon: typeof RefreshCw;
-        badge?: number | string;
-    }> = [
+    const tabs: Array<StickyTabItem<TabType>> = [
         {
             id: 'rotation',
             label: 'Rotation',
@@ -414,42 +410,11 @@ export default function OpenBaoIndex({
                     <OpenBaoSkeleton />
                 ) : (
                     <div className="space-y-6">
-                        {/* Tab Navigation */}
-                        <div className="flex items-center gap-6 border-b border-line">
-                            {tabs.map((tab) => {
-                                const Icon = tab.icon;
-                                const isActive = activeTab === tab.id;
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        type="button"
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`relative flex items-center gap-2 pb-3 text-xs font-medium transition ${
-                                            isActive
-                                                ? 'text-brand'
-                                                : 'text-soft hover:text-ink'
-                                        }`}
-                                    >
-                                        <Icon className="h-4 w-4" />
-                                        <span>{tab.label}</span>
-                                        {tab.badge !== undefined && (
-                                            <span
-                                                className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                                                    isActive
-                                                        ? 'bg-brand/10 text-brand'
-                                                        : 'bg-paper text-soft'
-                                                }`}
-                                            >
-                                                {tab.badge}
-                                            </span>
-                                        )}
-                                        {isActive && (
-                                            <div className="absolute right-0 bottom-0 left-0 h-0.5 bg-brand" />
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <StickyTabs
+                            tabs={tabs}
+                            activeTab={activeTab}
+                            onChange={setActiveTab}
+                        />
 
                         {/* TAB 1: ROTATION */}
                         {activeTab === 'rotation' && (

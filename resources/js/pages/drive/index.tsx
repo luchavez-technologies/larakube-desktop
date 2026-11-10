@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
+import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import { ExternalLinkButton } from '@/lib/open-external';
 import SyncStatusBadge, {
     type SyncStatus,
@@ -134,12 +135,7 @@ export default function DriveIndex({
 
     const otherDriveServers = servers.filter((s) => s.name !== server.name);
 
-    const tabs: Array<{
-        id: TabType;
-        label: string;
-        icon: typeof HardDrive;
-        badge?: string | number;
-    }> = [
+    const tabs: Array<StickyTabItem<TabType>> = [
         {
             id: 'overview',
             label: 'Overview',
@@ -252,51 +248,11 @@ export default function DriveIndex({
                     />
                 ) : (
                     <>
-                        {/* Tab Bar */}
-                        <div className="border-b border-line">
-                            <nav
-                                className="-mb-px flex gap-6"
-                                aria-label="Tabs"
-                            >
-                                {tabs.map((tab) => {
-                                    const Icon = tab.icon;
-                                    const isActive = activeTab === tab.id;
-
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            type="button"
-                                            onClick={() => setActiveTab(tab.id)}
-                                            className={`group inline-flex cursor-pointer items-center gap-2 border-b-2 px-1 py-3 text-xs font-medium transition ${
-                                                isActive
-                                                    ? 'border-brand text-brand'
-                                                    : 'border-transparent text-soft hover:border-line hover:text-ink'
-                                            }`}
-                                        >
-                                            <Icon
-                                                className={`h-4 w-4 ${
-                                                    isActive
-                                                        ? 'text-brand'
-                                                        : 'text-muted group-hover:text-soft'
-                                                }`}
-                                            />
-                                            <span>{tab.label}</span>
-                                            {tab.badge !== undefined && (
-                                                <span
-                                                    className={`py-0.2 rounded-full px-1.5 text-[10px] font-semibold ${
-                                                        isActive
-                                                            ? 'bg-brand/10 text-brand'
-                                                            : 'text-muted bg-paper ring-1 ring-line'
-                                                    }`}
-                                                >
-                                                    {tab.badge}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </nav>
-                        </div>
+                        <StickyTabs
+                            tabs={tabs}
+                            activeTab={activeTab}
+                            onChange={setActiveTab}
+                        />
 
                         {/* Tab Content */}
                         {loading ? (

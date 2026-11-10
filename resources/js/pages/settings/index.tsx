@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/button';
 import PageHeader from '@/components/page-header';
+import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import AdvancedTab from './advanced-tab';
 import AiMcpTab from './ai-mcp-tab';
 import DangerZoneTab from './danger-zone-tab';
@@ -216,11 +217,7 @@ export default function SettingsIndex({
         </Button>
     );
 
-    const tabs: Array<{
-        id: SettingsTab;
-        label: string;
-        icon: typeof Laptop;
-    }> = [
+    const tabs: Array<StickyTabItem<SettingsTab>> = [
         {
             id: 'general',
             label: 'General',
@@ -250,6 +247,7 @@ export default function SettingsIndex({
             id: 'danger-zone',
             label: 'Danger Zone',
             icon: AlertTriangle,
+            tone: 'danger',
         },
     ];
 
@@ -266,36 +264,12 @@ export default function SettingsIndex({
             />
 
             <div className="space-y-6">
-                {/* Tab Navigation (matching Mail's tab bar) */}
-                <div className="flex border-b border-line">
-                    <div className="flex flex-wrap gap-1">
-                        {tabs.map((tab) => {
-                            const Icon = tab.icon;
-                            const isActive = activeTab === tab.id;
-
-                            return (
-                                <button
-                                    key={tab.id}
-                                    type="button"
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`relative flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${
-                                        isActive
-                                            ? 'text-brand'
-                                            : tab.id === 'danger-zone'
-                                              ? 'text-accent/80 hover:text-accent'
-                                              : 'text-soft hover:text-ink'
-                                    }`}
-                                >
-                                    <Icon className="size-4" />
-                                    <span>{tab.label}</span>
-                                    {isActive && (
-                                        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-brand" />
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
+                <StickyTabs
+                    tabs={tabs}
+                    activeTab={activeTab}
+                    onChange={setActiveTab}
+                    bleed
+                />
 
                 {/* Tab Content */}
                 <div className="max-w-4xl">
