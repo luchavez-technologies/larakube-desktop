@@ -16,6 +16,7 @@ import { brandIcon } from '@/components/tool-logo';
 import { cn } from '@/lib/utils';
 import type {
     PlexCommonsServicesReport,
+    PlexDatabaseSummary,
     PlexServiceCategoryDetail,
     PlexServiceOptionDetail,
 } from '@/types/larakube';
@@ -32,23 +33,34 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
 function ServiceOptionPill({
     categoryIcon: Icon,
     option,
+    dbSummary,
     onRequestAdd,
 }: {
     categoryIcon: LucideIcon;
     option: PlexServiceOptionDetail;
+    dbSummary?: PlexDatabaseSummary;
     onRequestAdd: (option: PlexServiceOptionDetail) => void;
 }) {
     const mark = brandIcon(option.driver);
+    const compatLabel =
+        dbSummary && dbSummary.counts.total > 0
+            ? ` · ${dbSummary.counts.total} apps`
+            : '';
 
     if (option.enabled) {
         return (
             <span
                 className="inline-flex items-center gap-1 rounded-md bg-ok-tint px-2 py-0.5 text-xs font-semibold text-ok ring-1 ring-ok/30 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30"
-                title={`Active: ${option.label}`}
+                title={`Active: ${option.label}${compatLabel}`}
             >
                 <Check className="size-3 text-ok dark:text-emerald-400" />
                 {mark}
                 {option.label}
+                {dbSummary && dbSummary.counts.total > 0 && (
+                    <span className="ml-0.5 rounded bg-ok/15 px-1 text-[10px] font-medium">
+                        {dbSummary.counts.total} apps
+                    </span>
+                )}
             </span>
         );
     }
@@ -70,11 +82,16 @@ function ServiceOptionPill({
             type="button"
             onClick={() => onRequestAdd(option)}
             className="inline-flex items-center gap-1 rounded-md bg-badge/70 px-2 py-0.5 text-xs text-soft ring-1 ring-line/50 transition hover:bg-badge hover:text-ink"
-            title={`Add ${option.label} to this Commons`}
+            title={`Add ${option.label} to this Commons${compatLabel}`}
         >
             <Plus className="size-3" />
             {mark}
             {option.label}
+            {dbSummary && dbSummary.counts.total > 0 && (
+                <span className="ml-0.5 rounded bg-surface px-1 text-[10px] font-medium text-soft">
+                    {dbSummary.counts.total} apps
+                </span>
+            )}
         </button>
     );
 }
@@ -82,10 +99,12 @@ function ServiceOptionPill({
 function AddServiceConfirmDialog({
     server,
     option,
+    dbSummary,
     onCancel,
 }: {
     server: string;
     option: PlexServiceOptionDetail;
+    dbSummary?: PlexDatabaseSummary;
     onCancel: () => void;
 }) {
     return (
@@ -109,6 +128,27 @@ function AddServiceConfirmDialog({
                     Worth checking the server has room, especially on a smaller
                     instance.
                 </p>
+                {dbSummary && dbSummary.counts.total > 0 && (
+                    <div className="mt-3 rounded-xl border border-line bg-paper p-3">
+                        <div className="text-xs font-medium text-ink">
+                            Unlocks shared database wiring for{' '}
+                            {dbSummary.counts.total} catalog{' '}
+                            {dbSummary.counts.total === 1 ? 'app' : 'apps'}
+                        </div>
+                        {dbSummary.highlights.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                                {dbSummary.highlights.map((app) => (
+                                    <span
+                                        key={app.slug}
+                                        className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-soft ring-1 ring-line/60"
+                                    >
+                                        {app.name}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
                 <div className="mt-5 flex justify-end gap-2.5">
                     <Button variant="secondary" onClick={onCancel}>
                         Cancel
@@ -132,9 +172,11 @@ function AddServiceConfirmDialog({
 
 function ServiceCategoryRow({
     category,
+    databaseMatrix,
     onRequestAdd,
 }: {
     category: PlexServiceCategoryDetail;
+    databaseMatrix?: Record<string, PlexDatabaseSummary>;
     onRequestAdd: (option: PlexServiceOptionDetail) => void;
 }) {
     const Icon = CATEGORY_ICON[category.key] ?? Database;
@@ -155,6 +197,12 @@ function ServiceCategoryRow({
                             key={option.driver}
                             categoryIcon={Icon}
                             option={option}
+                            dbSummary={
+                                databaseMatrix?.[option.driver] ??
+                                (option.driver === 'postgresql'
+                                    ? databaseMatrix?.['postgres']
+                                    : undefined)
+                            }
                             onRequestAdd={onRequestAdd}
                         />
                     ))}
@@ -193,10 +241,12 @@ function ServiceCategoryRow({
 export default function PlexCommonsServicesCard({
     server,
     services,
+    databaseMatrix,
     className,
 }: {
     server: string;
     services?: PlexCommonsServicesReport | null;
+    databaseMatrix?: Record<string, PlexDatabaseSummary>;
     className?: string;
 }) {
     const [pendingAdd, setPendingAdd] =
@@ -217,6 +267,7 @@ export default function PlexCommonsServicesCard({
                         <ServiceCategoryRow
                             key={category.key}
                             category={category}
+                            databaseMatrix={databaseMatrix}
                             onRequestAdd={setPendingAdd}
                         />
                     ))}
@@ -226,6 +277,7 @@ export default function PlexCommonsServicesCard({
                 <AddServiceConfirmDialog
                     server={server}
                     option={pendingAdd}
+                    dbSummary={databaseMatrix?.[pendingAdd.driver]}
                     onCancel={() => setPendingAdd(null)}
                 />
             )}

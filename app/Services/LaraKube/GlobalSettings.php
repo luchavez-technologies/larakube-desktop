@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Enums\CloudProviderSlug;
 use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Models\Project;
 use App\Models\ProjectGroup;
@@ -20,7 +21,13 @@ class GlobalSettings
     /** What this computer is for: `tools` installs Cluster Tools on servers, `apps` also builds and runs apps locally. */
     public const USAGES = ['tools', 'apps'];
 
-    public const CLOUD_PROVIDERS = ['gcp' => 'Google Cloud', 'aws' => 'Amazon Web Services', 'do' => 'DigitalOcean', 'hetzner' => 'Hetzner Cloud'];
+    /**
+     * @return array<string, string>
+     */
+    public static function cloudProviders(): array
+    {
+        return CloudProviderSlug::configuredOptions();
+    }
 
     public const WSL_SHUTDOWN_MODES = ['terminate', 'shutdown', 'disabled'];
 
@@ -251,7 +258,7 @@ class GlobalSettings
         $config = $this->readConfig();
         $providers = is_array($config['intendedProviders'] ?? null) ? $config['intendedProviders'] : [];
 
-        return array_values(array_intersect($providers, array_keys(self::CLOUD_PROVIDERS)));
+        return array_values(array_intersect($providers, array_keys(self::cloudProviders())));
     }
 
     public function hasCompletedOnboarding(): bool
@@ -344,7 +351,7 @@ class GlobalSettings
             $config['email'] = ! empty($data['email']) ? (string) $data['email'] : null;
         }
 
-        if (isset($data['defaultCloudProvider']) && array_key_exists($data['defaultCloudProvider'], self::CLOUD_PROVIDERS)) {
+        if (isset($data['defaultCloudProvider']) && array_key_exists($data['defaultCloudProvider'], self::cloudProviders())) {
             $config['defaultCloudProvider'] = $data['defaultCloudProvider'];
         }
 
@@ -359,7 +366,7 @@ class GlobalSettings
         }
 
         if (array_key_exists('intendedProviders', $data) && is_array($data['intendedProviders'])) {
-            $config['intendedProviders'] = array_values(array_intersect($data['intendedProviders'], array_keys(self::CLOUD_PROVIDERS)));
+            $config['intendedProviders'] = array_values(array_intersect($data['intendedProviders'], array_keys(self::cloudProviders())));
         }
 
         if (isset($data['wslShutdownMode']) && in_array($data['wslShutdownMode'], self::WSL_SHUTDOWN_MODES, true)) {

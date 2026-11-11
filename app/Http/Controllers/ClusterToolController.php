@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\DatabaseDriver;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Http\Requests\InstallClusterToolRequest;
 use App\Http\Requests\RebindClusterToolRequest;
 use App\Http\Requests\RemoveClusterToolRequest;
+use App\Jobs\Sync\SyncCatalogToolsJob;
 use App\Jobs\Sync\SyncPlexJob;
+use App\Models\CatalogTool;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\CurrentServer;
@@ -41,13 +44,22 @@ class ClusterToolController extends Controller
         return $resolved === null ? to_route('servers.index') : to_route('servers.apps.index', $resolved);
     }
 
-    public function index(string $server, ClusterStatus $status, DomainCatalog $domains, CurrentServer $current): Response
+    public function index(Request $request, string $server, ClusterStatus $status, DomainCatalog $domains, CurrentServer $current): Response
     {
         $stack = $this->readyServer($server);
         $current->remember($server);
 
         $context = (string) $stack['context'];
         $last = $this->tools->lastVerified($context);
+
+        $filters = [
+            'q' => $request->string('q')->trim()->toString(),
+            'category' => $request->string('category')->trim()->toString() ?: 'all',
+            'source' => $request->string('source')->trim()->toString() ?: 'all',
+            'scope' => $request->string('scope')->trim()->toString() ?: 'all',
+        ];
+        $page = max(1, $request->integer('page', 1));
+        $perPage = min(50, max(12, $request->integer('per_page', 18)));
 
         // A fresh verified list renders at once. Otherwise the last one (or,
         // on a first visit, the registry) shows while the live check runs.
@@ -60,6 +72,15 @@ class ClusterToolController extends Controller
             'tools' => $last !== null && $this->tools->isFresh($last)
                 ? $last['tools']
                 : Inertia::defer(fn (): ?array => $this->tools->forContext($context), 'tools'),
+            'catalog' => CatalogTool::exists() || $request->hasAny(['page', 'q', 'category', 'source', 'scope', 'per_page'])
+                ? $this->tools->paginatedCatalog($context, $filters, $page, $perPage)
+                : null,
+            'facets' => CatalogTool::exists() ? $this->tools->facetCounts() : null,
+            'filters' => [
+                ...$filters,
+                'page' => $page,
+                'per_page' => $perPage,
+            ],
             // Lets the Refresh button show a visible syncing state and
             // disable itself instead of inviting repeat clicks while a
             // background re-sync is in flight.
@@ -146,13 +167,14 @@ class ClusterToolController extends Controller
             foreach ($plex['services'] as $name => $svc) {
                 if (! empty($svc['enabled'])) {
                     $active[] = $name;
-                    if ($name === 'postgres') {
-                        $active[] = 'postgresql';
+                    $driver = DatabaseDriver::fromPlexService((string) $name);
+                    if ($driver !== null) {
+                        $active[] = $driver->value;
+                        if ($driver->plexServiceKey() !== null) {
+                            $active[] = $driver->plexServiceKey();
+                        }
                     }
-                    if ($name === 'mysql') {
-                        $active[] = 'mariadb';
-                    }
-                    if (in_array($name, ['minio', 'garage'], true)) {
+                    if (in_array($name, ['seaweedfs', 'minio', 'garage'], true)) {
                         $active[] = 's3';
                     }
                 }
@@ -540,6 +562,7 @@ class ClusterToolController extends Controller
     {
         $context = (string) $this->readyServer($server)['context'];
         $this->tools->forget($context);
+        SyncCatalogToolsJob::dispatch(fullRefresh: true);
         $status->forgetDomains($context);
         $status->forgetDns($context);
         $status->forgetTls($context);

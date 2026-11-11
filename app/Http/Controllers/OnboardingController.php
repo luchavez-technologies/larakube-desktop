@@ -29,7 +29,7 @@ class OnboardingController extends Controller
             'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $current['usage'] === 'apps' ? $wsl->check() : null),
             'usage' => $current['usage'],
             'intendedProviders' => $current['intendedProviders'],
-            'cloudProviders' => GlobalSettings::CLOUD_PROVIDERS,
+            'cloudProviders' => GlobalSettings::cloudProviders(),
             'catalog' => $readiness->catalog($current['intendedProviders']),
             'cliInstallCommand' => $readiness->cliInstallCommand(),
             'cliChannel' => $installer->channel(),
@@ -40,7 +40,7 @@ class OnboardingController extends Controller
     {
         $validated = $request->validate([
             'providers' => ['present', 'array'],
-            'providers.*' => ['string', 'in:'.implode(',', array_keys(GlobalSettings::CLOUD_PROVIDERS))],
+            'providers.*' => ['string', 'in:'.implode(',', array_keys(GlobalSettings::cloudProviders()))],
         ]);
 
         $settings->update(['intendedProviders' => $validated['providers']]);

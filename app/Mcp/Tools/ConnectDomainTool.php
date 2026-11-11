@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\DnsProvider;
 use App\Enums\RunKind;
 use App\Models\Server;
 use App\Services\LaraKube\CliRunner;
@@ -38,7 +39,7 @@ class ConnectDomainTool extends Tool implements Completable
         }
 
         if ($argument === 'dns_provider') {
-            return CompletionResponse::match(['cloudflare', 'route53', 'google']);
+            return CompletionResponse::match(DnsProvider::connectableValues());
         }
 
         return CompletionResponse::empty();
@@ -122,7 +123,7 @@ class ConnectDomainTool extends Tool implements Completable
         return [
             'server' => $schema->string()->description('The server/stack name to connect domain & DNS to'),
             'context' => $schema->string()->description("The server's kube context (optional; auto-resolved from server name if omitted)")->nullable(),
-            'dns_provider' => $schema->string()->description('DNS provider (cloudflare, route53, google). Default: cloudflare')->nullable(),
+            'dns_provider' => $schema->string()->enum(DnsProvider::connectableValues())->description('DNS provider ('.implode(', ', DnsProvider::connectableValues()).'). Default: cloudflare')->nullable(),
             'cloudflare_token' => $schema->string()->description('Cloudflare API token. Optional; auto-detected from LARAKUBE_CLOUDFLARE_TOKEN or CLOUDFLARE_API_TOKEN in environment if omitted.')->nullable(),
             'enable_tls' => $schema->boolean()->description('Whether to automatically enable SSL certificate generation via Traefik ACME (default: true)')->nullable(),
             'group' => $schema->string()->description('Optional credential group name')->nullable(),

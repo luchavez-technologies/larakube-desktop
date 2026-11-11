@@ -2,9 +2,12 @@
 
 namespace App\Services\LaraKube;
 
+use App\Jobs\Sync\SyncCatalogToolsJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Models\CatalogTool;
 use App\Models\ClusterTool;
 use App\Models\Server;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
@@ -222,8 +225,218 @@ class ToolCatalog
         return $decoded;
     }
 
-    private function registeredKey(string $context): string
+    public function registeredKey(string $context): string
     {
         return 'cluster-tools:'.$context.':registered';
+    }
+
+    public function ensureCatalogSeeded(): void
+    {
+        if (! CatalogTool::exists()) {
+            SyncCatalogToolsJob::dispatch();
+        }
+    }
+
+    /**
+     * Resolve one tool's full catalog definition (initFields, commonsCapabilities, etc.),
+     * preferring live server context state if present and falling back to `catalog_tools`.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findDefinition(string $toolSlug, ?string $context = null): ?array
+    {
+        if ($context !== null && $context !== '') {
+            $serverRow = $this->find($context, $toolSlug);
+            if ($serverRow !== null) {
+                return $serverRow;
+            }
+        }
+
+        $catalog = CatalogTool::firstWhere('slug', $toolSlug);
+        if ($catalog !== null) {
+            return $catalog->toToolRow();
+        }
+
+        if ($context !== null && $context !== '') {
+            foreach ($this->registered($context) ?? [] as $row) {
+                if (($row['tool'] ?? null) === $toolSlug) {
+                    return $row;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Server-side paginated catalog query (ADR 0013) backed by `catalog_tools`
+     * with seamless fallback for test suites seeding `cluster_tools` directly.
+     *
+     * @param  array{q?: ?string, category?: ?string, source?: ?string, scope?: ?string, installed_only?: ?bool}  $filters
+     * @return array{data: list<array<string, mixed>>, meta: array{current_page: int, last_page: int, per_page: int, total: int}}
+     */
+    public function paginatedCatalog(string $context = '', array $filters = [], int $page = 1, int $perPage = 18): array
+    {
+        $page = max(1, $page);
+        $perPage = min(50, max(1, $perPage));
+        $q = trim((string) ($filters['q'] ?? ''));
+        $category = trim((string) ($filters['category'] ?? ''));
+        $source = trim((string) ($filters['source'] ?? ''));
+        $scope = trim((string) ($filters['scope'] ?? 'all'));
+        $installedOnly = (bool) ($filters['installed_only'] ?? false) || $scope === 'installed';
+
+        $this->ensureCatalogSeeded();
+
+        $installedBySlug = $this->installedMapForContext($context);
+        $installedSlugs = array_keys($installedBySlug);
+
+        if (CatalogTool::exists()) {
+            $query = CatalogTool::query()
+                ->search($q)
+                ->category($category)
+                ->source($source);
+
+            if ($installedOnly) {
+                $query->whereIn('slug', $installedSlugs !== [] ? $installedSlugs : ['__none__']);
+            } elseif ($scope === 'explore' && $installedSlugs !== []) {
+                $query->whereNotIn('slug', $installedSlugs);
+            }
+
+            /** @var LengthAwarePaginator<int, CatalogTool> $paginator */
+            $paginator = $query
+                ->orderByRaw("CASE WHEN source = 'official' THEN 0 ELSE 1 END")
+                ->orderBy('position')
+                ->orderBy('name')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $data = array_values(array_map(function (CatalogTool $entry) use ($installedBySlug): array {
+                $row = $entry->toToolRow();
+                if (isset($installedBySlug[$entry->slug])) {
+                    $installedRow = $installedBySlug[$entry->slug][0];
+
+                    return [
+                        ...$row,
+                        ...$installedRow,
+                        'source' => $row['source'],
+                        'commonsCapabilities' => $installedRow['commonsCapabilities'] ?? $row['commonsCapabilities'],
+                        'initFields' => ($installedRow['initFields'] ?? []) !== [] ? $installedRow['initFields'] : $row['initFields'],
+                    ];
+                }
+
+                return $row;
+            }, $paginator->items()));
+
+            return [
+                'data' => $data,
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'has_more' => $paginator->hasMorePages(),
+                ],
+            ];
+        }
+
+        // Legacy fallback when tests seed ClusterTool models directly without CatalogTool rows
+        $rows = $context !== '' ? ($this->cached($context) ?? $this->forContext($context) ?? $this->registered($context) ?? []) : [];
+
+        $filtered = array_values(array_filter($rows, function (array $row) use ($q, $category, $source, $scope, $installedOnly): bool {
+            $installed = ! empty($row['installed']);
+            if ($installedOnly && ! $installed) {
+                return false;
+            }
+            if ($scope === 'explore' && $installed) {
+                return false;
+            }
+            if ($source !== '' && $source !== 'all' && ($row['source'] ?? 'official') !== $source) {
+                return false;
+            }
+            if ($category !== '' && $category !== 'all' && ! in_array($category, (array) ($row['categories'] ?? []), true)) {
+                return false;
+            }
+            if ($q !== '') {
+                $haystack = strtolower(implode(' ', [
+                    (string) ($row['tool'] ?? ''),
+                    (string) ($row['name'] ?? ''),
+                    (string) ($row['brand'] ?? ''),
+                    (string) ($row['tagline'] ?? ''),
+                ]));
+                if (! str_contains($haystack, strtolower($q))) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+
+        $total = count($filtered);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $pageData = array_slice($filtered, ($page - 1) * $perPage, $perPage);
+
+        return [
+            'data' => $pageData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+                'has_more' => $page < $lastPage,
+            ],
+        ];
+    }
+
+    /**
+     * Facet counts (categories & sources) for the Apps Store filter pills.
+     *
+     * @return array{all: int, official: int, community: int, categories: array<string, int>}
+     */
+    public function facetCounts(): array
+    {
+        if (! CatalogTool::exists()) {
+            return ['all' => 0, 'official' => 0, 'community' => 0, 'categories' => []];
+        }
+
+        $categories = [];
+        $official = 0;
+        $community = 0;
+
+        foreach (CatalogTool::query()->get(['source', 'categories']) as $item) {
+            if ($item->source === 'community') {
+                $community++;
+            } else {
+                $official++;
+            }
+            foreach ($item->categories ?? [] as $cat) {
+                $categories[$cat] = ($categories[$cat] ?? 0) + 1;
+            }
+        }
+
+        return [
+            'all' => $official + $community,
+            'official' => $official,
+            'community' => $community,
+            'categories' => $categories,
+        ];
+    }
+
+    /**
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function installedMapForContext(string $context): array
+    {
+        if ($context === '') {
+            return [];
+        }
+
+        $rows = $this->cached($context) ?? $this->forContext($context) ?? [];
+        $map = [];
+        foreach ($rows as $row) {
+            if (! empty($row['installed']) && isset($row['tool'])) {
+                $map[(string) $row['tool']][] = $row;
+            }
+        }
+
+        return $map;
     }
 }

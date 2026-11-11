@@ -22,14 +22,14 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 #[IsDestructive]
 class ProjectDownTool extends Tool implements Completable
 {
-    use PollsRun;
+    use CompletesProjectEnvironment, PollsRun;
 
     private const int TIMEOUT_SECONDS = 60;
 
     public function complete(string $argument, string $value, array $context): CompletionResponse
     {
         if ($argument === 'environment') {
-            return CompletionResponse::match(['local', 'production', 'staging']);
+            return $this->completeProjectEnvironment($context);
         }
 
         return CompletionResponse::empty();

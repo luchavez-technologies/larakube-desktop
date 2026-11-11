@@ -52,8 +52,12 @@ class SyncCliWithDesktopJob extends SyncJob
             ? $wsl->update(channel: $channel)['ok']
             : ($locator->find('larakube') !== null && $installer->install($channel)['success']);
 
-        if ($synced && $this->notify) {
-            $notifier->cliUpdated($channel);
+        if ($synced) {
+            SyncCatalogToolsJob::dispatch(fullRefresh: true);
+
+            if ($this->notify) {
+                $notifier->cliUpdated($channel);
+            }
         }
     }
 }

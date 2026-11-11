@@ -5,6 +5,7 @@ use App\Jobs\Sync\SyncAllServerClusterUsersJob;
 use App\Jobs\Sync\SyncAllServerExternalDnsJob;
 use App\Jobs\Sync\SyncAllServerPlexJob;
 use App\Jobs\Sync\SyncAllServerTlsJob;
+use App\Jobs\Sync\SyncCatalogToolsJob;
 use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
 use App\Jobs\Sync\SyncLocalWorkloadsJob;
@@ -46,6 +47,11 @@ Schedule::job(new SyncAllServerPlexJob)->everyTenMinutes()->withoutOverlapping()
 Schedule::job(new SyncAllServerExternalDnsJob)->everyTenMinutes()->withoutOverlapping();
 Schedule::job(new SyncAllServerTlsJob)->everyTenMinutes()->withoutOverlapping();
 Schedule::job(new SyncAllServerClusterUsersJob)->everyTenMinutes()->withoutOverlapping();
+
+// Global Official + Community Cluster App catalog syncs incrementally via
+// `--updated-since` so hundreds of future marketplace tools stay fresh without
+// re-pulling every server.
+Schedule::job(new SyncCatalogToolsJob)->hourly()->withoutOverlapping();
 
 // TEMPORARY, for active CLI development: canary moves fast enough that waiting
 // for a Desktop update to also bring the CLI along (NativeAppServiceProvider's

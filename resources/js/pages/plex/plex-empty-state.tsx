@@ -9,6 +9,7 @@ import {
     HardDrive,
     Layers,
     RotateCw,
+    Search,
     Server as ServerIcon,
     Sparkles,
     Terminal,
@@ -18,18 +19,34 @@ import {
 import Button from '@/components/button';
 import ToolLogo from '@/components/tool-logo';
 import { cn } from '@/lib/utils';
-import type { Server } from '@/types/larakube';
+import type {
+    CompatibilityToolItem,
+    PlexDatabaseSummary,
+    Server,
+} from '@/types/larakube';
 
 type DbEngine = 'postgres' | 'mysql' | 'mariadb';
 type StorageEngine = 'seaweedfs' | 'minio' | 'none';
 
 type Preset = 'modern' | 'laravel-classic' | 'minimal' | 'full' | 'custom';
 
-export default function PlexEmptyState({ server }: { server: Server }) {
+const DB_ENGINES: readonly DbEngine[] = ['postgres', 'mysql', 'mariadb'];
+
+export default function PlexEmptyState({
+    server,
+    databaseMatrix,
+    compatibilityTools = [],
+}: {
+    server: Server;
+    databaseMatrix?: Record<string, PlexDatabaseSummary>;
+    compatibilityTools?: CompatibilityToolItem[];
+}) {
     const headingId = useId();
 
     // Configuration state
     const [dbEngine, setDbEngine] = useState<DbEngine>('postgres');
+    const [plannedAppSlugs, setPlannedAppSlugs] = useState<string[]>([]);
+    const [plannedAppQuery, setPlannedAppQuery] = useState('');
     const [enableRedis, setEnableRedis] = useState(true);
     const [storageEngine, setStorageEngine] =
         useState<StorageEngine>('seaweedfs');
@@ -121,6 +138,98 @@ export default function PlexEmptyState({ server }: { server: Server }) {
                 break;
         }
     };
+
+    const togglePlannedApp = (slug: string) => {
+        setPlannedAppSlugs((current) =>
+            current.includes(slug)
+                ? current.filter((item) => item !== slug)
+                : [...current, slug],
+        );
+    };
+
+    const filteredCompatibilityTools = useMemo(() => {
+        const needle = plannedAppQuery.trim().toLowerCase();
+        const matches = needle
+            ? compatibilityTools.filter(
+                  (tool) =>
+                      tool.name.toLowerCase().includes(needle) ||
+                      tool.slug.toLowerCase().includes(needle),
+              )
+            : compatibilityTools;
+
+        return matches.slice(0, 18);
+    }, [compatibilityTools, plannedAppQuery]);
+
+    const selectedPlannedTools = useMemo(
+        () =>
+            compatibilityTools.filter((tool) =>
+                plannedAppSlugs.includes(tool.slug),
+            ),
+        [compatibilityTools, plannedAppSlugs],
+    );
+
+    const plannedCompatibility = useMemo(() => {
+        const byEngine: Record<
+            DbEngine,
+            {
+                matched: number;
+                total: number;
+                incompatibleNames: string[];
+                standaloneFallbackNames: string[];
+            }
+        > = {
+            postgres: {
+                matched: 0,
+                total: selectedPlannedTools.length,
+                incompatibleNames: [],
+                standaloneFallbackNames: [],
+            },
+            mysql: {
+                matched: 0,
+                total: selectedPlannedTools.length,
+                incompatibleNames: [],
+                standaloneFallbackNames: [],
+            },
+            mariadb: {
+                matched: 0,
+                total: selectedPlannedTools.length,
+                incompatibleNames: [],
+                standaloneFallbackNames: [],
+            },
+        };
+
+        for (const engine of DB_ENGINES) {
+            for (const tool of selectedPlannedTools) {
+                const matchesEngine =
+                    tool.plexDatabases.includes(engine) ||
+                    (engine === 'postgres' &&
+                        tool.plexDatabases.includes('postgresql'));
+                if (matchesEngine) {
+                    byEngine[engine].matched += 1;
+                } else if (tool.supportsNoPlex || tool.supportsSqlite) {
+                    byEngine[engine].standaloneFallbackNames.push(tool.name);
+                } else {
+                    byEngine[engine].incompatibleNames.push(tool.name);
+                }
+            }
+        }
+
+        let bestFit: DbEngine | null = null;
+        if (selectedPlannedTools.length > 0) {
+            let bestScore = -1;
+            for (const engine of DB_ENGINES) {
+                const score =
+                    byEngine[engine].matched * 100 +
+                    (databaseMatrix?.[engine]?.counts.total ?? 0);
+                if (byEngine[engine].matched > 0 && score > bestScore) {
+                    bestScore = score;
+                    bestFit = engine;
+                }
+            }
+        }
+
+        return { byEngine, bestFit };
+    }, [selectedPlannedTools, databaseMatrix]);
 
     // Estimated memory footprint
     const estimatedMemory = useMemo(() => {
@@ -265,108 +374,266 @@ export default function PlexEmptyState({ server }: { server: Server }) {
                         </div>
                     </div>
 
+                    {compatibilityTools.length > 0 && (
+                        <div className="mb-4 rounded-xl border border-line bg-paper/70 p-3.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <div className="text-xs font-semibold text-ink">
+                                        Plan apps you expect to install
+                                    </div>
+                                    <p className="text-[11px] text-soft">
+                                        Select Cluster Apps to highlight the
+                                        most compatible relational database
+                                        engine.
+                                    </p>
+                                </div>
+                                {plannedAppSlugs.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setPlannedAppSlugs([])}
+                                        className="text-[11px] font-medium text-soft underline-offset-2 hover:text-ink hover:underline"
+                                    >
+                                        Clear ({plannedAppSlugs.length})
+                                    </button>
+                                )}
+                            </div>
+                            <div className="relative mt-2.5">
+                                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-soft" />
+                                <input
+                                    type="search"
+                                    value={plannedAppQuery}
+                                    onChange={(e) =>
+                                        setPlannedAppQuery(e.target.value)
+                                    }
+                                    placeholder="Filter apps (e.g. n8n, ghost, wordpress)..."
+                                    className="w-full rounded-lg border border-line bg-surface py-1.5 pr-3 pl-8 text-xs text-ink placeholder:text-faint focus:border-tools focus:outline-none"
+                                />
+                            </div>
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                {filteredCompatibilityTools.map((tool) => {
+                                    const active = plannedAppSlugs.includes(
+                                        tool.slug,
+                                    );
+
+                                    return (
+                                        <button
+                                            key={tool.slug}
+                                            type="button"
+                                            onClick={() =>
+                                                togglePlannedApp(tool.slug)
+                                            }
+                                            className={cn(
+                                                'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ring-1 transition',
+                                                active
+                                                    ? 'bg-tools-tint text-tools ring-tools/40'
+                                                    : 'bg-surface text-soft ring-line hover:text-ink',
+                                            )}
+                                        >
+                                            {active && (
+                                                <Check className="size-3" />
+                                            )}
+                                            <span>{tool.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid gap-3 sm:grid-cols-3">
-                        {/* PostgreSQL */}
-                        <div
-                            onClick={() => setDbEngine('postgres')}
-                            className={cn(
-                                'group relative cursor-pointer rounded-xl border p-4 transition',
-                                dbEngine === 'postgres'
-                                    ? 'border-tools bg-tools-tint/30 ring-1 ring-tools'
-                                    : 'border-line bg-surface hover:border-tools/40 hover:bg-paper',
-                            )}
-                        >
-                            <div className="flex items-start justify-between">
-                                <ToolLogo slug="postgres" size="sm" />
-                                {dbEngine === 'postgres' ? (
-                                    <CheckCircle2 className="size-4 text-tools" />
-                                ) : (
-                                    <div className="size-4 rounded-full border border-line" />
-                                )}
-                            </div>
-                            <div className="mt-3">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-semibold text-ink">
-                                        PostgreSQL 16
-                                    </span>
-                                    <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
-                                        Recommended
-                                    </span>
-                                </div>
-                                <p className="mt-1 text-xs leading-relaxed text-soft">
-                                    Enterprise ACID database with pgvector,
-                                    JSONB, and high concurrency. Port 5432.
-                                </p>
-                            </div>
-                        </div>
+                        {(
+                            [
+                                {
+                                    engine: 'postgres' as const,
+                                    title: 'PostgreSQL 16',
+                                    badge: 'Recommended',
+                                    badgeClass:
+                                        'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+                                    description:
+                                        'Enterprise ACID database with pgvector, JSONB, and high concurrency. Port 5432.',
+                                },
+                                {
+                                    engine: 'mysql' as const,
+                                    title: 'MySQL 8.4',
+                                    badge: 'Laravel Standard',
+                                    badgeClass:
+                                        'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                                    description:
+                                        'The standard for classical Laravel schemas, WordPress, and legacy stacks. Port 3306.',
+                                },
+                                {
+                                    engine: 'mariadb' as const,
+                                    title: 'MariaDB 11',
+                                    badge: 'Open Source',
+                                    badgeClass:
+                                        'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+                                    description:
+                                        'Community-driven drop-in MySQL replacement with thread pool concurrency. Port 3306.',
+                                },
+                            ] as const
+                        ).map((card) => {
+                            const matrixEntry = databaseMatrix?.[card.engine];
+                            const planned =
+                                plannedCompatibility.byEngine[card.engine];
+                            const isBestFit =
+                                plannedCompatibility.bestFit === card.engine;
 
-                        {/* MySQL */}
-                        <div
-                            onClick={() => setDbEngine('mysql')}
-                            className={cn(
-                                'group relative cursor-pointer rounded-xl border p-4 transition',
-                                dbEngine === 'mysql'
-                                    ? 'border-tools bg-tools-tint/30 ring-1 ring-tools'
-                                    : 'border-line bg-surface hover:border-tools/40 hover:bg-paper',
-                            )}
-                        >
-                            <div className="flex items-start justify-between">
-                                <ToolLogo slug="mysql" size="sm" />
-                                {dbEngine === 'mysql' ? (
-                                    <CheckCircle2 className="size-4 text-tools" />
-                                ) : (
-                                    <div className="size-4 rounded-full border border-line" />
-                                )}
-                            </div>
-                            <div className="mt-3">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-semibold text-ink">
-                                        MySQL 8.4
-                                    </span>
-                                    <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                                        Laravel Standard
-                                    </span>
-                                </div>
-                                <p className="mt-1 text-xs leading-relaxed text-soft">
-                                    The standard for classical Laravel schemas,
-                                    WordPress, and legacy stacks. Port 3306.
-                                </p>
-                            </div>
-                        </div>
+                            return (
+                                <div
+                                    key={card.engine}
+                                    onClick={() => setDbEngine(card.engine)}
+                                    className={cn(
+                                        'group relative flex cursor-pointer flex-col justify-between rounded-xl border p-4 transition',
+                                        dbEngine === card.engine
+                                            ? 'border-tools bg-tools-tint/30 ring-1 ring-tools'
+                                            : isBestFit
+                                              ? 'border-emerald-500/50 bg-emerald-500/[0.04] hover:border-tools/40'
+                                              : 'border-line bg-surface hover:border-tools/40 hover:bg-paper',
+                                    )}
+                                >
+                                    <div>
+                                        <div className="flex items-start justify-between">
+                                            <ToolLogo
+                                                slug={card.engine}
+                                                size="sm"
+                                            />
+                                            {dbEngine === card.engine ? (
+                                                <CheckCircle2 className="size-4 text-tools" />
+                                            ) : (
+                                                <div className="size-4 rounded-full border border-line" />
+                                            )}
+                                        </div>
+                                        <div className="mt-3">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <span className="text-sm font-semibold text-ink">
+                                                    {card.title}
+                                                </span>
+                                                <span
+                                                    className={cn(
+                                                        'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                                                        card.badgeClass,
+                                                    )}
+                                                >
+                                                    {card.badge}
+                                                </span>
+                                                {isBestFit && (
+                                                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                                        Best Fit
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 text-xs leading-relaxed text-soft">
+                                                {card.description}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                        {/* MariaDB */}
-                        <div
-                            onClick={() => setDbEngine('mariadb')}
-                            className={cn(
-                                'group relative cursor-pointer rounded-xl border p-4 transition',
-                                dbEngine === 'mariadb'
-                                    ? 'border-tools bg-tools-tint/30 ring-1 ring-tools'
-                                    : 'border-line bg-surface hover:border-tools/40 hover:bg-paper',
-                            )}
-                        >
-                            <div className="flex items-start justify-between">
-                                <ToolLogo slug="mariadb" size="sm" />
-                                {dbEngine === 'mariadb' ? (
-                                    <CheckCircle2 className="size-4 text-tools" />
-                                ) : (
-                                    <div className="size-4 rounded-full border border-line" />
-                                )}
-                            </div>
-                            <div className="mt-3">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-semibold text-ink">
-                                        MariaDB 11
-                                    </span>
-                                    <span className="rounded bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-600 dark:text-teal-400">
-                                        Open Source
-                                    </span>
+                                    {(planned.total > 0 || matrixEntry) && (
+                                        <div className="mt-3 border-t border-line/70 pt-2.5 text-[11px]">
+                                            {planned.total > 0 ? (
+                                                <div className="space-y-1">
+                                                    <div
+                                                        className={cn(
+                                                            'font-medium',
+                                                            planned.matched ===
+                                                                planned.total
+                                                                ? 'text-emerald-700 dark:text-emerald-300'
+                                                                : planned.matched >
+                                                                    0
+                                                                  ? 'text-ink'
+                                                                  : 'text-soft',
+                                                        )}
+                                                    >
+                                                        Matches{' '}
+                                                        {planned.matched}/
+                                                        {planned.total} planned
+                                                    </div>
+                                                    {planned
+                                                        .standaloneFallbackNames
+                                                        .length > 0 && (
+                                                        <div className="text-[10px] text-soft">
+                                                            Standalone SQLite
+                                                            fallback:{' '}
+                                                            {planned.standaloneFallbackNames.join(
+                                                                ', ',
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {planned.incompatibleNames
+                                                        .length > 0 && (
+                                                        <div className="text-[10px] text-amber-600 dark:text-amber-400">
+                                                            Incompatible:{' '}
+                                                            {planned.incompatibleNames.join(
+                                                                ', ',
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                matrixEntry && (
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex items-center justify-between text-soft">
+                                                            <span>
+                                                                Supports{' '}
+                                                                <strong className="font-semibold text-ink">
+                                                                    {
+                                                                        matrixEntry
+                                                                            .counts
+                                                                            .total
+                                                                    }
+                                                                </strong>{' '}
+                                                                apps
+                                                            </span>
+                                                            {matrixEntry.counts
+                                                                .community >
+                                                                0 && (
+                                                                <span className="text-[10px]">
+                                                                    {
+                                                                        matrixEntry
+                                                                            .counts
+                                                                            .official
+                                                                    }{' '}
+                                                                    official ·{' '}
+                                                                    {
+                                                                        matrixEntry
+                                                                            .counts
+                                                                            .community
+                                                                    }{' '}
+                                                                    community
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {matrixEntry.highlights
+                                                            .length > 0 && (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {matrixEntry.highlights
+                                                                    .slice(0, 4)
+                                                                    .map(
+                                                                        (
+                                                                            app,
+                                                                        ) => (
+                                                                            <span
+                                                                                key={
+                                                                                    app.slug
+                                                                                }
+                                                                                className="rounded bg-badge px-1.5 py-0.5 text-[10px] text-soft"
+                                                                            >
+                                                                                {
+                                                                                    app.name
+                                                                                }
+                                                                            </span>
+                                                                        ),
+                                                                    )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <p className="mt-1 text-xs leading-relaxed text-soft">
-                                    Community-driven drop-in MySQL replacement
-                                    with thread pool concurrency. Port 3306.
-                                </p>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
 

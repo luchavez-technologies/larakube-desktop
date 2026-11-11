@@ -43,7 +43,7 @@ class SettingsController extends Controller
         return Inertia::render('settings/index', [
             'settings' => $settings->get(),
             'allowedTlds' => GlobalSettings::ALLOWED_TLDS,
-            'cloudProviders' => GlobalSettings::CLOUD_PROVIDERS,
+            'cloudProviders' => GlobalSettings::cloudProviders(),
             'wslShutdownModes' => GlobalSettings::WSL_SHUTDOWN_MODES,
             'contexts' => $contexts,
             'currentContext' => $currentContext,
@@ -83,7 +83,7 @@ class SettingsController extends Controller
             'theme' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::THEMES)],
             'localTld' => ['nullable', 'string', 'in:'.implode(',', GlobalSettings::ALLOWED_TLDS)],
             'email' => ['nullable', 'email'],
-            'defaultCloudProvider' => ['nullable', 'string', 'in:'.implode(',', array_keys(GlobalSettings::CLOUD_PROVIDERS))],
+            'defaultCloudProvider' => ['nullable', 'string', 'in:'.implode(',', array_keys(GlobalSettings::cloudProviders()))],
             'shareToken' => ['nullable', 'string'],
             'hideProjects' => ['nullable', 'boolean'],
             'experimental' => ['nullable', 'boolean'],

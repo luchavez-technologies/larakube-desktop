@@ -21,6 +21,7 @@ use App\Mcp\Tools\ProjectDownTool;
 use App\Mcp\Tools\ProjectHealTool;
 use App\Mcp\Tools\ProjectUpTool;
 use App\Mcp\Tools\RemoveClusterToolTool;
+use App\Mcp\Tools\ShowClusterToolTool;
 use App\Mcp\Tools\ShowProjectTool;
 use App\Mcp\Tools\ShowServerTool;
 use Laravel\Mcp\Server;
@@ -91,6 +92,7 @@ class LaraKubeDesktopServer extends Server
         ConnectDomainTool::class,
         DeleteServerTool::class,
         ListClusterToolsTool::class,
+        ShowClusterToolTool::class,
         ProjectUpTool::class,
         ProjectDownTool::class,
         ProjectHealTool::class,

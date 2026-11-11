@@ -24,8 +24,10 @@ import { show as showServer } from '@/routes/servers';
 import { index as plexIndex, refresh } from '@/routes/servers/plex';
 import type {
     CompanionApp,
+    CompatibilityToolItem,
     NodeMetrics,
     PlexCommonsServicesReport,
+    PlexDatabaseSummary,
     PlexServiceCategoryDetail,
     PlexServiceOptionDetail,
     PlexStatus,
@@ -150,6 +152,8 @@ export default function PlexIndex({
     podMetrics,
     nodeMetrics,
     companions,
+    databaseMatrix,
+    compatibilityTools,
 }: {
     server: Server;
     servers: Server[];
@@ -164,6 +168,8 @@ export default function PlexIndex({
     podMetrics?: PodMetrics | null;
     nodeMetrics?: NodeMetrics | null;
     companions?: CompanionApp[] | null;
+    databaseMatrix?: Record<string, PlexDatabaseSummary>;
+    compatibilityTools?: CompatibilityToolItem[];
 }) {
     const awaitingFirstSync = plex === null && plexSync.status !== 'error';
     const isLocal = isLocalServer(server);
@@ -341,7 +347,11 @@ export default function PlexIndex({
             />
 
             {!initialized ? (
-                <PlexEmptyState server={server} />
+                <PlexEmptyState
+                    server={server}
+                    databaseMatrix={databaseMatrix}
+                    compatibilityTools={compatibilityTools}
+                />
             ) : (
                 <div className="space-y-7">
                     {/* 1. Hero KPI Bar ("Backbone Vital Signs") */}

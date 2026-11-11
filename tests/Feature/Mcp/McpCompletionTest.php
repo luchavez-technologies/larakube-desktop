@@ -50,17 +50,35 @@ test('create-server completions work for provider, target_kind, and dns_provider
     expect($resDns['values'])->toContain('cloudflare');
 });
 
-test('install-cluster-tool completions work for server and tool', function (): void {
+use App\Models\CatalogTool;
+
+test('install-cluster-tool completions work for server and DB-backed catalog tools', function (): void {
     Server::updateOrCreate(
         ['name' => 'cluster-prod-1'],
         ['ip' => '10.0.0.10', 'context' => 'ctx-prod', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'ready']
     );
 
+    CatalogTool::upsertFromPayload([
+        'tool' => 'n8n',
+        'label' => 'n8n Workflow Automation',
+        'brand' => 'n8n',
+        'categories' => ['Productivity', 'DevOps'],
+        'source' => 'official',
+    ]);
+    CatalogTool::upsertFromPayload([
+        'tool' => 'n8n-community-helper',
+        'label' => 'n8n Community Helper',
+        'brand' => 'Community',
+        'categories' => ['Productivity'],
+        'source' => 'community',
+    ]);
+
     $resServer = callMcpCompletion('ref/tool', 'install-cluster-tool', 'server', 'cluster-');
     expect($resServer['values'])->toContain('cluster-prod-1');
 
     $resTool = callMcpCompletion('ref/tool', 'install-cluster-tool', 'tool', 'n8');
-    expect($resTool['values'])->toContain('n8n');
+    expect($resTool['values'])->toContain('n8n')
+        ->and($resTool['values'])->toContain('n8n-community-helper');
 });
 
 test('remove-cluster-tool completions filter by server installed tools if context is provided', function (): void {

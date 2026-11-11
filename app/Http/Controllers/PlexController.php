@@ -11,6 +11,7 @@ use App\Services\LaraKube\ClusterMetrics;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\PlexCatalog;
 use App\Services\LaraKube\PlexCommonsServices;
+use App\Services\LaraKube\PlexCompatibilityResolver;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
@@ -34,7 +35,7 @@ class PlexController extends Controller
     }
 
     /** Plex Commons overview for the selected server. */
-    public function index(string $server, PlexCatalog $plex, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, CurrentServer $current, ProjectInspector $inspector): Response
+    public function index(string $server, PlexCatalog $plex, ClusterMetrics $metrics, PlexCommonsServices $commonsServices, PlexCompatibilityResolver $compatibility, CurrentServer $current, ProjectInspector $inspector): Response
     {
         $stack = $this->readyServer($server);
         $current->remember($server);
@@ -135,6 +136,8 @@ class PlexController extends Controller
             'companions' => Server::isStackLocal($stack)
                 ? Inertia::defer(fn (): array => app(CompanionController::class)->all(app(ToolLocator::class), app(GlobalSettings::class)), 'companions')
                 : [],
+            'databaseMatrix' => $compatibility->databaseSummaryMatrix($context),
+            'compatibilityTools' => $compatibility->searchTools(limit: 60, fallbackContext: $context),
         ]);
     }
 

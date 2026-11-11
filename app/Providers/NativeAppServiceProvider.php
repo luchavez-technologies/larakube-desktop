@@ -10,6 +10,7 @@ use App\Jobs\Sync\SyncAllServerExternalDnsJob;
 use App\Jobs\Sync\SyncAllServerPlexJob;
 use App\Jobs\Sync\SyncAllServerTlsJob;
 use App\Jobs\Sync\SyncAppIconJob;
+use App\Jobs\Sync\SyncCatalogToolsJob;
 use App\Jobs\Sync\SyncCliWithDesktopJob;
 use App\Jobs\Sync\SyncCloudProvidersJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
@@ -166,6 +167,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         try {
             SyncAppIconJob::dispatch();
+            SyncCatalogToolsJob::dispatch();
             SyncServersJob::dispatch();
             SyncCloudProvidersJob::dispatch();
             SyncLocalClusterJob::dispatch();

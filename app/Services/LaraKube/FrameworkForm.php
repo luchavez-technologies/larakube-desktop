@@ -32,7 +32,7 @@ class FrameworkForm
             $label = (string) ($field['label'] ?? $key);
             $type = (string) ($field['type'] ?? 'text');
 
-            if ($type === 'confirm') {
+            if (in_array($type, ['confirm', 'boolean'], true)) {
                 $checked = $answer === true || $answer === 'true' || $answer === 1 || $answer === '1';
                 $flag = (string) ($field['flag'] ?? '');
 

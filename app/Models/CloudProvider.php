@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CloudProviderSlug;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -144,5 +145,18 @@ class CloudProvider extends Model
             'accounts' => $this->accounts ?? [],
             'activeAccount' => $this->active_account,
         ];
+    }
+
+    /**
+     * Slugs synced into SQLite from CLI `cloud:providers`, merged cleanly with
+     * the backed CloudProviderSlug enum so completions work on fresh installs too.
+     *
+     * @return list<string>
+     */
+    public static function availableSlugs(): array
+    {
+        $dbSlugs = self::query()->orderBy('slug')->pluck('slug')->all();
+
+        return array_values(array_unique([...$dbSlugs, ...CloudProviderSlug::values()]));
     }
 }

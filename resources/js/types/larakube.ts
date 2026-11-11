@@ -323,10 +323,43 @@ export type ClusterToolComponent = {
 
 export type ToolCommonsCapabilities = {
     databases: string[];
+    plexDatabases?: string[];
+    supportsSqlite?: boolean;
     cache: string[];
     storage: string[];
     auth: string[];
     mail: string[];
+};
+
+export type PlexDatabaseSummary = {
+    driver: string;
+    serviceKey: string;
+    label: string;
+    counts: {
+        official: number;
+        community: number;
+        total: number;
+    };
+    highlights: Array<{
+        slug: string;
+        name: string;
+        logo: string | null;
+        icon: string;
+        source: string;
+        supportsNoPlex: boolean;
+        supportsSqlite: boolean;
+    }>;
+};
+
+export type CompatibilityToolItem = {
+    slug: string;
+    name: string;
+    logo: string | null;
+    icon: string;
+    source: string;
+    plexDatabases: string[];
+    supportsNoPlex: boolean;
+    supportsSqlite: boolean;
 };
 
 export type ClusterTool = {
@@ -341,6 +374,9 @@ export type ClusterTool = {
     url: string | null;
     installedAt: string | null;
     categories?: string[];
+    source?: 'official' | 'community';
+    upvotesCount?: number;
+    supportsNoPlex?: boolean;
     /** The product's own name (e.g. Twenty), never the category. */
     name?: string;
     tagline?: string;

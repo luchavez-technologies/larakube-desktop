@@ -12,6 +12,7 @@ use App\Mcp\Tools\ProjectDownTool;
 use App\Mcp\Tools\ProjectHealTool;
 use App\Mcp\Tools\ProjectUpTool;
 use App\Mcp\Tools\RemoveClusterToolTool;
+use App\Mcp\Tools\ShowClusterToolTool;
 use App\Mcp\Tools\ShowProjectTool;
 use App\Mcp\Tools\ShowServerTool;
 
@@ -22,6 +23,7 @@ test('tools advertise readOnlyHint, destructiveHint, and idempotentHint annotati
         ->and((new ListServersTool)->annotations()['readOnlyHint'] ?? false)->toBeTrue()
         ->and((new ShowServerTool)->annotations()['readOnlyHint'] ?? false)->toBeTrue()
         ->and((new ListClusterToolsTool)->annotations()['readOnlyHint'] ?? false)->toBeTrue()
+        ->and((new ShowClusterToolTool)->annotations()['readOnlyHint'] ?? false)->toBeTrue()
         ->and((new GetRunStatusTool)->annotations()['readOnlyHint'] ?? false)->toBeTrue();
 
     // Destructive tools
@@ -36,7 +38,7 @@ test('tools advertise readOnlyHint, destructiveHint, and idempotentHint annotati
         ->and((new ProjectHealTool)->annotations()['idempotentHint'] ?? false)->toBeTrue();
 });
 
-test('server registers all 13 tools with proper hints in tools list', function (): void {
+test('server registers all 14 tools with proper hints in tools list', function (): void {
     $toolsResponse = LaraKubeDesktopServer::tools();
     $toolsResponse->assertRegistered([
         ListProjectsTool::class,
@@ -46,6 +48,7 @@ test('server registers all 13 tools with proper hints in tools list', function (
         CreateServerTool::class,
         DeleteServerTool::class,
         ListClusterToolsTool::class,
+        ShowClusterToolTool::class,
         ProjectUpTool::class,
         ProjectDownTool::class,
         ProjectHealTool::class,

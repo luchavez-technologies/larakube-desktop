@@ -21,10 +21,12 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsReadOnly]
 class ShowProjectTool extends Tool implements Completable
 {
+    use CompletesProjectEnvironment;
+
     public function complete(string $argument, string $value, array $context): CompletionResponse
     {
         if ($argument === 'environment') {
-            return CompletionResponse::match(['production', 'local', 'staging']);
+            return $this->completeProjectEnvironment($context);
         }
 
         return CompletionResponse::empty();

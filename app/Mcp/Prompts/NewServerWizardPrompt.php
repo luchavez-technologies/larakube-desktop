@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Mcp\Prompts;
 
+use App\Enums\CloudProviderSlug;
+use App\Models\CloudProvider;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -24,7 +26,7 @@ class NewServerWizardPrompt extends Prompt implements Completable
         return [
             new Argument(
                 name: 'provider',
-                description: 'Preferred cloud provider (gcp, do, hetzner, aws, custom)',
+                description: 'Preferred cloud provider ('.implode(', ', CloudProviderSlug::values()).')',
                 required: false,
             ),
         ];
@@ -55,7 +57,7 @@ EOT;
     public function complete(string $argument, string $value, array $context): CompletionResponse
     {
         if ($argument === 'provider') {
-            return CompletionResponse::match(['gcp', 'do', 'hetzner', 'aws', 'custom']);
+            return CompletionResponse::match(CloudProvider::availableSlugs());
         }
 
         return CompletionResponse::empty();

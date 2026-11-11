@@ -1,11 +1,13 @@
 import { Form, Head, Link, router, usePage, usePoll } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     RotateCw,
     ExternalLink,
     Search,
     ArrowDownToLine,
     ArrowUpCircle,
+    ChevronLeft,
+    ChevronRight,
     Plus,
     ArrowRight,
     Settings2,
@@ -60,6 +62,23 @@ import type {
     Untested,
 } from '@/types/larakube';
 
+type PaginatedCatalog = {
+    data: ClusterTool[];
+    meta: {
+        current_page: number;
+        last_page: number;
+        per_page: number;
+        total: number;
+    };
+};
+
+type CatalogFacets = {
+    all: number;
+    official: number;
+    community: number;
+    categories: Record<string, number>;
+};
+
 type Props = {
     server: Server;
     servers: Server[];
@@ -67,6 +86,16 @@ type Props = {
     lastVerified: ClusterTool[] | null;
     checkedAt: string | null;
     tools?: ClusterTool[] | null;
+    catalog?: PaginatedCatalog | null;
+    facets?: CatalogFacets | null;
+    filters?: {
+        q?: string;
+        category?: string;
+        source?: string;
+        scope?: string;
+        page?: number;
+        per_page?: number;
+    };
     toolsSyncing: boolean;
     installing: Record<string, number>;
     domains?: ServerDomain[] | null;
@@ -141,6 +170,9 @@ export default function ToolsIndex({
     lastVerified,
     checkedAt,
     tools: verifiedTools,
+    catalog,
+    facets,
+    filters: serverFilters,
     toolsSyncing,
     installing,
     domains,
@@ -233,9 +265,85 @@ export default function ToolsIndex({
         localStorage.setItem('larakube_view_mode_tools', mode);
     };
 
-    const [filter, setFilter] = useState<Filter>('all');
-    const [selectedCategory, setSelectedCategory] = useState<string>('all');
-    const [query, setQuery] = useState('');
+    const [filter, setFilter] = useState<Filter>(() =>
+        serverFilters?.scope === 'installed' ||
+        serverFilters?.scope === 'available'
+            ? serverFilters.scope
+            : 'all',
+    );
+    const [selectedCategory, setSelectedCategory] = useState<string>(
+        serverFilters?.category || 'all',
+    );
+    const [selectedSource, setSelectedSource] = useState<
+        'all' | 'official' | 'community'
+    >(() =>
+        serverFilters?.source === 'official' ||
+        serverFilters?.source === 'community'
+            ? serverFilters.source
+            : 'all',
+    );
+    const [query, setQuery] = useState(serverFilters?.q ?? '');
+    const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+
+    const requestCatalogPage = (overrides: {
+        q?: string;
+        category?: string;
+        source?: string;
+        scope?: string;
+        page?: number;
+        per_page?: number;
+    }) => {
+        if (!catalog) {
+            return;
+        }
+        const nextScope = overrides.scope ?? filter;
+        const params: Record<string, string | number> = {
+            q: overrides.q ?? query,
+            category: overrides.category ?? selectedCategory,
+            source: overrides.source ?? selectedSource,
+            scope: nextScope === 'available' ? 'explore' : nextScope,
+            page: overrides.page ?? 1,
+            per_page: overrides.per_page ?? (viewMode === 'table' ? 30 : 18),
+        };
+        router.get(toolsIndex(server.name).url, params, {
+            only: ['catalog', 'facets', 'filters'],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    const handleQueryChange = (nextQuery: string) => {
+        setQuery(nextQuery);
+        if (!catalog) {
+            return;
+        }
+        if (searchDebounceRef.current) {
+            clearTimeout(searchDebounceRef.current);
+        }
+        searchDebounceRef.current = setTimeout(() => {
+            requestCatalogPage({ q: nextQuery, page: 1 });
+        }, 250);
+    };
+
+    const handleCategorySelect = (nextCat: string) => {
+        setSelectedCategory(nextCat);
+        requestCatalogPage({ category: nextCat, page: 1 });
+    };
+
+    const handleSourceSelect = (
+        nextSource: 'all' | 'official' | 'community',
+    ) => {
+        setSelectedSource(nextSource);
+        requestCatalogPage({ source: nextSource, page: 1 });
+    };
+
+    const handleFilterSelect = (nextFilter: Filter) => {
+        setFilter(nextFilter);
+        requestCatalogPage({ scope: nextFilter, page: 1 });
+    };
     const rawInstalledAll = useMemo(
         () => tools?.filter((tool) => tool.installed) ?? [],
         [tools],
@@ -333,9 +441,24 @@ export default function ToolsIndex({
     const installed = installedAll.filter((tool) =>
         matches(tool, query, selectedCategory),
     );
-    const available = availableAll.filter((tool) =>
-        matches(tool, query, selectedCategory),
-    );
+    const available = useMemo(() => {
+        if (catalog) {
+            return catalog.data.filter(
+                (tool) => !tool.installed && !installedSlugs.has(tool.tool),
+            );
+        }
+
+        return availableAll.filter((tool) =>
+            matches(tool, query, selectedCategory),
+        );
+    }, [catalog, availableAll, query, selectedCategory]);
+    const availableCount = catalog ? catalog.meta.total : available.length;
+    const exploreTabCount = facets
+        ? Math.max(0, facets.all - installedAll.length)
+        : availableAll.length;
+    const totalAppsCount = facets
+        ? facets.all
+        : installedAll.length + availableAll.length;
 
     return (
         <>
@@ -394,14 +517,14 @@ export default function ToolsIndex({
             ) : tools ? (
                 <>
                     <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <div className="relative">
                                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
                                 <input
                                     type="search"
                                     value={query}
                                     onChange={(event) =>
-                                        setQuery(event.target.value)
+                                        handleQueryChange(event.target.value)
                                     }
                                     placeholder="Search 30+ apps (wiki, s3, chat, analytics…)"
                                     className="h-9.5 w-72 rounded-xl border-0 bg-surface pr-3 pl-9 text-[13px] ring-1 ring-line transition outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
@@ -413,16 +536,11 @@ export default function ToolsIndex({
                             >
                                 {(
                                     [
-                                        [
-                                            'all',
-                                            'All Apps',
-                                            installedAll.length +
-                                                availableAll.length,
-                                        ],
+                                        ['all', 'All Apps', totalAppsCount],
                                         [
                                             'available',
                                             'Explore',
-                                            availableAll.length,
+                                            exploreTabCount,
                                         ],
                                         [
                                             'installed',
@@ -436,7 +554,9 @@ export default function ToolsIndex({
                                         type="button"
                                         role="tab"
                                         aria-selected={filter === value}
-                                        onClick={() => setFilter(value)}
+                                        onClick={() =>
+                                            handleFilterSelect(value)
+                                        }
                                         className={
                                             filter === value
                                                 ? 'flex h-7.5 items-center gap-1.5 rounded-lg bg-surface px-3 text-[13px] font-medium text-ink shadow-xs ring-1 ring-line/50 transition'
@@ -452,6 +572,43 @@ export default function ToolsIndex({
                                     </button>
                                 ))}
                             </div>
+                            {facets && facets.community > 0 && (
+                                <div className="flex h-9.5 items-center rounded-xl bg-badge/70 p-1 ring-1 ring-line/50">
+                                    {(
+                                        [
+                                            ['all', 'All Sources', facets.all],
+                                            [
+                                                'official',
+                                                'Official',
+                                                facets.official,
+                                            ],
+                                            [
+                                                'community',
+                                                'Community',
+                                                facets.community,
+                                            ],
+                                        ] as const
+                                    ).map(([src, label, count]) => (
+                                        <button
+                                            key={src}
+                                            type="button"
+                                            onClick={() =>
+                                                handleSourceSelect(src)
+                                            }
+                                            className={
+                                                selectedSource === src
+                                                    ? 'flex h-7.5 items-center gap-1.5 rounded-lg bg-surface px-2.5 text-xs font-medium text-ink shadow-xs ring-1 ring-line/50 transition'
+                                                    : 'flex h-7.5 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-soft transition hover:text-ink'
+                                            }
+                                        >
+                                            <span>{label}</span>
+                                            <span className="text-[11px] text-faint">
+                                                {count}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center gap-3">
                             <VerifyStatus
@@ -466,12 +623,15 @@ export default function ToolsIndex({
 
                     <div className="mb-6 flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1">
                         {CATEGORY_FILTERS.map((cat) => {
-                            const count =
-                                cat.value === 'all'
-                                    ? (tools?.length ?? 0)
-                                    : (tools?.filter((t) =>
-                                          toolCategories(t).includes(cat.value),
-                                      ).length ?? 0);
+                            const count = facets
+                                ? cat.value === 'all'
+                                    ? facets.all
+                                    : (facets.categories[cat.value] ?? 0)
+                                : cat.value === 'all'
+                                  ? (tools?.length ?? 0)
+                                  : (tools?.filter((t) =>
+                                        toolCategories(t).includes(cat.value),
+                                    ).length ?? 0);
                             const isActive = selectedCategory === cat.value;
 
                             return (
@@ -479,7 +639,7 @@ export default function ToolsIndex({
                                     key={cat.value}
                                     type="button"
                                     onClick={() =>
-                                        setSelectedCategory(cat.value)
+                                        handleCategorySelect(cat.value)
                                     }
                                     className={`flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition ${
                                         isActive
@@ -519,7 +679,7 @@ export default function ToolsIndex({
                                             onAddInstance={handleAddInstance}
                                             onManage={setManagingTool}
                                             onCategoryClick={
-                                                setSelectedCategory
+                                                handleCategorySelect
                                             }
                                         />
                                     ))}
@@ -528,7 +688,7 @@ export default function ToolsIndex({
                             {filter !== 'installed' && (
                                 <Section
                                     title="Available"
-                                    count={available.length}
+                                    count={availableCount}
                                 >
                                     {available.map((tool) => (
                                         <AvailableCard
@@ -544,7 +704,7 @@ export default function ToolsIndex({
                                                 setInstallingTool(tool);
                                             }}
                                             onCategoryClick={
-                                                setSelectedCategory
+                                                handleCategorySelect
                                             }
                                         />
                                     ))}
@@ -696,7 +856,7 @@ export default function ToolsIndex({
                                                                                         }
                                                                                         type="button"
                                                                                         onClick={() =>
-                                                                                            setSelectedCategory(
+                                                                                            handleCategorySelect(
                                                                                                 cat,
                                                                                             )
                                                                                         }
@@ -940,7 +1100,7 @@ export default function ToolsIndex({
                                                                                         }
                                                                                         type="button"
                                                                                         onClick={() =>
-                                                                                            setSelectedCategory(
+                                                                                            handleCategorySelect(
                                                                                                 cat,
                                                                                             )
                                                                                         }
@@ -1017,6 +1177,56 @@ export default function ToolsIndex({
                             )}
                         </div>
                     )}
+                    {filter !== 'installed' &&
+                        catalog &&
+                        catalog.meta.last_page > 1 && (
+                            <div className="mt-6 flex items-center justify-between border-t border-line/60 pt-4 text-xs text-soft">
+                                <span>
+                                    Page {catalog.meta.current_page} of{' '}
+                                    {catalog.meta.last_page} ·{' '}
+                                    {catalog.meta.total} apps
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={
+                                            catalog.meta.current_page <= 1
+                                        }
+                                        onClick={() =>
+                                            requestCatalogPage({
+                                                page:
+                                                    catalog.meta.current_page -
+                                                    1,
+                                            })
+                                        }
+                                    >
+                                        <ChevronLeft className="size-3.5" />
+                                        <span>Previous</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={
+                                            catalog.meta.current_page >=
+                                            catalog.meta.last_page
+                                        }
+                                        onClick={() =>
+                                            requestCatalogPage({
+                                                page:
+                                                    catalog.meta.current_page +
+                                                    1,
+                                            })
+                                        }
+                                    >
+                                        <span>Next</span>
+                                        <ChevronRight className="size-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                 </>
             ) : (
                 <p className="text-sm text-soft">
@@ -1677,8 +1887,49 @@ function InstallDialog({
             answers.proxied = matched?.dnsProvider === 'cloudflare';
         }
 
+        // On dual-mode tools supporting `--no-plex` (e.g. n8n Postgres vs SQLite),
+        // auto-default `--no-plex` when the server has no compatible active Plex database
+        // so installing doesn't silently spin up a new DB container unless requested.
+        const caps = tool.commonsCapabilities;
+        const plexDbs =
+            caps?.plexDatabases ??
+            (caps?.databases ?? []).filter((d) => d.toLowerCase() !== 'sqlite');
+        if (
+            optionFields.some((field) => field.key === 'noPlex') &&
+            plexDbs.length > 0 &&
+            activeCommonsServices !== undefined
+        ) {
+            const activeSet = new Set(
+                (activeCommonsServices ?? []).map((s) => s.toLowerCase()),
+            );
+            const hasCompatibleDb = plexDbs.some((d) =>
+                activeSet.has(d.toLowerCase()),
+            );
+            if (!hasCompatibleDb) {
+                answers.noPlex = true;
+            }
+        }
+
         return answers;
     });
+
+    const plexDatabases = useMemo(() => {
+        const caps = tool.commonsCapabilities;
+        return (
+            caps?.plexDatabases ??
+            (caps?.databases ?? []).filter((d) => d.toLowerCase() !== 'sqlite')
+        );
+    }, [tool.commonsCapabilities]);
+
+    const hasCompatiblePlexDb = useMemo(() => {
+        if (!activeCommonsServices || plexDatabases.length === 0) {
+            return false;
+        }
+        const activeSet = new Set(
+            activeCommonsServices.map((s) => s.toLowerCase()),
+        );
+        return plexDatabases.some((d) => activeSet.has(d.toLowerCase()));
+    }, [activeCommonsServices, plexDatabases]);
 
     const activeMatches = useMemo(() => {
         if (
@@ -1703,19 +1954,30 @@ function InstallDialog({
                           | undefined
                   )?.toLowerCase() ?? null);
         const usesSqlite = chosenDb === 'sqlite';
+        const usesNoPlex = options.noPlex === true;
 
-        if (!usesSqlite && caps.databases?.some((d) => activeSet.has(d))) {
-            const dbName = caps.databases.find((d) => activeSet.has(d));
+        if (
+            !usesSqlite &&
+            !usesNoPlex &&
+            plexDatabases.some((d) => activeSet.has(d))
+        ) {
+            const dbName = plexDatabases.find((d) => activeSet.has(d));
             matches.push(
                 dbName === 'postgres' || dbName === 'postgresql'
                     ? 'Plex PostgreSQL'
-                    : 'Plex MySQL',
+                    : dbName === 'mariadb'
+                      ? 'Plex MariaDB'
+                      : 'Plex MySQL',
             );
         }
-        if (!usesSqlite && caps.cache?.some((c) => activeSet.has(c))) {
+        if (
+            !usesSqlite &&
+            !usesNoPlex &&
+            caps.cache?.some((c) => activeSet.has(c))
+        ) {
             matches.push('Redis');
         }
-        if (caps.storage?.some((s) => activeSet.has(s))) {
+        if (!usesNoPlex && caps.storage?.some((s) => activeSet.has(s))) {
             matches.push('S3 Storage');
         }
         if (caps.auth?.some((a) => activeSet.has(a))) {
@@ -1729,7 +1991,9 @@ function InstallDialog({
         tool.commonsCapabilities,
         tool.initFields,
         activeCommonsServices,
+        plexDatabases,
         options.db,
+        options.noPlex,
     ]);
 
     const [adminEmail, setAdminEmail] = useState(defaultAdminEmail);
@@ -1817,6 +2081,24 @@ function InstallDialog({
                                         </div>
                                     </div>
                                 )}
+
+                                {options.noPlex === true &&
+                                    plexDatabases.length > 0 && (
+                                        <div className="flex items-start gap-3 rounded-xl bg-sky-500/10 p-3 text-xs text-sky-900 ring-1 ring-sky-500/30 dark:text-sky-200">
+                                            <Sparkles className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                                            <div className="space-y-0.5">
+                                                <p className="font-semibold">
+                                                    Standalone mode selected
+                                                    (--no-plex)
+                                                </p>
+                                                <p className="leading-relaxed text-sky-800/90 dark:text-sky-300/80">
+                                                    {hasCompatiblePlexDb
+                                                        ? `Using local storage instead of the server's active ${plexDatabases.join('/')} Plex Commons.`
+                                                        : `No compatible Plex database (${plexDatabases.join('/')}) detected on this server — using isolated local SQLite storage. Uncheck below to provision Plex Commons instead.`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
 
                                 <div>
                                     <HostPicker

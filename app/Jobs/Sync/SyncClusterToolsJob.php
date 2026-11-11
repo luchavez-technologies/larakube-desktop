@@ -4,6 +4,7 @@ namespace App\Jobs\Sync;
 
 use App\Enums\ActivityType;
 use App\Models\Activity;
+use App\Models\CatalogTool;
 use App\Models\ClusterTool;
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
@@ -102,6 +103,8 @@ class SyncClusterToolsJob extends SyncJob
                             }
                         }
                     }
+
+                    CatalogTool::upsertFromPayload($row, $position);
 
                     $clusterTool = ClusterTool::updateOrCreate(
                         ['server_id' => $server->id, 'tool' => $tool, 'host' => $host],

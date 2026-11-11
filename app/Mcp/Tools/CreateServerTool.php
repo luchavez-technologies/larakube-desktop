@@ -2,8 +2,11 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\CloudProviderSlug;
+use App\Enums\DnsProvider;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Enums\ServerTargetKind;
 use App\Models\CloudProvider;
 use App\Models\Run;
 use App\Models\Server;
@@ -34,15 +37,15 @@ class CreateServerTool extends Tool implements Completable
     public function complete(string $argument, string $value, array $context): CompletionResponse
     {
         if ($argument === 'provider') {
-            return CompletionResponse::match(['gcp', 'do', 'hetzner', 'aws', 'custom']);
+            return CompletionResponse::match(CloudProvider::availableSlugs());
         }
 
         if ($argument === 'target_kind') {
-            return CompletionResponse::match(['vps', 'managed']);
+            return CompletionResponse::match(ServerTargetKind::values());
         }
 
         if ($argument === 'dns_provider') {
-            return CompletionResponse::match(['cloudflare', 'digitalocean', 'route53', 'google', 'none']);
+            return CompletionResponse::match(DnsProvider::values());
         }
 
         return CompletionResponse::empty();
@@ -285,15 +288,15 @@ class CreateServerTool extends Tool implements Completable
     public function schema(JsonSchema $schema): array
     {
         return [
-            'provider' => $schema->string()->description('The cloud provider (gcp, do, hetzner, aws, custom)'),
+            'provider' => $schema->string()->description('The cloud provider ('.implode(', ', CloudProviderSlug::values()).')'),
             'stack_name' => $schema->string()->description('Unique name for the server/stack (e.g. gcp-prod)'),
-            'target_kind' => $schema->string()->enum(['vps', 'managed'])->description('Server target kind: "vps" (single-node VM) or "managed" (GKE/DOKS/EKS cluster). Default: vps')->nullable(),
+            'target_kind' => $schema->string()->enum(ServerTargetKind::values())->description('Server target kind: "vps" (single-node VM) or "managed" (GKE/DOKS/EKS cluster). Default: vps')->nullable(),
             'region' => $schema->string()->description('Region to deploy to (optional; defaults to provider default)')->nullable(),
             'size' => $schema->string()->description('Machine size/type (optional; defaults to provider default)')->nullable(),
             'account' => $schema->string()->description('Configured cloud account/profile (optional; defaults to active account)')->nullable(),
             'node_count' => $schema->integer()->description('Number of worker nodes if target_kind is "managed" (default: 1)')->nullable(),
             'ha' => $schema->boolean()->description('Whether to enable High Availability for managed control plane (default: false)')->nullable(),
-            'dns_provider' => $schema->string()->description('DNS provider (e.g. cloudflare, google, route53) (optional)')->nullable(),
+            'dns_provider' => $schema->string()->enum(DnsProvider::values())->description('DNS provider ('.implode(', ', DnsProvider::values()).') (optional)')->nullable(),
             'cloudflare_token' => $schema->string()->description('Cloudflare API token for automatic ExternalDNS and SSL. Optional; auto-detected from LARAKUBE_CLOUDFLARE_TOKEN or CLOUDFLARE_API_TOKEN in environment if omitted.')->nullable(),
             'ip' => $schema->string()->description('IP address for custom/existing VPS (required only if provider is custom)')->nullable(),
             'ssh_user' => $schema->string()->description('SSH user for custom VPS (default: root)')->nullable(),
