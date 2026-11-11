@@ -455,6 +455,17 @@ class RecordRunOutput
             return null;
         }
 
+        // Node.js child_process crashes start with the internal file:line header
+        // (`node:internal/child_process:441` -> `throw err;` -> `^` -> `Error: ...`),
+        // so surface the actual `Error:` line rather than stopping at line 0.
+        if (str_starts_with($lines[0], 'node:')) {
+            foreach ($lines as $line) {
+                if (preg_match('/^(?:[A-Z]\w*)?Error:/', $line) === 1) {
+                    return ['success' => false, 'error' => $line];
+                }
+            }
+        }
+
         return ['success' => false, 'error' => $lines[0]];
     }
 

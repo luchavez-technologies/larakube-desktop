@@ -333,3 +333,28 @@ test('successful destroy-server run updates server status to destroyed and dispa
 
     Queue::assertPushed(SyncServersJob::class);
 });
+
+test('Node child_process stack traces extract the Error line instead of the node:internal frame header', function () {
+    $run = Run::create([
+        'label' => 'Google Cloud sign-in',
+        'kind' => RunKind::CloudAuth,
+        'subject' => 'gcp-auth',
+        'output' => implode("\n", [
+            'node:internal/child_process:441',
+            '    throw err;',
+            '    ^',
+            '',
+            'Error: spawn EINVAL',
+            '    at ChildProcess.spawn (node:internal/child_process:441:11)',
+        ]),
+        'command' => ['larakube', 'cloud:login', '--provider=gcp', '--json'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 1));
+
+    $run->refresh();
+    expect($run->result)->toBe([
+        'success' => false,
+        'error' => 'Error: spawn EINVAL',
+    ]);
+});

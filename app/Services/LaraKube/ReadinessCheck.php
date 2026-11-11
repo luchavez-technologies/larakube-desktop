@@ -281,6 +281,7 @@ class ReadinessCheck
 
         try {
             $result = Process::env($isolated['environment'])
+                ->path($isolated['cwd'] ?? sys_get_temp_dir())
                 ->timeout(60)
                 ->run($isolated['command']);
         } catch (ProcessTimedOutException) {
@@ -327,6 +328,7 @@ class ReadinessCheck
 
         try {
             $result = Process::env($isolated['environment'])
+                ->path($isolated['cwd'] ?? sys_get_temp_dir())
                 ->timeout(90)
                 ->run($isolated['command']);
         } catch (ProcessTimedOutException) {

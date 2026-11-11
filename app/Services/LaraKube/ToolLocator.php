@@ -396,7 +396,7 @@ class ToolLocator
      *
      * @param  list<string>  $command
      * @param  array<string, string>  $extraEnvironment
-     * @return array{command: list<string>, environment: array<string, string>, cwd: string|null}
+     * @return array{command: list<string>, environment: array<string, string|false>, cwd: string|null}
      */
     public function isolate(array $command, array $extraEnvironment = [], ?string $cwd = null): array
     {
@@ -483,7 +483,7 @@ class ToolLocator
      *
      * @param  list<string>  $command
      * @param  array<string, string>  $extraEnvironment
-     * @return array{command: list<string>, environment: array<string, string>, cwd: string|null}
+     * @return array{command: list<string>, environment: array<string, string|false>, cwd: string|null}
      */
     private function isolateForNativeWindows(array $command, array $extraEnvironment, ?string $cwd): array
     {
@@ -492,11 +492,19 @@ class ToolLocator
             'APP_ENV' => 'development',
             'CACHE_STORE' => 'file',
             'CACHE_DRIVER' => 'file',
-            'APP_CONFIG_CACHE' => '',
-            'APP_SERVICES_CACHE' => '',
-            'APP_PACKAGES_CACHE' => '',
-            'APP_ROUTES_CACHE' => '',
-            'APP_EVENTS_CACHE' => '',
+            // Symfony Process treats `false` as "unset from child env". Empty
+            // strings (`''`) would remain present in Windows `proc_open` and make
+            // Laravel Zero's Application::normalizeCachePath() treat basePath('')
+            // (the PHAR root) as a cached bootstrap file, crashing with exit 255.
+            'APP_CONFIG_CACHE' => false,
+            'APP_SERVICES_CACHE' => false,
+            'APP_PACKAGES_CACHE' => false,
+            'APP_ROUTES_CACHE' => false,
+            'APP_EVENTS_CACHE' => false,
+            'LARAVEL_STORAGE_PATH' => false,
+            'NATIVEPHP_RUNNING' => false,
+            'NATIVEPHP_STORAGE_PATH' => false,
+            'NATIVEPHP_DATABASE_PATH' => false,
             'PATH' => $this->nativeWindowsPath(),
             ...$extraEnvironment,
         ];
@@ -595,11 +603,9 @@ class ToolLocator
     public function run(array $command, int $timeout = 60, array $environment = [], ?string $cwd = null, ?string $input = null): ProcessResult
     {
         $isolated = $this->isolate($command, $environment, $cwd);
-        $process = Process::env($isolated['environment'])->timeout($timeout);
-
-        if ($isolated['cwd'] !== null) {
-            $process = $process->path($isolated['cwd']);
-        }
+        $process = Process::env($isolated['environment'])
+            ->path($isolated['cwd'] ?? sys_get_temp_dir())
+            ->timeout($timeout);
 
         if ($input !== null) {
             $process = $process->input($input);
@@ -625,7 +631,9 @@ class ToolLocator
             cmd: $isolated['command'],
             alias: $alias,
             cwd: $workingDirectory,
-            env: $isolated['environment'],
+            // Node's utilityProcess.fork stringifies booleans; drop `false` unset
+            // markers because Electron Node does not carry Desktop PHP's env.
+            env: array_filter($isolated['environment'], static fn (mixed $value): bool => $value !== false),
         );
     }
 

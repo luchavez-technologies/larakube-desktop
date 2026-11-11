@@ -107,7 +107,10 @@ class StackCatalog
 
         $isolated = $this->locator->isolate([$cli, 'cloud:stacks', '--json', '--no-interaction']);
         try {
-            $result = Process::env($isolated['environment'])->timeout(30)->run($isolated['command']);
+            $result = Process::env($isolated['environment'])
+                ->path($isolated['cwd'] ?? sys_get_temp_dir())
+                ->timeout(30)
+                ->run($isolated['command']);
         } catch (ProcessTimedOutException) {
             return null;
         }

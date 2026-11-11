@@ -2,6 +2,7 @@
 
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Process;
+use Native\Desktop\Facades\ChildProcess;
 
 test('isolated commands see only the allowlisted environment, not the parent app env', function () {
     putenv('DB_CONNECTION=sqlite');
@@ -233,4 +234,64 @@ test('windows finds gcloud installed via Google official installer under LOCALAP
         $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
         $oldLocalAppData === false ? putenv('LOCALAPPDATA') : putenv("LOCALAPPDATA={$oldLocalAppData}");
     }
+});
+
+test('native Windows isolation unsets Desktop cache and storage vars with false and executes PHP processes without leaking them', function () {
+    $oldConfigCache = getenv('APP_CONFIG_CACHE');
+    $oldServicesCache = getenv('APP_SERVICES_CACHE');
+    $oldStoragePath = getenv('LARAVEL_STORAGE_PATH');
+    putenv('APP_CONFIG_CACHE=/tmp/desktop-config.php');
+    putenv('APP_SERVICES_CACHE=/tmp/desktop-services.php');
+    putenv('LARAVEL_STORAGE_PATH=/tmp/desktop-storage');
+
+    try {
+        $locator = new ToolLocator(windows: true);
+        $isolated = $locator->isolate(['C:\\Users\\jamie\\.larakube\\bin\\larakube.exe', '--version']);
+
+        expect($isolated['environment']['APP_CONFIG_CACHE'])->toBeFalse()
+            ->and($isolated['environment']['APP_SERVICES_CACHE'])->toBeFalse()
+            ->and($isolated['environment']['APP_PACKAGES_CACHE'])->toBeFalse()
+            ->and($isolated['environment']['APP_ROUTES_CACHE'])->toBeFalse()
+            ->and($isolated['environment']['APP_EVENTS_CACHE'])->toBeFalse()
+            ->and($isolated['environment']['LARAVEL_STORAGE_PATH'])->toBeFalse()
+            ->and($isolated['environment']['NATIVEPHP_RUNNING'])->toBeFalse();
+
+        // Execute a real child PHP process through Symfony Process using that exact
+        // isolated env array: `false` must unset every leaked parent variable so
+        // `getenv(...)` returns false instead of an empty string `""`.
+        $probe = Process::env($isolated['environment'])
+            ->path(sys_get_temp_dir())
+            ->run([
+                PHP_BINARY,
+                '-r',
+                'echo json_encode(["cfg" => getenv("APP_CONFIG_CACHE"), "srv" => getenv("APP_SERVICES_CACHE"), "sto" => getenv("LARAVEL_STORAGE_PATH")]);',
+            ])
+            ->throw();
+
+        expect(json_decode($probe->output(), true))->toBe([
+            'cfg' => false,
+            'srv' => false,
+            'sto' => false,
+        ]);
+    } finally {
+        $oldConfigCache === false ? putenv('APP_CONFIG_CACHE') : putenv("APP_CONFIG_CACHE={$oldConfigCache}");
+        $oldServicesCache === false ? putenv('APP_SERVICES_CACHE') : putenv("APP_SERVICES_CACHE={$oldServicesCache}");
+        $oldStoragePath === false ? putenv('LARAVEL_STORAGE_PATH') : putenv("LARAVEL_STORAGE_PATH={$oldStoragePath}");
+    }
+});
+
+test('ToolLocator::start omits boolean false unset markers so Electron ChildProcess never stringifies them', function () {
+    $fake = ChildProcess::fake();
+    $locator = new ToolLocator(windows: true);
+
+    $locator->start(['C:\\Users\\jamie\\.larakube\\bin\\larakube.exe', 'update', '--yes'], 'test-update');
+
+    $fake->assertStarted(function (array|string $cmd, string $alias, ?string $cwd = null, ?array $env = null, bool $persistent = false): bool {
+        $env ??= [];
+
+        return ($env['NO_COLOR'] ?? null) === '1'
+            && ! array_key_exists('APP_CONFIG_CACHE', $env)
+            && ! array_key_exists('APP_SERVICES_CACHE', $env)
+            && ! array_key_exists('LARAVEL_STORAGE_PATH', $env);
+    });
 });

@@ -213,7 +213,9 @@ test('on Windows isolate() runs native larakube.exe directly without wsl.exe wra
         ->and($isolated['environment']['WSLENV'])->toBe('TF_VAR_do_token')
         ->and($isolated['environment']['CACHE_STORE'])->toBe('file')
         ->and($isolated['environment']['CACHE_DRIVER'])->toBe('file')
-        ->and($isolated['environment']['APP_CONFIG_CACHE'])->toBe('')
+        ->and($isolated['environment']['APP_CONFIG_CACHE'])->toBeFalse()
+        ->and($isolated['environment']['APP_SERVICES_CACHE'])->toBeFalse()
+        ->and($isolated['environment']['LARAVEL_STORAGE_PATH'])->toBeFalse()
         ->and(implode(' ', $isolated['command']))->not->toContain('dop_v1_secret')
         ->and(implode(' ', $isolated['command']))->not->toContain('wsl.exe');
 });
