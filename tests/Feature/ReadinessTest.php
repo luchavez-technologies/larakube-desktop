@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Wsl;
@@ -186,6 +187,36 @@ test('the Setup page lists every tool at once, before any check has run', functi
         ->has('catalog', count(ReadinessCheck::TOOLS))
         ->where('catalog.0.slug', 'larakube')
         ->missing('tools'));
+});
+
+test('an explicit "Check again" bypasses the local-cluster cache, so a cluster fixed since the last check shows up immediately', function () {
+    // Confirmed live: the "Check again" button reloaded 'wsl' and 'providers'
+    // but never 'localCluster', and even once added, LocalCluster::detect()
+    // without fresh=true still served its own 30s cache — so a user who just
+    // installed Traefik on an already-running OrbStack kept seeing the stale
+    // "not set up yet" verdict no matter how many times they clicked it.
+    readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    Cache::put(LocalCluster::CACHE_KEY, [
+        'engine' => 'OrbStack',
+        'context' => 'orbstack',
+        'status' => 'OrbStack is running — LaraKube is not set up on it yet',
+        'tone' => 'warn',
+    ], 30);
+
+    // A plain reload (no fresh flag) still serves the cached verdict.
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+            ->where('localCluster.tone', 'warn')));
+
+    // fresh=1, exactly what the "Check again" button now sends, forces a
+    // real recheck instead — here kubectl finds no cluster at all, proving
+    // the cached 'warn' verdict above was genuinely bypassed, not reused.
+    Process::fake(['*' => Process::result(output: '', exitCode: 1)]);
+
+    $this->get(route('readiness', ['fresh' => 1]))->assertInertia(fn (AssertableInertia $page) => $page
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+            ->where('localCluster.tone', 'muted')));
 });
 
 test('only a Windows computer is asked about WSL', function () {

@@ -102,7 +102,10 @@ export default function Readiness({
                             variant="secondary"
                             onClick={() => {
                                 setRefresh((count) => count + 1);
-                                router.reload({ only: ['providers', 'wsl'] });
+                                router.reload({
+                                    only: ['providers', 'wsl', 'localCluster'],
+                                    data: { fresh: true },
+                                });
                             }}
                         >
                             <RotateCw className="size-4" />

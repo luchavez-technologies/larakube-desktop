@@ -16,7 +16,7 @@ use Inertia\Response;
 
 class ReadinessController extends Controller
 {
-    public function show(ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl, TerminalIntegration $terminal): Response
+    public function show(Request $request, ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl, TerminalIntegration $terminal): Response
     {
         $usage = $settings->get()['usage'];
 
@@ -35,7 +35,11 @@ class ReadinessController extends Controller
             'cliInstallCommand' => $readiness->cliInstallCommand(),
             'cliChannel' => $installer->channel(),
             'usage' => $usage,
-            'localCluster' => Inertia::defer(fn (): array => $localCluster->detect()),
+            // fresh=1 on an explicit "Check again" reload bypasses LocalCluster's
+            // own 30s cache, so a cluster you just fixed (installed Traefik,
+            // started OrbStack) shows up immediately instead of the stale
+            // not-ready result from before the fix.
+            'localCluster' => Inertia::defer(fn (): array => $localCluster->detect(fresh: $request->boolean('fresh'))),
             'cliDownloadUrl' => $installer->downloadUrl(),
             'terminalConfigured' => $terminal->isConfigured(),
             'shellProfile' => basename($terminal->profilePath()),
