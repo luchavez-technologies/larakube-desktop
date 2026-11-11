@@ -290,13 +290,23 @@ export default function Readiness({
 function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
     const { errors } = usePage<{ errors: Record<string, string> }>().props;
     const running = cluster?.tone === 'ok';
+    // tone 'warn' with a real engine means LocalCluster::resolve() already found
+    // a running OrbStack/Docker Desktop/Colima cluster — it just isn't
+    // provisioned (no Traefik) yet. Setup only adds ingress/DNS/tools on top of
+    // it in that case; it never installs or reinstalls the cluster itself.
+    const detectedUnprovisioned =
+        !running &&
+        cluster?.tone === 'warn' &&
+        !!cluster?.engine &&
+        cluster.engine !== 'None' &&
+        cluster.engine !== 'Unknown';
 
     const start = () => {
-        if (
-            window.confirm(
-                'This installs a local Kubernetes cluster (k3s) so you can run apps on this computer. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?',
-            )
-        ) {
+        const message = detectedUnprovisioned
+            ? `This sets up ${cluster!.engine} (already running) for LaraKube — ingress and local DNS, nothing about ${cluster!.engine} itself is reinstalled or reconfigured. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?`
+            : 'This installs a local Kubernetes cluster (k3s) so you can run apps on this computer. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?';
+
+        if (window.confirm(message)) {
             router.post('/setup/local');
         }
     };
@@ -325,7 +335,8 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
                         detail={
                             running
                                 ? `${cluster?.engine} is running`
-                                : 'Runs your apps on this computer so you can work on them.'
+                                : (cluster?.status ??
+                                  'Runs your apps on this computer so you can work on them.')
                         }
                     />
                 </ListRow>
