@@ -692,9 +692,39 @@ export default function OnboardingIndex({
 
                             {currentStep === 4 && (
                                 <div className="space-y-3">
-                                    <p className="text-sm font-medium">
-                                        Install what you need
-                                    </p>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-sm font-medium">
+                                            Install what you need
+                                        </p>
+                                        {(cliMissing ||
+                                            (windows &&
+                                                usage === 'apps' &&
+                                                (!wsl ||
+                                                    wsl.state !==
+                                                        'ready'))) && (
+                                            // The tool-list Card below has its
+                                            // own Check again, right next to
+                                            // Install everything — this one
+                                            // only needs to exist for the two
+                                            // earlier gates (WSL, CLI) that
+                                            // render instead of that Card, so
+                                            // there's still SOME way to
+                                            // recheck after installing WSL or
+                                            // the CLI by hand.
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setRefresh(
+                                                        (count) => count + 1,
+                                                    )
+                                                }
+                                            >
+                                                Check again
+                                            </Button>
+                                        )}
+                                    </div>
                                     {selectedProviders.length > 0 && (
                                         <p className="flex flex-wrap items-center gap-1.5 text-xs leading-relaxed text-soft">
                                             <span>You picked</span>
