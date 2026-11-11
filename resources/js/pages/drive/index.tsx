@@ -169,8 +169,8 @@ export default function DriveIndex({
             <div className="mx-auto max-w-7xl space-y-6">
                 {/* Header with Server Switcher */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <div className="flex items-center gap-2.5">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5">
                             <ToolLogo slug="drive" size="sm" />
                             <h1 className="text-xl font-bold tracking-tight text-ink">
                                 Drive Management
@@ -196,7 +196,7 @@ export default function DriveIndex({
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
                         <ServerSwitcher
                             servers={servers}
                             value={server.name}

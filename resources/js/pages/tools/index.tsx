@@ -1278,42 +1278,44 @@ function InstalledCard({
                 )}
             </div>
 
-            <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3.5 text-xs">
-                <div className="min-w-0 pr-2">
-                    {canMulti && onAddInstance ? (
-                        <button
-                            type="button"
-                            onClick={() => onAddInstance(tool)}
-                            className="inline-flex items-center gap-1.5 font-medium text-brand transition hover:text-brand/80"
-                            title="Deploy another isolated instance"
-                        >
-                            <Plus className="size-3.5" />
-                            <span>Deploy Another</span>
-                        </button>
-                    ) : stack.length > 0 ? (
-                        <div
-                            className="flex items-center gap-1.5 truncate font-mono text-[11px] text-soft"
-                            title={`Stack: ${stack.join(' · ')}`}
-                        >
-                            <span className="font-sans text-[10px] font-medium tracking-wider text-faint uppercase">
-                                Stack:
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-t border-line/60 pt-3.5 text-xs">
+                {canMulti && onAddInstance ? (
+                    <button
+                        type="button"
+                        onClick={() => onAddInstance(tool)}
+                        className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 font-medium whitespace-nowrap text-brand transition hover:text-brand/80"
+                        title="Deploy another isolated instance"
+                    >
+                        <Plus className="size-3.5" />
+                        <span>Deploy Another</span>
+                    </button>
+                ) : (
+                    <div className="min-w-0 flex-1">
+                        {stack.length > 0 ? (
+                            <div
+                                className="flex items-center gap-1.5 truncate font-mono text-[11px] text-soft"
+                                title={`Stack: ${stack.join(' · ')}`}
+                            >
+                                <span className="font-sans text-[10px] font-medium tracking-wider text-faint uppercase">
+                                    Stack:
+                                </span>
+                                <span className="truncate">
+                                    {stack.join(' · ')}
+                                </span>
+                            </div>
+                        ) : (
+                            <span className="text-[11px] text-faint">
+                                Cluster Service
                             </span>
-                            <span className="truncate">
-                                {stack.join(' · ')}
-                            </span>
-                        </div>
-                    ) : (
-                        <span className="text-[11px] text-faint">
-                            Cluster Service
-                        </span>
-                    )}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
+                        )}
+                    </div>
+                )}
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     <button
                         type="button"
                         disabled
                         title="Coming soon — upgrade this tool's image version in place when a newer one is available."
-                        className={buttonClass('secondary', 'sm', 'h-8 px-3')}
+                        className={buttonClass('secondary', 'sm', 'h-8 px-2.5')}
                     >
                         <ArrowUpCircle className="size-3.5" />
                         <span>Update</span>
@@ -1331,7 +1333,7 @@ function InstalledCard({
                             className={buttonClass(
                                 'secondary',
                                 'sm',
-                                'h-8 px-3 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
+                                'h-8 px-2.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
                             )}
                         >
                             {paused ? (
@@ -1349,7 +1351,7 @@ function InstalledCard({
                             className={buttonClass(
                                 'secondary',
                                 'sm',
-                                'h-8 px-3 cursor-pointer',
+                                'h-8 px-2.5 cursor-pointer',
                             )}
                         >
                             <Settings2 className="size-3.5" />
@@ -1361,7 +1363,7 @@ function InstalledCard({
                             className={buttonClass(
                                 'secondary',
                                 'sm',
-                                'h-8 px-3',
+                                'h-8 px-2.5',
                             )}
                         >
                             <Settings2 className="size-3.5" />

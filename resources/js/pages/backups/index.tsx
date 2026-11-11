@@ -197,7 +197,7 @@ export default function BackupsIndex({
             <div className="mx-auto max-w-7xl space-y-6">
                 {/* Header with Server Switcher */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2.5">
                             <div className="flex size-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-500 ring-1 ring-teal-500/20">
                                 <DatabaseBackup className="size-4.5" />
@@ -238,7 +238,7 @@ export default function BackupsIndex({
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
                         <ServerSwitcher
                             servers={servers}
                             value={server.name}

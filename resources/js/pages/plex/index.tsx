@@ -73,7 +73,7 @@ function PlexPageHeader({
                 </p>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
                 <ServerSwitcher
                     servers={servers}
                     value={server.name}
