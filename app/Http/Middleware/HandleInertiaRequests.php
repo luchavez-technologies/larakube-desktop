@@ -86,14 +86,10 @@ class HandleInertiaRequests extends Middleware
             'demoMode' => fn () => app(GlobalSettings::class)->demoMode(),
             'versions' => fn () => rescue(function () {
                 $channel = app(GlobalSettings::class)->releaseChannel();
-                $cliRaw = app(ReadinessCheck::class)->status('larakube')['version'] ?? null;
-                $cliClean = null;
-                if ($cliRaw) {
-                    $cliClean = trim((string) preg_replace('/^LaraKube\s+/i', '', $cliRaw));
-                    if (preg_match('/^[a-f0-9]{40}$/i', $cliClean)) {
-                        $cliClean = substr($cliClean, 0, 7);
-                    }
-                }
+                $cliStatus = app(ReadinessCheck::class)->status('larakube');
+                $cliClean = $this->cleanCliVersion($cliStatus['version'] ?? null);
+                $wslStatus = $cliStatus['wsl'] ?? null;
+                $wslCliClean = is_array($wslStatus) ? $this->cleanCliVersion($wslStatus['version'] ?? null) : null;
 
                 $cliDetectedChannel = null;
                 if ($cliClean !== null && $cliClean !== '') {
@@ -109,6 +105,8 @@ class HandleInertiaRequests extends Middleware
                 return [
                     'desktop' => (string) config('nativephp.version', '1.0.0'),
                     'cli' => $cliClean,
+                    'wslCli' => $wslCliClean,
+                    'hasWslCli' => is_array($wslStatus),
                     'channel' => $channel,
                     'cliDetectedChannel' => $cliDetectedChannel,
                     'cliChannelMismatch' => $cliDetectedChannel !== null
@@ -118,6 +116,8 @@ class HandleInertiaRequests extends Middleware
             }, [
                 'desktop' => (string) config('nativephp.version', '1.0.0'),
                 'cli' => null,
+                'wslCli' => null,
+                'hasWslCli' => false,
                 'channel' => 'canary',
                 'cliDetectedChannel' => null,
                 'cliChannelMismatch' => false,
@@ -157,5 +157,19 @@ class HandleInertiaRequests extends Middleware
             'name' => fn () => config('app.name'),
             'untested' => fn () => app(ToolMaturity::class)->untested(),
         ];
+    }
+
+    private function cleanCliVersion(?string $raw): ?string
+    {
+        if (! $raw) {
+            return null;
+        }
+
+        $clean = trim((string) preg_replace('/^LaraKube\s+/i', '', $raw));
+        if (preg_match('/^[a-f0-9]{40}$/i', $clean)) {
+            return substr($clean, 0, 7);
+        }
+
+        return $clean !== '' ? $clean : null;
     }
 }

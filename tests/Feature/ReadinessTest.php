@@ -307,3 +307,123 @@ test('the manual install command is a PowerShell one-liner on Windows, not the U
         ->and($windows->cliInstallCommand())->toContain('irm')->toContain('install.ps1')
         ->and($windows->cliInstallCommand())->not->toContain('bash');
 });
+
+test('a failed version check is not cached for 5 minutes so the next check can recover', function () {
+    $bin = readinessFakeBinDirectory(['larakube']);
+    Cache::flush();
+
+    Process::fake([
+        '*larakube*--version*' => Process::sequence()
+            ->push(Process::result(errorOutput: 'timed out', exitCode: 1))
+            ->push(Process::result(output: "LaraKube  v0.42.0\n")),
+    ]);
+
+    $this->getJson(route('setup.tools.status', 'larakube'))
+        ->assertOk()
+        ->assertJson(['installed' => true, 'version' => null]);
+
+    $this->getJson(route('setup.tools.status', 'larakube'))
+        ->assertOk()
+        ->assertJson(['installed' => true, 'version' => 'LaraKube v0.42.0']);
+
+    File::deleteDirectory($bin);
+});
+
+test('on Windows with larakube-ubuntu installed, status(larakube) and shared versions include both host and WSL CLI versions', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $profile = sys_get_temp_dir().'/larakube-win-dual-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    file_put_contents($profile.'/.larakube/bin/larakube.exe', 'fake-exe');
+    putenv("USERPROFILE={$profile}");
+    Cache::flush();
+
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
+
+    Process::fake([
+        '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"),
+        '*which*larakube*' => Process::result(output: "/usr/local/bin/larakube\n"),
+        '*wsl.exe*--version*' => Process::result(output: "LaraKube v0.41.0\n"),
+        '*larakube.exe*--version*' => Process::result(output: "LaraKube v0.42.0\n"),
+        '*' => Process::result(exitCode: 1),
+    ]);
+
+    try {
+        $this->getJson(route('setup.tools.status', 'larakube'))
+            ->assertOk()
+            ->assertJson([
+                'installed' => true,
+                'version' => 'LaraKube v0.42.0',
+                'wsl' => [
+                    'installed' => true,
+                    'path' => '/usr/local/bin/larakube',
+                    'version' => 'LaraKube v0.41.0',
+                ],
+            ]);
+
+        $this->get(route('readiness'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('versions.cli', 'v0.42.0')
+                ->where('versions.wslCli', 'v0.41.0')
+                ->where('versions.hasWslCli', true));
+    } finally {
+        File::deleteDirectory($profile);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+    }
+});
+
+test('on Windows without WSL enabled, status(larakube) omits wsl and never invokes wsl.exe', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $profile = sys_get_temp_dir().'/larakube-win-nowsl-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    file_put_contents($profile.'/.larakube/bin/larakube.exe', 'fake-exe');
+    putenv("USERPROFILE={$profile}");
+    Cache::flush();
+
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: false));
+
+    Process::fake([
+        '*larakube.exe*--version*' => Process::result(output: "LaraKube v0.42.0\n"),
+    ]);
+
+    try {
+        $response = $this->getJson(route('setup.tools.status', 'larakube'))
+            ->assertOk()
+            ->assertJson(['installed' => true, 'version' => 'LaraKube v0.42.0'])
+            ->json();
+
+        expect($response)->not->toHaveKey('wsl');
+        Process::assertNotRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'wsl.exe'));
+    } finally {
+        File::deleteDirectory($profile);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+    }
+});
+
+test('on Windows with WSL enabled for another distro (no larakube-ubuntu), status(larakube) omits wsl cleanly', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $profile = sys_get_temp_dir().'/larakube-win-otherdistro-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    file_put_contents($profile.'/.larakube/bin/larakube.exe', 'fake-exe');
+    putenv("USERPROFILE={$profile}");
+    Cache::flush();
+
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
+
+    Process::fake([
+        '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* docker-desktop  Running         2\n"),
+        '*larakube.exe*--version*' => Process::result(output: "LaraKube v0.42.0\n"),
+    ]);
+
+    try {
+        $response = $this->getJson(route('setup.tools.status', 'larakube'))
+            ->assertOk()
+            ->assertJson(['installed' => true, 'version' => 'LaraKube v0.42.0'])
+            ->json();
+
+        expect($response)->not->toHaveKey('wsl');
+        Process::assertNotRan(fn ($process) => in_array('larakube-ubuntu', (array) $process->command, true));
+    } finally {
+        File::deleteDirectory($profile);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+    }
+});

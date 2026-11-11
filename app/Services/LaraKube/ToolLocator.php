@@ -37,6 +37,29 @@ class ToolLocator
         return $this->darwin ?? PHP_OS_FAMILY === 'Darwin';
     }
 
+    public function hasExplicitDirectories(): bool
+    {
+        return $this->directories !== null;
+    }
+
+    public function wslFeatureEnabled(): bool
+    {
+        if (! $this->isWindows()) {
+            return false;
+        }
+
+        return $this->wslFeatureEnabled ??= (new Wsl(windows: true))->featureEnabled();
+    }
+
+    public function findInWslDistro(string $binary): ?string
+    {
+        if (! $this->isWindows() || $this->directories !== null) {
+            return null;
+        }
+
+        return $this->inDistro[$binary] ??= $this->findInDistro($binary);
+    }
+
     public function hasXcodeCommandLineTools(): bool
     {
         if (! $this->isDarwin()) {
@@ -258,14 +281,32 @@ class ToolLocator
             return is_file($candidate) ? $candidate : null;
         }
 
+        if ($binary === 'gcloud') {
+            $profile = rtrim(self::hostProfile(true), '\\/');
+            $localAppData = rtrim((string) (getenv('LOCALAPPDATA') ?: ''), '\\/');
+            $programFilesX86 = rtrim((string) (getenv('ProgramFiles(x86)') ?: ''), '\\/');
+            $programFiles = rtrim((string) (getenv('ProgramFiles') ?: ''), '\\/');
+
+            foreach (array_filter([
+                $profile !== '' ? "{$profile}/google-cloud-sdk/bin/gcloud.cmd" : null,
+                $localAppData !== '' ? "{$localAppData}/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd" : null,
+                $programFilesX86 !== '' ? "{$programFilesX86}/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd" : null,
+                $programFiles !== '' ? "{$programFiles}/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd" : null,
+            ]) as $candidate) {
+                if (is_file($candidate)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        }
+
         $profile = rtrim(self::hostProfile(true), '\\/');
         if ($profile === '') {
             return null;
         }
 
-        $candidate = $binary === 'gcloud'
-            ? "{$profile}/google-cloud-sdk/bin/gcloud.cmd"
-            : "{$profile}/.larakube/bin/{$filename}";
+        $candidate = "{$profile}/.larakube/bin/{$filename}";
 
         return is_file($candidate) ? $candidate : null;
     }
@@ -403,7 +444,11 @@ class ToolLocator
      */
     private function isNativeWindowsPath(array $command): bool
     {
-        return preg_match('#^[A-Za-z]:[\\\\/]#', (string) ($command[0] ?? '')) === 1;
+        $binary = (string) ($command[0] ?? '');
+
+        return preg_match('#^[A-Za-z]:[\\\\/]#', $binary) === 1
+            || str_ends_with(strtolower($binary), '.exe')
+            || str_ends_with(strtolower($binary), '.cmd');
     }
 
     /**
@@ -490,6 +535,7 @@ class ToolLocator
         $dirs = array_values(array_filter([
             $profile !== '' ? "{$profile}\\.larakube\\bin" : null,
             $profile !== '' ? "{$profile}\\google-cloud-sdk\\bin" : null,
+            $localAppData !== '' ? "{$localAppData}\\Google\\Cloud SDK\\google-cloud-sdk\\bin" : null,
             $localAppData !== '' ? "{$localAppData}\\Programs\\Amazon\\AWSCLIV2" : null,
         ]));
 

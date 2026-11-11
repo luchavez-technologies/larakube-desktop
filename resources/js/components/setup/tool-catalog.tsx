@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { ArrowUpCircle, Download, RefreshCw } from 'lucide-react';
+import { ArrowUpCircle, Download, RefreshCw, RotateCw } from 'lucide-react';
 import Button from '@/components/button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import ProviderLogo from '@/components/provider-logo';
@@ -88,21 +88,62 @@ export function ToolRow({
                                 }
                                 detail={
                                     tool?.installed
-                                        ? (tool.version ??
-                                          // version check failed (see
-                                          // ReadinessCheck::version()'s
-                                          // diagnostic) — showing the
-                                          // install path here instead read
-                                          // as a garbled version string,
-                                          // confirmed live (2026-10-30) to
-                                          // read as broken/corrupted.
-                                          (tool.path ? (
-                                              <span title={tool.path}>
-                                                  Installed
-                                              </span>
-                                          ) : (
-                                              'Installed'
-                                          )))
+                                        ? tool.wsl
+                                            ? (() => {
+                                                  const hostLabel =
+                                                      tool.version ??
+                                                      'Installed';
+                                                  const wslLabel = tool.wsl
+                                                      .installed
+                                                      ? (tool.wsl.version ??
+                                                        'Installed')
+                                                      : 'Missing';
+                                                  const tooltip = [
+                                                      tool.path
+                                                          ? `Windows: ${tool.path}${tool.diagnostic ? ` (${tool.diagnostic})` : ''}`
+                                                          : null,
+                                                      tool.wsl.path
+                                                          ? `WSL: ${tool.wsl.path}${tool.wsl.diagnostic ? ` (${tool.wsl.diagnostic})` : ''}`
+                                                          : tool.wsl.diagnostic
+                                                            ? `WSL: ${tool.wsl.diagnostic}`
+                                                            : null,
+                                                  ]
+                                                      .filter(Boolean)
+                                                      .join('\n');
+
+                                                  return (
+                                                      <span
+                                                          title={
+                                                              tooltip ||
+                                                              undefined
+                                                          }
+                                                      >
+                                                          {`Desktop: ${hostLabel} · WSL: ${wslLabel}`}
+                                                      </span>
+                                                  );
+                                              })()
+                                            : (tool.version ??
+                                              // version check failed (see
+                                              // ReadinessCheck::version()'s
+                                              // diagnostic) — showing the
+                                              // install path here instead read
+                                              // as a garbled version string,
+                                              // confirmed live (2026-10-30) to
+                                              // read as broken/corrupted.
+                                              (tool.path || tool.diagnostic ? (
+                                                  <span
+                                                      title={
+                                                          tool.diagnostic
+                                                              ? `${tool.path ?? ''}${tool.path ? ' — ' : ''}${tool.diagnostic}`
+                                                              : (tool.path ??
+                                                                undefined)
+                                                      }
+                                                  >
+                                                      Installed
+                                                  </span>
+                                              ) : (
+                                                  'Installed'
+                                              )))
                                         : entry.purpose
                                 }
                                 mono={tool?.installed && tool.version != null}
@@ -256,11 +297,15 @@ function InstallAllButton({
     channel,
     showLocalOnly,
     onInstallingChange,
+    onCheckAgain,
+    checking = false,
 }: {
     catalog: CatalogEntry[];
     channel: string;
     showLocalOnly: boolean;
     onInstallingChange: (slug: string | null) => void;
+    onCheckAgain?: () => void;
+    checking?: boolean;
 }) {
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState<{
@@ -272,7 +317,7 @@ function InstallAllButton({
         (entry) => entry.installable && (showLocalOnly || !entry.localOnly),
     );
 
-    if (targets.length === 0) {
+    if (targets.length === 0 && !onCheckAgain) {
         return null;
     }
 
@@ -321,25 +366,41 @@ function InstallAllButton({
     };
 
     return (
-        <div className="mb-3 flex justify-end">
-            <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                disabled={running}
-                onClick={runAll}
-            >
-                {running ? (
-                    <RefreshCw className="size-3.5 animate-spin" />
-                ) : (
-                    <Download className="size-3.5" />
-                )}
-                <span>
-                    {running && progress
-                        ? `Installing… (${progress.done} of ${progress.total})`
-                        : 'Install everything'}
-                </span>
-            </Button>
+        <div className="mb-3 flex items-center justify-end gap-2">
+            {onCheckAgain && (
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={running || checking}
+                    onClick={onCheckAgain}
+                >
+                    <RotateCw
+                        className={cn('size-3.5', checking && 'animate-spin')}
+                    />
+                    <span>{checking ? 'Checking…' : 'Check again'}</span>
+                </Button>
+            )}
+            {targets.length > 0 && (
+                <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={running}
+                    onClick={runAll}
+                >
+                    {running ? (
+                        <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                        <Download className="size-3.5" />
+                    )}
+                    <span>
+                        {running && progress
+                            ? `Installing… (${progress.done} of ${progress.total})`
+                            : 'Install everything'}
+                    </span>
+                </Button>
+            )}
         </div>
     );
 }
@@ -351,12 +412,16 @@ export default function ToolCatalogList({
     refresh,
     showLocalOnly = true,
     highlight,
+    onCheckAgain,
+    checking = false,
 }: {
     catalog: CatalogEntry[];
     channel: string;
     refresh: number;
     showLocalOnly?: boolean;
     highlight?: string | null;
+    onCheckAgain?: () => void;
+    checking?: boolean;
 }) {
     const [installingSlug, setInstallingSlug] = useState<string | null>(null);
 
@@ -367,6 +432,8 @@ export default function ToolCatalogList({
                 channel={channel}
                 showLocalOnly={showLocalOnly}
                 onInstallingChange={setInstallingSlug}
+                onCheckAgain={onCheckAgain}
+                checking={checking}
             />
             {catalog
                 .filter((entry) => showLocalOnly || !entry.localOnly)

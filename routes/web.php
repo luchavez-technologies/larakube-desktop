@@ -86,6 +86,7 @@ Route::pattern('server', '[a-z0-9][a-z0-9-]*');
 Route::pattern('tool', '[a-z][a-z0-9-]*');
 
 Route::get('/servers/health', [ServerController::class, 'health'])->name('servers.health');
+Route::post('/servers/refresh', [ServerController::class, 'refresh'])->name('servers.refresh');
 Route::get('/servers/{server}', [ServerController::class, 'show'])->name('servers.show');
 Route::delete('/servers/{server}', [ServerController::class, 'destroy'])->name('servers.destroy');
 Route::post('/servers/{server}/restart', [ServerController::class, 'restart'])->name('servers.restart');

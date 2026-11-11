@@ -207,3 +207,30 @@ test('windows never asks the WSL distro when the WSL optional component itself i
 
     Process::assertNothingRan();
 });
+
+test('windows finds gcloud installed via Google official installer under LOCALAPPDATA and includes it in PATH', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $oldLocalAppData = getenv('LOCALAPPDATA');
+    $profileDir = sys_get_temp_dir().'/larakube-profile-'.bin2hex(random_bytes(6));
+    $localAppDataDir = sys_get_temp_dir().'/larakube-localappdata-'.bin2hex(random_bytes(6));
+    $gcloudBinDir = "{$localAppDataDir}/Google/Cloud SDK/google-cloud-sdk/bin";
+    mkdir($profileDir, 0777, true);
+    mkdir($gcloudBinDir, 0777, true);
+    file_put_contents("{$gcloudBinDir}/gcloud.cmd", '@echo off');
+
+    putenv("USERPROFILE={$profileDir}");
+    putenv("LOCALAPPDATA={$localAppDataDir}");
+    Process::fake();
+
+    try {
+        $locator = new ToolLocator(windows: true);
+        $isolated = $locator->isolate(['C:\\Users\\jamie\\.larakube\\bin\\larakube.exe', 'cloud:providers']);
+
+        expect($locator->find('gcloud'))->toBe("{$gcloudBinDir}/gcloud.cmd")
+            ->and($isolated['environment']['PATH'])->toContain("{$localAppDataDir}\\Google\\Cloud SDK\\google-cloud-sdk\\bin");
+        Process::assertNothingRan();
+    } finally {
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+        $oldLocalAppData === false ? putenv('LOCALAPPDATA') : putenv("LOCALAPPDATA={$oldLocalAppData}");
+    }
+});

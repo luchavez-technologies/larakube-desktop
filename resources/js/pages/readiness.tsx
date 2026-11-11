@@ -103,7 +103,12 @@ export default function Readiness({
                             onClick={() => {
                                 setRefresh((count) => count + 1);
                                 router.reload({
-                                    only: ['providers', 'wsl', 'localCluster'],
+                                    only: [
+                                        'providers',
+                                        'wsl',
+                                        'localCluster',
+                                        'versions',
+                                    ],
                                     data: { fresh: true },
                                 });
                             }}

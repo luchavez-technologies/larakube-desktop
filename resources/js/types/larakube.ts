@@ -8,6 +8,13 @@ export type Tool = {
     installed: boolean;
     path: string | null;
     version: string | null;
+    diagnostic?: string | null;
+    wsl?: {
+        installed: boolean;
+        path: string | null;
+        version: string | null;
+        diagnostic?: string | null;
+    };
 };
 
 export type PickerOption = { value: string; label: string };

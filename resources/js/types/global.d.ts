@@ -15,6 +15,8 @@ declare module '@inertiajs/core' {
             versions: {
                 desktop: string;
                 cli: string | null;
+                wslCli?: string | null;
+                hasWslCli?: boolean;
             };
             [key: string]: unknown;
         };

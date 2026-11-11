@@ -11,6 +11,7 @@ use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,6 +19,12 @@ class ReadinessController extends Controller
 {
     public function show(Request $request, ReadinessCheck $readiness, CliInstaller $installer, GlobalSettings $settings, LocalCluster $localCluster, Wsl $wsl, TerminalIntegration $terminal): Response
     {
+        if ($request->boolean('fresh')) {
+            $readiness->forget('larakube');
+            Cache::forget('readiness.providers.status');
+            Cache::forget('readiness.providers.full');
+        }
+
         $usage = $settings->get()['usage'];
 
         return Inertia::render('readiness', [

@@ -10,6 +10,7 @@ use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerBackupJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServersJob;
 use App\Jobs\Sync\SyncServerTlsJob;
 use App\Models\LocalClusterState;
 use App\Models\Project;
@@ -708,11 +709,27 @@ class ServerController extends Controller
         return response()->json($health->check($contexts))->header('Cache-Control', 'no-store');
     }
 
+    public function refresh(StackCatalog $catalog): RedirectResponse
+    {
+        $catalog->forget();
+        SyncServersJob::dispatchSync();
+
+        return back();
+    }
+
     public function destroy(DestroyServerRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
     {
         $stack = $catalog->find($server);
 
-        abort_if($stack === null, 404);
+        if ($stack === null) {
+            $staleServer = Server::where('name', $server)->first();
+            abort_if($staleServer === null, 404);
+
+            $staleServer->update(['status' => 'destroyed']);
+            $catalog->forget();
+
+            return to_route('servers.index')->with('success', "Removed stale server {$server}.");
+        }
 
         $run = $runner->start(
             label: "Destroy server {$server}",

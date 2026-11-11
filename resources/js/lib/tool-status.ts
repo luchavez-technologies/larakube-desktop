@@ -5,6 +5,12 @@ export type ToolStatus = {
     path: string | null;
     version: string | null;
     diagnostic?: string | null;
+    wsl?: {
+        installed: boolean;
+        path: string | null;
+        version: string | null;
+        diagnostic?: string | null;
+    };
 };
 
 const FRESH_FOR_MS = 15_000;

@@ -260,6 +260,16 @@ class RecordRunOutput
             SyncServersJob::dispatch();
         }
 
+        if ($run->kind === RunKind::ContextRemove) {
+            if ($status === RunStatus::Succeeded && $run->subject) {
+                Server::query()
+                    ->where('kind', 'discovered')
+                    ->where(fn ($q) => $q->where('context', $run->subject)->orWhere('name', $run->subject))
+                    ->update(['status' => 'missing']);
+            }
+            SyncServersJob::dispatch();
+        }
+
         if ($server !== null && $run->kind?->changesMail()) {
             // Deploying mail for the first time means the tool list itself doesn't
             // know about it yet; everything else already has an installed mail tool.

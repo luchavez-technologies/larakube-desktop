@@ -57,6 +57,13 @@ class Diagnostics
             ? ($cli['installed'] ? "{$cli['path']} ({$cli['version']})" : 'not found'.($cli['diagnostic'] ? " - {$cli['diagnostic']}" : ''))
             : "check failed: {$cli}");
 
+        if (is_array($cli) && is_array($cli['wsl'] ?? null)) {
+            $wslCli = $cli['wsl'];
+            $sections[] = 'LaraKube CLI (WSL): '.($wslCli['installed']
+                ? "{$wslCli['path']} ({$wslCli['version']})"
+                : 'not found'.($wslCli['diagnostic'] ? " - {$wslCli['diagnostic']}" : ''));
+        }
+
         $failed = Run::query()->where('status', RunStatus::Failed)->latest('id')->limit(3)->get();
         $sections[] = $failed->isEmpty()
             ? 'Recent failed runs: none'

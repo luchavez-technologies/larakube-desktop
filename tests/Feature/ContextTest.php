@@ -2,10 +2,12 @@
 
 use App\Enums\RunKind;
 use App\Models\Run;
+use App\Models\Server;
 use App\Services\FilePicker;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Native\Desktop\Facades\ChildProcess;
 
 function contextSandbox(): array
@@ -139,6 +141,32 @@ test('context remove runs context:remove with force', function () {
         $bin, 'context:remove', 'old-cluster', '--force', '--no-interaction',
     ]);
     expect(Run::sole()->kind)->toBe(RunKind::ContextRemove);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('context remove clears a stale discovered server directly when its context no longer exists in kubeconfig', function () {
+    $sandbox = contextSandbox();
+    $fake = ChildProcess::fake();
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => []])),
+        '*kubectl*config*view*' => Process::result(output: json_encode(['current-context' => '', 'contexts' => [], 'clusters' => []])),
+    ]);
+
+    Server::create([
+        'name' => 'k3s-larakube',
+        'provider' => 'local',
+        'kind' => 'discovered',
+        'context' => 'k3s-larakube',
+        'status' => 'ready',
+    ]);
+
+    $this->post(route('context.remove'), ['context' => 'k3s-larakube'])->assertRedirect();
+
+    expect($fake->starts)->toBe([])
+        ->and(Server::where('name', 'k3s-larakube')->exists())->toBeFalse()
+        ->and(Server::withMissing()->where('name', 'k3s-larakube')->value('status'))->toBe('missing');
 
     File::deleteDirectory($sandbox['home']);
 });

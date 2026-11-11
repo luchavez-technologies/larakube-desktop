@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
+use App\Models\Server;
 use App\Services\FilePicker;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -122,13 +124,29 @@ class ContextController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function remove(Request $request, CliRunner $runner): RedirectResponse
+    public function remove(Request $request, CliRunner $runner, StackCatalog $catalog): RedirectResponse
     {
         $validated = $request->validate([
             'context' => ['required', 'string'],
         ]);
 
         $context = $validated['context'];
+
+        // If the discovered cluster is a stale SQLite leftover (e.g. from an
+        // uninstalled WSL distro) that is no longer present in the live
+        // kubeconfig/stack catalog, mark it missing immediately without
+        // failing on a missing local kubeconfig entry.
+        $staleDiscovered = Server::query()
+            ->where('kind', 'discovered')
+            ->where(fn ($q) => $q->where('context', $context)->orWhere('name', $context))
+            ->first();
+
+        if ($staleDiscovered !== null && $catalog->find($staleDiscovered->name) === null && $catalog->find($context) === null) {
+            $staleDiscovered->update(['status' => 'missing']);
+            $catalog->forget();
+
+            return back()->with('success', "Removed stale cluster {$staleDiscovered->name}.");
+        }
 
         $run = $runner->start(
             label: "Remove Context {$context}",

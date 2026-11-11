@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Deferred, Head, Link, Form, usePage } from '@inertiajs/react';
+import { Deferred, Head, Link, Form, router, usePage } from '@inertiajs/react';
 import {
     Plus,
     ChevronRight,
     FileUp,
     FolderOpen,
+    RotateCw,
     UploadCloud,
     CheckCircle2,
     X,
@@ -17,6 +18,7 @@ import { ServerActions } from '@/components/server-dialogs';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
 import { getServerStatusBadge, serverEndpointLabel } from '@/lib/servers';
+import { cn } from '@/lib/utils';
 import { create, show } from '@/routes/servers';
 import { providerLabels } from '@/types/larakube';
 import type { Server } from '@/types/larakube';
@@ -29,6 +31,21 @@ export default function ServersIndex({
     const { hideProjects } = usePage<{ hideProjects?: boolean }>().props;
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [showImport, setShowImport] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const handleRefresh = () => {
+        setRefreshing(true);
+        router.post(
+            '/servers/refresh',
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+                only: ['servers'],
+                onFinish: () => setRefreshing(false),
+            },
+        );
+    };
 
     useEffect(() => {
         const saved = localStorage.getItem('larakube_view_mode_servers');
@@ -97,6 +114,20 @@ export default function ServersIndex({
                         mode={viewMode}
                         onChange={handleViewModeChange}
                     />
+                    <Button
+                        variant="secondary"
+                        disabled={refreshing}
+                        onClick={handleRefresh}
+                        className="gap-2"
+                    >
+                        <RotateCw
+                            className={cn(
+                                'size-4',
+                                refreshing && 'animate-spin',
+                            )}
+                        />
+                        <span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+                    </Button>
                     <Button
                         variant="secondary"
                         onClick={() => setShowImport(true)}

@@ -3,6 +3,8 @@
 use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
 test('the report gathers versions, the CLI, failed runs and the log, and removes secrets', function () {
@@ -38,4 +40,35 @@ test('the report includes the end of the Desktop program log when there is one',
 
     expect($report)->toContain('failed to start within timeout period')
         ->toContain("Data folder: {$data}");
+});
+
+test('the diagnostics report includes both Windows host and WSL CLI versions when larakube-ubuntu exists', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $profile = sys_get_temp_dir().'/larakube-diag-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    file_put_contents($profile.'/.larakube/bin/larakube.exe', 'fake-exe');
+    putenv("USERPROFILE={$profile}");
+
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
+
+    Process::fake([
+        '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"),
+        '*which*larakube*' => Process::result(output: "/usr/local/bin/larakube\n"),
+        '*wsl.exe*--version*' => Process::result(output: "LaraKube v0.41.0\n"),
+        '*larakube.exe*--version*' => Process::result(output: "LaraKube v0.42.0\n"),
+        '*' => Process::result(output: ''),
+    ]);
+
+    try {
+        $report = $this->getJson('/diagnostics')->assertOk()->json('report');
+
+        expect($report)
+            ->toContain('LaraKube CLI: ')
+            ->toContain('LaraKube v0.42.0')
+            ->toContain('LaraKube CLI (WSL): /usr/local/bin/larakube (LaraKube v0.41.0)');
+    } finally {
+        File::deleteDirectory($profile);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+    }
 });

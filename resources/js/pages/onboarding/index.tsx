@@ -8,8 +8,8 @@ import {
     Download,
     Globe,
     PartyPopper,
-    RefreshCw,
     Rocket,
+    RotateCw,
     Server,
     Sparkles,
     Wrench,
@@ -295,10 +295,21 @@ export default function OnboardingIndex({
         useState<string[]>(intendedProviders);
     const [savingProviders, setSavingProviders] = useState(false);
     const [refresh, setRefresh] = useState(0);
+    const [rechecking, setRechecking] = useState(false);
     const [selectedChannel, setSelectedChannel] = useState(cliChannel);
     const [finishing, setFinishing] = useState(false);
     const direction = useRef(1);
     const celebrated = useRef(false);
+
+    const triggerRecheck = () => {
+        setRechecking(true);
+        setRefresh((count) => count + 1);
+        router.reload({
+            only: ['wsl', 'versions'],
+            data: { fresh: true },
+            onFinish: () => setRechecking(false),
+        });
+    };
 
     const cli = useToolStatus('larakube', refresh);
     const cliMissing = cli.status?.installed === false;
@@ -716,14 +727,21 @@ export default function OnboardingIndex({
                                                 type="button"
                                                 variant="secondary"
                                                 size="sm"
-                                                onClick={() =>
-                                                    setRefresh(
-                                                        (count) => count + 1,
-                                                    )
-                                                }
+                                                disabled={rechecking}
+                                                onClick={triggerRecheck}
                                             >
-                                                <RefreshCw className="size-3.5" />
-                                                <span>Check again</span>
+                                                <RotateCw
+                                                    className={cn(
+                                                        'size-3.5',
+                                                        rechecking &&
+                                                            'animate-spin',
+                                                    )}
+                                                />
+                                                <span>
+                                                    {rechecking
+                                                        ? 'Checking…'
+                                                        : 'Check again'}
+                                                </span>
                                             </Button>
                                         )}
                                     </div>
@@ -787,30 +805,14 @@ export default function OnboardingIndex({
                                             onChannelChange={setSelectedChannel}
                                         />
                                     ) : (
-                                        <Card
-                                            label="Command-line tools"
-                                            action={
-                                                <Button
-                                                    type="button"
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        setRefresh(
-                                                            (count) =>
-                                                                count + 1,
-                                                        )
-                                                    }
-                                                >
-                                                    <RefreshCw className="size-3.5" />
-                                                    <span>Check again</span>
-                                                </Button>
-                                            }
-                                        >
+                                        <Card label="Command-line tools">
                                             <ToolCatalogList
                                                 catalog={catalog}
                                                 channel={selectedChannel}
                                                 refresh={refresh}
                                                 showLocalOnly={usage === 'apps'}
+                                                onCheckAgain={triggerRecheck}
+                                                checking={rechecking}
                                             />
                                         </Card>
                                     )}

@@ -228,6 +228,8 @@ export default function AppLayout({
         versions?: {
             desktop: string;
             cli: string | null;
+            wslCli?: string | null;
+            hasWslCli?: boolean;
             channel?: 'canary' | 'stable';
             cliDetectedChannel?: string | null;
             cliChannelMismatch?: boolean;
@@ -237,6 +239,14 @@ export default function AppLayout({
     const demoMode = Boolean(props.demoMode);
     const channel = props.versions?.channel ?? 'canary';
     const cliChannelMismatch = Boolean(props.versions?.cliChannelMismatch);
+    const hasWslCli = Boolean(props.versions?.hasWslCli);
+    const formatCliVersion = (ver: string | null | undefined) =>
+        ver ? (ver.startsWith('v') ? ver : `v${ver}`) : '—';
+    const wslCliMismatch =
+        hasWslCli &&
+        Boolean(props.versions?.cli) &&
+        Boolean(props.versions?.wslCli) &&
+        props.versions?.cli !== props.versions?.wslCli;
 
     const toggleDemoMode = () => {
         router.post(
@@ -347,7 +357,7 @@ export default function AppLayout({
                             type="button"
                             onClick={toggleSidebar}
                             className="cursor-pointer rounded-lg p-0.5 transition-transform hover:scale-105 active:scale-95"
-                            title={`LaraKube\nDesktop v${props.versions?.desktop ?? '1.0.0'}\nCLI ${props.versions?.cli ? (props.versions.cli.startsWith('v') ? props.versions.cli : `v${props.versions.cli}`) : '—'}\n\n(Click to expand · ⌘B)`}
+                            title={`LaraKube\nDesktop v${props.versions?.desktop ?? '1.0.0'}\n${hasWslCli ? `Windows CLI ${formatCliVersion(props.versions?.cli)}\nWSL CLI ${formatCliVersion(props.versions?.wslCli)}` : `CLI ${formatCliVersion(props.versions?.cli)}`}\n\n(Click to expand · ⌘B)`}
                             aria-label="Expand sidebar"
                         >
                             <img
@@ -393,16 +403,12 @@ export default function AppLayout({
                                     title={
                                         cliChannelMismatch
                                             ? `CLI version (${props.versions?.cli ?? '—'}) does not match the ${channel} channel. Click Settings to sync.`
-                                            : `CLI ${props.versions?.cli ? (props.versions.cli.startsWith('v') ? props.versions.cli : `v${props.versions.cli}`) : '—'}`
+                                            : `${hasWslCli ? 'Windows CLI' : 'CLI'} ${formatCliVersion(props.versions?.cli)}`
                                     }
                                 >
                                     <span>
-                                        CLI{' '}
-                                        {props.versions?.cli
-                                            ? props.versions.cli.startsWith('v')
-                                                ? props.versions.cli
-                                                : `v${props.versions.cli}`
-                                            : '—'}
+                                        {hasWslCli ? 'Win CLI' : 'CLI'}{' '}
+                                        {formatCliVersion(props.versions?.cli)}
                                     </span>
                                     {cliChannelMismatch && (
                                         <Link
@@ -414,6 +420,32 @@ export default function AppLayout({
                                         </Link>
                                     )}
                                 </span>
+                                {hasWslCli && (
+                                    <span
+                                        className="flex items-center gap-1 truncate font-mono text-[10px] text-faint"
+                                        title={
+                                            wslCliMismatch
+                                                ? `WSL CLI (${formatCliVersion(props.versions?.wslCli)}) differs from Windows CLI (${formatCliVersion(props.versions?.cli)}).`
+                                                : `WSL CLI ${formatCliVersion(props.versions?.wslCli)}`
+                                        }
+                                    >
+                                        <span>
+                                            WSL CLI{' '}
+                                            {formatCliVersion(
+                                                props.versions?.wslCli,
+                                            )}
+                                        </span>
+                                        {wslCliMismatch && (
+                                            <Link
+                                                href="/settings"
+                                                className="inline-flex items-center text-amber-500 hover:text-amber-400"
+                                                title={`WSL CLI (${formatCliVersion(props.versions?.wslCli)}) differs from Windows CLI (${formatCliVersion(props.versions?.cli)}) — click to sync`}
+                                            >
+                                                <AlertTriangle className="size-3 shrink-0" />
+                                            </Link>
+                                        )}
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-0.5 pt-0.5">

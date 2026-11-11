@@ -230,6 +230,49 @@ test('destroying a server the CLI does not know is a 404 and runs nothing', func
     File::deleteDirectory($bin);
 });
 
+test('destroying a stale SQLite server no longer known to the CLI marks it destroyed cleanly without 404', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks([]);
+    $fake = ChildProcess::fake();
+
+    Server::create([
+        'name' => 'hello-windows',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'ip' => '34.143.225.191',
+        'status' => 'incomplete',
+    ]);
+
+    $this->delete(route('servers.destroy', 'hello-windows'), ['confirm' => 'hello-windows'])
+        ->assertRedirect(route('servers.index'));
+
+    expect($fake->starts)->toBe([])
+        ->and(Server::where('name', 'hello-windows')->exists())->toBeFalse()
+        ->and(Server::withMissing()->where('name', 'hello-windows')->value('status'))->toBe('destroyed');
+
+    File::deleteDirectory($bin);
+});
+
+test('refreshing servers resyncs against the CLI and marks disappeared WSL leftovers as missing', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks([]);
+
+    Server::create([
+        'name' => 'k3s-larakube',
+        'provider' => 'local',
+        'kind' => 'discovered',
+        'context' => 'k3s-larakube',
+        'status' => 'ready',
+    ]);
+
+    $this->post(route('servers.refresh'))->assertRedirect();
+
+    expect(Server::where('name', 'k3s-larakube')->exists())->toBeFalse()
+        ->and(Server::withMissing()->where('name', 'k3s-larakube')->value('status'))->toBe('missing');
+
+    File::deleteDirectory($bin);
+});
+
 test('activity lists runs newest first', function () {
     Run::create(['label' => 'Create server one', 'kind' => RunKind::CreateServer, 'subject' => 'one', 'command' => ['larakube']]);
     Run::create(['label' => 'Destroy server one', 'kind' => RunKind::DestroyServer, 'subject' => 'one', 'command' => ['larakube']]);

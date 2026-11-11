@@ -5,6 +5,7 @@ namespace App\Services\LaraKube;
 use App\Models\CloudProvider;
 use App\Models\CloudRegion;
 use App\Models\CloudSize;
+use App\Services\Wsl;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -98,7 +99,7 @@ class ReadinessCheck
      * One tool's state on this computer. Remembered for a few minutes, because
      * running `--version` on every tool is what made the Setup page slow.
      *
-     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string}
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, wsl?: array{installed: bool, path: ?string, version: ?string, diagnostic: ?string}}
      */
     public function status(string $slug, bool $fresh = false): array
     {
@@ -108,17 +109,99 @@ class ReadinessCheck
             Cache::forget($key);
         }
 
-        return Cache::remember($key, now()->addMinutes(5), function () use ($slug): array {
+        $cached = Cache::get($key);
+        $result = null;
+
+        if (is_array($cached) && is_bool($cached['installed'] ?? null)) {
+            $result = [
+                'installed' => $cached['installed'],
+                'path' => is_string($cached['path'] ?? null) ? $cached['path'] : null,
+                'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
+                'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
+            ];
+        } else {
             $path = $this->locator->find($slug);
 
             if ($path === null) {
-                return ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $this->locator->lastFailure()];
+                $result = ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $this->locator->lastFailure()];
+                Cache::put($key, $result, now()->addMinutes(5));
+            } else {
+                ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, self::TOOLS[$slug]['versionArgs']);
+                $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
+
+                // Do not cache a failed version probe (e.g. cold Windows Defender scan
+                // timing out on first launch) for 5 minutes — otherwise the sidebar
+                // stays stuck at "CLI —" even once the binary starts answering.
+                if ($version !== null) {
+                    Cache::put($key, $result, now()->addMinutes(5));
+                }
             }
+        }
 
-            ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, self::TOOLS[$slug]['versionArgs']);
+        if ($slug === 'larakube') {
+            $wsl = $this->wslCliStatus($fresh);
+            if ($wsl !== null) {
+                $result['wsl'] = $wsl;
+            }
+        }
 
-            return ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
-        });
+        return $result;
+    }
+
+    /**
+     * Status of the LaraKube CLI inside the bundled `larakube-ubuntu` WSL distro
+     * on Windows, or null when not on Windows or when WSL / `larakube-ubuntu` does
+     * not exist (never invoking `wsl.exe` when the WSL feature is off).
+     *
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string}|null
+     */
+    public function wslCliStatus(bool $fresh = false): ?array
+    {
+        if (! $this->locator->isWindows() || $this->locator->hasExplicitDirectories()) {
+            return null;
+        }
+
+        if (! $this->locator->wslFeatureEnabled()) {
+            return null;
+        }
+
+        $key = 'readiness.tool.larakube.wsl';
+
+        if ($fresh) {
+            Cache::forget($key);
+        }
+
+        $cached = Cache::get($key);
+        if (is_array($cached) && is_bool($cached['installed'] ?? null)) {
+            return [
+                'installed' => $cached['installed'],
+                'path' => is_string($cached['path'] ?? null) ? $cached['path'] : null,
+                'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
+                'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
+            ];
+        }
+
+        $wsl = new Wsl(windows: true, featureEnabled: true);
+        if ($wsl->distro() === null) {
+            return null;
+        }
+
+        $path = $this->locator->findInWslDistro('larakube');
+        if ($path === null) {
+            $result = ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $this->locator->lastFailure()];
+            Cache::put($key, $result, now()->addMinutes(5));
+
+            return $result;
+        }
+
+        ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, self::TOOLS['larakube']['versionArgs']);
+        $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
+
+        if ($version !== null) {
+            Cache::put($key, $result, now()->addMinutes(5));
+        }
+
+        return $result;
     }
 
     /** Forget what is remembered about one tool, or all of them, after something installed. */
@@ -128,6 +211,10 @@ class ReadinessCheck
             Cache::forget('readiness.providers');
             Cache::forget('readiness.providers.status');
             Cache::forget('readiness.providers.full');
+        }
+
+        if ($slug === null || $slug === 'larakube') {
+            Cache::forget('readiness.tool.larakube.wsl');
         }
 
         foreach ($slug !== null ? [$slug] : array_keys(self::TOOLS) as $tool) {
@@ -433,7 +520,8 @@ class ReadinessCheck
 
         try {
             $result = Process::env($isolated['environment'])
-                ->timeout(20)
+                ->path($isolated['cwd'] ?? sys_get_temp_dir())
+                ->timeout(30)
                 ->run($isolated['command']);
         } catch (ProcessTimedOutException) {
             return ['version' => null, 'diagnostic' => 'Timed out running '.implode(' ', $arguments).'.'];
