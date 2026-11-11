@@ -150,10 +150,11 @@ function TrackedRun({
     useEffect(() => {
         if (wasRunning.current && stream.status !== 'running') {
             onFinished(seed.id);
-            if (
-                stream.kind === 'install-tool' ||
-                stream.kind === 'setup-local'
-            ) {
+            if (stream.kind === 'install-tool') {
+                // subject is the tool's own slug (ToolInstallController) — no
+                // reason for every other row to recheck itself too.
+                forgetToolStatus(stream.subject ?? undefined);
+            } else if (stream.kind === 'setup-local') {
                 forgetToolStatus();
             }
             router.reload();

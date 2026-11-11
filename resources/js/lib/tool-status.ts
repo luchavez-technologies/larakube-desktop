@@ -45,13 +45,25 @@ export function toolIsInstalled(slug: string): Promise<boolean> {
         .catch(() => false);
 }
 
-type Listener = () => void;
+type Listener = (slug?: string) => void;
 const listeners = new Set<Listener>();
 
-/** Drops every remembered result, for when something changed what the checks would find. */
-export function forgetToolStatus() {
-    known.clear();
-    listeners.forEach((listener) => listener());
+/**
+ * Drops a remembered result, for when something changed what its check would
+ * find. Pass a slug to drop just that one tool — e.g. after installing it,
+ * nothing about every OTHER row's status changed, so there's no reason for
+ * the whole list to recheck itself each time one row finishes. Omit it to
+ * drop everything (a Desktop update, a WSL change — something that could
+ * plausibly affect any tool at once).
+ */
+export function forgetToolStatus(slug?: string) {
+    if (slug) {
+        known.delete(slug);
+    } else {
+        known.clear();
+    }
+
+    listeners.forEach((listener) => listener(slug));
 }
 
 /**
@@ -91,8 +103,10 @@ export function useToolStatus(slug: string, refresh = 0) {
     }, [slug, refresh, check]);
 
     useEffect(() => {
-        const onForget = () => {
-            check(true);
+        const onForget = (forgottenSlug?: string) => {
+            if (forgottenSlug === undefined || forgottenSlug === slug) {
+                check(true);
+            }
         };
 
         listeners.add(onForget);

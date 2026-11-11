@@ -8,6 +8,7 @@ import {
     Download,
     Globe,
     PartyPopper,
+    RefreshCw,
     Rocket,
     Server,
     Sparkles,
@@ -713,7 +714,7 @@ export default function OnboardingIndex({
                                             // the CLI by hand.
                                             <Button
                                                 type="button"
-                                                variant="ghost"
+                                                variant="secondary"
                                                 size="sm"
                                                 onClick={() =>
                                                     setRefresh(
@@ -721,7 +722,8 @@ export default function OnboardingIndex({
                                                     )
                                                 }
                                             >
-                                                Check again
+                                                <RefreshCw className="size-3.5" />
+                                                <span>Check again</span>
                                             </Button>
                                         )}
                                     </div>
@@ -790,7 +792,7 @@ export default function OnboardingIndex({
                                             action={
                                                 <Button
                                                     type="button"
-                                                    variant="ghost"
+                                                    variant="secondary"
                                                     size="sm"
                                                     onClick={() =>
                                                         setRefresh(
@@ -799,7 +801,8 @@ export default function OnboardingIndex({
                                                         )
                                                     }
                                                 >
-                                                    Check again
+                                                    <RefreshCw className="size-3.5" />
+                                                    <span>Check again</span>
                                                 </Button>
                                             }
                                         >

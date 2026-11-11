@@ -130,7 +130,7 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
             preserveState: true,
             only: ['activeRuns'],
             onSuccess: () => {
-                forgetToolStatus();
+                forgetToolStatus(tool.slug);
             },
             onFinish: () => {
                 setSubmitting(false);
@@ -311,7 +311,7 @@ function InstallAllButton({
                 await waitForRunToFinish(runId);
             }
 
-            forgetToolStatus();
+            forgetToolStatus(entry.slug);
             setProgress({ done: index + 1, total: targets.length });
         }
 
