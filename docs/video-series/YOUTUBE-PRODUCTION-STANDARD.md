@@ -1,6 +1,6 @@
 # LaraKube Desktop YouTube Series: Production Standard
 
-Captioned, no-narration demo series for non-developers. Title pattern: "LaraKube Desktop: [what it does]." One episode per Cluster Tool (20+ planned). This doc is the durable reference — read it before starting a new episode's thumbnail or edit, instead of re-deriving the format from scratch.
+Voiced-over demo series for non-developers, with captions that call out new terminology as it's spoken. Title pattern: "LaraKube Desktop: [what it does]." One episode per Cluster Tool (20+ planned). This doc is the durable reference — read it before starting a new episode's thumbnail or edit, instead of re-deriving the format from scratch.
 
 ## Canonical thumbnails (source of truth — copy the template, don't reinvent it)
 
@@ -34,13 +34,20 @@ All three are the _same_ `index.html` template with only the brand-mark image, e
 4. Copy the Ep.3 artifact's `index.html` as the base, swap only: ep-tag, badge, headline, subline, callout text, and `card.png`. Reuse `logo.png` (`desktop/public/icon.png`) unchanged.
 5. Publish with `publish_files`, `mode: "replace"`, as a _new_ artifact (title `LaraKube Desktop Ep.N Thumbnail`) — don't overwrite a prior episode's artifact.
 
-## Video structure (captions, no narration)
+## Voiceover
 
-1. **Intro contrast beat** (~0–18s): two real competitor/landscape pages (e.g. a paid SaaS pricing page, then the open-source tool's landing page), each with one caption naming the actual contrast (price, ownership, simplicity — never a misleading or fabricated number). Caption each half separately; don't leave either half silent.
-2. **Desktop Quick Launch flow**: captions on each meaningful step (app picker, cluster picker, DNS/SSL auto-config, standalone/config callouts, deploy-in-progress). A 4x speed region covers any real wait (e.g. deploy polling) rather than cutting it.
-3. **Browser tour**: live credentials reveal caption, login prompt caption, final "you're in" caption covering the admin UI tour.
-4. Re-verify every caption's placement with `getFrames` after any trim/crop — if the user is editing the same OpenScreen project live in parallel, timeline boundaries shift and captions must be re-checked, not assumed.
-5. Export is reserved for the user — never call `exportVideo` or claim the clip is exported.
+- **Voice:** James Carlo (the creator's own cloned ElevenLabs voice), voice_id `MygA9aaydxOchycGVIMI`. Never substitute a stock/premade ElevenLabs voice for narration — if that voice isn't available, stop and ask rather than picking a stand-in.
+- **Model:** `eleven_v4` (see the `text-to-speech` ElevenLabs skill for the API shape). Generate one audio file per narration beat, not one monolithic file for the whole episode — each beat is placed as its own `voiceover`-lane audio track in OpenScreen, timed to the step it narrates.
+- **Script = caption.** Write the narration beat first, in plain spoken language explaining what's happening and why it matters to a non-developer, then reuse that same sentence (lightly trimmed for screen) as its caption — they are not two different texts.
+- Export is reserved for the user — never call `exportVideo` or claim the clip is exported. Generating/importing voiceover audio is fine; rendering the final video is not.
+
+## Video structure (voiceover + matching big captions)
+
+1. **Intro contrast beat** (~0–18s): two real competitor/landscape pages (e.g. a paid SaaS pricing page, then the open-source tool's landing page), narrated with the actual contrast (price, ownership, simplicity — never a misleading or fabricated number).
+2. **Desktop Quick Launch flow**: narrate each meaningful step (app picker, cluster picker, DNS/SSL auto-config, standalone/config callouts, deploy-in-progress). A speed region covers any real wait that outlasts the narration for that step (e.g. deploy polling) rather than cutting it — size the region so the step's voiceover still finishes inside its real-time span; don't speed up a span while its own narration is still playing.
+3. **Browser tour**: narrate the live credentials reveal, the login prompt, and the final "you're in" walkthrough of the admin UI.
+4. **Captions are big and run the voiceover's own sentence, not a short jargon-only tag.** Bottom-third placement (`x: 50, y: 90`), near-full frame width, bold white text on a `rgba(0, 0, 0, 0.85)` plate, `fade` animation — let the box auto-fit its font size to the text length (OpenScreen clamps it to stay inside the frame; don't force a fixed size). Span the caption over the exact same `startSec`–`endSec` as its voiceover audio track, not a sub-span.
+5. Re-verify every caption's and audio track's placement with `getFrames` after any trim/crop/speed change — if the user is editing the same OpenScreen project live in parallel, timeline boundaries shift and both must be re-checked, not assumed.
 
 ## YouTube metadata format
 
