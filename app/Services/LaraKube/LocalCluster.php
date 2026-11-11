@@ -234,7 +234,7 @@ class LocalCluster
      * labeled `app.kubernetes.io/name=traefik`) so "ready" here means the
      * same thing it means to `larakube setup`'s own idempotency guard.
      */
-    private function isProvisioned(string $kubectl, string $context): bool
+    public function isProvisioned(string $kubectl, string $context): bool
     {
         $named = $this->locator->isolate([$kubectl, 'get', 'svc', '-n', 'traefik', 'traefik', "--context={$context}", '-o', 'name']);
         $namedResult = Process::env($named['environment'])->timeout(3)->run($named['command']);

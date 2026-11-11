@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\LaraKube\KubeconfigDiscovery;
+use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
@@ -31,18 +32,50 @@ test('kubeconfig discovery discovers external clusters from kubectl config view'
 
     Process::fake([
         '*kubectl*config*view*-o*json*' => Process::result(output: json_encode($fakeKubeconfig)),
+        '*get*svc*-n*traefik*traefik*' => Process::result(output: 'service/traefik'),
     ]);
 
-    $discovery = new KubeconfigDiscovery($locator);
+    $discovery = new KubeconfigDiscovery($locator, new LocalCluster($locator));
     $discovered = $discovery->discover(['existing-stack']);
 
     expect($discovered)->toHaveCount(2)
         ->and($discovered[0]['name'])->toBe('orbstack')
         ->and($discovered[0]['provider'])->toBe('orbstack')
         ->and($discovered[0]['kind'])->toBe('discovered')
+        ->and($discovered[0]['status'])->toBe('ready')
         ->and($discovered[0]['isCurrent'])->toBeTrue()
         ->and($discovered[1]['name'])->toBe('minikube')
         ->and($discovered[1]['provider'])->toBe('minikube');
+
+    File::deleteDirectory($dir);
+});
+
+test('a discovered local cluster with no Traefik on it yet is reported incomplete, not ready', function () {
+    $dir = storage_path('framework/testing/bin-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($dir);
+    File::put("{$dir}/kubectl", "#!/bin/sh\nexit 0\n");
+    chmod("{$dir}/kubectl", 0755);
+
+    $locator = new ToolLocator([$dir]);
+    app()->instance(ToolLocator::class, $locator);
+
+    Process::fake([
+        '*kubectl*config*view*-o*json*' => Process::result(output: json_encode([
+            'current-context' => 'orbstack',
+            'contexts' => [['name' => 'orbstack', 'context' => ['cluster' => 'orbstack']]],
+            'clusters' => [['name' => 'orbstack', 'cluster' => ['server' => 'https://127.0.0.1:26443']]],
+        ])),
+        // Neither the named nor the labelled Traefik lookup finds anything —
+        // a bare, freshly-enabled OrbStack cluster nobody has run setup on.
+        '*get*svc*' => Process::result(output: '', exitCode: 1),
+    ]);
+
+    $discovery = new KubeconfigDiscovery($locator, new LocalCluster($locator));
+    $discovered = $discovery->discover();
+
+    expect($discovered)->toHaveCount(1)
+        ->and($discovered[0]['name'])->toBe('orbstack')
+        ->and($discovered[0]['status'])->toBe('incomplete');
 
     File::deleteDirectory($dir);
 });
@@ -75,6 +108,7 @@ test('stack catalog includes both provisioned stacks and discovered clusters', f
                 ['name' => 'orbstack', 'cluster' => ['server' => 'https://127.0.0.1:26443']],
             ],
         ])),
+        '*get*svc*-n*traefik*traefik*' => Process::result(output: 'service/traefik'),
     ]);
 
     $catalog = new StackCatalog($locator);

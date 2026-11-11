@@ -25,8 +25,10 @@ class StackCatalog
     public function __construct(
         private ToolLocator $locator,
         private ?KubeconfigDiscovery $discovery = null,
+        private ?LocalCluster $localCluster = null,
     ) {
-        $this->discovery ??= new KubeconfigDiscovery($this->locator);
+        $this->localCluster ??= new LocalCluster($this->locator);
+        $this->discovery ??= new KubeconfigDiscovery($this->locator, $this->localCluster);
     }
 
     /** Forget cached stacks, e.g. after creating, deleting, or updating a server. */

@@ -7,7 +7,7 @@ use Throwable;
 
 class KubeconfigDiscovery
 {
-    public function __construct(private ToolLocator $locator) {}
+    public function __construct(private ToolLocator $locator, private LocalCluster $localCluster) {}
 
     /**
      * Discover all clusters/contexts from local ~/.kube/config that are not
@@ -62,6 +62,17 @@ class KubeconfigDiscovery
                 $ip = $this->extractIp($serverUrl);
                 $isLocal = str_contains($serverUrl, '127.0.0.1') || str_contains($serverUrl, 'localhost') || $provider === 'orbstack' || $provider === 'docker';
 
+                // For a local cluster (OrbStack, Docker Desktop, ...) "ready"
+                // means LaraKube actually set it up (Traefik present), not
+                // just that it answers kubectl — a bare, freshly-enabled
+                // OrbStack cluster is reachable long before anyone runs
+                // `setup` on it. A remote discovered cluster (an imported
+                // kubeconfig) was never LaraKube's to provision, so it keeps
+                // the simple "it's in your kubeconfig" status instead.
+                $status = $isLocal && ! $this->localCluster->isProvisioned($kubectl, $contextName)
+                    ? 'incomplete'
+                    : 'ready';
+
                 $discovered[] = [
                     'name' => $contextName,
                     'provider' => $provider,
@@ -69,7 +80,7 @@ class KubeconfigDiscovery
                     'region' => $isLocal ? 'local' : 'remote',
                     'ip' => $ip,
                     'context' => $contextName,
-                    'status' => 'ready',
+                    'status' => $status,
                     'isCurrent' => $contextName === $currentContext,
                 ];
             }

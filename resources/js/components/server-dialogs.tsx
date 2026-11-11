@@ -1,4 +1,4 @@
-import { Form } from '@inertiajs/react';
+import { Form, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -14,6 +14,7 @@ import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import { remove as removeContext } from '@/routes/context';
 import { destroy, repair, resize, restart } from '@/routes/servers';
+import { isLocalServer } from '@/lib/servers';
 import { providerLabels } from '@/types/larakube';
 import type { Provider, Server } from '@/types/larakube';
 
@@ -353,8 +354,27 @@ export function ServerActions({
     const canRestart =
         made && server.kind === 'vps' && server.status === 'ready';
     const stale = !made && reachable === false;
+    // A discovered cluster LaraKube found but never provisioned — typically
+    // an existing OrbStack/Docker Desktop install with no Traefik on it yet.
+    // KubeconfigDiscovery reports this as 'incomplete', the same status a
+    // half-finished cloud create uses.
+    const needsSetup =
+        !made &&
+        !stale &&
+        isLocalServer(server) &&
+        server.status === 'incomplete';
 
-    if (!made && !stale) {
+    const setUp = () => {
+        if (
+            window.confirm(
+                `This sets up ${server.name} (already running) for LaraKube — ingress and local DNS, nothing about ${server.name} itself is reinstalled or reconfigured. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?`,
+            )
+        ) {
+            router.post('/setup/local');
+        }
+    };
+
+    if (!made && !stale && !needsSetup) {
         return null;
     }
 
@@ -368,6 +388,17 @@ export function ServerActions({
                 role="group"
                 aria-label={`Quick actions for ${server.name}`}
             >
+                {needsSetup && (
+                    <button
+                        type="button"
+                        onClick={setUp}
+                        title="Set up: add Traefik ingress and local DNS so LaraKube can deploy onto this cluster"
+                        className={`${small} text-soft ring-line hover:bg-paper hover:text-ink`}
+                    >
+                        <Wrench className="size-3.5" />
+                        <span>Set up</span>
+                    </button>
+                )}
                 {canRestart && (
                     <button
                         type="button"
