@@ -3,13 +3,14 @@
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
 
-class RebindClusterToolRequest extends FormRequest
+class RebindClusterToolRequest extends SanitizingFormRequest
 {
-    public function authorize(): bool
+    protected function prepareForValidation(): void
     {
-        return true;
+        $this->sanitizeDomainField('current_host');
+        $this->sanitizeDomainField('new_host');
+        $this->sanitizeTrimmedField('instance');
     }
 
     /**

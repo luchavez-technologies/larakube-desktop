@@ -640,3 +640,109 @@ test('removing a mail domain with with_sso forwards --with-sso flag and marks bo
         ->and($run->kind->changesMail())->toBeTrue()
         ->and($run->kind->changesSso())->toBeTrue();
 });
+
+test('mail form requests sanitize email and domain inputs before validation and execution', function () {
+    $bin = mailTestServer();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.mail.accounts.store', 'prod-vps'), [
+        'email' => '  Alice@EXAMPLE.COM  ',
+        'name' => '  Alice Smith  ',
+        'password' => 'StrongPass!123',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--email=alice@example.com', (array) $cmd, true)
+        && in_array('--name=Alice Smith', (array) $cmd, true));
+
+    $this->post(route('servers.mail.domains.store', 'prod-vps'), [
+        'domain' => '  Mail.Example.ORG.  ',
+        'acme_email' => ' ADMIN@Example.ORG ',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('--zone=mail.example.org', (array) $cmd, true)
+        && in_array('--acme-email=admin@example.org', (array) $cmd, true));
+
+    $this->post(route('servers.mail.domains.store', 'prod-vps'), [
+        'domain' => 'https://bad.example.com/',
+    ])->assertSessionHasErrors('domain');
+
+    expect($bin)->toBeString();
+});
+
+test('precognition validates mail and tool forms without starting any CLI run', function () {
+    mailTestServer();
+    ChildProcess::fake();
+
+    $this->withHeaders([
+        'Precognition' => 'true',
+        'Precognition-Validate-Only' => 'email',
+    ])->postJson(route('servers.mail.accounts.store', 'prod-vps'), [
+        'email' => 'not-an-email',
+    ])->assertStatus(422)->assertJsonValidationErrors('email');
+
+    $this->withHeaders([
+        'Precognition' => 'true',
+        'Precognition-Validate-Only' => 'domain',
+    ])->postJson(route('servers.mail.domains.store', 'prod-vps'), [
+        'domain' => 'Sub.Example.COM.',
+    ])->assertNoContent();
+
+    $this->withHeaders([
+        'Precognition' => 'true',
+        'Precognition-Validate-Only' => 'domain',
+    ])->postJson(route('servers.tools.store', ['server' => 'prod-vps', 'tool' => 'n8n']), [
+        'domain' => 'https://example.com/',
+    ])->assertStatus(422)->assertJsonValidationErrors('domain');
+
+    expect(Run::count())->toBe(0);
+});
+
+test('deleting a mailbox or domain optimistically removes mirrored SQLite rows immediately before sync runs', function () {
+    mailTestServer();
+    ChildProcess::fake();
+
+    $server = Server::create([
+        'name' => 'prod-vps',
+        'provider' => 'do',
+        'kind' => 'vps',
+        'context' => 'larakube-do-ams3',
+        'status' => 'ready',
+    ]);
+
+    $domain = MailDomain::create([
+        'server_id' => $server->id,
+        'name' => 'client.com',
+        'accounts_count' => 2,
+    ]);
+
+    MailAccount::create([
+        'server_id' => $server->id,
+        'mail_domain_id' => $domain->id,
+        'email' => 'alice@client.com',
+        'name' => 'Alice',
+        'role' => 'user',
+    ]);
+    MailAccount::create([
+        'server_id' => $server->id,
+        'mail_domain_id' => $domain->id,
+        'email' => 'bob@client.com',
+        'name' => 'Bob',
+        'role' => 'user',
+    ]);
+
+    $this->delete(route('servers.mail.accounts.destroy', 'prod-vps'), [
+        'email' => 'ALICE@CLIENT.COM',
+    ])->assertRedirect();
+
+    expect(MailAccount::where('email', 'alice@client.com')->exists())->toBeFalse()
+        ->and(MailAccount::where('email', 'bob@client.com')->exists())->toBeTrue()
+        ->and($domain->fresh()->accounts_count)->toBe(1);
+
+    $this->delete(route('servers.mail.domains.destroy', 'prod-vps'), [
+        'domain' => 'client.com',
+        'confirm' => 'client.com',
+    ])->assertRedirect();
+
+    expect(MailDomain::where('name', 'client.com')->exists())->toBeFalse()
+        ->and(MailAccount::where('email', 'bob@client.com')->exists())->toBeFalse();
+});

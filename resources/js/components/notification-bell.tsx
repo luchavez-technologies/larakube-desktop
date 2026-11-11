@@ -135,29 +135,83 @@ export default function NotificationBell() {
     }
 
     function handleMarkAllAsRead() {
-        router.post(
-            '/notifications/read-all',
-            {},
-            {
-                preserveScroll: true,
-                preserveState: true,
-                only: ['notifications'],
-            },
-        );
+        router
+            .optimistic((props) => {
+                const payload = (
+                    props as { notifications?: NotificationPayload }
+                ).notifications;
+
+                if (!payload) {
+                    return {};
+                }
+
+                const now = new Date().toISOString();
+
+                return {
+                    notifications: {
+                        ...payload,
+                        unreadCount: 0,
+                        items: payload.items.map((entry) =>
+                            entry.read_at ? entry : { ...entry, read_at: now },
+                        ),
+                    },
+                };
+            })
+            .post(
+                '/notifications/read-all',
+                {},
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    only: ['notifications'],
+                },
+            );
     }
 
     function handleMarkAsRead(id: string, e?: MouseEvent) {
         e?.stopPropagation();
         e?.preventDefault();
-        router.post(
-            `/notifications/${id}/read`,
-            {},
-            {
-                preserveScroll: true,
-                preserveState: true,
-                only: ['notifications'],
-            },
-        );
+        router
+            .optimistic((props) => {
+                const payload = (
+                    props as { notifications?: NotificationPayload }
+                ).notifications;
+
+                if (!payload) {
+                    return {};
+                }
+
+                let decremented = false;
+                const now = new Date().toISOString();
+                const items = payload.items.map((entry) => {
+                    if (entry.id === id && !entry.read_at) {
+                        decremented = true;
+
+                        return { ...entry, read_at: now };
+                    }
+
+                    return entry;
+                });
+
+                return {
+                    notifications: {
+                        ...payload,
+                        unreadCount: decremented
+                            ? Math.max(0, payload.unreadCount - 1)
+                            : payload.unreadCount,
+                        items,
+                    },
+                };
+            })
+            .post(
+                `/notifications/${id}/read`,
+                {},
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    only: ['notifications'],
+                },
+            );
     }
 
     function handleNotificationClick(item: NotificationItem) {

@@ -39,6 +39,7 @@ use App\Http\Controllers\UninstallController;
 use App\Http\Controllers\UpdatesController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\WslSetupController;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
@@ -73,7 +74,9 @@ Route::delete('/setup/cloud/accounts', [CloudAccountController::class, 'remove']
 
 Route::get('/servers', [ServerController::class, 'index'])->name('servers.index');
 Route::get('/servers/create', [ServerController::class, 'create'])->name('servers.create');
-Route::post('/servers', [ServerController::class, 'store'])->name('servers.store');
+Route::post('/servers', [ServerController::class, 'store'])
+    ->middleware(HandlePrecognitiveRequests::class)
+    ->name('servers.store');
 Route::get('/servers/pick-key', [ServerController::class, 'pickKey'])->name('servers.pick_key');
 Route::post('/servers/inspect-key', [ServerController::class, 'inspectKey'])->name('servers.inspect_key');
 Route::get('/servers/provider-catalog/{provider}', [ServerController::class, 'providerCatalog'])->name('servers.provider_catalog');
@@ -119,7 +122,9 @@ Route::get('/dev-boxes', [DevBoxController::class, 'index'])->name('devboxes.ind
 Route::get('/dev-boxes/pick-bundle', [DevBoxController::class, 'pickBundle'])->name('devboxes.pick-bundle');
 Route::post('/dev-boxes/import', [DevBoxController::class, 'import'])->name('devboxes.import');
 Route::get('/dev-boxes/create', [DevBoxController::class, 'create'])->name('devboxes.create');
-Route::post('/dev-boxes', [DevBoxController::class, 'store'])->name('devboxes.store');
+Route::post('/dev-boxes', [DevBoxController::class, 'store'])
+    ->middleware(HandlePrecognitiveRequests::class)
+    ->name('devboxes.store');
 Route::get('/dev-boxes/{box}', [DevBoxController::class, 'show'])->name('devboxes.show');
 Route::post('/dev-boxes/{box}/export', [DevBoxController::class, 'export'])->name('devboxes.export');
 Route::post('/dev-boxes/{box}/access/grant', [DevBoxController::class, 'grant'])->name('devboxes.access.grant');
@@ -212,15 +217,17 @@ Route::get('/servers/{server}/plex', [PlexController::class, 'index'])->name('se
 Route::get('/mail', [MailController::class, 'entry'])->name('mail');
 Route::get('/servers/{server}/mail', [MailController::class, 'index'])->name('servers.mail.index');
 Route::post('/servers/{server}/mail/refresh', [MailController::class, 'refresh'])->name('servers.mail.refresh');
-Route::post('/servers/{server}/mail/deploy', [MailController::class, 'deploy'])->name('servers.mail.deploy');
-Route::post('/servers/{server}/mail/accounts', [MailController::class, 'createAccount'])->name('servers.mail.accounts.store');
-Route::post('/servers/{server}/mail/accounts/password', [MailController::class, 'resetPassword'])->name('servers.mail.accounts.password');
+Route::middleware(HandlePrecognitiveRequests::class)->group(function (): void {
+    Route::post('/servers/{server}/mail/deploy', [MailController::class, 'deploy'])->name('servers.mail.deploy');
+    Route::post('/servers/{server}/mail/accounts', [MailController::class, 'createAccount'])->name('servers.mail.accounts.store');
+    Route::post('/servers/{server}/mail/accounts/password', [MailController::class, 'resetPassword'])->name('servers.mail.accounts.password');
+    Route::delete('/servers/{server}/mail/accounts', [MailController::class, 'deleteAccount'])->name('servers.mail.accounts.destroy');
+    Route::post('/servers/{server}/mail/domains', [MailController::class, 'addDomain'])->name('servers.mail.domains.store');
+    Route::delete('/servers/{server}/mail/domains', [MailController::class, 'removeDomain'])->name('servers.mail.domains.destroy');
+    Route::post('/servers/{server}/mail/relay', [MailController::class, 'configureRelay'])->name('servers.mail.relay.store');
+    Route::post('/servers/{server}/mail/test', [MailController::class, 'sendTest'])->name('servers.mail.test');
+});
 Route::post('/servers/{server}/mail/sync-sso', [MailController::class, 'syncSso'])->name('servers.mail.sync-sso');
-Route::delete('/servers/{server}/mail/accounts', [MailController::class, 'deleteAccount'])->name('servers.mail.accounts.destroy');
-Route::post('/servers/{server}/mail/domains', [MailController::class, 'addDomain'])->name('servers.mail.domains.store');
-Route::delete('/servers/{server}/mail/domains', [MailController::class, 'removeDomain'])->name('servers.mail.domains.destroy');
-Route::post('/servers/{server}/mail/relay', [MailController::class, 'configureRelay'])->name('servers.mail.relay.store');
-Route::post('/servers/{server}/mail/test', [MailController::class, 'sendTest'])->name('servers.mail.test');
 Route::get('/servers/{server}/mail/check-dns', [MailController::class, 'checkDns'])->name('servers.mail.check-dns');
 
 Route::get('/drive', [DriveController::class, 'entry'])->name('drive');
@@ -281,8 +288,12 @@ Route::get('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'sho
 Route::get('/servers/{server}/tools/{tool}/credentials', [ClusterToolController::class, 'credentials'])->name('servers.tools.credentials');
 Route::post('/servers/{server}/tools/{tool}/wire', [ClusterToolController::class, 'wire'])->name('servers.tools.wire');
 Route::post('/servers/{server}/tools/{tool}/unwire', [ClusterToolController::class, 'unwire'])->name('servers.tools.unwire');
-Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])->name('servers.tools.store');
-Route::post('/servers/{server}/tools/{tool}/rebind', [ClusterToolController::class, 'rebind'])->name('servers.tools.rebind');
+Route::post('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'store'])
+    ->middleware(HandlePrecognitiveRequests::class)
+    ->name('servers.tools.store');
+Route::post('/servers/{server}/tools/{tool}/rebind', [ClusterToolController::class, 'rebind'])
+    ->middleware(HandlePrecognitiveRequests::class)
+    ->name('servers.tools.rebind');
 Route::post('/servers/{server}/tools/{tool}/pause', [ClusterToolController::class, 'pause'])->name('servers.tools.pause');
 Route::post('/servers/{server}/tools/{tool}/resume', [ClusterToolController::class, 'resume'])->name('servers.tools.resume');
 Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.tools.destroy');

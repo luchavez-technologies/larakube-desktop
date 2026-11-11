@@ -2058,9 +2058,10 @@ function InstallDialog({
                 </div>
                 <Form
                     action={store({ server: server.name, tool: tool.tool })}
+                    validationTimeout={250}
                     className="flex h-full flex-col overflow-hidden"
                 >
-                    {({ errors, processing }) => (
+                    {({ errors, invalid, validate, processing }) => (
                         <>
                             <div className="flex-1 space-y-4 overflow-y-auto px-7 pt-5 pb-7">
                                 {activeMatches.length > 0 && (
@@ -2138,10 +2139,17 @@ function InstallDialog({
                                                     event.target.value.trim(),
                                                 );
                                             }}
+                                            onBlur={() =>
+                                                validate('admin_email')
+                                            }
                                             placeholder={`e.g. admin@${domain || 'example.com'}`}
                                             spellCheck={false}
                                             required
-                                            className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-tools"
+                                            className={`w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 outline-none placeholder:text-faint focus:ring-2 ${
+                                                invalid('admin_email')
+                                                    ? 'ring-accent focus:ring-accent'
+                                                    : 'ring-line focus:ring-tools'
+                                            }`}
                                         />
                                         {errors.admin_email ? (
                                             <span className="mt-1 block text-xs text-accent">

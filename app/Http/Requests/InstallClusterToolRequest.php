@@ -3,13 +3,13 @@
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
 
-class InstallClusterToolRequest extends FormRequest
+class InstallClusterToolRequest extends SanitizingFormRequest
 {
-    public function authorize(): bool
+    protected function prepareForValidation(): void
     {
-        return true;
+        $this->sanitizeDomainField('domain');
+        $this->sanitizeEmailField('admin_email');
     }
 
     /**
@@ -18,7 +18,7 @@ class InstallClusterToolRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'domain' => ['required', 'string', 'max:200', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
+            'domain' => ['required', 'string', 'max:200', 'regex:'.self::HOSTNAME_REGEX],
             'admin_email' => ['nullable', 'string', 'email', 'max:255'],
             'wire_sso' => ['boolean'],
             'wire_mail' => ['boolean'],

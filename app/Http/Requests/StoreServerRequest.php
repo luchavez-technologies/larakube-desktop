@@ -6,11 +6,10 @@ use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Models\Run;
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class StoreServerRequest extends FormRequest
+class StoreServerRequest extends SanitizingFormRequest
 {
     /**
      * Env var the CLI reads a run-only API token from, per provider. Tokens
@@ -22,16 +21,15 @@ class StoreServerRequest extends FormRequest
         'hetzner' => 'HCLOUD_TOKEN',
     ];
 
-    public function authorize(): bool
-    {
-        return true;
-    }
-
     protected function prepareForValidation(): void
     {
         if (! $this->filled('target_kind')) {
             $this->merge(['target_kind' => 'vps']);
         }
+
+        $this->sanitizeTrimmedField('provider', lowercase: true);
+        $this->sanitizeTrimmedField('stack_name', lowercase: true);
+        $this->sanitizeTrimmedField('region', lowercase: true);
     }
 
     /**

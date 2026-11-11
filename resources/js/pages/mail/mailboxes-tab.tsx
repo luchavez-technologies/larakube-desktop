@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import FieldError, { fieldInputClass } from '@/components/field-error';
 import type { Server } from '@/types/larakube';
 
 export type AccountRow = {
@@ -279,130 +280,170 @@ export default function MailboxesTab({
                         <Form
                             action={`/servers/${server.name}/mail/accounts`}
                             method="post"
+                            validationTimeout={250}
                             disableWhileProcessing
                             onSuccess={() => setIsCreateOpen(false)}
                             className="space-y-4"
                         >
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Email Address
-                                </label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    required
-                                    value={newEmail}
-                                    onChange={(e) =>
-                                        setNewEmail(e.target.value)
-                                    }
-                                    placeholder="alice@example.com"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Display Name
-                                </label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value={newName}
-                                    onChange={(e) => setNewName(e.target.value)}
-                                    placeholder="Alice Smith"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
-
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs font-medium text-soft">
-                                        Password
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setNewPassword(generatePassword())
-                                        }
-                                        className="text-[11px] text-brand transition hover:underline"
-                                    >
-                                        Regenerate
-                                    </button>
-                                </div>
-                                <input
-                                    type="text"
-                                    name="password"
-                                    required
-                                    value={newPassword}
-                                    onChange={(e) =>
-                                        setNewPassword(e.target.value)
-                                    }
-                                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 font-mono text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Disk Quota (GB)
-                                </label>
-                                <input
-                                    type="number"
-                                    name="quota"
-                                    min="1"
-                                    value={newQuota}
-                                    onChange={(e) =>
-                                        setNewQuota(e.target.value)
-                                    }
-                                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
-
-                            {hasSso && (
-                                <div className="rounded-lg border border-line bg-paper/50 p-3">
-                                    <input type="hidden" name="sso" value="0" />
-                                    <label className="flex cursor-pointer items-start gap-2.5">
+                            {({ errors, invalid, validate, processing }) => (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            Email Address
+                                        </label>
                                         <input
-                                            type="checkbox"
-                                            name="sso"
-                                            value="1"
-                                            checked={createSso}
+                                            type="email"
+                                            name="email"
+                                            required
+                                            value={newEmail}
                                             onChange={(e) =>
-                                                setCreateSso(e.target.checked)
+                                                setNewEmail(e.target.value)
                                             }
-                                            className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                            onBlur={() => validate('email')}
+                                            placeholder="alice@example.com"
+                                            className={fieldInputClass(
+                                                invalid('email'),
+                                                'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
                                         />
-                                        <div>
-                                            <span className="block text-xs font-medium text-ink">
-                                                Create matching SSO identity
-                                            </span>
-                                            <span className="block text-[11px] text-soft">
-                                                Provisions a Zitadel user
-                                                account with matching email and
-                                                password.
-                                            </span>
-                                        </div>
-                                    </label>
-                                </div>
-                            )}
+                                        <FieldError message={errors.email} />
+                                    </div>
 
-                            <div className="flex items-center justify-end gap-2 pt-4">
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setIsCreateOpen(false)}
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    size="sm"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                    Create Mailbox
-                                </Button>
-                            </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            Display Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="name"
+                                            value={newName}
+                                            onChange={(e) =>
+                                                setNewName(e.target.value)
+                                            }
+                                            onBlur={() => validate('name')}
+                                            placeholder="Alice Smith"
+                                            className={fieldInputClass(
+                                                invalid('name'),
+                                                'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
+                                        />
+                                        <FieldError message={errors.name} />
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-medium text-soft">
+                                                Password
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setNewPassword(
+                                                        generatePassword(),
+                                                    )
+                                                }
+                                                className="text-[11px] text-brand transition hover:underline"
+                                            >
+                                                Regenerate
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            name="password"
+                                            required
+                                            value={newPassword}
+                                            onChange={(e) =>
+                                                setNewPassword(e.target.value)
+                                            }
+                                            onBlur={() => validate('password')}
+                                            className={fieldInputClass(
+                                                invalid('password'),
+                                                'mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 font-mono text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
+                                        />
+                                        <FieldError message={errors.password} />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            Disk Quota (GB)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="quota"
+                                            min="1"
+                                            value={newQuota}
+                                            onChange={(e) =>
+                                                setNewQuota(e.target.value)
+                                            }
+                                            onBlur={() => validate('quota')}
+                                            className={fieldInputClass(
+                                                invalid('quota'),
+                                                'mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
+                                        />
+                                        <FieldError message={errors.quota} />
+                                    </div>
+
+                                    {hasSso && (
+                                        <div className="rounded-lg border border-line bg-paper/50 p-3">
+                                            <input
+                                                type="hidden"
+                                                name="sso"
+                                                value="0"
+                                            />
+                                            <label className="flex cursor-pointer items-start gap-2.5">
+                                                <input
+                                                    type="checkbox"
+                                                    name="sso"
+                                                    value="1"
+                                                    checked={createSso}
+                                                    onChange={(e) =>
+                                                        setCreateSso(
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                    className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                                />
+                                                <div>
+                                                    <span className="block text-xs font-medium text-ink">
+                                                        Create matching SSO
+                                                        identity
+                                                    </span>
+                                                    <span className="block text-[11px] text-soft">
+                                                        Provisions a Zitadel
+                                                        user account with
+                                                        matching email and
+                                                        password.
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center justify-end gap-2 pt-4">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                setIsCreateOpen(false)
+                                            }
+                                        >
+                                            <XCircle className="h-4 w-4" />
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            variant="primary"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Create Mailbox
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
                         </Form>
                     </div>
                 </div>
@@ -435,105 +476,129 @@ export default function MailboxesTab({
                         <Form
                             action={`/servers/${server.name}/mail/accounts/password`}
                             method="post"
+                            validationTimeout={250}
                             disableWhileProcessing
                             onSuccess={() => setResetTarget(null)}
                             className="space-y-4"
                         >
-                            <input
-                                type="hidden"
-                                name="email"
-                                value={resetTarget.email}
-                            />
+                            {({ errors, invalid, validate, processing }) => (
+                                <>
+                                    <input
+                                        type="hidden"
+                                        name="email"
+                                        value={resetTarget.email}
+                                    />
 
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs font-medium text-soft">
-                                        New Password
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            void navigator.clipboard.writeText(
-                                                newResetPassword,
-                                            );
-                                            setCopiedReset(true);
-                                            setTimeout(
-                                                () => setCopiedReset(false),
-                                                2000,
-                                            );
-                                        }}
-                                        className="inline-flex items-center gap-1 text-[11px] text-brand transition hover:underline"
-                                    >
-                                        {copiedReset ? (
-                                            <>
-                                                <Check className="h-3 w-3" />
-                                                Copied
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Copy className="h-3 w-3" />
-                                                Copy
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                                <input
-                                    type="text"
-                                    name="password"
-                                    required
-                                    value={newResetPassword}
-                                    onChange={(e) =>
-                                        setNewResetPassword(e.target.value)
-                                    }
-                                    className="mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 font-mono text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
-
-                            {hasSso && (
-                                <div className="rounded-lg border border-line bg-paper/50 p-3">
-                                    <input type="hidden" name="sso" value="0" />
-                                    <label className="flex cursor-pointer items-start gap-2.5">
-                                        <input
-                                            type="checkbox"
-                                            name="sso"
-                                            value="1"
-                                            checked={resetSso}
-                                            onChange={(e) =>
-                                                setResetSso(e.target.checked)
-                                            }
-                                            className="mt-0.5 rounded border-line text-brand focus:ring-brand"
-                                        />
-                                        <div>
-                                            <span className="block text-xs font-medium text-ink">
-                                                Update matching SSO password
-                                            </span>
-                                            <span className="block text-[11px] text-soft">
-                                                Updates this user's password in
-                                                Zitadel if the identity exists.
-                                            </span>
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-medium text-soft">
+                                                New Password
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    void navigator.clipboard.writeText(
+                                                        newResetPassword,
+                                                    );
+                                                    setCopiedReset(true);
+                                                    setTimeout(
+                                                        () =>
+                                                            setCopiedReset(
+                                                                false,
+                                                            ),
+                                                        2000,
+                                                    );
+                                                }}
+                                                className="inline-flex items-center gap-1 text-[11px] text-brand transition hover:underline"
+                                            >
+                                                {copiedReset ? (
+                                                    <>
+                                                        <Check className="h-3 w-3" />
+                                                        Copied
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Copy className="h-3 w-3" />
+                                                        Copy
+                                                    </>
+                                                )}
+                                            </button>
                                         </div>
-                                    </label>
-                                </div>
-                            )}
+                                        <input
+                                            type="text"
+                                            name="password"
+                                            required
+                                            value={newResetPassword}
+                                            onChange={(e) =>
+                                                setNewResetPassword(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            onBlur={() => validate('password')}
+                                            className={fieldInputClass(
+                                                invalid('password'),
+                                                'mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 font-mono text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
+                                        />
+                                        <FieldError message={errors.password} />
+                                    </div>
 
-                            <div className="flex items-center justify-end gap-2 pt-4">
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setResetTarget(null)}
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    size="sm"
-                                >
-                                    <KeyRound className="h-4 w-4" />
-                                    Update Password
-                                </Button>
-                            </div>
+                                    {hasSso && (
+                                        <div className="rounded-lg border border-line bg-paper/50 p-3">
+                                            <input
+                                                type="hidden"
+                                                name="sso"
+                                                value="0"
+                                            />
+                                            <label className="flex cursor-pointer items-start gap-2.5">
+                                                <input
+                                                    type="checkbox"
+                                                    name="sso"
+                                                    value="1"
+                                                    checked={resetSso}
+                                                    onChange={(e) =>
+                                                        setResetSso(
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                    className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                                />
+                                                <div>
+                                                    <span className="block text-xs font-medium text-ink">
+                                                        Update matching SSO
+                                                        password
+                                                    </span>
+                                                    <span className="block text-[11px] text-soft">
+                                                        Updates this user&apos;s
+                                                        password in Zitadel if
+                                                        the identity exists.
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center justify-end gap-2 pt-4">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => setResetTarget(null)}
+                                        >
+                                            <XCircle className="h-4 w-4" />
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            variant="primary"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            <KeyRound className="h-4 w-4" />
+                                            Update Password
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
                         </Form>
                     </div>
                 </div>
@@ -568,31 +633,65 @@ export default function MailboxesTab({
                             action={`/servers/${server.name}/mail/accounts`}
                             method="delete"
                             disableWhileProcessing
+                            options={{ preserveScroll: true }}
+                            optimistic={(props) => {
+                                const current = (
+                                    props as {
+                                        accounts?: {
+                                            accounts?: AccountRow[];
+                                            queue?: number;
+                                        };
+                                    }
+                                ).accounts;
+
+                                if (!current?.accounts) {
+                                    return {};
+                                }
+
+                                const targetEmail =
+                                    deleteTarget.email.toLowerCase();
+
+                                return {
+                                    accounts: {
+                                        ...current,
+                                        accounts: current.accounts.filter(
+                                            (row) =>
+                                                row.email.toLowerCase() !==
+                                                targetEmail,
+                                        ),
+                                    },
+                                };
+                            }}
                             onSuccess={() => setDeleteTarget(null)}
                             className="mt-6 flex items-center justify-end gap-2"
                         >
-                            <input
-                                type="hidden"
-                                name="email"
-                                value={deleteTarget.email}
-                            />
+                            {({ errors }) => (
+                                <>
+                                    <input
+                                        type="hidden"
+                                        name="email"
+                                        value={deleteTarget.email}
+                                    />
+                                    <FieldError message={errors.email} />
 
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setDeleteTarget(null)}
-                            >
-                                <XCircle className="h-4 w-4" />
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                variant="dangerFill"
-                                size="sm"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                                Delete Mailbox
-                            </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setDeleteTarget(null)}
+                                    >
+                                        <XCircle className="h-4 w-4" />
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        variant="dangerFill"
+                                        size="sm"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete Mailbox
+                                    </Button>
+                                </>
+                            )}
                         </Form>
                     </div>
                 </div>

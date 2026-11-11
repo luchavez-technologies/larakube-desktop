@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import FieldError, { fieldInputClass } from '@/components/field-error';
 import type { Server } from '@/types/larakube';
 
 type Props = {
@@ -99,42 +100,66 @@ export default function MailEmptyState({ server, otherServers = [] }: Props) {
                     <Form
                         action={`/servers/${server.name}/mail/deploy`}
                         method="post"
+                        validationTimeout={250}
                         className="mt-4 space-y-4"
                     >
-                        <div>
-                            <label className="block text-xs font-medium text-soft">
-                                Primary Mail Domain
-                            </label>
-                            <input
-                                type="text"
-                                name="domain"
-                                value={domain}
-                                onChange={(e) => setDomain(e.target.value)}
-                                placeholder="e.g. mail.example.com"
-                                className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                            />
-                        </div>
+                        {({ errors, invalid, validate, processing }) => (
+                            <>
+                                <div>
+                                    <label className="block text-xs font-medium text-soft">
+                                        Primary Mail Domain
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="domain"
+                                        value={domain}
+                                        onChange={(e) =>
+                                            setDomain(e.target.value)
+                                        }
+                                        onBlur={() => validate('domain')}
+                                        placeholder="e.g. mail.example.com"
+                                        className={fieldInputClass(
+                                            invalid('domain'),
+                                            'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                        )}
+                                    />
+                                    <FieldError message={errors.domain} />
+                                </div>
 
-                        <div>
-                            <label className="block text-xs font-medium text-soft">
-                                Initial Postmaster / Admin Email (Optional)
-                            </label>
-                            <input
-                                type="email"
-                                name="admin_email"
-                                value={adminEmail}
-                                onChange={(e) => setAdminEmail(e.target.value)}
-                                placeholder="postmaster@example.com"
-                                className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                            />
-                        </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-soft">
+                                        Initial Postmaster / Admin Email
+                                        (Optional)
+                                    </label>
+                                    <input
+                                        type="email"
+                                        name="admin_email"
+                                        value={adminEmail}
+                                        onChange={(e) =>
+                                            setAdminEmail(e.target.value)
+                                        }
+                                        onBlur={() => validate('admin_email')}
+                                        placeholder="postmaster@example.com"
+                                        className={fieldInputClass(
+                                            invalid('admin_email'),
+                                            'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                        )}
+                                    />
+                                    <FieldError message={errors.admin_email} />
+                                </div>
 
-                        <div className="pt-2">
-                            <Button type="submit" variant="primary">
-                                <Download className="h-4 w-4" />
-                                Deploy Stalwart Mail Server
-                            </Button>
-                        </div>
+                                <div className="pt-2">
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
+                                        disabled={processing}
+                                    >
+                                        <Download className="h-4 w-4" />
+                                        Deploy Stalwart Mail Server
+                                    </Button>
+                                </div>
+                            </>
+                        )}
                     </Form>
                 </div>
             </div>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Send, Check, Trash2, Info, CheckCircle2 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import FieldError, { fieldInputClass } from '@/components/field-error';
 import type { Server as ServerType } from '@/types/larakube';
 import type { RelayInfo } from './settings-tab';
 
@@ -118,194 +119,244 @@ export default function RelayTab({ server, relay }: Props) {
                     <Form
                         action={`/servers/${server.name}/mail/relay`}
                         method="post"
+                        validationTimeout={250}
                         className="space-y-4 pt-2"
                     >
-                        <div>
-                            <label className="mb-2 block text-xs font-medium text-soft">
-                                Select Relay Provider
-                            </label>
-                            <div className="grid grid-cols-3 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setProvider('brevo');
-                                        setPort('2525');
-                                    }}
-                                    className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                                        provider === 'brevo'
-                                            ? 'border-brand bg-brand/10 text-brand ring-1 ring-brand'
-                                            : 'border-line bg-paper/40 text-soft hover:bg-paper'
-                                    }`}
-                                >
-                                    <span className="text-xs font-semibold">
-                                        Brevo
-                                    </span>
-                                    <span className="mt-0.5 text-[10px] opacity-75">
-                                        Free 300/day
-                                    </span>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setProvider('ses');
-                                        setPort('2587');
-                                    }}
-                                    className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                                        provider === 'ses'
-                                            ? 'border-brand bg-brand/10 text-brand ring-1 ring-brand'
-                                            : 'border-line bg-paper/40 text-soft hover:bg-paper'
-                                    }`}
-                                >
-                                    <span className="text-xs font-semibold">
-                                        Amazon SES
-                                    </span>
-                                    <span className="mt-0.5 text-[10px] opacity-75">
-                                        Low-cost bulk
-                                    </span>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setProvider('remove')}
-                                    className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                                        provider === 'remove'
-                                            ? 'border-accent bg-accent/10 text-accent ring-1 ring-accent'
-                                            : 'border-line bg-paper/40 text-soft hover:bg-paper'
-                                    }`}
-                                >
-                                    <span className="text-xs font-semibold">
-                                        Direct MX
-                                    </span>
-                                    <span className="mt-0.5 text-[10px] opacity-75">
-                                        Disable relay
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <input type="hidden" name="provider" value={provider} />
-
-                        {provider !== 'remove' ? (
+                        {({ errors, invalid, validate, processing }) => (
                             <>
                                 <div>
-                                    <label className="block text-xs font-medium text-soft">
-                                        SMTP Username / Access Key
+                                    <label className="mb-2 block text-xs font-medium text-soft">
+                                        Select Relay Provider
                                     </label>
-                                    <input
-                                        type="text"
-                                        name="username"
-                                        required
-                                        value={username}
-                                        onChange={(e) =>
-                                            setUsername(e.target.value)
-                                        }
-                                        placeholder={
-                                            provider === 'brevo'
-                                                ? 'e.g. 7192837@smtp-brevo.com'
-                                                : 'e.g. AKIAIOSFODNN7EXAMPLE'
-                                        }
-                                        className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                    />
-                                </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setProvider('brevo');
+                                                setPort('2525');
+                                            }}
+                                            className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
+                                                provider === 'brevo'
+                                                    ? 'border-brand bg-brand/10 text-brand ring-1 ring-brand'
+                                                    : 'border-line bg-paper/40 text-soft hover:bg-paper'
+                                            }`}
+                                        >
+                                            <span className="text-xs font-semibold">
+                                                Brevo
+                                            </span>
+                                            <span className="mt-0.5 text-[10px] opacity-75">
+                                                Free 300/day
+                                            </span>
+                                        </button>
 
-                                <div>
-                                    <label className="block text-xs font-medium text-soft">
-                                        SMTP Password / Secret Key
-                                    </label>
-                                    <input
-                                        type="password"
-                                        name="api_key"
-                                        required={!isCurrentProviderActive}
-                                        value={apiKey}
-                                        onChange={(e) =>
-                                            setApiKey(e.target.value)
-                                        }
-                                        placeholder={
-                                            isCurrentProviderActive
-                                                ? '•••••••• (Saved on cluster — leave blank to keep)'
-                                                : provider === 'brevo'
-                                                  ? 'xsmtpsib-...'
-                                                  : 'Amazon SES SMTP password'
-                                        }
-                                        className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                    />
-                                    {isCurrentProviderActive && (
-                                        <p className="mt-1 text-[11px] text-soft">
-                                            Credentials are active on the
-                                            cluster. Leave blank to keep current
-                                            secret, or enter a new one to
-                                            update.
-                                        </p>
-                                    )}
-                                </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setProvider('ses');
+                                                setPort('2587');
+                                            }}
+                                            className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
+                                                provider === 'ses'
+                                                    ? 'border-brand bg-brand/10 text-brand ring-1 ring-brand'
+                                                    : 'border-line bg-paper/40 text-soft hover:bg-paper'
+                                            }`}
+                                        >
+                                            <span className="text-xs font-semibold">
+                                                Amazon SES
+                                            </span>
+                                            <span className="mt-0.5 text-[10px] opacity-75">
+                                                Low-cost bulk
+                                            </span>
+                                        </button>
 
-                                {provider === 'ses' && (
-                                    <div>
-                                        <label className="block text-xs font-medium text-soft">
-                                            AWS Region
-                                        </label>
-                                        <input
-                                            type="text"
-                                            name="region"
-                                            value={region}
-                                            onChange={(e) =>
-                                                setRegion(e.target.value)
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setProvider('remove')
                                             }
-                                            placeholder="us-east-1"
-                                            className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                        />
+                                            className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
+                                                provider === 'remove'
+                                                    ? 'border-accent bg-accent/10 text-accent ring-1 ring-accent'
+                                                    : 'border-line bg-paper/40 text-soft hover:bg-paper'
+                                            }`}
+                                        >
+                                            <span className="text-xs font-semibold">
+                                                Direct MX
+                                            </span>
+                                            <span className="mt-0.5 text-[10px] opacity-75">
+                                                Disable relay
+                                            </span>
+                                        </button>
+                                    </div>
+                                    <FieldError message={errors.provider} />
+                                </div>
+
+                                <input
+                                    type="hidden"
+                                    name="provider"
+                                    value={provider}
+                                />
+
+                                {provider !== 'remove' ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs font-medium text-soft">
+                                                SMTP Username / Access Key
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="username"
+                                                required
+                                                value={username}
+                                                onChange={(e) =>
+                                                    setUsername(e.target.value)
+                                                }
+                                                onBlur={() =>
+                                                    validate('username')
+                                                }
+                                                placeholder={
+                                                    provider === 'brevo'
+                                                        ? 'e.g. 7192837@smtp-brevo.com'
+                                                        : 'e.g. AKIAIOSFODNN7EXAMPLE'
+                                                }
+                                                className={fieldInputClass(
+                                                    invalid('username'),
+                                                    'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                                )}
+                                            />
+                                            <FieldError
+                                                message={errors.username}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-soft">
+                                                SMTP Password / Secret Key
+                                            </label>
+                                            <input
+                                                type="password"
+                                                name="api_key"
+                                                required={
+                                                    !isCurrentProviderActive
+                                                }
+                                                value={apiKey}
+                                                onChange={(e) =>
+                                                    setApiKey(e.target.value)
+                                                }
+                                                placeholder={
+                                                    isCurrentProviderActive
+                                                        ? '•••••••• (Saved on cluster — leave blank to keep)'
+                                                        : provider === 'brevo'
+                                                          ? 'xsmtpsib-...'
+                                                          : 'Amazon SES SMTP password'
+                                                }
+                                                className={fieldInputClass(
+                                                    invalid('api_key'),
+                                                    'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                                )}
+                                            />
+                                            <FieldError
+                                                message={errors.api_key}
+                                            />
+                                            {isCurrentProviderActive && (
+                                                <p className="mt-1 text-[11px] text-soft">
+                                                    Credentials are active on
+                                                    the cluster. Leave blank to
+                                                    keep current secret, or
+                                                    enter a new one to update.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {provider === 'ses' && (
+                                            <div>
+                                                <label className="block text-xs font-medium text-soft">
+                                                    AWS Region
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="region"
+                                                    value={region}
+                                                    onChange={(e) =>
+                                                        setRegion(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onBlur={() =>
+                                                        validate('region')
+                                                    }
+                                                    placeholder="us-east-1"
+                                                    className={fieldInputClass(
+                                                        invalid('region'),
+                                                        'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                                    )}
+                                                />
+                                                <FieldError
+                                                    message={errors.region}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-soft">
+                                                Relay Port
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="port"
+                                                min="1"
+                                                max="65535"
+                                                value={port}
+                                                onChange={(e) =>
+                                                    setPort(e.target.value)
+                                                }
+                                                onBlur={() => validate('port')}
+                                                className={fieldInputClass(
+                                                    invalid('port'),
+                                                    'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                                )}
+                                            />
+                                            <FieldError message={errors.port} />
+                                            <p className="mt-1 text-[11px] text-soft">
+                                                Brevo standard is 2525. SES
+                                                standard is 2587 or 587.
+                                            </p>
+                                        </div>
+
+                                        <div className="pt-2">
+                                            <Button
+                                                type="submit"
+                                                variant="primary"
+                                                size="sm"
+                                                disabled={processing}
+                                            >
+                                                <Check className="h-4 w-4" />
+                                                Save Relay Route
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="space-y-4 pt-2">
+                                        <p className="text-xs text-soft">
+                                            Removing the relay will configure
+                                            Stalwart to deliver directly to
+                                            external destination MX records over
+                                            port 25. Only use this if your
+                                            server provider permits outbound
+                                            port 25.
+                                        </p>
+                                        <Button
+                                            type="submit"
+                                            variant="danger"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            Remove Relay & Use Direct MX
+                                        </Button>
                                     </div>
                                 )}
-
-                                <div>
-                                    <label className="block text-xs font-medium text-soft">
-                                        Relay Port
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="port"
-                                        value={port}
-                                        onChange={(e) =>
-                                            setPort(e.target.value)
-                                        }
-                                        className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                    />
-                                    <p className="mt-1 text-[11px] text-soft">
-                                        Brevo standard is 2525. SES standard is
-                                        2587 or 587.
-                                    </p>
-                                </div>
-
-                                <div className="pt-2">
-                                    <Button
-                                        type="submit"
-                                        variant="primary"
-                                        size="sm"
-                                    >
-                                        <Check className="h-4 w-4" />
-                                        Save Relay Route
-                                    </Button>
-                                </div>
                             </>
-                        ) : (
-                            <div className="space-y-4 pt-2">
-                                <p className="text-xs text-soft">
-                                    Removing the relay will configure Stalwart
-                                    to deliver directly to external destination
-                                    MX records over port 25. Only use this if
-                                    your server provider permits outbound port
-                                    25.
-                                </p>
-                                <Button
-                                    type="submit"
-                                    variant="danger"
-                                    size="sm"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                    Remove Relay & Use Direct MX
-                                </Button>
-                            </div>
                         )}
                     </Form>
                 </Card>
@@ -313,66 +364,92 @@ export default function RelayTab({ server, relay }: Props) {
                 {/* Send Test Email Card */}
                 <Card label="Send Live Test Email">
                     <p className="text-xs text-soft">
-                        Dispatch a test email through Stalwart's authenticated
-                        SMTP pipeline to confirm deliverability end-to-end.
+                        Dispatch a test email through Stalwart&apos;s
+                        authenticated SMTP pipeline to confirm deliverability
+                        end-to-end.
                     </p>
 
                     <Form
                         action={`/servers/${server.name}/mail/test`}
                         method="post"
+                        validationTimeout={250}
                         className="mt-4 space-y-4"
                     >
-                        <div>
-                            <label className="block text-xs font-medium text-soft">
-                                Recipient Email Address
-                            </label>
-                            <input
-                                type="email"
-                                name="to"
-                                required
-                                value={testTo}
-                                onChange={(e) => setTestTo(e.target.value)}
-                                placeholder="you@gmail.com"
-                                className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                            />
-                        </div>
+                        {({ errors, invalid, validate, processing }) => (
+                            <>
+                                <div>
+                                    <label className="block text-xs font-medium text-soft">
+                                        Recipient Email Address
+                                    </label>
+                                    <input
+                                        type="email"
+                                        name="to"
+                                        required
+                                        value={testTo}
+                                        onChange={(e) =>
+                                            setTestTo(e.target.value)
+                                        }
+                                        onBlur={() => validate('to')}
+                                        placeholder="you@gmail.com"
+                                        className={fieldInputClass(
+                                            invalid('to'),
+                                            'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                        )}
+                                    />
+                                    <FieldError message={errors.to} />
+                                </div>
 
-                        <div>
-                            <label className="block text-xs font-medium text-soft">
-                                Sender Account (Optional)
-                            </label>
-                            <input
-                                type="email"
-                                name="from"
-                                value={testFrom}
-                                onChange={(e) => setTestFrom(e.target.value)}
-                                placeholder="postmaster@yourdomain.com (or leave blank for default)"
-                                className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                            />
-                        </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-soft">
+                                        Sender Account (Optional)
+                                    </label>
+                                    <input
+                                        type="email"
+                                        name="from"
+                                        value={testFrom}
+                                        onChange={(e) =>
+                                            setTestFrom(e.target.value)
+                                        }
+                                        onBlur={() => validate('from')}
+                                        placeholder="postmaster@yourdomain.com (or leave blank for default)"
+                                        className={fieldInputClass(
+                                            invalid('from'),
+                                            'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                        )}
+                                    />
+                                    <FieldError message={errors.from} />
+                                </div>
 
-                        <div>
-                            <label className="block text-xs font-medium text-soft">
-                                Sender Password (Optional)
-                            </label>
-                            <input
-                                type="password"
-                                name="password"
-                                value={testPassword}
-                                onChange={(e) =>
-                                    setTestPassword(e.target.value)
-                                }
-                                placeholder="Leave blank if using default account"
-                                className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                            />
-                        </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-soft">
+                                        Sender Password (Optional)
+                                    </label>
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        value={testPassword}
+                                        onChange={(e) =>
+                                            setTestPassword(e.target.value)
+                                        }
+                                        placeholder="Leave blank if using default account"
+                                        className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                                    />
+                                    <FieldError message={errors.password} />
+                                </div>
 
-                        <div className="pt-2">
-                            <Button type="submit" variant="secondary" size="sm">
-                                <Send className="h-4 w-4" />
-                                Dispatch Test Email
-                            </Button>
-                        </div>
+                                <div className="pt-2">
+                                    <Button
+                                        type="submit"
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={processing}
+                                    >
+                                        <Send className="h-4 w-4" />
+                                        Dispatch Test Email
+                                    </Button>
+                                </div>
+                            </>
+                        )}
                     </Form>
                 </Card>
             </div>

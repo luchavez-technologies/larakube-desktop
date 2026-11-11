@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import FieldError, { fieldInputClass } from '@/components/field-error';
 import type { Server } from '@/types/larakube';
 
 export type DomainRow = {
@@ -458,83 +459,138 @@ export default function DomainsTab({
                             action={`/servers/${server.name}/mail/domains`}
                             method="delete"
                             disableWhileProcessing
+                            options={{ preserveScroll: true }}
+                            optimistic={(props) => {
+                                const pageProps = props as {
+                                    domains?: DomainRow[];
+                                    accounts?: {
+                                        accounts?: Array<{ email: string }>;
+                                        queue?: number;
+                                    };
+                                };
+                                const domainLower =
+                                    removingDomain.toLowerCase();
+
+                                return {
+                                    ...(pageProps.domains
+                                        ? {
+                                              domains: pageProps.domains.filter(
+                                                  (row) =>
+                                                      row.name.toLowerCase() !==
+                                                      domainLower,
+                                              ),
+                                          }
+                                        : {}),
+                                    ...(pageProps.accounts?.accounts
+                                        ? {
+                                              accounts: {
+                                                  ...pageProps.accounts,
+                                                  accounts:
+                                                      pageProps.accounts.accounts.filter(
+                                                          (acct) =>
+                                                              !acct.email
+                                                                  .toLowerCase()
+                                                                  .endsWith(
+                                                                      `@${domainLower}`,
+                                                                  ),
+                                                      ),
+                                              },
+                                          }
+                                        : {}),
+                                };
+                            }}
                             onSuccess={() => {
                                 setRemovingDomain(null);
                                 setRemoveConfirm('');
                             }}
                             className="mt-4 space-y-4"
                         >
-                            <input
-                                type="hidden"
-                                name="domain"
-                                value={removingDomain}
-                            />
+                            {({ errors, invalid, validate, processing }) => (
+                                <>
+                                    <input
+                                        type="hidden"
+                                        name="domain"
+                                        value={removingDomain}
+                                    />
 
-                            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-paper/60 p-3 text-xs text-ink">
-                                <input
-                                    type="checkbox"
-                                    name="with_sso"
-                                    value="1"
-                                    defaultChecked
-                                    className="mt-0.5 rounded border-line text-brand focus:ring-brand"
-                                />
-                                <div>
-                                    <div className="font-medium text-ink">
-                                        Also offboard partner organization from
-                                        Zitadel SSO
+                                    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-paper/60 p-3 text-xs text-ink">
+                                        <input
+                                            type="checkbox"
+                                            name="with_sso"
+                                            value="1"
+                                            defaultChecked
+                                            className="mt-0.5 rounded border-line text-brand focus:ring-brand"
+                                        />
+                                        <div>
+                                            <div className="font-medium text-ink">
+                                                Also offboard partner
+                                                organization from Zitadel SSO
+                                            </div>
+                                            <div className="mt-0.5 text-[11px] text-soft">
+                                                If a partner organization named{' '}
+                                                <span className="font-mono">
+                                                    {removingDomain}
+                                                </span>{' '}
+                                                exists in Zitadel SSO,
+                                                permanently remove it and its
+                                                users too.
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            Type{' '}
+                                            <strong className="text-ink">
+                                                {removingDomain}
+                                            </strong>{' '}
+                                            to confirm
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="confirm"
+                                            required
+                                            autoComplete="off"
+                                            value={removeConfirm}
+                                            onChange={(e) =>
+                                                setRemoveConfirm(e.target.value)
+                                            }
+                                            onBlur={() => validate('confirm')}
+                                            placeholder={removingDomain}
+                                            className={fieldInputClass(
+                                                invalid('confirm'),
+                                                'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent',
+                                            )}
+                                        />
+                                        <FieldError message={errors.confirm} />
                                     </div>
-                                    <div className="mt-0.5 text-[11px] text-soft">
-                                        If a partner organization named{' '}
-                                        <span className="font-mono">
-                                            {removingDomain}
-                                        </span>{' '}
-                                        exists in Zitadel SSO, permanently
-                                        remove it and its users too.
+
+                                    <div className="flex items-center justify-end gap-2">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                setRemovingDomain(null)
+                                            }
+                                        >
+                                            <XCircle className="h-4 w-4" />
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            variant="dangerFill"
+                                            size="sm"
+                                            disabled={
+                                                processing ||
+                                                removeConfirm !== removingDomain
+                                            }
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            Remove Domain
+                                        </Button>
                                     </div>
-                                </div>
-                            </label>
-
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Type{' '}
-                                    <strong className="text-ink">
-                                        {removingDomain}
-                                    </strong>{' '}
-                                    to confirm
-                                </label>
-                                <input
-                                    type="text"
-                                    name="confirm"
-                                    required
-                                    autoComplete="off"
-                                    value={removeConfirm}
-                                    onChange={(e) =>
-                                        setRemoveConfirm(e.target.value)
-                                    }
-                                    placeholder={removingDomain}
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-end gap-2">
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setRemovingDomain(null)}
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="dangerFill"
-                                    size="sm"
-                                    disabled={removeConfirm !== removingDomain}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                    Remove Domain
-                                </Button>
-                            </div>
+                                </>
+                            )}
                         </Form>
                     </div>
                 </div>
@@ -564,75 +620,101 @@ export default function DomainsTab({
                         <Form
                             action={`/servers/${server.name}/mail/domains`}
                             method="post"
+                            validationTimeout={250}
                             disableWhileProcessing
                             onSuccess={() => setIsAddOpen(false)}
                             className="space-y-4"
                         >
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Domain Name
-                                </label>
-                                <input
-                                    type="text"
-                                    name="domain"
-                                    required
-                                    value={newDomain}
-                                    onChange={(e) =>
-                                        setNewDomain(e.target.value)
-                                    }
-                                    placeholder="acme.com"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
+                            {({ errors, invalid, validate, processing }) => (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            Domain Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="domain"
+                                            required
+                                            value={newDomain}
+                                            onChange={(e) =>
+                                                setNewDomain(e.target.value)
+                                            }
+                                            onBlur={() => validate('domain')}
+                                            placeholder="acme.com"
+                                            className={fieldInputClass(
+                                                invalid('domain'),
+                                                'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
+                                        />
+                                        <FieldError message={errors.domain} />
+                                    </div>
 
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    Cloudflare API Token (Optional)
-                                </label>
-                                <input
-                                    type="password"
-                                    name="cloudflare_token"
-                                    value={cfToken}
-                                    onChange={(e) => setCfToken(e.target.value)}
-                                    placeholder="Auto-configures DNS records if provided"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            Cloudflare API Token (Optional)
+                                        </label>
+                                        <input
+                                            type="password"
+                                            name="cloudflare_token"
+                                            value={cfToken}
+                                            onChange={(e) =>
+                                                setCfToken(e.target.value)
+                                            }
+                                            placeholder="Auto-configures DNS records if provided"
+                                            className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                                        />
+                                        <FieldError
+                                            message={errors.cloudflare_token}
+                                        />
+                                    </div>
 
-                            <div>
-                                <label className="block text-xs font-medium text-soft">
-                                    ACME / Let's Encrypt Email (Optional)
-                                </label>
-                                <input
-                                    type="email"
-                                    name="acme_email"
-                                    value={acmeEmail}
-                                    onChange={(e) =>
-                                        setAcmeEmail(e.target.value)
-                                    }
-                                    placeholder="admin@acme.com"
-                                    className="placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                                />
-                            </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-soft">
+                                            ACME / Let&apos;s Encrypt Email
+                                            (Optional)
+                                        </label>
+                                        <input
+                                            type="email"
+                                            name="acme_email"
+                                            value={acmeEmail}
+                                            onChange={(e) =>
+                                                setAcmeEmail(e.target.value)
+                                            }
+                                            onBlur={() =>
+                                                validate('acme_email')
+                                            }
+                                            placeholder="admin@acme.com"
+                                            className={fieldInputClass(
+                                                invalid('acme_email'),
+                                                'placeholder:text-muted mt-1.5 w-full rounded-lg border border-line bg-paper px-3 py-2 text-xs text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand',
+                                            )}
+                                        />
+                                        <FieldError
+                                            message={errors.acme_email}
+                                        />
+                                    </div>
 
-                            <div className="flex items-center justify-end gap-2 pt-4">
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => setIsAddOpen(false)}
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    size="sm"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                    Add Domain
-                                </Button>
-                            </div>
+                                    <div className="flex items-center justify-end gap-2 pt-4">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => setIsAddOpen(false)}
+                                        >
+                                            <XCircle className="h-4 w-4" />
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            variant="primary"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Add Domain
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
                         </Form>
                     </div>
                 </div>
