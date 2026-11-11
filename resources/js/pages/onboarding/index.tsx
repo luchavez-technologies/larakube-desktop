@@ -692,21 +692,9 @@ export default function OnboardingIndex({
 
                             {currentStep === 4 && (
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-sm font-medium">
-                                            Install what you need
-                                        </p>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                                setRefresh((count) => count + 1)
-                                            }
-                                        >
-                                            Check again
-                                        </Button>
-                                    </div>
+                                    <p className="text-sm font-medium">
+                                        Install what you need
+                                    </p>
                                     {selectedProviders.length > 0 && (
                                         <p className="flex flex-wrap items-center gap-1.5 text-xs leading-relaxed text-soft">
                                             <span>You picked</span>
@@ -767,7 +755,24 @@ export default function OnboardingIndex({
                                             onChannelChange={setSelectedChannel}
                                         />
                                     ) : (
-                                        <Card label="Command-line tools">
+                                        <Card
+                                            label="Command-line tools"
+                                            action={
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setRefresh(
+                                                            (count) =>
+                                                                count + 1,
+                                                        )
+                                                    }
+                                                >
+                                                    Check again
+                                                </Button>
+                                            }
+                                        >
                                             <ToolCatalogList
                                                 catalog={catalog}
                                                 channel={selectedChannel}
