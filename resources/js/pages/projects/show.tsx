@@ -3011,6 +3011,24 @@ function LocalClusterCard({
     podMetrics?: PodMetrics | null;
 }) {
     const [confirmDownOpen, setConfirmDownOpen] = useState(false);
+    const [tearingDown, setTearingDown] = useState(false);
+
+    const handleDown = () => {
+        if (tearingDown) return;
+        setTearingDown(true);
+        router.post(
+            down(project.id).url,
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => {
+                    setTearingDown(false);
+                    setConfirmDownOpen(false);
+                },
+            },
+        );
+    };
 
     const PREVIEWABLE_FRAMEWORKS = ['astro', 'vite', 'docusaurus', 'nextjs'];
     const isPreviewable = PREVIEWABLE_FRAMEWORKS.includes(
@@ -3501,32 +3519,28 @@ function LocalClusterCard({
 
                         <div className="mt-6 flex items-center justify-end gap-2.5">
                             <Button
+                                type="button"
                                 variant="secondary"
                                 size="sm"
+                                disabled={tearingDown}
                                 onClick={() => setConfirmDownOpen(false)}
                             >
                                 Cancel
                             </Button>
-                            <Form
-                                action={down(project.id)}
-                                onSuccess={() => setConfirmDownOpen(false)}
+                            <Button
+                                type="button"
+                                variant="dangerFill"
+                                size="sm"
+                                disabled={tearingDown}
+                                onClick={handleDown}
                             >
-                                {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        variant="dangerFill"
-                                        size="sm"
-                                        disabled={processing}
-                                    >
-                                        <PowerOff className="size-3.5" />
-                                        <span>
-                                            {processing
-                                                ? 'Tearing down…'
-                                                : 'Confirm Down'}
-                                        </span>
-                                    </Button>
-                                )}
-                            </Form>
+                                <PowerOff className="size-3.5" />
+                                <span>
+                                    {tearingDown
+                                        ? 'Tearing down…'
+                                        : 'Confirm Down'}
+                                </span>
+                            </Button>
                         </div>
                     </div>
                 </div>

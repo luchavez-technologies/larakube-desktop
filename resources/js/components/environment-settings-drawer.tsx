@@ -970,40 +970,62 @@ export default function EnvironmentSettingsDrawer({
                                     </p>
                                     <Form
                                         action={configureCiRoute(project.id)}
-                                        onSuccess={() =>
+                                        options={{
+                                            preserveScroll: true,
+                                            preserveState: true,
+                                        }}
+                                        onFinish={() =>
                                             setShowRotateConfirm(false)
                                         }
                                     >
-                                        <input
-                                            type="hidden"
-                                            name="environment"
-                                            value={environment}
-                                        />
-                                        <input
-                                            type="hidden"
-                                            name="rotate"
-                                            value="1"
-                                        />
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                type="submit"
-                                                size="sm"
-                                                variant="primary"
-                                            >
-                                                <RotateCw className="size-3" />
-                                                <span>Confirm Rotate</span>
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() =>
-                                                    setShowRotateConfirm(false)
-                                                }
-                                            >
-                                                Cancel
-                                            </Button>
-                                        </div>
+                                        {({ processing }) => (
+                                            <>
+                                                <input
+                                                    type="hidden"
+                                                    name="environment"
+                                                    value={environment}
+                                                />
+                                                <input
+                                                    type="hidden"
+                                                    name="rotate"
+                                                    value="1"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        type="submit"
+                                                        size="sm"
+                                                        variant="primary"
+                                                        disabled={processing}
+                                                    >
+                                                        <RotateCw
+                                                            className={cn(
+                                                                'size-3',
+                                                                processing &&
+                                                                    'animate-spin',
+                                                            )}
+                                                        />
+                                                        <span>
+                                                            {processing
+                                                                ? 'Rotating…'
+                                                                : 'Confirm Rotate'}
+                                                        </span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="secondary"
+                                                        disabled={processing}
+                                                        onClick={() =>
+                                                            setShowRotateConfirm(
+                                                                false,
+                                                            )
+                                                        }
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </>
+                                        )}
                                     </Form>
                                 </div>
                             )}
