@@ -79,81 +79,96 @@ export function ToolRow({
                 <div className="flex min-w-0 items-center gap-3">
                     <ProviderLogo slug={entry.slug} size="sm" />
                     <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                            <TwoLine
-                                title={
-                                    entry.required
-                                        ? entry.label
-                                        : `${entry.label} · optional`
-                                }
-                                detail={
-                                    tool?.installed
-                                        ? tool.wsl
-                                            ? (() => {
-                                                  const hostLabel =
-                                                      tool.version ??
-                                                      'Installed';
-                                                  const wslLabel = tool.wsl
-                                                      .installed
-                                                      ? (tool.wsl.version ??
-                                                        'Installed')
-                                                      : 'Missing';
-                                                  const tooltip = [
-                                                      tool.path
-                                                          ? `Windows: ${tool.path}${tool.diagnostic ? ` (${tool.diagnostic})` : ''}`
-                                                          : null,
-                                                      tool.wsl.path
-                                                          ? `WSL: ${tool.wsl.path}${tool.wsl.diagnostic ? ` (${tool.wsl.diagnostic})` : ''}`
-                                                          : tool.wsl.diagnostic
-                                                            ? `WSL: ${tool.wsl.diagnostic}`
-                                                            : null,
-                                                  ]
-                                                      .filter(Boolean)
-                                                      .join('\n');
+                        <TwoLine
+                            title={
+                                <span className="flex flex-wrap items-center gap-2">
+                                    <span>
+                                        {entry.required
+                                            ? entry.label
+                                            : `${entry.label} · optional`}
+                                    </span>
+                                    {tool && !checking && (
+                                        <StatusPill
+                                            tone={
+                                                tool.installed
+                                                    ? 'ok'
+                                                    : tool.required
+                                                      ? 'bad'
+                                                      : 'muted'
+                                            }
+                                        >
+                                            {tool.installed
+                                                ? 'Installed'
+                                                : 'Missing'}
+                                        </StatusPill>
+                                    )}
+                                    {highlight && !tool?.installed && (
+                                        <span className="inline-flex shrink-0 animate-pulse items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand ring-1 ring-brand/20">
+                                            Recommended for Observability
+                                        </span>
+                                    )}
+                                </span>
+                            }
+                            detail={
+                                tool?.installed
+                                    ? tool.wsl
+                                        ? (() => {
+                                              const hostLabel =
+                                                  tool.version ?? 'Installed';
+                                              const wslLabel = tool.wsl
+                                                  .installed
+                                                  ? (tool.wsl.version ??
+                                                    'Installed')
+                                                  : 'Missing';
+                                              const tooltip = [
+                                                  tool.path
+                                                      ? `Windows: ${tool.path}${tool.diagnostic ? ` (${tool.diagnostic})` : ''}`
+                                                      : null,
+                                                  tool.wsl.path
+                                                      ? `WSL: ${tool.wsl.path}${tool.wsl.diagnostic ? ` (${tool.wsl.diagnostic})` : ''}`
+                                                      : tool.wsl.diagnostic
+                                                        ? `WSL: ${tool.wsl.diagnostic}`
+                                                        : null,
+                                              ]
+                                                  .filter(Boolean)
+                                                  .join('\n');
 
-                                                  return (
-                                                      <span
-                                                          title={
-                                                              tooltip ||
-                                                              undefined
-                                                          }
-                                                      >
-                                                          {`Desktop: ${hostLabel} · WSL: ${wslLabel}`}
-                                                      </span>
-                                                  );
-                                              })()
-                                            : (tool.version ??
-                                              // version check failed (see
-                                              // ReadinessCheck::version()'s
-                                              // diagnostic) — showing the
-                                              // install path here instead read
-                                              // as a garbled version string,
-                                              // confirmed live (2026-10-30) to
-                                              // read as broken/corrupted.
-                                              (tool.path || tool.diagnostic ? (
+                                              return (
                                                   <span
                                                       title={
-                                                          tool.diagnostic
-                                                              ? `${tool.path ?? ''}${tool.path ? ' — ' : ''}${tool.diagnostic}`
-                                                              : (tool.path ??
-                                                                undefined)
+                                                          tooltip || undefined
                                                       }
                                                   >
-                                                      Installed
+                                                      {`Desktop: ${hostLabel} · WSL: ${wslLabel}`}
                                                   </span>
-                                              ) : (
-                                                  'Installed'
-                                              )))
-                                        : entry.purpose
-                                }
-                                mono={tool?.installed && tool.version != null}
-                            />
-                            {highlight && !tool?.installed && (
-                                <span className="inline-flex shrink-0 animate-pulse items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand ring-1 ring-brand/20">
-                                    Recommended for Observability
-                                </span>
-                            )}
-                        </div>
+                                              );
+                                          })()
+                                        : (tool.version ??
+                                          // version check failed (see
+                                          // ReadinessCheck::version()'s
+                                          // diagnostic) — showing the
+                                          // install path here instead read
+                                          // as a garbled version string,
+                                          // confirmed live (2026-10-30) to
+                                          // read as broken/corrupted.
+                                          (tool.path || tool.diagnostic ? (
+                                              <span
+                                                  title={
+                                                      tool.diagnostic
+                                                          ? `${tool.path ?? ''}${tool.path ? ' — ' : ''}${tool.diagnostic}`
+                                                          : (tool.path ??
+                                                            undefined)
+                                                  }
+                                              >
+                                                  Installed
+                                              </span>
+                                          ) : (
+                                              'Installed'
+                                          )))
+                                    : entry.purpose
+                            }
+                            mono={tool?.installed && tool.version != null}
+                        />
                         {tool?.installed &&
                             (tool.path || tool.wsl?.path) &&
                             (() => {
@@ -203,72 +218,68 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     };
 
     if (tool.installed) {
-        return (
-            <div className="flex items-center gap-2">
-                {tool.slug === 'larakube' ? (
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        disabled={submitting}
-                        onClick={() =>
-                            handleAction('/setup/cli/update', { channel })
-                        }
-                    >
-                        {submitting ? (
-                            <RefreshCw className="size-3.5 animate-spin" />
-                        ) : (
-                            <ArrowUpCircle className="size-3.5" />
-                        )}
-                        <span>Update</span>
-                    </Button>
-                ) : (
-                    tool.installable && (
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            disabled={submitting}
-                            onClick={() => handleAction(update(tool.slug).url)}
-                        >
-                            {submitting ? (
-                                <RefreshCw className="size-3.5 animate-spin" />
-                            ) : (
-                                <ArrowUpCircle className="size-3.5" />
-                            )}
-                            <span>Update</span>
-                        </Button>
-                    )
-                )}
-                <StatusPill tone="ok">Installed</StatusPill>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex items-center gap-2">
-            {tool.installable && (
+        if (tool.slug === 'larakube') {
+            return (
                 <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     disabled={submitting}
                     onClick={() =>
-                        handleAction(install(tool.slug).url, { channel })
+                        handleAction('/setup/cli/update', { channel })
                     }
                 >
                     {submitting ? (
                         <RefreshCw className="size-3.5 animate-spin" />
                     ) : (
-                        <Download className="size-3.5" />
+                        <ArrowUpCircle className="size-3.5" />
                     )}
-                    <span>Install</span>
+                    <span>Update</span>
                 </Button>
+            );
+        }
+
+        if (tool.installable) {
+            return (
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={submitting}
+                    onClick={() => handleAction(update(tool.slug).url)}
+                >
+                    {submitting ? (
+                        <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                        <ArrowUpCircle className="size-3.5" />
+                    )}
+                    <span>Update</span>
+                </Button>
+            );
+        }
+
+        return null;
+    }
+
+    if (!tool.installable) {
+        return null;
+    }
+
+    return (
+        <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={submitting}
+            onClick={() => handleAction(install(tool.slug).url, { channel })}
+        >
+            {submitting ? (
+                <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+                <Download className="size-3.5" />
             )}
-            <StatusPill tone={tool.required ? 'bad' : 'muted'}>
-                Missing
-            </StatusPill>
-        </div>
+            <span>Install</span>
+        </Button>
     );
 }
 

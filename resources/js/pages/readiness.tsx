@@ -194,43 +194,20 @@ export default function Readiness({
                                             <ListRow
                                                 key={provider.slug}
                                                 action={
-                                                    <div className="flex items-center gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="secondary"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                setAccountModalProviderSlug(
-                                                                    provider.slug,
-                                                                )
-                                                            }
-                                                            className="gap-1.5"
-                                                        >
-                                                            <Settings2 className="size-3.5" />
-                                                            <span>Manage</span>
-                                                        </Button>
-                                                        <StatusPill
-                                                            tone={
-                                                                provider
-                                                                    .credentials
-                                                                    .ready
-                                                                    ? 'ok'
-                                                                    : 'muted'
-                                                            }
-                                                        >
-                                                            {provider
-                                                                .credentials
-                                                                .ready
-                                                                ? provider.accounts &&
-                                                                  provider
-                                                                      .accounts
-                                                                      .length >
-                                                                      1
-                                                                    ? `Ready (${provider.accounts.length})`
-                                                                    : 'Ready'
-                                                                : 'Not connected'}
-                                                        </StatusPill>
-                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setAccountModalProviderSlug(
+                                                                provider.slug,
+                                                            )
+                                                        }
+                                                        className="gap-1.5"
+                                                    >
+                                                        <Settings2 className="size-3.5" />
+                                                        <span>Manage</span>
+                                                    </Button>
                                                 }
                                             >
                                                 <div className="flex min-w-0 items-center gap-3">
@@ -241,7 +218,34 @@ export default function Readiness({
                                                     <div className="min-w-0">
                                                         <TwoLine
                                                             title={
-                                                                provider.label
+                                                                <span className="flex flex-wrap items-center gap-2">
+                                                                    <span>
+                                                                        {
+                                                                            provider.label
+                                                                        }
+                                                                    </span>
+                                                                    <StatusPill
+                                                                        tone={
+                                                                            provider
+                                                                                .credentials
+                                                                                .ready
+                                                                                ? 'ok'
+                                                                                : 'muted'
+                                                                        }
+                                                                    >
+                                                                        {provider
+                                                                            .credentials
+                                                                            .ready
+                                                                            ? provider.accounts &&
+                                                                              provider
+                                                                                  .accounts
+                                                                                  .length >
+                                                                                  1
+                                                                                ? `Ready (${provider.accounts.length})`
+                                                                                : 'Ready'
+                                                                            : 'Not connected'}
+                                                                    </StatusPill>
+                                                                </span>
                                                             }
                                                             detail={
                                                                 provider.activeAccount
