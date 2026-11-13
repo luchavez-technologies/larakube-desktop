@@ -46,6 +46,7 @@ import EnvironmentSettingsDrawer, {
     type EnvironmentSettingsDrawerSection,
 } from '@/components/environment-settings-drawer';
 import HostPicker from '@/components/host-picker';
+import DomainStatusPills from '@/components/domain-status-pills';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
 import LocalDevCompanionsCard, {
@@ -1166,7 +1167,7 @@ function CloudEnvironmentOverviewCard({
 
                         {activeHost ? (
                             <div className="mt-2 flex items-center justify-between">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5">
                                         <span className="truncate font-mono text-xs font-semibold text-ink">
                                             https://{activeHost}
@@ -1187,6 +1188,11 @@ function CloudEnvironmentOverviewCard({
                                     <p className="mt-0.5 text-[11px] text-soft">
                                         Traefik Ingress SSL
                                     </p>
+                                    <DomainStatusPills
+                                        host={activeHost}
+                                        showDetail
+                                        className="mt-1.5"
+                                    />
                                 </div>
                             </div>
                         ) : (

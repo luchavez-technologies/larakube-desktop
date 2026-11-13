@@ -12,6 +12,7 @@ use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\DiagnosticsController;
+use App\Http\Controllers\DomainStatusController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LocalSetupController;
@@ -359,6 +360,7 @@ Route::post('/tray/settings', [TrayController::class, 'saveSettings'])->name('tr
 
 Route::post('/open', OpenExternalController::class)->name('open');
 Route::get('/api/qr', [QrCodeController::class, 'show'])->name('api.qr');
+Route::get('/domains/status', [DomainStatusController::class, 'show'])->name('domains.status');
 
 Route::get('/runs', [RunController::class, 'index'])->name('runs.index');
 Route::get('/runs/{run}', [RunController::class, 'show'])->name('runs.show');

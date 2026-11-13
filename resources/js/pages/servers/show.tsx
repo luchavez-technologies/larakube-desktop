@@ -33,6 +33,7 @@ import {
     ResizeServerDialog,
 } from '@/components/server-dialogs';
 import DiagnoseCard from '@/components/diagnose-card';
+import DomainStatusPills from '@/components/domain-status-pills';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import ProviderLogo from '@/components/provider-logo';
@@ -398,13 +399,20 @@ export default function ShowServer({
                                                             ),
                                                         )}
                                                     </div>
-                                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-soft">
+                                                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-soft">
                                                         {project.webHost ? (
-                                                            <span className="font-mono text-ink">
-                                                                {
-                                                                    project.webHost
-                                                                }
-                                                            </span>
+                                                            <>
+                                                                <span className="font-mono text-ink">
+                                                                    {
+                                                                        project.webHost
+                                                                    }
+                                                                </span>
+                                                                <DomainStatusPills
+                                                                    host={
+                                                                        project.webHost
+                                                                    }
+                                                                />
+                                                            </>
                                                         ) : (
                                                             <span>
                                                                 No web host
@@ -515,15 +523,22 @@ export default function ShowServer({
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="truncate text-xs text-soft">
+                                                    <div className="flex flex-wrap items-center gap-2 truncate text-xs text-soft">
                                                         {tool.host ? (
-                                                            <span className="font-mono text-ink">
-                                                                {tool.host}
-                                                            </span>
+                                                            <>
+                                                                <span className="font-mono text-ink">
+                                                                    {tool.host}
+                                                                </span>
+                                                                <DomainStatusPills
+                                                                    host={
+                                                                        tool.host
+                                                                    }
+                                                                />
+                                                            </>
                                                         ) : (
                                                             tool.label
                                                         )}
-                                                    </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">

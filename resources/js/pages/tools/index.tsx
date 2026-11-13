@@ -26,6 +26,7 @@ import CustomEnvFields, {
     excludeCustomEnvFields,
 } from '@/components/custom-env-fields';
 import HostPicker from '@/components/host-picker';
+import DomainStatusPills from '@/components/domain-status-pills';
 import { ExternalLinkButton } from '@/lib/open-external';
 import QrCodePopover from '@/components/qr-code-popover';
 import ToolLogo from '@/components/tool-logo';
@@ -880,34 +881,41 @@ export default function ToolsIndex({
                                                                 </td>
                                                                 <td className="py-3.5 font-mono text-[12px] text-soft">
                                                                     {tool.host ? (
-                                                                        url ? (
-                                                                            <Link
-                                                                                href={
-                                                                                    open()
-                                                                                        .url
-                                                                                }
-                                                                                method="post"
-                                                                                data={{
-                                                                                    url,
-                                                                                }}
-                                                                                as="button"
-                                                                                className="inline-flex items-center gap-1 text-left hover:text-ink hover:underline"
-                                                                                title="Open in browser"
-                                                                            >
+                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                            {url ? (
+                                                                                <Link
+                                                                                    href={
+                                                                                        open()
+                                                                                            .url
+                                                                                    }
+                                                                                    method="post"
+                                                                                    data={{
+                                                                                        url,
+                                                                                    }}
+                                                                                    as="button"
+                                                                                    className="inline-flex items-center gap-1 text-left hover:text-ink hover:underline"
+                                                                                    title="Open in browser"
+                                                                                >
+                                                                                    <span className="max-w-[180px] truncate">
+                                                                                        {
+                                                                                            tool.host
+                                                                                        }
+                                                                                    </span>
+                                                                                    <ExternalLink className="size-3 shrink-0 text-faint" />
+                                                                                </Link>
+                                                                            ) : (
                                                                                 <span className="max-w-[180px] truncate">
                                                                                     {
                                                                                         tool.host
                                                                                     }
                                                                                 </span>
-                                                                                <ExternalLink className="size-3 shrink-0 text-faint" />
-                                                                            </Link>
-                                                                        ) : (
-                                                                            <span className="max-w-[180px] truncate">
-                                                                                {
+                                                                            )}
+                                                                            <DomainStatusPills
+                                                                                host={
                                                                                     tool.host
                                                                                 }
-                                                                            </span>
-                                                                        )
+                                                                            />
+                                                                        </div>
                                                                     ) : (
                                                                         <span className="text-faint">
                                                                             No
@@ -1453,28 +1461,37 @@ function InstalledCard({
                     )}
                 </div>
 
-                <div className="flex items-center justify-between rounded-xl bg-badge/50 px-3.5 py-2.5 text-xs ring-1 ring-line/60">
-                    <span className="truncate font-mono text-[11px] text-soft select-all">
-                        {tool.host
-                            ? `https://${tool.host}`
-                            : 'No public ingress address'}
-                    </span>
-                    {url && (
-                        <div className="ml-2 flex shrink-0 items-center gap-1.5">
-                            <QrCodePopover
-                                url={url}
-                                title={name}
-                                description={`Scan to open ${name} on your phone`}
-                            />
-                            <ExternalLinkButton
-                                url={url}
-                                className="inline-flex cursor-pointer items-center gap-1 font-medium text-brand hover:underline"
-                                title="Open in default browser"
-                            >
-                                <span>Visit</span>
-                                <ExternalLink className="size-3" />
-                            </ExternalLinkButton>
-                        </div>
+                <div className="space-y-2 rounded-xl bg-badge/50 px-3.5 py-2.5 text-xs ring-1 ring-line/60">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-mono text-[11px] text-soft select-all">
+                            {tool.host
+                                ? `https://${tool.host}`
+                                : 'No public ingress address'}
+                        </span>
+                        {url && (
+                            <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                                <QrCodePopover
+                                    url={url}
+                                    title={name}
+                                    description={`Scan to open ${name} on your phone`}
+                                />
+                                <ExternalLinkButton
+                                    url={url}
+                                    className="inline-flex cursor-pointer items-center gap-1 font-medium text-brand hover:underline"
+                                    title="Open in default browser"
+                                >
+                                    <span>Visit</span>
+                                    <ExternalLink className="size-3" />
+                                </ExternalLinkButton>
+                            </div>
+                        )}
+                    </div>
+                    {tool.host && (
+                        <DomainStatusPills
+                            host={tool.host}
+                            showDetail
+                            className="w-full border-t border-line/50 pt-2"
+                        />
                     )}
                 </div>
 
