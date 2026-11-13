@@ -1,39 +1,41 @@
 import { router } from '@inertiajs/react';
 import { Check, Code2, Wrench } from 'lucide-react';
-import FrameworkLogo from '@/components/framework-logo';
-import ProviderLogo from '@/components/provider-logo';
 import { cn } from '@/lib/utils';
 
 const USAGES: {
     value: 'tools' | 'apps';
     title: string;
     detail: string;
+    highlights: string[];
     icon: typeof Wrench;
     accent: string;
-    /** Slugs rendered as brand icons below the description so someone can see what this path is for at a glance. */
-    installs: string[];
-    logoKind: 'provider' | 'framework';
-    size: string;
+    footnote: string;
 }[] = [
     {
         value: 'tools',
-        title: 'Install tools on a server',
-        detail: 'Create servers and set up chat, a wiki, sign-in and more for your team. Nothing runs on this computer.',
+        title: 'Servers & Cluster Tools',
+        detail: 'Provision cloud servers and deploy self-hosted apps for your team.',
+        highlights: [
+            'Create & manage cloud servers (VPS, EKS, GKE)',
+            'Deploy 45+ Cluster Tools (chat, wiki, auth, storage, n8n)',
+            'Manage domains, TLS, backups & Plex Commons',
+        ],
         icon: Wrench,
         accent: 'tools',
-        installs: ['kubectl', 'tofu'],
-        logoKind: 'provider',
-        size: '~150MB download',
+        footnote: 'Nothing runs locally · ~150MB download',
     },
     {
         value: 'apps',
         title: 'Local development',
-        detail: 'Everything above, plus running a local Kubernetes cluster on this computer (requires a container runtime, and WSL on Windows) to build and preview apps before deploying.',
+        detail: 'Everything in Servers & Cluster Tools, plus:',
+        highlights: [
+            'Build & preview Laravel, Next.js, Vite, Django & more locally',
+            'Run a local Kubernetes cluster on this computer',
+            'Unlocks Projects & Dev Boxes in the sidebar',
+        ],
         icon: Code2,
         accent: 'brand',
-        installs: ['laravel', 'nextjs', 'vite', 'django', 'nestjs'],
-        logoKind: 'framework',
-        size: '~300MB+ with a container runtime',
+        footnote: 'Requires a container runtime (and WSL on Windows) · ~300MB+',
     },
 ];
 
@@ -118,25 +120,19 @@ export default function UsageChoice({
                                 <span className="mt-1 block text-xs leading-relaxed text-soft">
                                     {option.detail}
                                 </span>
-                                <span className="mt-2.5 flex items-center gap-1.5">
-                                    {option.installs.map((slug) =>
-                                        option.logoKind === 'framework' ? (
-                                            <FrameworkLogo
-                                                key={slug}
-                                                slug={slug}
-                                                size="xs"
-                                            />
-                                        ) : (
-                                            <ProviderLogo
-                                                key={slug}
-                                                slug={slug}
-                                                size="xs"
-                                            />
-                                        ),
-                                    )}
-                                    <span className="ml-1 text-[11px] text-faint">
-                                        {option.size}
-                                    </span>
+                                <ul className="mt-2.5 space-y-1 text-xs text-soft">
+                                    {option.highlights.map((item) => (
+                                        <li
+                                            key={item}
+                                            className="flex items-start gap-1.5"
+                                        >
+                                            <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
+                                            <span>{item}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <span className="mt-2.5 block text-[11px] text-faint">
+                                    {option.footnote}
                                 </span>
                             </span>
                             <span

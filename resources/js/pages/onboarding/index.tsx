@@ -876,7 +876,7 @@ export default function OnboardingIndex({
                                             </span>
                                             {usage === 'apps'
                                                 ? 'Local development'
-                                                : 'Install tools on a server'}
+                                                : 'Servers & Cluster Tools'}
                                         </span>
                                         {selectedProviders.length > 0 ? (
                                             selectedProviders.map((slug) => (
