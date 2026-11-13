@@ -7,6 +7,7 @@ use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\CloudAccount;
+use App\Services\LaraKube\ToolLocator;
 use Native\Desktop\Facades\ChildProcess;
 
 /**
@@ -18,7 +19,7 @@ class GcpSignIn
 {
     public const SUBJECT = 'gcp-auth';
 
-    public function __construct(private CliRunner $runner, private CloudAccount $account) {}
+    public function __construct(private CliRunner $runner, private CloudAccount $account, private ?ToolLocator $locator = null) {}
 
     public function current(): ?Run
     {
@@ -40,14 +41,30 @@ class GcpSignIn
 
         Run::query()->where('subject', self::SUBJECT)->where('status', RunStatus::Running)->get()->each(function (Run $old): void {
             ChildProcess::stop($old->alias());
+            if (is_string($oldFile = $old->meta['stdin_file'] ?? null) && $oldFile !== '') {
+                @unlink($oldFile);
+            }
             $old->forceFill(['status' => RunStatus::Cancelled, 'finished_at' => now()])->save();
         });
+
+        $secretEnvironment = [];
+        $meta = [];
+
+        if (! ($this->locator ?? app(ToolLocator::class))->wslFeatureEnabled()) {
+            $stdinFile = storage_path('framework/temp/gcp-code-'.bin2hex(random_bytes(8)).'.txt');
+            @mkdir(dirname($stdinFile), 0755, true);
+            @unlink($stdinFile);
+            $secretEnvironment['LARAKUBE_STDIN_FILE'] = $stdinFile;
+            $meta['stdin_file'] = $stdinFile;
+        }
 
         return $this->runner->start(
             label: 'Google Cloud sign-in',
             arguments: ['cloud:login', '--provider=gcp', '--json'],
+            secretEnvironment: $secretEnvironment,
             kind: RunKind::CloudAuth,
             subject: self::SUBJECT,
+            meta: $meta,
             targetType: 'system',
             targetName: 'Google Cloud',
         );
@@ -67,10 +84,19 @@ class GcpSignIn
         };
     }
 
-    /** The code goes to the waiting process on stdin. It is not stored and never shown in a command line. */
+    /** The code goes to the waiting process via its stdin file (or stdin pipe under WSL). It is never shown in a command line. */
     public function submitCode(Run $run, string $code): void
     {
-        ChildProcess::message(trim($code)."\n", $run->alias());
+        $stdinFile = $run->meta['stdin_file'] ?? null;
+
+        if (is_string($stdinFile) && $stdinFile !== '') {
+            @mkdir(dirname($stdinFile), 0755, true);
+            $tmp = $stdinFile.'.tmp';
+            file_put_contents($tmp, trim($code)."\n", LOCK_EX);
+            @rename($tmp, $stdinFile);
+        } else {
+            ChildProcess::message(trim($code)."\n", $run->alias());
+        }
 
         $run->forceFill(['meta' => [...($run->meta ?? []), 'code_sent' => '1']])->save();
     }

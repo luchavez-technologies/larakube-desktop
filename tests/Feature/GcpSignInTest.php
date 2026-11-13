@@ -131,3 +131,33 @@ test('loginGcp endpoint reuses running session unless restart flag is sent', fun
     $res3->assertOk();
     expect($res3->json('run'))->not->toBe($runId1);
 });
+
+test('native sign-in without WSL passes LARAKUBE_STDIN_FILE and writes the code to that file', function () {
+    $binDir = sys_get_temp_dir().'/larakube-gcp-test-'.bin2hex(random_bytes(4));
+    @mkdir($binDir, 0755, true);
+    file_put_contents($binDir.'/larakube.exe', '');
+
+    try {
+        putenv('SystemRoot=C:\\Windows');
+        app()->instance(ToolLocator::class, new ToolLocator(directories: [$binDir], windows: true, wslFeatureEnabled: false));
+        $fake = ChildProcess::fake();
+        $signIn = app(GcpSignIn::class);
+
+        $run = $signIn->start();
+        $stdinFile = $run->meta['stdin_file'] ?? null;
+
+        expect($stdinFile)->toBeString()->not->toBe('');
+        $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => true);
+
+        $signIn->submitCode($run, '  4/0NativeWinCode  ');
+
+        expect(file_get_contents($stdinFile))->toBe("4/0NativeWinCode\n");
+        expect($signIn->state($run->refresh())['state'])->toBe('signing-in');
+
+        $signIn->start(restart: true);
+        expect(is_file($stdinFile))->toBeFalse();
+    } finally {
+        @unlink($binDir.'/larakube.exe');
+        @rmdir($binDir);
+    }
+});
