@@ -129,6 +129,8 @@ export default function Readiness({
                 }
             />
 
+            <UsageChoice usage={usage} />
+
             {windows && usage === 'apps' && (!wsl || wsl.state !== 'ready') ? (
                 // WSL is only still needed for local k3s development
                 // (`usage === 'apps'`) — cloud:create (VPS, EKS, GKE) and
@@ -155,7 +157,6 @@ export default function Readiness({
                 />
             ) : (
                 <>
-                    <UsageChoice usage={usage} />
                     {usage === 'apps' && (
                         <>
                             <LocalDevelopment cluster={localCluster} />
