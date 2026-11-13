@@ -151,16 +151,14 @@ export default function DomainStatusPills({
     const warnClass =
         'bg-warn-tint text-warn ring-1 ring-warn/30 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30';
 
-    let summaryText = 'Checking DNS & TLS...';
+    let summaryText = 'Checking DNS & HTTPS...';
     if (status) {
         if (!dnsReady) {
             summaryText = dnsDetail;
         } else if (!httpsReady) {
             summaryText = httpsDetail;
         } else {
-            summaryText = status.dns.records[0]
-                ? `${status.dns.records[0]} · TLS active`
-                : 'TLS active';
+            summaryText = 'Public DNS & HTTPS ready';
         }
     }
 

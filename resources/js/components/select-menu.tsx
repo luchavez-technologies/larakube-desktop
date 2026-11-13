@@ -236,22 +236,26 @@ export default function SelectMenu({
                                                 : 'text-ink hover:bg-badge/60',
                                         )}
                                     >
-                                        <div className="flex min-w-0 items-center gap-2">
+                                        <div className="flex min-w-0 items-center gap-2.5">
                                             {option.icon}
-                                            <span className="truncate">
-                                                {option.label}
-                                            </span>
-                                            {option.badge}
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="truncate">
+                                                        {option.label}
+                                                    </span>
+                                                    {option.badge}
+                                                </div>
+                                                {option.description && (
+                                                    <div className="mt-0.5 truncate font-mono text-[10px] font-normal text-soft">
+                                                        {option.description}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                         {isSelected && (
                                             <Check className="size-3.5 shrink-0 text-brand" />
                                         )}
                                     </button>
-                                    {option.description && (
-                                        <div className="px-2.5 pb-1 text-[10px] text-faint">
-                                            {option.description}
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })}

@@ -108,3 +108,28 @@ export function serverEndpointLabel(
 
     return 'Provisioning IP…';
 }
+
+export type ServerKind = 'VPS' | 'Managed' | 'Local' | 'External';
+
+/**
+ * Short classification label for server switchers and badges.
+ */
+export function serverKindLabel(
+    server?: Pick<Server, 'provider' | 'region' | 'ip' | 'kind'> | null,
+): ServerKind {
+    if (!server) return 'VPS';
+    if (isLocalServer(server)) return 'Local';
+
+    const kind = (server.kind ?? '').toLowerCase();
+    if (['managed', 'doks', 'gke', 'eks', 'aks', 'cluster'].includes(kind)) {
+        return 'Managed';
+    }
+    if (kind === 'discovered') {
+        return 'External';
+    }
+    if (!server.ip) {
+        return 'Managed';
+    }
+
+    return 'VPS';
+}
