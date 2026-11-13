@@ -18,6 +18,7 @@ import Button from '@/components/button';
 import Card from '@/components/card';
 import ProviderLogo from '@/components/provider-logo';
 import RunDrawer from '@/components/run-drawer';
+import ToolLogo from '@/components/tool-logo';
 import FrameworkLogo from '@/components/framework-logo';
 import { celebrate } from '@/lib/celebrate';
 import { cn } from '@/lib/utils';
@@ -108,9 +109,58 @@ const WHAT_YOU_GET = [
 ] as const;
 
 // Brand icons only — no names, taglines, or categories — purely to show the
-// supported frameworks. Static on purpose: the Welcome step has to render
-// before the LaraKube CLI is even installed, so a CLI-sourced catalog can't
-// reach this screen.
+// breadth of what's installable. Mirrors every case tool-logo.tsx/
+// framework-logo.tsx already draw a real brand icon for. Static on purpose:
+// the Welcome step has to render before the LaraKube CLI is even installed,
+// so a CLI-sourced catalog can't reach this screen.
+const TOOL_LOGO_WALL = [
+    'pocketbase',
+    'directus',
+    'wordpress',
+    'matrix',
+    'openbao',
+    'twenty',
+    'livekit',
+    'kuma',
+    'vaultwarden',
+    'forgejo',
+    'gitea',
+    'grafana',
+    'prometheus',
+    'minio',
+    'ocis',
+    'n8n',
+    'windmill',
+    'metabase',
+    'outline',
+    'chatwoot',
+    'umami',
+    'plausible',
+    'glitchtip',
+    'netbird',
+    'wireguard',
+    'zitadel',
+    'stalwart',
+    'teable',
+    'documenso',
+    'traefik',
+    'headlamp',
+    'penpot',
+    'resume',
+    'yopass',
+    'external-dns',
+    'planka',
+    'kutt',
+    'sendrec',
+    'bulwark',
+    'redis',
+    'postgresql',
+    'mysql',
+    'mariadb',
+    'mongodb',
+    'adminer',
+];
+
 const FRAMEWORK_LOGO_WALL = [
     'laravel',
     'statamic',
@@ -129,21 +179,21 @@ const FRAMEWORK_LOGO_WALL = [
     'rust',
 ];
 
+const ALL_LOGO_SLUGS = [...TOOL_LOGO_WALL, ...FRAMEWORK_LOGO_WALL];
+
 function rotated(list: string[], offset: number): string[] {
     const n = offset % list.length;
 
     return [...list.slice(n), ...list.slice(0, n)];
 }
 
-// Five differently-offset views of the framework pool, duplicated once per row
-// so even wide monitors stay filled without gaps.
-const BACKGROUND_WALL_ROWS = [0, 3, 6, 9, 12].map((offset) => {
-    const row = rotated(FRAMEWORK_LOGO_WALL, offset);
+// Five differently-offset views of the same pool, so each row shows a
+// different mix rather than all scrolling the identical sequence.
+const BACKGROUND_WALL_ROWS = [0, 12, 24, 36, 48].map((offset) =>
+    rotated(ALL_LOGO_SLUGS, offset),
+);
 
-    return [...row, ...row];
-});
-
-/** The full-screen, grayscale, slow-drifting framework logo wall behind the card — present on every step, not just Welcome. */
+/** The full-screen, grayscale, slow-drifting logo wall behind the card — present on every step, not just Welcome. */
 function BackgroundLogoWall() {
     return (
         <div className="pointer-events-none absolute inset-0 z-0 flex flex-col justify-around gap-8 overflow-hidden py-4 opacity-[0.16] grayscale">
@@ -153,9 +203,13 @@ function BackgroundLogoWall() {
                     items={items}
                     reverse={idx % 2 === 1}
                     duration={52 + idx * 9}
-                    renderItem={(slug) => (
-                        <FrameworkLogo slug={slug} size="lg" />
-                    )}
+                    renderItem={(slug) =>
+                        TOOL_LOGO_WALL.includes(slug) ? (
+                            <ToolLogo slug={slug} size="lg" />
+                        ) : (
+                            <FrameworkLogo slug={slug} size="lg" />
+                        )
+                    }
                 />
             ))}
         </div>
@@ -538,9 +592,9 @@ export default function OnboardingIndex({
                                         variants={fadeUpItem}
                                         className="pt-1 text-[11px] font-medium text-faint"
                                     >
-                                        45+ Cluster Tools and{' '}
-                                        {FRAMEWORK_LOGO_WALL.length}+ frameworks
-                                        — and growing
+                                        {TOOL_LOGO_WALL.length}+ Cluster Tools
+                                        and {FRAMEWORK_LOGO_WALL.length}+
+                                        frameworks — and growing
                                     </motion.p>
                                 </motion.div>
                             )}

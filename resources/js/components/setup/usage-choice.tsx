@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Check, Code2, Wrench } from 'lucide-react';
+import FrameworkLogo from '@/components/framework-logo';
 import ProviderLogo from '@/components/provider-logo';
 import { cn } from '@/lib/utils';
 
@@ -9,8 +10,9 @@ const USAGES: {
     detail: string;
     icon: typeof Wrench;
     accent: string;
-    /** Slugs ProviderLogo already renders — shown so someone can see exactly what this path installs before picking it, not just read a sentence about it. */
+    /** Slugs rendered as brand icons below the description so someone can see what this path is for at a glance. */
     installs: string[];
+    logoKind: 'provider' | 'framework';
     size: string;
 }[] = [
     {
@@ -20,6 +22,7 @@ const USAGES: {
         icon: Wrench,
         accent: 'tools',
         installs: ['kubectl', 'tofu'],
+        logoKind: 'provider',
         size: '~150MB download',
     },
     {
@@ -28,7 +31,8 @@ const USAGES: {
         detail: 'Everything above, plus running a local Kubernetes cluster on this computer (requires a container runtime, and WSL on Windows) to build and preview apps before deploying.',
         icon: Code2,
         accent: 'brand',
-        installs: ['kubectl', 'tofu', 'docker', 'git'],
+        installs: ['laravel', 'nextjs', 'vite', 'django', 'go'],
+        logoKind: 'framework',
         size: '~300MB+ with a container runtime',
     },
 ];
@@ -115,13 +119,21 @@ export default function UsageChoice({
                                     {option.detail}
                                 </span>
                                 <span className="mt-2.5 flex items-center gap-1.5">
-                                    {option.installs.map((slug) => (
-                                        <ProviderLogo
-                                            key={slug}
-                                            slug={slug}
-                                            size="xs"
-                                        />
-                                    ))}
+                                    {option.installs.map((slug) =>
+                                        option.logoKind === 'framework' ? (
+                                            <FrameworkLogo
+                                                key={slug}
+                                                slug={slug}
+                                                size="xs"
+                                            />
+                                        ) : (
+                                            <ProviderLogo
+                                                key={slug}
+                                                slug={slug}
+                                                size="xs"
+                                            />
+                                        ),
+                                    )}
                                     <span className="ml-1 text-[11px] text-faint">
                                         {option.size}
                                     </span>
