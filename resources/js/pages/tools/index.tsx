@@ -1500,6 +1500,7 @@ function InstalledCard({
                         capabilities={tool.commonsCapabilities}
                         activeCommonsServices={activeCommonsServices}
                         instanceCommons={tool.commons}
+                        instanceWiring={{ sso: tool.sso, mail: tool.mail }}
                         compact
                     />
                 )}
