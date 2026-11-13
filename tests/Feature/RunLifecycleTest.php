@@ -119,6 +119,30 @@ test('updating the larakube tool itself goes through the CLI self-updater, not s
     File::deleteDirectory($tempBin);
 });
 
+test('updating LaraKube CLI on Windows uses CliInstaller directly without spawning larakube.exe', function () {
+    $tempBin = storage_path('framework/testing/cli-win-update-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($tempBin);
+    File::put("{$tempBin}/larakube.exe", 'old-binary');
+    app()->instance(
+        CliInstaller::class,
+        new CliInstaller(app(GlobalSettings::class), binDir: $tempBin, os: 'windows', arch: 'x64'),
+    );
+    $fake = ChildProcess::fake();
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response('fake windows binary '.str_repeat('A', 2048), 200),
+    ]);
+
+    $response = $this->post(route('setup.tools.update', 'larakube'), ['channel' => 'canary']);
+
+    $run = Run::sole();
+    $response->assertRedirect(route('runs.show', $run));
+    expect($run->status)->toBe(RunStatus::Succeeded)
+        ->and($run->command)->toBe(['cli:install', '--channel=canary'])
+        ->and(file_get_contents("{$tempBin}/larakube.exe"))->toStartWith('fake windows binary ');
+
+    File::deleteDirectory($tempBin);
+});
+
 test('updating Podman runs the runtime installer with --update, not setup --update', function () {
     $directory = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($directory);

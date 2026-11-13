@@ -159,13 +159,26 @@ class CliInstaller
                 ];
             }
 
-            // Move into place and make executable
-            if (file_exists($target)) {
+            // Move into place and make executable. On Windows, rename any existing
+            // executable to .old first so an active handle (e.g. a concurrent
+            // ReadinessCheck) does not block replacement.
+            $oldTarget = null;
+            if ($this->os() === 'windows' && file_exists($target)) {
+                $oldTarget = "{$target}.old";
+                if (file_exists($oldTarget)) {
+                    @unlink($oldTarget);
+                }
+                @rename($target, $oldTarget);
+            } elseif (file_exists($target)) {
                 @unlink($target);
             }
 
             File::move($tempFile, $target);
             chmod($target, 0755);
+
+            if ($oldTarget !== null && file_exists($oldTarget)) {
+                @unlink($oldTarget);
+            }
 
             // On Windows, also cache the matching Linux binary (`larakube-linux-x64`) alongside `larakube.exe`
             // so WSL2 stays in lockstep and self-heals immediately across "LaraKube Linux Reset".
@@ -188,6 +201,10 @@ class CliInstaller
                 'error' => null,
             ];
         } catch (Throwable $e) {
+            if (isset($oldTarget) && ! file_exists($target) && file_exists($oldTarget)) {
+                @rename($oldTarget, $target);
+            }
+
             return [
                 'success' => false,
                 'path' => null,

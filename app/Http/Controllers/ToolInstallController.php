@@ -8,7 +8,7 @@ use App\Models\Run;
 use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ReadinessCheck;
-use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -41,6 +41,11 @@ class ToolInstallController extends Controller
             $readiness->forget('larakube');
 
             if ($result['success']) {
+                $wsl = app(Wsl::class);
+                if ($wsl->isWindows() && $wsl->distro() !== null) {
+                    $wsl->syncCachedLinuxBinaryToDistro();
+                }
+
                 $run->update([
                     'status' => RunStatus::Succeeded,
                     'finished_at' => now(),
@@ -77,10 +82,10 @@ class ToolInstallController extends Controller
      * goes through, just asking it to upgrade rather than only install when
      * missing.
      */
-    public function updateTool(string $tool, CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, ToolLocator $locator, Request $request): RedirectResponse
+    public function updateTool(string $tool, CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, Request $request): RedirectResponse
     {
         if ($tool === 'larakube') {
-            return $this->updateCli($runner, $installer, $readiness, $locator, $request);
+            return $this->updateCli($runner, $installer, $readiness, $request);
         }
 
         $definition = ReadinessCheck::TOOLS[$tool] ?? null;
@@ -121,31 +126,13 @@ class ToolInstallController extends Controller
     }
 
     /**
-     * Brings the LaraKube CLI up to date. On Windows `larakube update` runs via the native `larakube.exe` binary
-     * (which updates both the Windows `.exe` and the WSL Linux binary in lockstep, or falls back to the in-distro
-     * binary when `larakube.exe` is not yet installed); on a Mac or Linux it is the same download that installed it.
+     * Brings the LaraKube CLI up to date using the same direct download/replace
+     * installer used for initial installation on all platforms (including Windows,
+     * where self-updating via `larakube.exe update` cannot recover if the binary
+     * is broken or locked).
      */
-    public function updateCli(CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, ToolLocator $locator, Request $request): RedirectResponse
+    public function updateCli(CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, Request $request): RedirectResponse
     {
-        if (! $locator->isWindows()) {
-            return $this->store('larakube', $runner, $installer, $readiness, $request);
-        }
-
-        $channel = in_array($request->input('channel'), CliInstaller::CHANNELS, true) ? (string) $request->input('channel') : $installer->channel();
-
-        $readiness->forget('larakube');
-
-        $run = $runner->start(
-            label: "Update LaraKube CLI ({$channel})",
-            arguments: ['update', ...($channel === 'canary' ? ['--canary'] : []), '--yes'],
-            kind: RunKind::InstallTool,
-            subject: 'larakube',
-            targetType: 'tool',
-            targetName: 'LaraKube CLI',
-            tool: 'larakube',
-            environment: 'local',
-        );
-
-        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+        return $this->store('larakube', $runner, $installer, $readiness, $request);
     }
 }
