@@ -27,8 +27,31 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureMaturityFlags();
+        $this->configureNativeSqlite();
 
         $this->app->make(AppUpdates::class)->listen();
+    }
+
+    /**
+     * NativePHP's runtime `nativephp` SQLite connection omits WAL and busy_timeout,
+     * causing `database is locked` errors when web workers, queues, and scheduler overlap.
+     */
+    protected function configureNativeSqlite(): void
+    {
+        $this->app->booted(function (): void {
+            if (! is_array(config('database.connections.nativephp'))) {
+                return;
+            }
+
+            config([
+                'database.connections.nativephp.busy_timeout' => 10000,
+                'database.connections.nativephp.journal_mode' => 'WAL',
+                'database.connections.nativephp.synchronous' => 'NORMAL',
+                'database.connections.nativephp.transaction_mode' => 'DEFERRED',
+            ]);
+
+            DB::purge('nativephp');
+        });
     }
 
     /**
