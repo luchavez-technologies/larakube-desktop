@@ -31,7 +31,7 @@ const USAGES: {
         detail: 'Everything above, plus running a local Kubernetes cluster on this computer (requires a container runtime, and WSL on Windows) to build and preview apps before deploying.',
         icon: Code2,
         accent: 'brand',
-        installs: ['laravel', 'nextjs', 'vite', 'django', 'go'],
+        installs: ['laravel', 'nextjs', 'vite', 'django', 'nestjs'],
         logoKind: 'framework',
         size: '~300MB+ with a container runtime',
     },
