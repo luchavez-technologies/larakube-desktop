@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RunStatus;
+use App\Models\CloudProvider;
 use App\Models\Run;
 use App\Services\GcpSignIn;
 use App\Services\LaraKube\ToolLocator;
@@ -160,4 +161,43 @@ test('native sign-in without WSL passes LARAKUBE_STDIN_FILE and writes the code 
         @unlink($binDir.'/larakube.exe');
         @rmdir($binDir);
     }
+});
+
+test('selecting a gcp project refreshes SQLite provider credentials synchronously', function () {
+    putenv('SystemRoot=C:\\Windows');
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
+
+    CloudProvider::updateOrCreate(['slug' => 'gcp'], [
+        'label' => 'Google Cloud Platform',
+        'default_region' => 'us-central1',
+        'default_vps_size' => 'e2-medium',
+        'credentials_ready' => false,
+        'credentials_hint' => 'No Google Cloud project selected.',
+    ]);
+
+    Process::fake([
+        '*which*' => Process::result(output: "/usr/local/bin/larakube\n"),
+        '*cloud:project*' => Process::result(output: json_encode(['success' => true, 'provider' => 'gcp', 'project' => 'my-gcp-project'])),
+        '*cloud:providers*' => Process::result(output: json_encode([
+            'success' => true,
+            'providers' => [[
+                'slug' => 'gcp',
+                'label' => 'Google Cloud Platform',
+                'credentials' => ['ready' => true, 'hint' => null],
+                'activeAccount' => 'user@example.com',
+                'accounts' => [['id' => 'user@example.com', 'label' => 'user@example.com', 'isDefault' => true]],
+            ]],
+        ])),
+    ]);
+
+    $this->postJson('/setup/cloud/gcp/project', ['project_id' => 'my-gcp-project'])
+        ->assertOk()
+        ->assertJson(['ok' => true]);
+
+    $provider = CloudProvider::where('slug', 'gcp')->firstOrFail();
+
+    expect($provider->credentials_ready)->toBeTrue()
+        ->and($provider->credentials_hint)->toBeNull()
+        ->and($provider->active_account)->toBe('user@example.com')
+        ->and($provider->accounts)->toHaveCount(1);
 });

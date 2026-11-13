@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\Sync\SyncCloudProvidersJob;
 use App\Services\LaraKube\CloudAccount;
+use App\Services\LaraKube\ReadinessCheck;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class CloudAccountController extends Controller
 {
-    public function setDefault(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
+    public function setDefault(Request $request, CloudAccount $account, ReadinessCheck $readiness): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'provider' => ['required', 'string', 'in:do,hetzner,aws,gcp'],
@@ -25,7 +25,8 @@ class CloudAccountController extends Controller
 
         $success = ($result['success'] ?? false) === true;
         if ($success) {
-            SyncCloudProvidersJob::dispatch();
+            $readiness->forget();
+            $readiness->providers(fresh: true, statusOnly: true);
         }
 
         if ($request->expectsJson()) {
@@ -40,7 +41,7 @@ class CloudAccountController extends Controller
             : back()->withErrors(['account' => (string) ($result['error'] ?? 'Could not switch account.')]);
     }
 
-    public function add(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
+    public function add(Request $request, CloudAccount $account, ReadinessCheck $readiness): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'provider' => ['required', 'string', 'in:do,hetzner'],
@@ -58,7 +59,8 @@ class CloudAccountController extends Controller
 
         $success = ($result['success'] ?? false) === true;
         if ($success) {
-            SyncCloudProvidersJob::dispatch();
+            $readiness->forget();
+            $readiness->providers(fresh: true, statusOnly: true);
         }
 
         if ($request->expectsJson()) {
@@ -73,7 +75,7 @@ class CloudAccountController extends Controller
             : back()->withErrors(['account' => (string) ($result['error'] ?? 'Could not add account.')]);
     }
 
-    public function remove(Request $request, CloudAccount $account): RedirectResponse|JsonResponse
+    public function remove(Request $request, CloudAccount $account, ReadinessCheck $readiness): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'provider' => ['required', 'string', 'in:do,hetzner,aws,gcp'],
@@ -88,7 +90,8 @@ class CloudAccountController extends Controller
 
         $success = ($result['success'] ?? false) === true;
         if ($success) {
-            SyncCloudProvidersJob::dispatch();
+            $readiness->forget();
+            $readiness->providers(fresh: true, statusOnly: true);
         }
 
         if ($request->expectsJson()) {
