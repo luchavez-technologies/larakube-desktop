@@ -875,7 +875,7 @@ export default function OnboardingIndex({
                                                 )}
                                             </span>
                                             {usage === 'apps'
-                                                ? 'Build and run apps here'
+                                                ? 'Local development'
                                                 : 'Install tools on a server'}
                                         </span>
                                         {selectedProviders.length > 0 ? (

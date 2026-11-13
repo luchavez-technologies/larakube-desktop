@@ -24,8 +24,8 @@ const USAGES: {
     },
     {
         value: 'apps',
-        title: 'Build and run apps here',
-        detail: 'Everything above, plus creating apps and running them on this computer to work on them.',
+        title: 'Local development',
+        detail: 'Everything above, plus running a local Kubernetes cluster on this computer (requires a container runtime, and WSL on Windows) to build and preview apps before deploying.',
         icon: Code2,
         accent: 'brand',
         installs: ['kubectl', 'tofu', 'docker', 'git'],
