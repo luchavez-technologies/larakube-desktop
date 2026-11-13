@@ -113,13 +113,35 @@ class ReadinessCheck
         $result = null;
 
         if (is_array($cached) && is_bool($cached['installed'] ?? null)) {
-            $result = [
-                'installed' => $cached['installed'],
-                'path' => is_string($cached['path'] ?? null) ? $cached['path'] : null,
-                'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
-                'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
-            ];
-        } else {
+            $cachedPath = is_string($cached['path'] ?? null) ? $cached['path'] : null;
+
+            // If a previously cached host binary disappeared from disk (e.g.
+            // uninstalled or moved between user profiles), don't trust the
+            // 5-minute database cache. Skip WSL-internal `/...` paths on Windows
+            // because PHP on Windows cannot `is_file()` into a WSL distro.
+            $staleMissingBinary = $cached['installed'] === true
+                && $cachedPath !== null
+                && ! (
+                    $this->locator->isWindows()
+                    && str_starts_with($cachedPath, '/')
+                    && ! str_ends_with(strtolower($cachedPath), '.exe')
+                    && ! str_ends_with(strtolower($cachedPath), '.cmd')
+                )
+                && ! is_file($cachedPath);
+
+            if ($staleMissingBinary) {
+                Cache::forget($key);
+            } else {
+                $result = [
+                    'installed' => $cached['installed'],
+                    'path' => $cachedPath,
+                    'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
+                    'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
+                ];
+            }
+        }
+
+        if ($result === null) {
             $path = $this->locator->find($slug);
 
             if ($path === null) {

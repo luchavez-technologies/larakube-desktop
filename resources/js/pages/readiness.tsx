@@ -151,6 +151,7 @@ export default function Readiness({
                             { preserveState: true },
                         );
                     }}
+                    onInstalled={() => setRefresh((count) => count + 1)}
                 />
             ) : (
                 <>

@@ -427,3 +427,32 @@ test('on Windows with WSL enabled for another distro (no larakube-ubuntu), statu
         $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
     }
 });
+
+test('status ignores a stale cached installed entry when the cached binary no longer exists on disk', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $profile = sys_get_temp_dir().'/larakube-win-stale-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    $binaryPath = $profile.'/.larakube/bin/larakube.exe';
+    file_put_contents($binaryPath, 'fake-exe');
+    putenv("USERPROFILE={$profile}");
+    Cache::flush();
+
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: false));
+    Process::fake([
+        '*larakube.exe*--version*' => Process::result(output: "LaraKube v0.42.0\n"),
+    ]);
+
+    try {
+        $check = app(ReadinessCheck::class);
+        expect($check->status('larakube')['installed'])->toBeTrue();
+
+        @unlink($binaryPath);
+
+        $afterDelete = $check->status('larakube');
+        expect($afterDelete['installed'])->toBeFalse()
+            ->and($afterDelete['path'])->toBeNull();
+    } finally {
+        File::deleteDirectory($profile);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+    }
+});

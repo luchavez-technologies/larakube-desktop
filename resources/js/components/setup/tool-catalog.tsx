@@ -154,6 +154,29 @@ export function ToolRow({
                                 </span>
                             )}
                         </div>
+                        {tool?.installed &&
+                            (tool.path || tool.wsl?.path) &&
+                            (() => {
+                                const pathText = tool.wsl
+                                    ? [
+                                          tool.path,
+                                          tool.wsl.path
+                                              ? `WSL: ${tool.wsl.path}`
+                                              : null,
+                                      ]
+                                          .filter(Boolean)
+                                          .join(' · ')
+                                    : tool.path;
+
+                                return pathText ? (
+                                    <p
+                                        className="mt-0.5 truncate font-mono text-[11px] text-faint"
+                                        title={pathText}
+                                    >
+                                        {pathText}
+                                    </p>
+                                ) : null;
+                            })()}
                     </div>
                 </div>
             </ListRow>

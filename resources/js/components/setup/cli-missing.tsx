@@ -4,17 +4,20 @@ import { Download, RefreshCw } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import { forgetToolStatus } from '@/lib/tool-status';
 
 export default function CliMissing({
     diagnostic,
     command,
     channel,
     onChannelChange,
+    onInstalled,
 }: {
     diagnostic: string | null;
     command: string;
     channel: string;
     onChannelChange: (channel: string) => void;
+    onInstalled?: () => void;
 }) {
     const [installing, setInstalling] = useState(false);
 
@@ -24,6 +27,12 @@ export default function CliMissing({
             '/setup/tools/larakube/install',
             { channel },
             {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    forgetToolStatus('larakube');
+                    onInstalled?.();
+                },
                 onFinish: () => setInstalling(false),
             },
         );

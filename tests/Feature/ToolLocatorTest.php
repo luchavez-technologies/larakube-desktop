@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Native\Desktop\Facades\ChildProcess;
 
@@ -294,4 +295,27 @@ test('ToolLocator::start omits boolean false unset markers so Electron ChildProc
             && ! array_key_exists('APP_SERVICES_CACHE', $env)
             && ! array_key_exists('LARAVEL_STORAGE_PATH', $env);
     });
+});
+
+test('windows falls back to PATH for kubectl.exe when not present in .larakube/bin', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $oldPath = getenv('PATH');
+    $profile = sys_get_temp_dir().'/larakube-win-empty-'.bin2hex(random_bytes(4));
+    $pathDir = sys_get_temp_dir().'/larakube-win-path-'.bin2hex(random_bytes(4));
+    mkdir($profile, 0777, true);
+    mkdir($pathDir, 0777, true);
+    file_put_contents($pathDir.'/kubectl.exe', 'fake-kubectl');
+    putenv("USERPROFILE={$profile}");
+    putenv("PATH={$pathDir}");
+
+    try {
+        $locator = new ToolLocator(windows: true, wslFeatureEnabled: false);
+
+        expect($locator->find('kubectl'))->toBe("{$pathDir}/kubectl.exe");
+    } finally {
+        File::deleteDirectory($profile);
+        File::deleteDirectory($pathDir);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+        $oldPath === false ? putenv('PATH') : putenv("PATH={$oldPath}");
+    }
 });

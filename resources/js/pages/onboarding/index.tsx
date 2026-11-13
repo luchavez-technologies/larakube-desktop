@@ -803,6 +803,7 @@ export default function OnboardingIndex({
                                             command={cliInstallCommand}
                                             channel={selectedChannel}
                                             onChannelChange={setSelectedChannel}
+                                            onInstalled={triggerRecheck}
                                         />
                                     ) : (
                                         <Card label="Command-line tools">

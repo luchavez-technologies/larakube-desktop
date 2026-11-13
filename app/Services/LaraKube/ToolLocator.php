@@ -302,13 +302,25 @@ class ToolLocator
         }
 
         $profile = rtrim(self::hostProfile(true), '\\/');
-        if ($profile === '') {
-            return null;
+        if ($profile !== '') {
+            $candidate = "{$profile}/.larakube/bin/{$filename}";
+            if (is_file($candidate)) {
+                return $candidate;
+            }
         }
 
-        $candidate = "{$profile}/.larakube/bin/{$filename}";
+        // Fall back to Windows PATH so tools already installed via winget,
+        // scoop, chocolatey, or Docker Desktop are detected without
+        // re-downloading into ~/.larakube/bin.
+        $rawPath = (string) (getenv('PATH') ?: ($_SERVER['PATH'] ?? ''));
+        foreach (array_filter(array_map('trim', explode(';', $rawPath))) as $dir) {
+            $candidate = rtrim($dir, '\\/')."/{$filename}";
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
 
-        return is_file($candidate) ? $candidate : null;
+        return null;
     }
 
     /**
