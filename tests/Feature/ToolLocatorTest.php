@@ -319,3 +319,14 @@ test('windows falls back to PATH for kubectl.exe when not present in .larakube/b
         $oldPath === false ? putenv('PATH') : putenv("PATH={$oldPath}");
     }
 });
+
+test('normalizeWindowsPath converts mixed slashes on drive-letter and UNC paths without changing POSIX paths', function () {
+    expect(ToolLocator::normalizeWindowsPath('C:\\Users\\jsluc/.larakube/bin/larakube.exe'))
+        ->toBe('C:\\Users\\jsluc\\.larakube\\bin\\larakube.exe')
+        ->and(ToolLocator::normalizeWindowsPath('C:\\Windows/System32/OpenSSH/ssh.exe'))
+        ->toBe('C:\\Windows\\System32\\OpenSSH\\ssh.exe')
+        ->and(ToolLocator::normalizeWindowsPath('\\\\server\\share/bin/tool.exe'))
+        ->toBe('\\\\server\\share\\bin\\tool.exe')
+        ->and(ToolLocator::normalizeWindowsPath('/Users/jsluc/.larakube/bin/larakube'))
+        ->toBe('/Users/jsluc/.larakube/bin/larakube');
+});

@@ -200,6 +200,17 @@ class ToolLocator
     }
 
     /**
+     * Normalizes forward slashes to backslashes on Windows drive-letter or UNC paths
+     * without disturbing POSIX temp paths used when running tests on macOS/Linux.
+     */
+    public static function normalizeWindowsPath(string $path): string
+    {
+        return preg_match('/^(?:[A-Za-z]:[\\\\\/]|\\\\\\\\)/', $path) === 1
+            ? str_replace('/', '\\', $path)
+            : $path;
+    }
+
+    /**
      * Resolves the native Windows `larakube.exe` binary on the host (`%USERPROFILE%\.larakube\bin\larakube.exe`),
      * or returns null when not yet installed so `find('larakube')` can fall back to the WSL distro binary.
      */
@@ -211,7 +222,7 @@ class ToolLocator
 
         if ($this->directories !== null) {
             foreach ($this->directories as $directory) {
-                $candidate = rtrim($directory, '\\/').'/larakube.exe';
+                $candidate = self::normalizeWindowsPath(rtrim($directory, '\\/').'/larakube.exe');
                 if (is_file($candidate)) {
                     return $candidate;
                 }
@@ -225,7 +236,7 @@ class ToolLocator
             return null;
         }
 
-        $candidate = rtrim($profile, '\\/').'/.larakube/bin/larakube.exe';
+        $candidate = self::normalizeWindowsPath(rtrim($profile, '\\/').'/.larakube/bin/larakube.exe');
 
         return is_file($candidate) ? $candidate : null;
     }
@@ -255,7 +266,7 @@ class ToolLocator
 
         if ($this->directories !== null) {
             foreach ($this->directories as $directory) {
-                $candidate = rtrim($directory, '\\/')."/{$filename}";
+                $candidate = self::normalizeWindowsPath(rtrim($directory, '\\/')."/{$filename}");
                 if (is_file($candidate)) {
                     return $candidate;
                 }
@@ -269,14 +280,14 @@ class ToolLocator
             if ($localAppData === '') {
                 return null;
             }
-            $candidate = "{$localAppData}/Programs/Amazon/AWSCLIV2/aws.exe";
+            $candidate = self::normalizeWindowsPath("{$localAppData}/Programs/Amazon/AWSCLIV2/aws.exe");
 
             return is_file($candidate) ? $candidate : null;
         }
 
         if ($binary === 'ssh') {
             $sysRoot = rtrim((string) (getenv('SystemRoot') ?: 'C:\\Windows'), '\\/');
-            $candidate = "{$sysRoot}/System32/OpenSSH/ssh.exe";
+            $candidate = self::normalizeWindowsPath("{$sysRoot}/System32/OpenSSH/ssh.exe");
 
             return is_file($candidate) ? $candidate : null;
         }
@@ -293,6 +304,7 @@ class ToolLocator
                 $programFilesX86 !== '' ? "{$programFilesX86}/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd" : null,
                 $programFiles !== '' ? "{$programFiles}/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd" : null,
             ]) as $candidate) {
+                $candidate = self::normalizeWindowsPath($candidate);
                 if (is_file($candidate)) {
                     return $candidate;
                 }
@@ -303,7 +315,7 @@ class ToolLocator
 
         $profile = rtrim(self::hostProfile(true), '\\/');
         if ($profile !== '') {
-            $candidate = "{$profile}/.larakube/bin/{$filename}";
+            $candidate = self::normalizeWindowsPath("{$profile}/.larakube/bin/{$filename}");
             if (is_file($candidate)) {
                 return $candidate;
             }
@@ -314,7 +326,7 @@ class ToolLocator
         // re-downloading into ~/.larakube/bin.
         $rawPath = (string) (getenv('PATH') ?: ($_SERVER['PATH'] ?? ''));
         foreach (array_filter(array_map('trim', explode(';', $rawPath))) as $dir) {
-            $candidate = rtrim($dir, '\\/')."/{$filename}";
+            $candidate = self::normalizeWindowsPath(rtrim($dir, '\\/')."/{$filename}");
             if (is_file($candidate)) {
                 return $candidate;
             }
