@@ -14,6 +14,7 @@ import {
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import WorkersQueuesCard from '@/components/settings/workers-queues-card';
 import WslCheck, { type WslState } from '@/components/setup/wsl-check';
 import { sendJson } from '@/lib/http';
 import { forgetToolStatus } from '@/lib/tool-status';
@@ -56,6 +57,7 @@ export default function UpdatesDiagnosticsTab({
         <div className="space-y-5">
             <UpdatesCard />
             <DiagnosticsCard />
+            <WorkersQueuesCard />
             {windows && wsl?.state === 'stale' && <WslCheck wsl={wsl} />}
             {windows && wsl?.state === 'ready' && <LinuxCard />}
         </div>

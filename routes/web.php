@@ -321,6 +321,15 @@ Route::post('/context/remove', [ContextController::class, 'remove'])->name('cont
 
 Route::get('/diagnostics', DiagnosticsController::class)->name('diagnostics');
 Route::post('/diagnostics/folder', [DiagnosticsController::class, 'folder'])->name('diagnostics.folder');
+Route::get('/diagnostics/runtime', [DiagnosticsController::class, 'runtime'])->name('diagnostics.runtime');
+Route::post('/diagnostics/queues/retry/{uuid?}', [DiagnosticsController::class, 'retryQueue'])->name('diagnostics.queues.retry');
+Route::post('/diagnostics/queues/flush', [DiagnosticsController::class, 'flushQueue'])->name('diagnostics.queues.flush');
+Route::post('/diagnostics/processes/{alias}/restart', [DiagnosticsController::class, 'restartProcess'])
+    ->where('alias', '[a-zA-Z0-9._-]+')
+    ->name('diagnostics.processes.restart');
+Route::post('/diagnostics/processes/{alias}/stop', [DiagnosticsController::class, 'stopProcess'])
+    ->where('alias', '[a-zA-Z0-9._-]+')
+    ->name('diagnostics.processes.stop');
 Route::get('/updates', [UpdatesController::class, 'status'])->name('updates.status');
 Route::post('/updates/check', [UpdatesController::class, 'check'])->name('updates.check');
 Route::post('/updates/install', [UpdatesController::class, 'install'])->name('updates.install');

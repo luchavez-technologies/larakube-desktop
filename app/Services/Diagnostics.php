@@ -6,6 +6,7 @@ use App\Enums\RunStatus;
 use App\Models\Run;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
+use App\Services\LaraKube\RuntimeInspector;
 use Throwable;
 
 /**
@@ -68,6 +69,9 @@ class Diagnostics
         $sections[] = $failed->isEmpty()
             ? 'Recent failed runs: none'
             : "Recent failed runs:\n".$failed->map(fn (Run $run): string => "- #{$run->id} {$run->label} (exit ".($run->exit_code ?? 'none').")\n  ".implode(' ', array_map('strval', $run->command))."\n".$this->indent($this->tail($run->output, 12)))->implode("\n");
+
+        $runtimeSummary = $this->safely(fn (): string => app(RuntimeInspector::class)->summaryLine());
+        $sections[] = is_string($runtimeSummary) ? $runtimeSummary : 'Workers & Queues: check failed';
 
         $sections[] = "End of the app log:\n".$this->indent($this->logTail(40));
 
