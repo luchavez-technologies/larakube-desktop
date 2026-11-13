@@ -56,7 +56,7 @@ export default function UpdatesDiagnosticsTab({
             <UpdatesCard />
             <DiagnosticsCard />
             {windows && wsl?.state === 'stale' && <WslCheck wsl={wsl} />}
-            {windows && <LinuxCard />}
+            {windows && wsl?.state === 'ready' && <LinuxCard />}
         </div>
     );
 }
