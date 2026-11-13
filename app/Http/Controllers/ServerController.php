@@ -365,7 +365,7 @@ class ServerController extends Controller
 
     public function providerCatalog(string $provider, ReadinessCheck $readiness): JsonResponse
     {
-        $data = $readiness->providerCatalog($provider);
+        $data = $readiness->providerCatalog($provider, true);
 
         if ($data === null) {
             return response()->json(['message' => 'Provider catalog unavailable'], 404);

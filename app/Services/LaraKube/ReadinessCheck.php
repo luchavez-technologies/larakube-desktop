@@ -335,7 +335,7 @@ class ReadinessCheck
      *
      * @return array<string, mixed>|null
      */
-    public function providerCatalog(string $providerSlug): ?array
+    public function providerCatalog(string $providerSlug, bool $refresh = false): ?array
     {
         $cli = $this->locator->find('larakube');
 
@@ -345,7 +345,12 @@ class ReadinessCheck
             return $provider?->toInertiaProvider();
         }
 
-        $commandArgs = [$cli, 'cloud:providers', "--provider={$providerSlug}", '--json', '--no-interaction'];
+        $commandArgs = [$cli, 'cloud:providers', "--provider={$providerSlug}"];
+        if ($refresh) {
+            $commandArgs[] = '--refresh';
+        }
+        $commandArgs[] = '--json';
+        $commandArgs[] = '--no-interaction';
         $isolated = $this->locator->isolate($commandArgs);
 
         try {

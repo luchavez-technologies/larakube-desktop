@@ -30,7 +30,7 @@ test('the create server page is told the default cloud provider, to pre-select i
 
 test('provider-catalog endpoint returns catalog for a single provider', function () {
     $readiness = mock(ReadinessCheck::class);
-    $readiness->shouldReceive('providerCatalog')->with('aws')->andReturn([
+    $readiness->shouldReceive('providerCatalog')->with('aws', true)->andReturn([
         'slug' => 'aws',
         'label' => 'Amazon Web Services',
         'regions' => [['value' => 'us-east-1', 'label' => 'us-east-1']],
