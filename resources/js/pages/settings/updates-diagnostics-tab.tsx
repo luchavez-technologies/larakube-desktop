@@ -8,6 +8,7 @@ import {
     ChevronRight,
     RotateCw,
     Trash2,
+    X,
     XCircle,
 } from 'lucide-react';
 import Button from '@/components/button';
@@ -425,6 +426,15 @@ function DiagnosticsCard() {
                             Show log folder
                         </Button>
                         <CopyButton value={report} />
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setReport(null)}
+                        >
+                            <X className="size-3.5" />
+                            Close
+                        </Button>
                     </div>
                 ) : (
                     <Button
