@@ -98,7 +98,17 @@ class Elevation
             return true;
         }
 
-        return $this->asRoot(['rm', '-f', self::SUDOERS_FILE]);
+        if ($this->method() === 'wsl') {
+            return $this->asRoot(['rm', '-f', self::SUDOERS_FILE]);
+        }
+
+        // Remove the temporary sudoers rule using the active NOPASSWD grant itself;
+        // if no grant was active (e.g. dnsmasq already covered the TLD so grant()
+        // was skipped), `sudo -n` exits cleanly without popping an osascript/pkexec
+        // password dialog right as `up` finishes or the app quits.
+        Process::timeout(30)->run(['sudo', '-n', 'rm', '-f', self::SUDOERS_FILE]);
+
+        return true;
     }
 
     /** @param  list<string>  $command */

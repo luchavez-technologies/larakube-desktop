@@ -17,9 +17,18 @@ class LocalDnsCoverage
     public function covers(string $tld): bool
     {
         if (PHP_OS_FAMILY === 'Darwin') {
-            $brewPrefix = trim(Process::run('brew --prefix')->output()) ?: '/usr/local';
+            $brewPrefix = trim(Process::run('brew --prefix')->output());
+            $prefixes = array_values(array_unique(array_filter([$brewPrefix, '/opt/homebrew', '/usr/local'])));
+            $hasConf = false;
 
-            if (! file_exists("{$brewPrefix}/etc/dnsmasq.d/larakube.conf") || ! file_exists("/etc/resolver/{$tld}")) {
+            foreach ($prefixes as $prefix) {
+                if (file_exists("{$prefix}/etc/dnsmasq.d/larakube.conf")) {
+                    $hasConf = true;
+                    break;
+                }
+            }
+
+            if (! $hasConf || ! file_exists("/etc/resolver/{$tld}")) {
                 return false;
             }
 

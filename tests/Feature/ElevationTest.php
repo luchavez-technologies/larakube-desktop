@@ -45,16 +45,14 @@ test('grant skips the osascript prompt entirely when passwordless sudo already w
     Process::assertNotRan(fn ($process) => $process->command[0] === 'osascript');
 });
 
-test('revoking on native macOS removes the sudoers entry via osascript too', function () {
-    Process::fake(['*command -v*osascript*' => Process::result('/usr/bin/osascript'), '*' => Process::result()]);
+test('revoking on native macOS removes the sudoers entry via non-interactive sudo without prompting osascript', function () {
+    Process::fake(['*' => Process::result()]);
     $elevation = new Elevation(user: 'student', windows: false, darwin: true);
 
     expect($elevation->revoke())->toBeTrue();
 
-    Process::assertRan(fn ($process) => $process->command[0] === 'osascript'
-        && str_contains($process->command[2], "'rm'")
-        && str_contains($process->command[2], "'-f'")
-        && str_contains($process->command[2], Elevation::SUDOERS_FILE));
+    Process::assertRan(fn ($process) => $process->command === ['sudo', '-n', 'rm', '-f', Elevation::SUDOERS_FILE]);
+    Process::assertNotRan(fn ($process) => ($process->command[0] ?? '') === 'osascript');
 });
 
 test('without osascript on the PATH, macOS has no elevation method and grant refuses rather than hanging on a password prompt', function () {
