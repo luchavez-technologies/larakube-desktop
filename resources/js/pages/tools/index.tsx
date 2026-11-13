@@ -677,7 +677,6 @@ export default function ToolsIndex({
                                             activeCommonsServices={
                                                 activeCommonsServices ?? []
                                             }
-                                            onAddInstance={handleAddInstance}
                                             onManage={setManagingTool}
                                             onCategoryClick={
                                                 handleCategorySelect
@@ -1366,25 +1365,21 @@ function InstalledCard({
     server,
     tool,
     activeCommonsServices,
-    onAddInstance,
     onManage,
     onCategoryClick,
 }: {
     server: Server;
     tool: ClusterTool;
     activeCommonsServices?: string[];
-    onAddInstance?: (tool: ClusterTool) => void;
     onManage?: (tool: ClusterTool) => void;
     onCategoryClick?: (category: string) => void;
 }) {
     const { untested } = usePage<{ untested: Untested }>().props;
     const url = tool.url?.split(' ')[0] ?? null;
     const href = detailUrl(server, tool);
-    const canMulti = isMultiInstance(tool);
     const name = toolName(tool);
     const tagline = toolTagline(tool);
     const cats = toolCategories(tool);
-    const stack = toolStack(tool);
     const paused = tool.paused ?? false;
     const [togglingPause, setTogglingPause] = useState(false);
 
@@ -1506,99 +1501,62 @@ function InstalledCard({
                 )}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-t border-line/60 pt-3.5 text-xs">
-                {canMulti && onAddInstance ? (
+            <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-line/60 pt-3.5 text-xs">
+                <button
+                    type="button"
+                    disabled
+                    title="Coming soon — upgrade this tool's image version in place when a newer one is available."
+                    className={buttonClass('secondary', 'sm', 'h-8 px-2.5')}
+                >
+                    <ArrowUpCircle className="size-3.5" />
+                    <span>Update</span>
+                </button>
+                {tool.host && (
                     <button
                         type="button"
-                        onClick={() => onAddInstance(tool)}
-                        className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 font-medium whitespace-nowrap text-brand transition hover:text-brand/80"
-                        title="Deploy another isolated instance"
+                        disabled={togglingPause}
+                        onClick={handleTogglePause}
+                        title={
+                            paused
+                                ? 'Resume — scale back up to its prior pod count'
+                                : 'Pause — scale pods to zero to free RAM; data (PVCs, Secrets) is kept'
+                        }
+                        className={buttonClass(
+                            'secondary',
+                            'sm',
+                            'h-8 px-2.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
+                        )}
                     >
-                        <Plus className="size-3.5" />
-                        <span>Deploy Another</span>
+                        {paused ? (
+                            <Play className="size-3.5" />
+                        ) : (
+                            <Pause className="size-3.5" />
+                        )}
+                        <span>{paused ? 'Resume' : 'Pause'}</span>
+                    </button>
+                )}
+                {onManage ? (
+                    <button
+                        type="button"
+                        onClick={() => onManage(tool)}
+                        className={buttonClass(
+                            'secondary',
+                            'sm',
+                            'h-8 px-2.5 cursor-pointer',
+                        )}
+                    >
+                        <Settings2 className="size-3.5" />
+                        <span>Manage</span>
                     </button>
                 ) : (
-                    <div className="min-w-0 flex-1">
-                        {stack.length > 0 ? (
-                            <div
-                                className="flex items-center gap-1.5 truncate font-mono text-[11px] text-soft"
-                                title={`Stack: ${stack.join(' · ')}`}
-                            >
-                                <span className="font-sans text-[10px] font-medium tracking-wider text-faint uppercase">
-                                    Stack:
-                                </span>
-                                <span className="truncate">
-                                    {stack.join(' · ')}
-                                </span>
-                            </div>
-                        ) : (
-                            <span className="text-[11px] text-faint">
-                                Cluster Service
-                            </span>
-                        )}
-                    </div>
-                )}
-                <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                    <button
-                        type="button"
-                        disabled
-                        title="Coming soon — upgrade this tool's image version in place when a newer one is available."
+                    <Link
+                        href={href}
                         className={buttonClass('secondary', 'sm', 'h-8 px-2.5')}
                     >
-                        <ArrowUpCircle className="size-3.5" />
-                        <span>Update</span>
-                    </button>
-                    {tool.host && (
-                        <button
-                            type="button"
-                            disabled={togglingPause}
-                            onClick={handleTogglePause}
-                            title={
-                                paused
-                                    ? 'Resume — scale back up to its prior pod count'
-                                    : 'Pause — scale pods to zero to free RAM; data (PVCs, Secrets) is kept'
-                            }
-                            className={buttonClass(
-                                'secondary',
-                                'sm',
-                                'h-8 px-2.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
-                            )}
-                        >
-                            {paused ? (
-                                <Play className="size-3.5" />
-                            ) : (
-                                <Pause className="size-3.5" />
-                            )}
-                            <span>{paused ? 'Resume' : 'Pause'}</span>
-                        </button>
-                    )}
-                    {onManage ? (
-                        <button
-                            type="button"
-                            onClick={() => onManage(tool)}
-                            className={buttonClass(
-                                'secondary',
-                                'sm',
-                                'h-8 px-2.5 cursor-pointer',
-                            )}
-                        >
-                            <Settings2 className="size-3.5" />
-                            <span>Manage</span>
-                        </button>
-                    ) : (
-                        <Link
-                            href={href}
-                            className={buttonClass(
-                                'secondary',
-                                'sm',
-                                'h-8 px-2.5',
-                            )}
-                        >
-                            <Settings2 className="size-3.5" />
-                            <span>Manage</span>
-                        </Link>
-                    )}
-                </div>
+                        <Settings2 className="size-3.5" />
+                        <span>Manage</span>
+                    </Link>
+                )}
             </div>
         </article>
     );
