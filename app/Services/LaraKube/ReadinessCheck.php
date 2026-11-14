@@ -5,6 +5,7 @@ namespace App\Services\LaraKube;
 use App\Models\CloudProvider;
 use App\Models\CloudRegion;
 use App\Models\CloudSize;
+use App\Services\LaraKube\Tools\CliToolRegistry;
 use App\Services\Wsl;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
@@ -42,10 +43,15 @@ class ReadinessCheck
 
     private const CLI_INSTALL_COMMAND_WINDOWS = '$env:LARAKUBE_CHANNEL="canary"; irm https://docs.larakube.app/install.ps1 | iex';
 
-    /** Which cloud provider (GlobalSettings::CLOUD_PROVIDERS key) each provider-specific CLI tool is for. DO/Hetzner need no CLI binary — just the API token fields already on Setup/Settings. */
-    private const PROVIDER_TOOLS = ['aws' => 'aws', 'gcloud' => 'gcp'];
+    public function __construct(
+        private ToolLocator $locator,
+        private ?CliToolRegistry $registry = null,
+    ) {}
 
-    public function __construct(private ToolLocator $locator) {}
+    private function registry(): CliToolRegistry
+    {
+        return $this->registry ??= app(CliToolRegistry::class);
+    }
 
     /**
      * The manual "install without the button" command shown on CliMissing —
@@ -69,38 +75,7 @@ class ReadinessCheck
      */
     public function catalog(?array $intendedProviders = null): array
     {
-        $catalog = [];
-
-        foreach (self::TOOLS as $slug => $tool) {
-            if (($tool['windowsOnly'] ?? false) && ! $this->locator->isWindows()) {
-                continue;
-            }
-
-            if (! empty($intendedProviders) && array_key_exists($slug, self::PROVIDER_TOOLS) && ! in_array(self::PROVIDER_TOOLS[$slug], $intendedProviders, true)) {
-                continue;
-            }
-
-            $catalog[] = [
-                'slug' => $slug,
-                'label' => $tool['label'],
-                'purpose' => $tool['purpose'],
-                'required' => $tool['required'],
-                'localOnly' => $tool['localOnly'] ?? false,
-                'environment' => $this->locator->isWindows()
-                    ? ($this->locator->isWindowsNativeTool($slug) ? 'windows' : 'wsl')
-                    : null,
-                // Podman installs through apt, so only Linux (and WSL) can offer it.
-                'installable' => $tool['installable']
-                    && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux')
-                    // dnsmasq wildcards local DNS via the host's own resolver — Windows
-                    // has no such mechanism (it resolves via the Windows hosts file
-                    // instead, see InteractsWithHosts::ensureWindowsHostsAreSet() in the
-                    // CLI), so `larakube trust` is a no-op for it there.
-                    && ($slug !== 'dnsmasq' || PHP_OS_FAMILY !== 'Windows'),
-            ];
-        }
-
-        return $catalog;
+        return $this->registry()->catalog($this->locator, $intendedProviders);
     }
 
     /**
@@ -159,13 +134,21 @@ class ReadinessCheck
         }
 
         if ($result === null) {
-            $path = $this->locator->find($slug);
+            $tool = $this->registry()->find($slug);
+            $path = $tool !== null
+                ? $tool->locate($this->locator)
+                : $this->locator->find($slug);
 
             if ($path === null) {
-                $result = ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $this->locator->lastFailure()];
+                $diagnostic = ($this->locator->isWindows() && $tool?->runsOnWindowsHost())
+                    ? null
+                    : $this->locator->lastFailure();
+
+                $result = ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $diagnostic];
                 Cache::put($key, $result, now()->addMinutes(5));
             } else {
-                ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, self::TOOLS[$slug]['versionArgs']);
+                $versionArgs = $tool !== null ? $tool->versionArgs() : self::TOOLS[$slug]['versionArgs'];
+                ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, $versionArgs);
                 $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
 
                 // Do not cache a failed version probe (e.g. cold Windows Defender scan

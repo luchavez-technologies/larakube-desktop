@@ -59,7 +59,7 @@ test('cli installer resolves windows binary name and download url on windows', f
         ->and($installer->downloadUrl('stable'))->toContain('/latest/download/larakube-windows-x64.exe');
 });
 
-test('cli installer installs larakube.exe and caches larakube-linux-x64 in lockstep on windows', function () {
+test('cli installer installs only larakube.exe on Windows without redownloading the Linux WSL binary', function () {
     Http::fake([
         'https://github.com/luchavez-technologies/larakube-cli/releases/*' => fn () => Http::response('fake binary content longer than 1024 bytes '.str_repeat('A', 2048), 200),
     ]);
@@ -69,5 +69,37 @@ test('cli installer installs larakube.exe and caches larakube-linux-x64 in locks
 
     expect($result['success'])->toBeTrue()
         ->and(file_exists("{$this->tempBin}/larakube.exe"))->toBeTrue()
-        ->and(file_exists("{$this->tempBin}/larakube-linux-x64"))->toBeTrue();
+        ->and(file_exists("{$this->tempBin}/larakube-linux-x64"))->toBeFalse();
+});
+
+test('cli installer rejects a truncated download when Content-Length mismatches and succeeds on retry', function () {
+    $fullPayload = str_repeat('B', 4096);
+    $truncatedPayload = str_repeat('X', 2048);
+
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::sequence()
+            ->push($truncatedPayload, 200, ['Content-Length' => '4096'])
+            ->push($fullPayload, 200, ['Content-Length' => '4096']),
+    ]);
+
+    $installer = new CliInstaller(app(GlobalSettings::class), binDir: $this->tempBin, os: 'windows');
+    $result = $installer->install('canary');
+
+    expect($result['success'])->toBeTrue()
+        ->and(file_get_contents("{$this->tempBin}/larakube.exe"))->toBe($fullPayload);
+});
+
+test('cli installer preserves existing binary and returns an error if every download attempt is truncated', function () {
+    File::put("{$this->tempBin}/larakube.exe", 'previous-working-binary');
+
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response(str_repeat('X', 2048), 200, ['Content-Length' => '8192']),
+    ]);
+
+    $installer = new CliInstaller(app(GlobalSettings::class), binDir: $this->tempBin, os: 'windows');
+    $result = $installer->install('canary');
+
+    expect($result['success'])->toBeFalse()
+        ->and($result['error'])->toContain('Incomplete download')
+        ->and(file_get_contents("{$this->tempBin}/larakube.exe"))->toBe('previous-working-binary');
 });

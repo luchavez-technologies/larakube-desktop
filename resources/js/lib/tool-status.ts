@@ -44,10 +44,14 @@ function load(slug: string, fresh: boolean): Promise<ToolStatus> {
     return request;
 }
 
+export function toolIsHealthy(status: ToolStatus): boolean {
+    return status.installed && (status.version !== null || !status.diagnostic);
+}
+
 /** A one-off fresh check, for a caller that needs to decide something (not render a row) — bypasses the `known` cache entirely. */
 export function toolIsInstalled(slug: string): Promise<boolean> {
     return load(slug, true)
-        .then((status) => status.installed)
+        .then(toolIsHealthy)
         .catch(() => false);
 }
 

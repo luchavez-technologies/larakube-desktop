@@ -85,6 +85,9 @@ export function ToolRow({
     const rowRef = useRef<HTMLDivElement>(null);
     const { status, checking } = useToolStatus(entry.slug, refresh);
     const tool = status ? { ...entry, ...status } : null;
+    const isCorrupted = Boolean(
+        tool && tool.installed && tool.version === null && tool.diagnostic,
+    );
 
     useEffect(() => {
         if (highlight && rowRef.current) {
@@ -143,16 +146,26 @@ export function ToolRow({
                                     {tool && !checking && (
                                         <StatusPill
                                             tone={
-                                                tool.installed
-                                                    ? 'ok'
-                                                    : tool.required
-                                                      ? 'bad'
-                                                      : 'muted'
+                                                isCorrupted
+                                                    ? 'bad'
+                                                    : tool.installed
+                                                      ? 'ok'
+                                                      : tool.required
+                                                        ? 'bad'
+                                                        : 'muted'
+                                            }
+                                            title={
+                                                isCorrupted
+                                                    ? (tool.diagnostic ??
+                                                      undefined)
+                                                    : undefined
                                             }
                                         >
-                                            {tool.installed
-                                                ? 'Installed'
-                                                : 'Missing'}
+                                            {isCorrupted
+                                                ? 'Corrupted'
+                                                : tool.installed
+                                                  ? 'Installed'
+                                                  : 'Missing'}
                                         </StatusPill>
                                     )}
                                     {highlight && !tool?.installed && (
@@ -163,29 +176,25 @@ export function ToolRow({
                                 </span>
                             }
                             detail={
-                                tool?.installed
-                                    ? (tool.version ??
-                                      // version check failed (see
-                                      // ReadinessCheck::version()'s
-                                      // diagnostic) — showing the
-                                      // install path here instead read
-                                      // as a garbled version string,
-                                      // confirmed live (2026-10-30) to
-                                      // read as broken/corrupted.
-                                      (tool.path || tool.diagnostic ? (
-                                          <span
-                                              title={
-                                                  tool.diagnostic
-                                                      ? `${tool.path ?? ''}${tool.path ? ' — ' : ''}${tool.diagnostic}`
-                                                      : (tool.path ?? undefined)
-                                              }
-                                          >
-                                              Installed
-                                          </span>
-                                      ) : (
-                                          'Installed'
-                                      )))
-                                    : entry.purpose
+                                isCorrupted ? (
+                                    <span
+                                        className="text-accent"
+                                        title={tool?.diagnostic ?? undefined}
+                                    >
+                                        Corrupted or unreadable binary — click
+                                        Reinstall to replace it.
+                                    </span>
+                                ) : tool?.installed ? (
+                                    (tool.version ??
+                                    // version check failed without diagnostic
+                                    (tool.path ? (
+                                        <span title={tool.path}>Installed</span>
+                                    ) : (
+                                        'Installed'
+                                    )))
+                                ) : (
+                                    entry.purpose
+                                )
                             }
                             mono={tool?.installed && tool.version != null}
                         />
@@ -201,13 +210,20 @@ export function ToolRow({
 
 function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     const [submitting, setSubmitting] = useState(false);
+    const isCorrupted =
+        tool.installed && tool.version === null && Boolean(tool.diagnostic);
+    const isLaraKubeCli =
+        tool.slug === 'larakube' || tool.slug === 'larakube-wsl';
 
     const handleAction = (url: string, data?: Record<string, string>) => {
         setSubmitting(true);
         router.post(url, data ?? {}, {
             preserveScroll: true,
             preserveState: true,
-            only: ['activeRuns'],
+            only:
+                tool.slug === 'larakube'
+                    ? ['activeRuns', 'versions']
+                    : ['activeRuns'],
             onSuccess: () => {
                 forgetToolStatus(tool.slug);
             },
@@ -217,55 +233,91 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
         });
     };
 
+    const actionUrl =
+        tool.slug === 'larakube' ? '/setup/cli/update' : update(tool.slug).url;
+    const updatePayload: Record<string, string> | undefined = isLaraKubeCli
+        ? { channel }
+        : undefined;
+    const reinstallPayload: Record<string, string> = isLaraKubeCli
+        ? { channel, reinstall: '1' }
+        : { reinstall: '1' };
+
     if (tool.installed) {
-        if (tool.slug === 'larakube') {
+        if (!tool.installable) {
+            return null;
+        }
+
+        if (isCorrupted) {
             return (
                 <Button
                     type="button"
-                    variant="secondary"
+                    variant="primary"
                     size="sm"
                     disabled={submitting}
-                    onClick={() =>
-                        handleAction('/setup/cli/update', { channel })
-                    }
+                    onClick={() => handleAction(actionUrl, reinstallPayload)}
                 >
-                    {submitting ? (
-                        <RefreshCw className="size-3.5 animate-spin" />
-                    ) : (
-                        <ArrowUpCircle className="size-3.5" />
-                    )}
-                    <span>Update</span>
+                    <RotateCw
+                        className={cn('size-3.5', submitting && 'animate-spin')}
+                    />
+                    <span>Reinstall</span>
                 </Button>
             );
         }
 
-        if (tool.installable) {
+        if (isLaraKubeCli) {
             return (
-                <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={submitting}
-                    onClick={() =>
-                        handleAction(
-                            update(tool.slug).url,
-                            tool.slug === 'larakube-wsl'
-                                ? { channel }
-                                : undefined,
-                        )
-                    }
-                >
-                    {submitting ? (
-                        <RefreshCw className="size-3.5 animate-spin" />
-                    ) : (
-                        <ArrowUpCircle className="size-3.5" />
-                    )}
-                    <span>Update</span>
-                </Button>
+                <div className="flex items-center gap-1.5">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={() =>
+                            handleAction(actionUrl, reinstallPayload)
+                        }
+                    >
+                        <RotateCw
+                            className={cn(
+                                'size-3.5',
+                                submitting && 'animate-spin',
+                            )}
+                        />
+                        <span>Reinstall</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={() => handleAction(actionUrl, updatePayload)}
+                    >
+                        {submitting ? (
+                            <RefreshCw className="size-3.5 animate-spin" />
+                        ) : (
+                            <ArrowUpCircle className="size-3.5" />
+                        )}
+                        <span>Update</span>
+                    </Button>
+                </div>
             );
         }
 
-        return null;
+        return (
+            <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={submitting}
+                onClick={() => handleAction(actionUrl, updatePayload)}
+            >
+                {submitting ? (
+                    <RefreshCw className="size-3.5 animate-spin" />
+                ) : (
+                    <ArrowUpCircle className="size-3.5" />
+                )}
+                <span>Update</span>
+            </Button>
+        );
     }
 
     if (!tool.installable) {

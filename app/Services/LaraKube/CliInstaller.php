@@ -119,6 +119,8 @@ class CliInstaller
      */
     public function install(?string $channel = null): array
     {
+        set_time_limit(0);
+
         $channel = $channel ?? $this->channel();
         $this->setChannel($channel);
 
@@ -129,6 +131,8 @@ class CliInstaller
 
         $ext = $this->os() === 'windows' ? '.exe' : '';
         $target = "{$binDir}/larakube{$ext}";
+        $tempFile = null;
+        $oldTarget = null;
 
         try {
             if (! is_dir($binDir)) {
@@ -136,55 +140,34 @@ class CliInstaller
             }
 
             $url = $this->downloadUrl($channel);
-            $tempFile = storage_path('framework/temp/larakube-download-'.bin2hex(random_bytes(4)));
-            File::ensureDirectoryExists(dirname($tempFile));
-
-            // GitHub's release CDN occasionally resets the connection mid-download
-            // (confirmed live, 2026-10-30: "The request was aborted: The connection
-            // was closed unexpectedly" on a real Windows machine) — retry a few
-            // times before giving up, since this is almost always transient.
-            $response = Http::withOptions([
-                'follow_redirects' => true,
-                'verify' => true,
-            ])->timeout(120)->retry(3, 2000)->sink($tempFile)->get($url);
-
-            if (! $response->successful() || ! file_exists($tempFile) || filesize($tempFile) < 1024) {
-                if (file_exists($tempFile)) {
-                    @unlink($tempFile);
-                }
-
+            $download = $this->downloadVerifiedBinary($url, $binDir, 'larakube-download');
+            if (! $download['success'] || $download['path'] === null) {
                 return [
                     'success' => false,
                     'path' => null,
-                    'error' => "Download failed from {$url} (HTTP status: {$response->status()}).",
+                    'error' => $download['error'] ?? "Download failed from {$url}.",
                 ];
             }
 
-            // Move into place and make executable. On Windows, rename any existing
-            // executable to .old first so an active handle (e.g. a concurrent
-            // ReadinessCheck) does not block replacement.
-            $oldTarget = null;
-            if ($this->os() === 'windows' && file_exists($target)) {
+            $tempFile = $download['path'];
+
+            // Remove or move aside any existing binary before moving the verified
+            // temp file into place. On Windows, an active file handle (e.g. a running
+            // process or Defender scan) blocks unlink(), so fall back to renaming it
+            // to .old first.
+            if (file_exists($target) && ! @unlink($target) && $this->os() === 'windows') {
                 $oldTarget = "{$target}.old";
                 if (file_exists($oldTarget)) {
                     @unlink($oldTarget);
                 }
                 @rename($target, $oldTarget);
-            } elseif (file_exists($target)) {
-                @unlink($target);
             }
 
             File::move($tempFile, $target);
-            chmod($target, 0755);
+            @chmod($target, 0755);
 
             if ($oldTarget !== null && file_exists($oldTarget)) {
                 @unlink($oldTarget);
-            }
-
-            // On Windows, also cache the matching Linux binary (`larakube-linux-x64`) alongside `larakube.exe`
-            // so WSL2 stays in lockstep and self-heals immediately across "LaraKube Linux Reset".
-            if ($this->os() === 'windows') {
-                $this->downloadWindowsLinuxCacheBinary($binDir, $channel);
             }
 
             // Initialize global config if not already created
@@ -202,7 +185,11 @@ class CliInstaller
                 'error' => null,
             ];
         } catch (Throwable $e) {
-            if (isset($oldTarget) && ! file_exists($target) && file_exists($oldTarget)) {
+            if ($tempFile !== null && file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+
+            if ($oldTarget !== null && ! file_exists($target) && file_exists($oldTarget)) {
                 @rename($oldTarget, $target);
             }
 
@@ -222,6 +209,8 @@ class CliInstaller
      */
     public function installWsl(?string $channel = null, ?Wsl $wsl = null): array
     {
+        set_time_limit(0);
+
         $channel = $channel ?? $this->channel();
         $this->setChannel($channel);
 
@@ -269,61 +258,42 @@ class CliInstaller
         ];
     }
 
-    private function downloadWindowsLinuxCacheBinary(string $binDir, string $channel): void
-    {
-        $this->downloadLinuxCacheBinary($binDir, $channel);
-    }
-
     /**
      * @return array{success: bool, path: ?string, error: ?string}
      */
     private function downloadLinuxCacheBinary(string $binDir, string $channel): array
     {
         $linuxTarget = "{$binDir}/larakube-linux-{$this->arch()}";
-        $linuxTemp = storage_path('framework/temp/larakube-linux-download-'.bin2hex(random_bytes(4)));
         $url = $this->linuxCacheDownloadUrl($channel);
+        $tempFile = null;
 
         try {
-            File::ensureDirectoryExists(dirname($linuxTemp));
-            $response = Http::withOptions([
-                'follow_redirects' => true,
-                'verify' => true,
-            ])->timeout(120)->retry(3, 2000)->sink($linuxTemp)->get($url);
-
-            if ($response->successful() && (! file_exists($linuxTemp) || filesize($linuxTemp) === 0)) {
-                $body = $response->body();
-                if ($body !== '') {
-                    file_put_contents($linuxTemp, $body);
-                }
-            }
-
-            if ($response->successful() && file_exists($linuxTemp) && filesize($linuxTemp) >= 1024) {
-                if (file_exists($linuxTarget)) {
-                    @unlink($linuxTarget);
-                }
-
-                File::move($linuxTemp, $linuxTarget);
-                @chmod($linuxTarget, 0755);
-
+            $download = $this->downloadVerifiedBinary($url, $binDir, 'larakube-linux-download');
+            if (! $download['success'] || $download['path'] === null) {
                 return [
-                    'success' => true,
-                    'path' => $linuxTarget,
-                    'error' => null,
+                    'success' => false,
+                    'path' => null,
+                    'error' => $download['error'] ?? "Download failed from {$url}.",
                 ];
             }
 
-            if (file_exists($linuxTemp)) {
-                @unlink($linuxTemp);
+            $tempFile = $download['path'];
+
+            if (file_exists($linuxTarget)) {
+                @unlink($linuxTarget);
             }
 
+            File::move($tempFile, $linuxTarget);
+            @chmod($linuxTarget, 0755);
+
             return [
-                'success' => false,
-                'path' => null,
-                'error' => "Download failed from {$url} (HTTP status: {$response->status()}).",
+                'success' => true,
+                'path' => $linuxTarget,
+                'error' => null,
             ];
         } catch (Throwable $e) {
-            if (file_exists($linuxTemp)) {
-                @unlink($linuxTemp);
+            if ($tempFile !== null && file_exists($tempFile)) {
+                @unlink($tempFile);
             }
 
             return [
@@ -332,5 +302,100 @@ class CliInstaller
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Downloads a binary to a fresh same-directory temp file, closes its stream handle
+     * before inspecting size, verifies Content-Length completeness, and retries up to 3 times.
+     *
+     * @return array{success: bool, path: ?string, error: ?string}
+     */
+    private function downloadVerifiedBinary(string $url, string $destinationDir, string $prefix): array
+    {
+        $lastError = "Download failed from {$url}.";
+
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            if ($attempt > 1) {
+                app()->runningUnitTests() ? usleep(10_000) : sleep(2);
+            }
+
+            $tempFile = "{$destinationDir}/.{$prefix}-".bin2hex(random_bytes(4)).'.tmp';
+
+            try {
+                File::ensureDirectoryExists($destinationDir);
+
+                $response = Http::withOptions([
+                    'follow_redirects' => true,
+                    'verify' => true,
+                ])->connectTimeout(30)->timeout(600)->sink($tempFile)->get($url);
+
+                clearstatcache(true, $tempFile);
+
+                $successful = $response->successful();
+                $status = $response->status();
+                $contentLength = $response->header('Content-Length');
+
+                if ($successful && (! file_exists($tempFile) || (int) filesize($tempFile) === 0)) {
+                    $body = $response->body();
+                    if ($body !== '') {
+                        file_put_contents($tempFile, $body);
+                    }
+                }
+
+                $psrBody = $response->toPsrResponse()->getBody();
+                if ($psrBody->getMetadata('uri') === $tempFile) {
+                    $psrBody->close();
+                }
+                unset($response, $psrBody);
+                clearstatcache(true, $tempFile);
+
+                if (! $successful) {
+                    if (file_exists($tempFile)) {
+                        @unlink($tempFile);
+                    }
+                    $lastError = "Download failed from {$url} (HTTP status: {$status}).";
+
+                    continue;
+                }
+
+                if (! file_exists($tempFile) || (int) filesize($tempFile) < 1024) {
+                    if (file_exists($tempFile)) {
+                        @unlink($tempFile);
+                    }
+                    $lastError = "Download failed from {$url} (file missing or incomplete).";
+
+                    continue;
+                }
+
+                $expectedBytes = ctype_digit(trim($contentLength))
+                    ? (int) trim($contentLength)
+                    : 0;
+                $actualBytes = (int) filesize($tempFile);
+
+                if ($expectedBytes > 0 && $actualBytes !== $expectedBytes) {
+                    @unlink($tempFile);
+                    $lastError = "Incomplete download from {$url} (received {$actualBytes} of {$expectedBytes} bytes).";
+
+                    continue;
+                }
+
+                return [
+                    'success' => true,
+                    'path' => $tempFile,
+                    'error' => null,
+                ];
+            } catch (Throwable $e) {
+                if (file_exists($tempFile)) {
+                    @unlink($tempFile);
+                }
+                $lastError = $e->getMessage();
+            }
+        }
+
+        return [
+            'success' => false,
+            'path' => null,
+            'error' => $lastError,
+        ];
     }
 }

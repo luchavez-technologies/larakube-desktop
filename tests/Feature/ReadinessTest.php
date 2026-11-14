@@ -1,9 +1,13 @@
 <?php
 
+use App\Contracts\CliToolContract;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\LaraKube\Tools\CliToolRegistry;
+use App\Services\LaraKube\Tools\LaraKubeWslCliTool;
+use App\Services\LaraKube\Tools\PodmanTool;
 use App\Services\Wsl;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -514,4 +518,40 @@ test('GET setup/tools/larakube-wsl/status returns installed false cleanly when W
             'path' => null,
             'version' => null,
         ]);
+});
+
+test('on Windows when larakube.exe is missing, status(larakube) returns missing without falling back to WSL diagnostics', function () {
+    $oldUserProfile = getenv('USERPROFILE');
+    $profile = sys_get_temp_dir().'/larakube-win-missing-'.bin2hex(random_bytes(4));
+    mkdir($profile.'/.larakube/bin', 0777, true);
+    putenv("USERPROFILE={$profile}");
+    Cache::flush();
+
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: false));
+    Process::fake();
+
+    try {
+        $this->getJson(route('setup.tools.status', 'larakube'))
+            ->assertOk()
+            ->assertJson([
+                'installed' => false,
+                'path' => null,
+                'version' => null,
+                'diagnostic' => null,
+            ]);
+
+        Process::assertNothingRan();
+    } finally {
+        File::deleteDirectory($profile);
+        $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
+    }
+});
+
+test('CliToolRegistry resolves per-tool services and drives the ReadinessCheck catalog', function () {
+    $registry = app(CliToolRegistry::class);
+
+    expect($registry->all())->toHaveCount(count(ReadinessCheck::TOOLS))
+        ->and($registry->find('larakube'))->toBeInstanceOf(CliToolContract::class)
+        ->and($registry->find('larakube-wsl'))->toBeInstanceOf(LaraKubeWslCliTool::class)
+        ->and($registry->find('podman'))->toBeInstanceOf(PodmanTool::class);
 });

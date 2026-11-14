@@ -7,6 +7,7 @@ use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\TerminalIntegration;
+use App\Services\LaraKube\Tools\CliToolRegistry;
 use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -67,9 +68,9 @@ class ReadinessController extends Controller
     }
 
     /** One tool's state as JSON, so the Setup page can fill each row in as its own check finishes. */
-    public function toolStatus(string $tool, Request $request, ReadinessCheck $readiness): JsonResponse
+    public function toolStatus(string $tool, Request $request, ReadinessCheck $readiness, CliToolRegistry $registry): JsonResponse
     {
-        abort_unless(array_key_exists($tool, ReadinessCheck::TOOLS), 404);
+        abort_unless($registry->find($tool) !== null, 404);
 
         return response()->json($readiness->status($tool, $request->boolean('fresh')));
     }

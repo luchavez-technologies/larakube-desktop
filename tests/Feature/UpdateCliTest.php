@@ -116,3 +116,53 @@ test('on Windows larakube-wsl updates the Linux binary inside larakube-ubuntu on
 
     File::deleteDirectory($tempBin);
 });
+
+test('reinstalling a corrupted LaraKube CLI replaces it and labels the run as Reinstall', function () {
+    $tempBin = storage_path('framework/testing/reinstall-cli-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($tempBin);
+    File::put("{$tempBin}/larakube.exe", 'corrupted-bytes');
+    app()->instance(
+        CliInstaller::class,
+        new CliInstaller(app(GlobalSettings::class), binDir: $tempBin, os: 'windows', arch: 'x64'),
+    );
+    $freshBinary = 'clean windows binary '.str_repeat('C', 2048);
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response($freshBinary, 200),
+    ]);
+
+    $this->post('/setup/cli/update', ['channel' => 'canary', 'reinstall' => '1'])->assertRedirect();
+
+    $run = Run::query()->latest('id')->first();
+    expect($run->kind)->toBe(RunKind::InstallTool)
+        ->and($run->status)->toBe(RunStatus::Succeeded)
+        ->and($run->label)->toBe('Reinstall LaraKube CLI (canary)')
+        ->and(file_get_contents("{$tempBin}/larakube.exe"))->toBe($freshBinary);
+
+    File::deleteDirectory($tempBin);
+});
+
+test('reinstalling LaraKube CLI WSL labels the run as Reinstall LaraKube CLI (WSL)', function () {
+    $tempBin = storage_path('framework/testing/reinstall-wsl-cli-'.bin2hex(random_bytes(4)));
+    File::ensureDirectoryExists($tempBin);
+    app()->instance(
+        CliInstaller::class,
+        new CliInstaller(app(GlobalSettings::class), binDir: $tempBin, os: 'windows', arch: 'x64'),
+    );
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
+    Http::fake([
+        'https://github.com/luchavez-technologies/larakube-cli/releases/*' => Http::response('wsl binary '.str_repeat('D', 2048), 200),
+    ]);
+    Process::fake([
+        '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"),
+        '*wsl.exe*install*' => Process::result(output: ''),
+    ]);
+
+    $this->post(route('setup.tools.update', 'larakube-wsl'), ['channel' => 'canary', 'reinstall' => '1'])->assertRedirect();
+
+    $run = Run::query()->latest('id')->first();
+    expect($run->kind)->toBe(RunKind::InstallTool)
+        ->and($run->status)->toBe(RunStatus::Succeeded)
+        ->and($run->label)->toBe('Reinstall LaraKube CLI (WSL) (canary)');
+
+    File::deleteDirectory($tempBin);
+});
