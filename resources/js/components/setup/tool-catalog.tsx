@@ -410,20 +410,20 @@ async function waitForRunToFinish(runId: number): Promise<void> {
  * already-installed tools entirely avoids touching a tool this button has
  * no reason to touch.
  */
+/**
+ * Card footer: sits under the list so people read which tools it will install
+ * before committing to all of them.
+ */
 function InstallAllButton({
     catalog,
     channel,
     showLocalOnly,
     onInstallingChange,
-    onCheckAgain,
-    checking = false,
 }: {
     catalog: CatalogEntry[];
     channel: string;
     showLocalOnly: boolean;
     onInstallingChange: (slug: string | null) => void;
-    onCheckAgain?: () => void;
-    checking?: boolean;
 }) {
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState<{
@@ -435,7 +435,7 @@ function InstallAllButton({
         (entry) => entry.installable && (showLocalOnly || !entry.localOnly),
     );
 
-    if (targets.length === 0 && !onCheckAgain) {
+    if (targets.length === 0) {
         return null;
     }
 
@@ -484,41 +484,28 @@ function InstallAllButton({
     };
 
     return (
-        <div className="mb-3 flex items-center justify-end gap-2">
-            {onCheckAgain && (
-                <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={running || checking}
-                    onClick={onCheckAgain}
-                >
-                    <RotateCw
-                        className={cn('size-3.5', checking && 'animate-spin')}
-                    />
-                    <span>{checking ? 'Checking…' : 'Check again'}</span>
-                </Button>
-            )}
-            {targets.length > 0 && (
-                <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    disabled={running}
-                    onClick={runAll}
-                >
-                    {running ? (
-                        <RefreshCw className="size-3.5 animate-spin" />
-                    ) : (
-                        <Download className="size-3.5" />
-                    )}
-                    <span>
-                        {running && progress
-                            ? `Installing… (${progress.done} of ${progress.total})`
-                            : 'Install everything'}
-                    </span>
-                </Button>
-            )}
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
+            <p className="text-xs text-soft">
+                Installs any tool above that is still missing.
+            </p>
+            <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={running}
+                onClick={runAll}
+            >
+                {running ? (
+                    <RefreshCw className="size-3.5 animate-spin" />
+                ) : (
+                    <Download className="size-3.5" />
+                )}
+                <span>
+                    {running && progress
+                        ? `Installing… (${progress.done} of ${progress.total})`
+                        : 'Install everything'}
+                </span>
+            </Button>
         </div>
     );
 }
@@ -545,14 +532,25 @@ export default function ToolCatalogList({
 
     return (
         <>
-            <InstallAllButton
-                catalog={catalog}
-                channel={channel}
-                showLocalOnly={showLocalOnly}
-                onInstallingChange={setInstallingSlug}
-                onCheckAgain={onCheckAgain}
-                checking={checking}
-            />
+            {onCheckAgain && (
+                <div className="mb-3 flex justify-end">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={checking}
+                        onClick={onCheckAgain}
+                    >
+                        <RotateCw
+                            className={cn(
+                                'size-3.5',
+                                checking && 'animate-spin',
+                            )}
+                        />
+                        <span>{checking ? 'Checking…' : 'Check again'}</span>
+                    </Button>
+                </div>
+            )}
             {catalog
                 .filter((entry) => showLocalOnly || !entry.localOnly)
                 .map((entry) => (
@@ -565,6 +563,12 @@ export default function ToolCatalogList({
                         installing={installingSlug === entry.slug}
                     />
                 ))}
+            <InstallAllButton
+                catalog={catalog}
+                channel={channel}
+                showLocalOnly={showLocalOnly}
+                onInstallingChange={setInstallingSlug}
+            />
         </>
     );
 }

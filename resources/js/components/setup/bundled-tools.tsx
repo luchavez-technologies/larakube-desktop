@@ -33,7 +33,7 @@ export default function BundledTools({
 
     return (
         <div className="mt-4">
-            <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+            <p className="mb-1 text-xs font-medium tracking-wide text-soft uppercase">
                 Bundled in larakube-ubuntu
             </p>
             {entries.map(([name, version]) => (
@@ -52,9 +52,9 @@ export default function BundledTools({
 export function BundledToolsSkeleton() {
     return (
         <div className="mt-4 space-y-2" aria-hidden>
-            <div className="bg-muted h-3 w-40 animate-pulse rounded" />
-            <div className="bg-muted h-8 animate-pulse rounded" />
-            <div className="bg-muted h-8 animate-pulse rounded" />
+            <div className="h-3 w-40 animate-pulse rounded bg-paper" />
+            <div className="h-8 animate-pulse rounded bg-paper" />
+            <div className="h-8 animate-pulse rounded bg-paper" />
         </div>
     );
 }
