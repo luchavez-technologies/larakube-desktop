@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Process;
 
 class SshKeyInspector
@@ -123,12 +124,12 @@ class SshKeyInspector
      */
     public function detectCommonKeys(): array
     {
-        $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+        $home = $this->homeDirectory();
         if ($home === '') {
             return [];
         }
 
-        $sshDir = $home.'/.ssh';
+        $sshDir = rtrim($home, '/\\').'/.ssh';
         if (! is_dir($sshDir)) {
             return [];
         }
@@ -152,11 +153,19 @@ class SshKeyInspector
     public function resolvePath(string $path): string
     {
         if (str_starts_with($path, '~/')) {
-            $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+            $home = $this->homeDirectory();
 
-            return $home !== '' ? $home.substr($path, 1) : $path;
+            return $home !== '' ? rtrim($home, '/\\').substr($path, 1) : $path;
         }
 
         return $path;
+    }
+
+    /** Resolve home directory on both POSIX (HOME) and Windows (USERPROFILE). */
+    private function homeDirectory(): string
+    {
+        $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+
+        return $home !== '' ? $home : ToolLocator::hostProfile();
     }
 }

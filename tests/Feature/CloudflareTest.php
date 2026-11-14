@@ -86,6 +86,43 @@ test('returns invalid when CLI verification flags missing permissions', function
         ]);
 });
 
+test('passes LARAKUBE_EXECUTION_CONTEXT=host and handles NUL-padded output safely', function () {
+    $capturedExtraEnv = null;
+    app()->bind(ToolLocator::class, function () use (&$capturedExtraEnv) {
+        $mock = Mockery::mock(ToolLocator::class);
+        $mock->shouldReceive('find')->with('larakube')->andReturn('C:\\Users\\Demo\\.larakube\\bin\\larakube.exe');
+        $mock->shouldReceive('isolate')->andReturnUsing(function ($cmd, $extraEnv = []) use (&$capturedExtraEnv) {
+            $capturedExtraEnv = $extraEnv;
+
+            return ['command' => $cmd, 'environment' => $extraEnv];
+        });
+
+        return $mock;
+    });
+
+    $json = json_encode([
+        'valid' => true,
+        'status' => 'active',
+        'zones' => ['example.com'],
+        'checks' => [
+            'token_active' => true,
+            'zones_accessible' => true,
+            'dns_edit' => true,
+            'ssl_read' => true,
+        ],
+        'errors' => [],
+    ]);
+
+    Process::fake([
+        '*dns:verify*' => Process::result(output: implode("\0", str_split((string) $json))),
+    ]);
+
+    $response = $this->postJson(route('cloudflare.verify_token'), ['token' => 'good-token']);
+
+    $response->assertOk()->assertJson(['valid' => true]);
+    expect($capturedExtraEnv)->toBe(['LARAKUBE_EXECUTION_CONTEXT' => 'host']);
+});
+
 test('returns 500 when CLI output is not valid json', function () {
     Process::fake([
         '*dns:verify*' => Process::result(output: 'Fatal error occurred', exitCode: 1),
@@ -98,4 +135,20 @@ test('returns 500 when CLI output is not valid json', function () {
             'valid' => false,
             'code' => 'invalid_response',
         ]);
+    expect((string) $response->json('error'))->toContain('Fatal error occurred');
+});
+
+test('surfaces CLI update hint when WSL dispatch error occurs on Windows', function () {
+    Process::fake([
+        '*dns:verify*' => Process::result(errorOutput: "W\0s\0l\0/\0S\0e\0r\0v\0i\0c\0e\0/\0C\0r\0e\0a\0t\0e\0I\0n\0s\0t\0a\0n\0c\0e\0 \0f\0a\0i\0l\0e\0d\0", exitCode: 1),
+    ]);
+
+    $response = $this->postJson(route('cloudflare.verify_token'), ['token' => 'good-token']);
+
+    $response->assertStatus(500)
+        ->assertJson([
+            'valid' => false,
+            'code' => 'invalid_response',
+        ]);
+    expect((string) $response->json('error'))->toContain('Update the LaraKube CLI in Setup');
 });

@@ -35,7 +35,10 @@ class CloudflareController extends Controller
             ], 500);
         }
 
-        $isolated = $locator->isolate([$cli, 'dns:verify', '--provider=cloudflare', '--token='.$token, '--json', '--no-interaction']);
+        $isolated = $locator->isolate(
+            [$cli, 'dns:verify', '--provider=cloudflare', '--token='.$token, '--json', '--no-interaction'],
+            ['LARAKUBE_EXECUTION_CONTEXT' => 'host'],
+        );
 
         try {
             $result = Process::env($isolated['environment'])->timeout(20)->run($isolated['command']);
@@ -47,13 +50,23 @@ class CloudflareController extends Controller
             ], 500);
         }
 
-        $lines = preg_split('/\R/', trim($result->output())) ?: [];
-        $data = json_decode((string) end($lines), true);
+        $cleanOutput = trim(str_replace("\0", '', $result->output()));
+        $cleanError = trim(str_replace("\0", '', $result->errorOutput()));
+        $lines = $cleanOutput !== '' ? (preg_split('/\R/', $cleanOutput) ?: []) : [];
+        $data = $lines !== [] ? json_decode((string) end($lines), true) : null;
 
         if (! is_array($data)) {
+            $detail = $cleanError !== '' ? $cleanError : $cleanOutput;
+            $wslHint = $detail !== '' && (str_contains(strtolower($detail), 'wsl') || str_contains(strtolower($detail), 'larakube-ubuntu'));
+            $error = match (true) {
+                $wslHint => 'Invalid response from LaraKube CLI verification. Update the LaraKube CLI in Setup and retry.',
+                $detail !== '' => 'Invalid response from LaraKube CLI verification: '.str($detail)->limit(200)->toString(),
+                default => 'Invalid response from LaraKube CLI verification.',
+            };
+
             return response()->json([
                 'valid' => false,
-                'error' => 'Invalid response from LaraKube CLI verification.',
+                'error' => $error,
                 'code' => 'invalid_response',
             ], 500);
         }
