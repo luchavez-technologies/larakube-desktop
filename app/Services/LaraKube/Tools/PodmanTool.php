@@ -29,7 +29,7 @@ class PodmanTool extends AbstractCliTool
     public function isInstallable(ToolLocator $locator): bool
     {
         // Podman installs through apt, so only Linux (and WSL) can offer it.
-        return PHP_OS_FAMILY === 'Linux';
+        return ! $locator->isWindows() && ! $locator->isDarwin();
     }
 
     public function installArguments(bool $update = false): array

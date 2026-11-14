@@ -496,6 +496,23 @@ class Wsl
     }
 
     /**
+     * Starts larakube-ubuntu if WSL has stopped it for being idle, so its
+     * systemd brings k3s back and the shared kubeconfig's local context
+     * (`https://127.0.0.1:6443`, forwarded to Windows by WSL2) answers again.
+     * A no-op returning false off Windows, without WSL, or without the distro.
+     */
+    public function ensureDistroRunning(): bool
+    {
+        if (! $this->isWindows() || ! $this->featureEnabled()) {
+            return false;
+        }
+
+        return Process::timeout(60)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--exec', '/bin/true',
+        ])->successful();
+    }
+
+    /**
      * Terminates LaraKube Desktop's WSL distro (or the given distro) to cleanly stop running background services.
      */
     public function terminate(?string $distro = null): bool

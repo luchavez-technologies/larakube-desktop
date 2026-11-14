@@ -2,6 +2,8 @@
 
 namespace App\Services\LaraKube;
 
+use App\Services\Wsl;
+use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 use Throwable;
@@ -16,7 +18,10 @@ class LocalCluster
     /** @var array{engine: string, context: ?string, status: string, tone: string}|null */
     private ?array $memoized = null;
 
-    public function __construct(private ToolLocator $locator) {}
+    /** The context `larakube cluster:setup` gives the k3s cluster inside larakube-ubuntu. */
+    public const WSL_K3S_CONTEXT = 'k3s-larakube';
+
+    public function __construct(private ToolLocator $locator, private ?Wsl $wsl = null) {}
 
     public function forget(): void
     {
@@ -158,10 +163,10 @@ class LocalCluster
 
                 // Check if any local candidate is reachable, prioritizing k3s-larakube
                 uksort($localCandidates, function (string $a, string $b): int {
-                    if ($a === 'k3s-larakube') {
+                    if ($a === self::WSL_K3S_CONTEXT) {
                         return -1;
                     }
-                    if ($b === 'k3s-larakube') {
+                    if ($b === self::WSL_K3S_CONTEXT) {
                         return 1;
                     }
 
@@ -173,10 +178,7 @@ class LocalCluster
                 $targetEngine = $localCandidates[$firstContext];
 
                 foreach ($localCandidates as $candidateCtx => $candidateEngine) {
-                    $probeIsolated = $this->locator->isolate([$kubectl, 'cluster-info', "--context={$candidateCtx}", '--request-timeout=2s']);
-                    $probeResult = Process::env($probeIsolated['environment'])
-                        ->timeout(3)
-                        ->run($probeIsolated['command']);
+                    $probeResult = $this->probe($kubectl, $candidateCtx, 3);
 
                     if ($probeResult->successful()) {
                         return $this->isProvisioned($kubectl, $candidateCtx)
@@ -195,10 +197,7 @@ class LocalCluster
             }
 
             // Test reachability for targetContext
-            $infoIsolated = $this->locator->isolate([$kubectl, 'cluster-info', "--context={$targetContext}", '--request-timeout=2s']);
-            $infoResult = Process::env($infoIsolated['environment'])
-                ->timeout(4)
-                ->run($infoIsolated['command']);
+            $infoResult = $this->probe($kubectl, (string) $targetContext, 4);
 
             $isReachable = $infoResult->successful();
 
@@ -222,6 +221,27 @@ class LocalCluster
                 'tone' => 'muted',
             ];
         }
+    }
+
+    /**
+     * `kubectl cluster-info` against one context. On Windows, a refused
+     * k3s-larakube probe usually means WSL stopped the idle distro, so wake
+     * it once and ask again before reporting the cluster offline.
+     */
+    private function probe(string $kubectl, string $context, int $timeout): ProcessResult
+    {
+        $isolated = $this->locator->isolate([$kubectl, 'cluster-info', "--context={$context}", '--request-timeout=2s']);
+        $result = Process::env($isolated['environment'])->timeout($timeout)->run($isolated['command']);
+
+        if ($result->successful() || $context !== self::WSL_K3S_CONTEXT || ! $this->locator->isWindows()) {
+            return $result;
+        }
+
+        if (! ($this->wsl ?? new Wsl(windows: true))->ensureDistroRunning()) {
+            return $result;
+        }
+
+        return Process::env($isolated['environment'])->timeout($timeout + 10)->run($isolated['command']);
     }
 
     /**

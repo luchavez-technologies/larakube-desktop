@@ -185,7 +185,7 @@ test('the usage choice is saved and offered back to the Setup page', function ()
 test('the Setup page lists every tool at once, before any check has run', function () {
     readinessFakeBinDirectory(['larakube']);
     Process::fake(['*' => Process::result(output: '')]);
-    $expectedCount = count(ReadinessCheck::TOOLS) - (PHP_OS_FAMILY === 'Windows' ? 0 : 1);
+    $expectedCount = count(app(CliToolRegistry::class)->all()) - (PHP_OS_FAMILY === 'Windows' ? 0 : 1);
 
     $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
         ->component('readiness')
@@ -547,11 +547,36 @@ test('on Windows when larakube.exe is missing, status(larakube) returns missing 
     }
 });
 
+test('every registry tool that runs on the Windows host is located natively by ToolLocator', function () {
+    $hostTools = array_values(array_map(
+        fn (CliToolContract $tool): string => $tool->binary(),
+        array_filter(
+            app(CliToolRegistry::class)->all(),
+            fn (CliToolContract $tool): bool => $tool->runsOnWindowsHost() && $tool->binary() !== 'larakube',
+        ),
+    ));
+
+    expect($hostTools)->toEqualCanonicalizing(ToolLocator::WINDOWS_NATIVE_TOOLS);
+});
+
 test('CliToolRegistry resolves per-tool services and drives the ReadinessCheck catalog', function () {
     $registry = app(CliToolRegistry::class);
 
-    expect($registry->all())->toHaveCount(count(ReadinessCheck::TOOLS))
+    expect($registry->all())->toHaveCount(14)
         ->and($registry->find('larakube'))->toBeInstanceOf(CliToolContract::class)
         ->and($registry->find('larakube-wsl'))->toBeInstanceOf(LaraKubeWslCliTool::class)
         ->and($registry->find('podman'))->toBeInstanceOf(PodmanTool::class);
+});
+
+test('podman and dnsmasq installability follows the locator OS, not the PHP host OS', function () {
+    $registry = app(CliToolRegistry::class);
+    $linux = new ToolLocator(directories: [], windows: false, darwin: false);
+    $mac = new ToolLocator(directories: [], windows: false, darwin: true);
+    $windows = new ToolLocator(directories: [], windows: true, darwin: false);
+
+    expect($registry->find('podman')->isInstallable($linux))->toBeTrue()
+        ->and($registry->find('podman')->isInstallable($mac))->toBeFalse()
+        ->and($registry->find('podman')->isInstallable($windows))->toBeFalse()
+        ->and($registry->find('dnsmasq')->isInstallable($mac))->toBeTrue()
+        ->and($registry->find('dnsmasq')->isInstallable($windows))->toBeFalse();
 });

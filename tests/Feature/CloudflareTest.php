@@ -86,13 +86,15 @@ test('returns invalid when CLI verification flags missing permissions', function
         ]);
 });
 
-test('passes LARAKUBE_EXECUTION_CONTEXT=host and handles NUL-padded output safely', function () {
+test('passes the token via the environment, pins the host context, and handles NUL-padded output safely', function () {
     $capturedExtraEnv = null;
-    app()->bind(ToolLocator::class, function () use (&$capturedExtraEnv) {
+    $capturedCommand = null;
+    app()->bind(ToolLocator::class, function () use (&$capturedExtraEnv, &$capturedCommand) {
         $mock = Mockery::mock(ToolLocator::class);
         $mock->shouldReceive('find')->with('larakube')->andReturn('C:\\Users\\Demo\\.larakube\\bin\\larakube.exe');
-        $mock->shouldReceive('isolate')->andReturnUsing(function ($cmd, $extraEnv = []) use (&$capturedExtraEnv) {
+        $mock->shouldReceive('isolate')->andReturnUsing(function ($cmd, $extraEnv = []) use (&$capturedExtraEnv, &$capturedCommand) {
             $capturedExtraEnv = $extraEnv;
+            $capturedCommand = $cmd;
 
             return ['command' => $cmd, 'environment' => $extraEnv];
         });
@@ -120,7 +122,8 @@ test('passes LARAKUBE_EXECUTION_CONTEXT=host and handles NUL-padded output safel
     $response = $this->postJson(route('cloudflare.verify_token'), ['token' => 'good-token']);
 
     $response->assertOk()->assertJson(['valid' => true]);
-    expect($capturedExtraEnv)->toBe(['LARAKUBE_EXECUTION_CONTEXT' => 'host']);
+    expect($capturedExtraEnv)->toBe(['LARAKUBE_EXECUTION_CONTEXT' => 'host', 'LARAKUBE_CLOUDFLARE_TOKEN' => 'good-token'])
+        ->and(implode(' ', $capturedCommand))->not->toContain('good-token');
 });
 
 test('returns 500 when CLI output is not valid json', function () {

@@ -32,7 +32,7 @@ class DnsmasqTool extends AbstractCliTool
         // has no such mechanism (it resolves via the Windows hosts file
         // instead, see InteractsWithHosts::ensureWindowsHostsAreSet() in the
         // CLI), so `larakube trust` is a no-op for it there.
-        return PHP_OS_FAMILY !== 'Windows';
+        return ! $locator->isWindows();
     }
 
     public function installArguments(bool $update = false): array

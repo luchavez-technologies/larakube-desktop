@@ -2,6 +2,7 @@
 
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
@@ -242,4 +243,35 @@ test('detects Docker Desktop and OrbStack distributions correctly', function () 
         ->and($local->resolveLocalEngine('larakube-34.142.199.251', 'https://34.142.199.251:6443'))->toBeNull()
         ->and($local->resolveLocalEngine('doks-prod', 'https://...digitalocean.com'))->toBeNull()
         ->and($local->resolveLocalEngine('eks-prod', 'https://...amazonaws.com'))->toBeNull();
+});
+
+test('on Windows, an unreachable k3s-larakube wakes the WSL distro once and probes again', function () {
+    $dir = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($dir);
+    File::put("{$dir}/kubectl.exe", '');
+    $locator = new ToolLocator([$dir], windows: true, wslFeatureEnabled: true);
+
+    $configJson = json_encode([
+        'current-context' => 'k3s-larakube',
+        'contexts' => [['name' => 'k3s-larakube', 'context' => ['cluster' => 'k3s-larakube', 'user' => 'k3s-larakube']]],
+        'clusters' => [['name' => 'k3s-larakube', 'cluster' => ['server' => 'https://127.0.0.1:6443']]],
+    ]);
+
+    Process::fake([
+        '*config*view*-o*json*' => Process::result(output: $configJson),
+        '*cluster-info*' => Process::sequence()
+            ->push(Process::result(errorOutput: 'connection refused', exitCode: 1))
+            ->push(Process::result(output: 'Kubernetes control plane is running')),
+        '*wsl.exe*' => Process::result(),
+        '*get*svc*traefik*' => Process::result(output: 'service/traefik'),
+    ]);
+
+    $cluster = (new LocalCluster($locator, new Wsl(windows: true, featureEnabled: true)))->detect(fresh: true);
+
+    expect($cluster['context'])->toBe('k3s-larakube')
+        ->and($cluster['tone'])->toBe('ok');
+    Process::assertRan(fn ($process): bool => in_array('/bin/true', (array) $process->command, true));
+    Process::assertRanTimes(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'cluster-info'), 2);
+
+    File::deleteDirectory($dir);
 });

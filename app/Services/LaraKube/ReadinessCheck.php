@@ -19,26 +19,6 @@ use Illuminate\Support\Facades\Process;
  */
 class ReadinessCheck
 {
-    /**
-     * @var array<string, array{label: string, purpose: string, required: bool, versionArgs: list<string>, installable: bool, localOnly?: bool, windowsOnly?: bool}>
-     */
-    public const TOOLS = [
-        'larakube' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs every action in this app.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true],
-        'larakube-wsl' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs local Kubernetes and project commands inside WSL.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true, 'windowsOnly' => true],
-        'kubectl' => ['label' => 'kubectl', 'purpose' => 'Talks to your Kubernetes clusters.', 'required' => true, 'versionArgs' => ['version', '--client'], 'installable' => true],
-        'k9s' => ['label' => 'k9s', 'purpose' => 'Terminal UI for browsing and managing Kubernetes clusters — optional, but what "Open in Terminal" uses on a server page.', 'required' => false, 'versionArgs' => ['version', '--short'], 'installable' => true],
-        'tofu' => ['label' => 'OpenTofu', 'purpose' => 'Provisions new cloud servers.', 'required' => true, 'versionArgs' => ['version'], 'installable' => true],
-        'ssh' => ['label' => 'OpenSSH Client', 'purpose' => 'Connects to and configures a VPS cloud:create just provisioned.', 'required' => false, 'versionArgs' => ['-V'], 'installable' => false],
-        'aws' => ['label' => 'AWS CLI', 'purpose' => 'Needed for Amazon Web Services servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
-        'gcloud' => ['label' => 'Google Cloud CLI', 'purpose' => 'Needed for Google Cloud servers.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true],
-        'gh' => ['label' => 'GitHub CLI', 'purpose' => 'Manages GitHub Actions CI and GHCR image registry secrets.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
-        'tea' => ['label' => 'Tea CLI', 'purpose' => 'Manages Forgejo and Gitea git forge repository secrets.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
-        'git' => ['label' => 'Git', 'purpose' => 'Needed to deploy Laravel apps.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false, 'localOnly' => true],
-        'docker' => ['label' => 'Docker', 'purpose' => 'Builds your apps to deploy them. OrbStack or Docker Desktop provide it; Podman works too.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => false, 'localOnly' => true],
-        'podman' => ['label' => 'Podman', 'purpose' => 'Builds your apps to deploy them, instead of Docker.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
-        'dnsmasq' => ['label' => 'dnsmasq', 'purpose' => 'Wildcard local-domain DNS so project hosts resolve automatically, without a sudo prompt on every `up`.', 'required' => false, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true],
-    ];
-
     private const CLI_INSTALL_COMMAND_POSIX = 'curl -fsSL https://docs.larakube.app/install.sh | bash -s -- --canary';
 
     private const CLI_INSTALL_COMMAND_WINDOWS = '$env:LARAKUBE_CHANNEL="canary"; irm https://docs.larakube.app/install.ps1 | iex';
@@ -135,9 +115,7 @@ class ReadinessCheck
 
         if ($result === null) {
             $tool = $this->registry()->find($slug);
-            $path = $tool !== null
-                ? $tool->locate($this->locator)
-                : $this->locator->find($slug);
+            $path = $tool?->locate($this->locator);
 
             if ($path === null) {
                 $diagnostic = ($this->locator->isWindows() && $tool?->runsOnWindowsHost())
@@ -147,8 +125,7 @@ class ReadinessCheck
                 $result = ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $diagnostic];
                 Cache::put($key, $result, now()->addMinutes(5));
             } else {
-                $versionArgs = $tool !== null ? $tool->versionArgs() : self::TOOLS[$slug]['versionArgs'];
-                ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, $versionArgs);
+                ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, $tool->versionArgs());
                 $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
 
                 // Do not cache a failed version probe (e.g. cold Windows Defender scan
@@ -216,7 +193,7 @@ class ReadinessCheck
             return $result;
         }
 
-        ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, self::TOOLS['larakube']['versionArgs']);
+        ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, $this->registry()->find('larakube-wsl')?->versionArgs() ?? ['--version']);
         $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
 
         if ($version !== null) {
@@ -240,7 +217,7 @@ class ReadinessCheck
             Cache::forget('readiness.tool.larakube-wsl');
         }
 
-        foreach ($slug !== null ? [$slug] : array_keys(self::TOOLS) as $tool) {
+        foreach ($slug !== null ? [$slug] : array_keys($this->registry()->all()) as $tool) {
             Cache::forget("readiness.tool.{$tool}");
         }
     }

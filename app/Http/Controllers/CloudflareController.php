@@ -36,8 +36,8 @@ class CloudflareController extends Controller
         }
 
         $isolated = $locator->isolate(
-            [$cli, 'dns:verify', '--provider=cloudflare', '--token='.$token, '--json', '--no-interaction'],
-            ['LARAKUBE_EXECUTION_CONTEXT' => 'host'],
+            [$cli, 'dns:verify', '--provider=cloudflare', '--json', '--no-interaction'],
+            ['LARAKUBE_EXECUTION_CONTEXT' => 'host', 'LARAKUBE_CLOUDFLARE_TOKEN' => $token],
         );
 
         try {

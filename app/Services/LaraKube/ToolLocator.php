@@ -144,11 +144,6 @@ class ToolLocator
      */
     public const WINDOWS_NATIVE_TOOLS = ['kubectl', 'k9s', 'tofu', 'aws', 'gcloud', 'ssh'];
 
-    public function isWindowsNativeTool(string $slug): bool
-    {
-        return $slug === 'larakube' || in_array($slug, self::WINDOWS_NATIVE_TOOLS, true);
-    }
-
     public function find(string $binary): ?string
     {
         if ($this->isWindows()) {
