@@ -179,6 +179,7 @@ function resolveVisual(id: string): Visual {
                     'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300 border-neutral-500/25',
             };
         case 'larakube':
+        case 'larakubewsl':
             return {
                 icon: (
                     <img

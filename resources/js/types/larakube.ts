@@ -5,6 +5,7 @@ export type Tool = {
     required: boolean;
     installable: boolean;
     localOnly: boolean;
+    environment?: 'windows' | 'wsl' | null;
     installed: boolean;
     path: string | null;
     version: string | null;

@@ -8,7 +8,6 @@ use App\Models\Run;
 use App\Services\LaraKube\CliInstaller;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ReadinessCheck;
-use App\Services\Wsl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -20,46 +19,8 @@ class ToolInstallController extends Controller
 
         abort_if($definition === null || ! $definition['installable'], 404);
 
-        if ($tool === 'larakube') {
-            $channel = $request->input('channel', $installer->channel());
-            $url = $installer->downloadUrl($channel);
-
-            $run = Run::create([
-                'label' => "Install LaraKube CLI ({$channel})",
-                'kind' => RunKind::InstallTool,
-                'subject' => 'larakube',
-                'target_type' => 'tool',
-                'target_name' => 'LaraKube CLI',
-                'tool' => 'larakube',
-                'environment' => 'local',
-                'command' => ['cli:install', "--channel={$channel}"],
-                'status' => RunStatus::Running,
-                'output' => "Downloading LaraKube CLI ({$channel} channel) from {$url}...\n",
-            ]);
-
-            $result = $installer->install($channel);
-            $readiness->forget('larakube');
-
-            if ($result['success']) {
-                $wsl = app(Wsl::class);
-                if ($wsl->isWindows() && $wsl->distro() !== null) {
-                    $wsl->syncCachedLinuxBinaryToDistro();
-                }
-
-                $run->update([
-                    'status' => RunStatus::Succeeded,
-                    'finished_at' => now(),
-                    'output' => $run->output."✓ LaraKube CLI installed successfully to {$result['path']}.\n",
-                ]);
-            } else {
-                $run->update([
-                    'status' => RunStatus::Failed,
-                    'finished_at' => now(),
-                    'output' => $run->output."✗ Failed to install LaraKube CLI: {$result['error']}\n",
-                ]);
-            }
-
-            return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+        if ($tool === 'larakube' || $tool === 'larakube-wsl') {
+            return $this->installCliBinary($tool, $installer, $readiness, $request, 'Install');
         }
 
         $run = $runner->start(
@@ -86,6 +47,10 @@ class ToolInstallController extends Controller
     {
         if ($tool === 'larakube') {
             return $this->updateCli($runner, $installer, $readiness, $request);
+        }
+
+        if ($tool === 'larakube-wsl') {
+            return $this->installCliBinary('larakube-wsl', $installer, $readiness, $request, 'Update');
         }
 
         $definition = ReadinessCheck::TOOLS[$tool] ?? null;
@@ -133,6 +98,52 @@ class ToolInstallController extends Controller
      */
     public function updateCli(CliRunner $runner, CliInstaller $installer, ReadinessCheck $readiness, Request $request): RedirectResponse
     {
-        return $this->store('larakube', $runner, $installer, $readiness, $request);
+        return $this->installCliBinary('larakube', $installer, $readiness, $request, 'Install');
+    }
+
+    private function installCliBinary(
+        string $tool,
+        CliInstaller $installer,
+        ReadinessCheck $readiness,
+        Request $request,
+        string $verb = 'Install',
+    ): RedirectResponse {
+        $isWsl = $tool === 'larakube-wsl';
+        $name = $isWsl ? 'LaraKube CLI (WSL)' : 'LaraKube CLI';
+        $channel = (string) $request->input('channel', $installer->channel());
+        $url = $isWsl ? $installer->linuxCacheDownloadUrl($channel) : $installer->downloadUrl($channel);
+        $command = $isWsl ? ['cli:install', '--wsl', "--channel={$channel}"] : ['cli:install', "--channel={$channel}"];
+
+        $run = Run::create([
+            'label' => "{$verb} {$name} ({$channel})",
+            'kind' => RunKind::InstallTool,
+            'subject' => $tool,
+            'target_type' => 'tool',
+            'target_name' => $name,
+            'tool' => $tool,
+            'environment' => $isWsl ? 'wsl' : 'local',
+            'command' => $command,
+            'status' => RunStatus::Running,
+            'output' => "Downloading {$name} ({$channel} channel) from {$url}...\n",
+        ]);
+
+        $result = $isWsl ? $installer->installWsl($channel) : $installer->install($channel);
+        $readiness->forget($tool);
+
+        if ($result['success']) {
+            $run->update([
+                'status' => RunStatus::Succeeded,
+                'finished_at' => now(),
+                'output' => $run->output."✓ {$name} installed successfully to {$result['path']}.\n",
+            ]);
+        } else {
+            $run->update([
+                'status' => RunStatus::Failed,
+                'finished_at' => now(),
+                'output' => $run->output."✗ Failed to install {$name}: {$result['error']}\n",
+            ]);
+        }
+
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 }

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { ArrowUpCircle, Download, RefreshCw, RotateCw } from 'lucide-react';
+import {
+    ArrowUpCircle,
+    Check,
+    Copy,
+    Download,
+    RefreshCw,
+    RotateCw,
+} from 'lucide-react';
 import Button from '@/components/button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import ProviderLogo from '@/components/provider-logo';
@@ -26,6 +33,38 @@ function InstallingBar() {
             </div>
             <span className="text-xs font-medium text-faint">Installing…</span>
         </div>
+    );
+}
+
+function CopyablePath({ path }: { path: string }) {
+    const [copied, setCopied] = useState(false);
+
+    const copy = () => {
+        void navigator.clipboard?.writeText(path);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1800);
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={copy}
+            title={copied ? 'Copied location' : `Copy path: ${path}`}
+            aria-label={copied ? 'Copied location' : `Copy path ${path}`}
+            className="group -mx-1 mt-0.5 inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left font-mono text-[11px] text-faint transition-colors hover:bg-badge/60 hover:text-ink"
+        >
+            <span className="truncate">{path}</span>
+            {copied ? (
+                <>
+                    <Check className="size-3 shrink-0 text-ok" />
+                    <span className="font-sans text-[10px] font-medium text-ok">
+                        Copied
+                    </span>
+                </>
+            ) : (
+                <Copy className="size-3 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
+            )}
+        </button>
     );
 }
 
@@ -87,6 +126,20 @@ export function ToolRow({
                                             ? entry.label
                                             : `${entry.label} · optional`}
                                     </span>
+                                    {entry.environment && (
+                                        <span
+                                            className={cn(
+                                                'inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1',
+                                                entry.environment === 'windows'
+                                                    ? 'bg-sky-500/10 text-sky-600 ring-sky-500/20 dark:text-sky-400'
+                                                    : 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400',
+                                            )}
+                                        >
+                                            {entry.environment === 'windows'
+                                                ? 'Windows'
+                                                : 'WSL'}
+                                        </span>
+                                    )}
                                     {tool && !checking && (
                                         <StatusPill
                                             tone={
@@ -111,87 +164,34 @@ export function ToolRow({
                             }
                             detail={
                                 tool?.installed
-                                    ? tool.wsl
-                                        ? (() => {
-                                              const hostLabel =
-                                                  tool.version ?? 'Installed';
-                                              const wslLabel = tool.wsl
-                                                  .installed
-                                                  ? (tool.wsl.version ??
-                                                    'Installed')
-                                                  : 'Missing';
-                                              const tooltip = [
-                                                  tool.path
-                                                      ? `Windows: ${tool.path}${tool.diagnostic ? ` (${tool.diagnostic})` : ''}`
-                                                      : null,
-                                                  tool.wsl.path
-                                                      ? `WSL: ${tool.wsl.path}${tool.wsl.diagnostic ? ` (${tool.wsl.diagnostic})` : ''}`
-                                                      : tool.wsl.diagnostic
-                                                        ? `WSL: ${tool.wsl.diagnostic}`
-                                                        : null,
-                                              ]
-                                                  .filter(Boolean)
-                                                  .join('\n');
-
-                                              return (
-                                                  <span
-                                                      title={
-                                                          tooltip || undefined
-                                                      }
-                                                  >
-                                                      {`Desktop: ${hostLabel} · WSL: ${wslLabel}`}
-                                                  </span>
-                                              );
-                                          })()
-                                        : (tool.version ??
-                                          // version check failed (see
-                                          // ReadinessCheck::version()'s
-                                          // diagnostic) — showing the
-                                          // install path here instead read
-                                          // as a garbled version string,
-                                          // confirmed live (2026-10-30) to
-                                          // read as broken/corrupted.
-                                          (tool.path || tool.diagnostic ? (
-                                              <span
-                                                  title={
-                                                      tool.diagnostic
-                                                          ? `${tool.path ?? ''}${tool.path ? ' — ' : ''}${tool.diagnostic}`
-                                                          : (tool.path ??
-                                                            undefined)
-                                                  }
-                                              >
-                                                  Installed
-                                              </span>
-                                          ) : (
-                                              'Installed'
-                                          )))
+                                    ? (tool.version ??
+                                      // version check failed (see
+                                      // ReadinessCheck::version()'s
+                                      // diagnostic) — showing the
+                                      // install path here instead read
+                                      // as a garbled version string,
+                                      // confirmed live (2026-10-30) to
+                                      // read as broken/corrupted.
+                                      (tool.path || tool.diagnostic ? (
+                                          <span
+                                              title={
+                                                  tool.diagnostic
+                                                      ? `${tool.path ?? ''}${tool.path ? ' — ' : ''}${tool.diagnostic}`
+                                                      : (tool.path ?? undefined)
+                                              }
+                                          >
+                                              Installed
+                                          </span>
+                                      ) : (
+                                          'Installed'
+                                      )))
                                     : entry.purpose
                             }
                             mono={tool?.installed && tool.version != null}
                         />
-                        {tool?.installed &&
-                            (tool.path || tool.wsl?.path) &&
-                            (() => {
-                                const pathText = tool.wsl
-                                    ? [
-                                          tool.path,
-                                          tool.wsl.path
-                                              ? `WSL: ${tool.wsl.path}`
-                                              : null,
-                                      ]
-                                          .filter(Boolean)
-                                          .join(' · ')
-                                    : tool.path;
-
-                                return pathText ? (
-                                    <p
-                                        className="mt-0.5 truncate font-mono text-[11px] text-faint"
-                                        title={pathText}
-                                    >
-                                        {pathText}
-                                    </p>
-                                ) : null;
-                            })()}
+                        {tool?.installed && tool.path && (
+                            <CopyablePath path={tool.path} />
+                        )}
                     </div>
                 </div>
             </ListRow>
@@ -246,7 +246,14 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
                     variant="secondary"
                     size="sm"
                     disabled={submitting}
-                    onClick={() => handleAction(update(tool.slug).url)}
+                    onClick={() =>
+                        handleAction(
+                            update(tool.slug).url,
+                            tool.slug === 'larakube-wsl'
+                                ? { channel }
+                                : undefined,
+                        )
+                    }
                 >
                     {submitting ? (
                         <RefreshCw className="size-3.5 animate-spin" />

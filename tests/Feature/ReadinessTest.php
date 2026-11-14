@@ -181,10 +181,11 @@ test('the usage choice is saved and offered back to the Setup page', function ()
 test('the Setup page lists every tool at once, before any check has run', function () {
     readinessFakeBinDirectory(['larakube']);
     Process::fake(['*' => Process::result(output: '')]);
+    $expectedCount = count(ReadinessCheck::TOOLS) - (PHP_OS_FAMILY === 'Windows' ? 0 : 1);
 
     $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
         ->component('readiness')
-        ->has('catalog', count(ReadinessCheck::TOOLS))
+        ->has('catalog', $expectedCount)
         ->where('catalog.0.slug', 'larakube')
         ->missing('tools'));
 });
@@ -455,4 +456,62 @@ test('status ignores a stale cached installed entry when the cached binary no lo
         File::deleteDirectory($profile);
         $oldUserProfile === false ? putenv('USERPROFILE') : putenv("USERPROFILE={$oldUserProfile}");
     }
+});
+
+test('non-Windows catalog omits larakube-wsl and leaves environment null for every tool', function () {
+    $check = new ReadinessCheck(new ToolLocator(windows: false));
+    $catalog = collect($check->catalog())->keyBy('slug');
+
+    expect($catalog)->not->toHaveKey('larakube-wsl')
+        ->and($catalog->every(fn (array $tool): bool => $tool['environment'] === null))->toBeTrue();
+});
+
+test('Windows catalog includes larakube-wsl and tags every tool as windows or wsl', function () {
+    $check = new ReadinessCheck(new ToolLocator(windows: true));
+    $catalog = collect($check->catalog())->keyBy('slug');
+
+    expect($catalog)->toHaveKey('larakube-wsl')
+        ->and($catalog['larakube-wsl']['localOnly'])->toBeTrue()
+        ->and($catalog['larakube-wsl']['environment'])->toBe('wsl');
+
+    foreach (['larakube', 'kubectl', 'k9s', 'tofu', 'ssh', 'aws', 'gcloud'] as $windowsSlug) {
+        expect($catalog[$windowsSlug]['environment'])->toBe('windows');
+    }
+
+    foreach (['larakube-wsl', 'gh', 'tea', 'git', 'docker', 'podman', 'dnsmasq'] as $wslSlug) {
+        expect($catalog[$wslSlug]['environment'])->toBe('wsl');
+    }
+});
+
+test('GET setup/tools/larakube-wsl/status returns the WSL CLI status independently on Windows', function () {
+    Cache::flush();
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: true));
+
+    Process::fake([
+        '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"),
+        '*which*larakube*' => Process::result(output: "/usr/local/bin/larakube\n"),
+        '*wsl.exe*--version*' => Process::result(output: "LaraKube v0.41.0\n"),
+        '*' => Process::result(exitCode: 1),
+    ]);
+
+    $this->getJson(route('setup.tools.status', 'larakube-wsl'))
+        ->assertOk()
+        ->assertJson([
+            'installed' => true,
+            'path' => '/usr/local/bin/larakube',
+            'version' => 'LaraKube v0.41.0',
+        ]);
+});
+
+test('GET setup/tools/larakube-wsl/status returns installed false cleanly when WSL distro is missing', function () {
+    Cache::flush();
+    app()->instance(ToolLocator::class, new ToolLocator(windows: true, wslFeatureEnabled: false));
+
+    $this->getJson(route('setup.tools.status', 'larakube-wsl'))
+        ->assertOk()
+        ->assertJson([
+            'installed' => false,
+            'path' => null,
+            'version' => null,
+        ]);
 });

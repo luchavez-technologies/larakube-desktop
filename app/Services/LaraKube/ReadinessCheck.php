@@ -19,10 +19,11 @@ use Illuminate\Support\Facades\Process;
 class ReadinessCheck
 {
     /**
-     * @var array<string, array{label: string, purpose: string, required: bool, versionArgs: list<string>, installable: bool, localOnly?: bool}>
+     * @var array<string, array{label: string, purpose: string, required: bool, versionArgs: list<string>, installable: bool, localOnly?: bool, windowsOnly?: bool}>
      */
     public const TOOLS = [
         'larakube' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs every action in this app.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true],
+        'larakube-wsl' => ['label' => 'LaraKube CLI', 'purpose' => 'Runs local Kubernetes and project commands inside WSL.', 'required' => true, 'versionArgs' => ['--version'], 'installable' => true, 'localOnly' => true, 'windowsOnly' => true],
         'kubectl' => ['label' => 'kubectl', 'purpose' => 'Talks to your Kubernetes clusters.', 'required' => true, 'versionArgs' => ['version', '--client'], 'installable' => true],
         'k9s' => ['label' => 'k9s', 'purpose' => 'Terminal UI for browsing and managing Kubernetes clusters — optional, but what "Open in Terminal" uses on a server page.', 'required' => false, 'versionArgs' => ['version', '--short'], 'installable' => true],
         'tofu' => ['label' => 'OpenTofu', 'purpose' => 'Provisions new cloud servers.', 'required' => true, 'versionArgs' => ['version'], 'installable' => true],
@@ -64,13 +65,17 @@ class ReadinessCheck
      * draw its rows at once and fill each in as its check finishes.
      *
      * @param  ?list<string>  $intendedProviders  When given and non-empty, provider-specific tools (aws/gcloud) whose provider isn't in this list are left out entirely. Null or empty means "show everything" — used by the regular Setup page and by onboarding before a provider choice is made.
-     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool}>
+     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool, environment: ?string}>
      */
     public function catalog(?array $intendedProviders = null): array
     {
         $catalog = [];
 
         foreach (self::TOOLS as $slug => $tool) {
+            if (($tool['windowsOnly'] ?? false) && ! $this->locator->isWindows()) {
+                continue;
+            }
+
             if (! empty($intendedProviders) && array_key_exists($slug, self::PROVIDER_TOOLS) && ! in_array(self::PROVIDER_TOOLS[$slug], $intendedProviders, true)) {
                 continue;
             }
@@ -81,6 +86,9 @@ class ReadinessCheck
                 'purpose' => $tool['purpose'],
                 'required' => $tool['required'],
                 'localOnly' => $tool['localOnly'] ?? false,
+                'environment' => $this->locator->isWindows()
+                    ? ($this->locator->isWindowsNativeTool($slug) ? 'windows' : 'wsl')
+                    : null,
                 // Podman installs through apt, so only Linux (and WSL) can offer it.
                 'installable' => $tool['installable']
                     && ($slug !== 'podman' || PHP_OS_FAMILY === 'Linux')
@@ -103,6 +111,15 @@ class ReadinessCheck
      */
     public function status(string $slug, bool $fresh = false): array
     {
+        if ($slug === 'larakube-wsl') {
+            return $this->wslCliStatus($fresh) ?? [
+                'installed' => false,
+                'path' => null,
+                'version' => null,
+                'diagnostic' => 'LaraKube Linux (WSL) is not installed.',
+            ];
+        }
+
         $key = "readiness.tool.{$slug}";
 
         if ($fresh) {
@@ -235,8 +252,9 @@ class ReadinessCheck
             Cache::forget('readiness.providers.full');
         }
 
-        if ($slug === null || $slug === 'larakube') {
+        if ($slug === null || $slug === 'larakube' || $slug === 'larakube-wsl') {
             Cache::forget('readiness.tool.larakube.wsl');
+            Cache::forget('readiness.tool.larakube-wsl');
         }
 
         foreach ($slug !== null ? [$slug] : array_keys(self::TOOLS) as $tool) {
@@ -245,7 +263,7 @@ class ReadinessCheck
     }
 
     /**
-     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool, installed: bool, path: ?string, version: ?string}>
+     * @return list<array{slug: string, label: string, purpose: string, required: bool, installable: bool, localOnly: bool, environment: ?string, installed: bool, path: ?string, version: ?string, diagnostic: ?string}>
      */
     public function tools(): array
     {

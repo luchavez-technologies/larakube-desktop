@@ -300,22 +300,25 @@ class Wsl
     }
 
     /**
-     * When the Windows host has a cached `larakube-linux-x64` binary in `%USERPROFILE%\.larakube\bin`,
-     * inject it into `/usr/local/bin/larakube` inside the freshly imported distro so "LaraKube Linux Reset"
-     * immediately has the exact matching CLI version without redownloading from GitHub.
+     * When the Windows host has a cached `larakube-linux-x64` binary in `%USERPROFILE%\.larakube\bin`
+     * (or at an explicit local path), inject it into `/usr/local/bin/larakube` inside the distro so
+     * "LaraKube Linux Reset" and standalone WSL CLI installs/updates work without re-downloading.
      */
-    public function syncCachedLinuxBinaryToDistro(): bool
+    public function syncCachedLinuxBinaryToDistro(?string $cachedPath = null): bool
     {
         if (! $this->isWindows()) {
             return false;
         }
 
-        $userProfile = (string) (getenv('USERPROFILE') ?: '');
-        if ($userProfile === '') {
-            return false;
+        if ($cachedPath === null) {
+            $userProfile = (string) (getenv('USERPROFILE') ?: '');
+            if ($userProfile === '') {
+                return false;
+            }
+
+            $cachedPath = rtrim($userProfile, '\\/').DIRECTORY_SEPARATOR.'.larakube'.DIRECTORY_SEPARATOR.'bin'.DIRECTORY_SEPARATOR.'larakube-linux-x64';
         }
 
-        $cachedPath = rtrim($userProfile, '\\/').DIRECTORY_SEPARATOR.'.larakube'.DIRECTORY_SEPARATOR.'bin'.DIRECTORY_SEPARATOR.'larakube-linux-x64';
         if (! is_file($cachedPath)) {
             return false;
         }

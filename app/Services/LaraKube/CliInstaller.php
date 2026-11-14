@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Services\Wsl;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -213,17 +214,81 @@ class CliInstaller
         }
     }
 
+    /**
+     * Installs or updates the Linux `larakube` CLI binary inside the `larakube-ubuntu`
+     * WSL distribution independently from the native Windows `.exe` binary.
+     *
+     * @return array{success: bool, path: ?string, error: ?string}
+     */
+    public function installWsl(?string $channel = null, ?Wsl $wsl = null): array
+    {
+        $channel = $channel ?? $this->channel();
+        $this->setChannel($channel);
+
+        $binDir = $this->binDir();
+        if ($binDir === '') {
+            return ['success' => false, 'path' => null, 'error' => 'Could not determine user binary directory.'];
+        }
+
+        if (! is_dir($binDir)) {
+            File::makeDirectory($binDir, 0755, true);
+        }
+
+        $download = $this->downloadLinuxCacheBinary($binDir, $channel);
+        if (! $download['success'] || $download['path'] === null) {
+            return [
+                'success' => false,
+                'path' => null,
+                'error' => $download['error'] ?? 'Could not download LaraKube Linux CLI binary.',
+            ];
+        }
+
+        $wsl ??= app(Wsl::class);
+        if ($wsl->distro() === null) {
+            return [
+                'success' => false,
+                'path' => null,
+                'error' => 'LaraKube Linux (WSL) distribution is not installed.',
+            ];
+        }
+
+        if (! $wsl->syncCachedLinuxBinaryToDistro($download['path'])) {
+            return [
+                'success' => false,
+                'path' => null,
+                'error' => 'Could not install LaraKube CLI into larakube-ubuntu WSL distribution.',
+            ];
+        }
+
+        rescue(fn () => app(ReadinessCheck::class)->forget('larakube-wsl'), report: false);
+
+        return [
+            'success' => true,
+            'path' => '/usr/local/bin/larakube',
+            'error' => null,
+        ];
+    }
+
     private function downloadWindowsLinuxCacheBinary(string $binDir, string $channel): void
+    {
+        $this->downloadLinuxCacheBinary($binDir, $channel);
+    }
+
+    /**
+     * @return array{success: bool, path: ?string, error: ?string}
+     */
+    private function downloadLinuxCacheBinary(string $binDir, string $channel): array
     {
         $linuxTarget = "{$binDir}/larakube-linux-{$this->arch()}";
         $linuxTemp = storage_path('framework/temp/larakube-linux-download-'.bin2hex(random_bytes(4)));
+        $url = $this->linuxCacheDownloadUrl($channel);
 
         try {
             File::ensureDirectoryExists(dirname($linuxTemp));
             $response = Http::withOptions([
                 'follow_redirects' => true,
                 'verify' => true,
-            ])->timeout(120)->retry(3, 2000)->sink($linuxTemp)->get($this->linuxCacheDownloadUrl($channel));
+            ])->timeout(120)->retry(3, 2000)->sink($linuxTemp)->get($url);
 
             if ($response->successful() && (! file_exists($linuxTemp) || filesize($linuxTemp) === 0)) {
                 $body = $response->body();
@@ -240,14 +305,32 @@ class CliInstaller
                 File::move($linuxTemp, $linuxTarget);
                 @chmod($linuxTarget, 0755);
 
-                return;
+                return [
+                    'success' => true,
+                    'path' => $linuxTarget,
+                    'error' => null,
+                ];
             }
-        } catch (Throwable) {
-            // Best-effort cache download
-        }
 
-        if (file_exists($linuxTemp)) {
-            @unlink($linuxTemp);
+            if (file_exists($linuxTemp)) {
+                @unlink($linuxTemp);
+            }
+
+            return [
+                'success' => false,
+                'path' => null,
+                'error' => "Download failed from {$url} (HTTP status: {$response->status()}).",
+            ];
+        } catch (Throwable $e) {
+            if (file_exists($linuxTemp)) {
+                @unlink($linuxTemp);
+            }
+
+            return [
+                'success' => false,
+                'path' => null,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 }
