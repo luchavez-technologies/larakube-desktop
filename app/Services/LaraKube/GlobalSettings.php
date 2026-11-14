@@ -8,7 +8,6 @@ use App\Models\Project;
 use App\Models\ProjectGroup;
 use App\Models\Server;
 use App\Services\EditorLauncher;
-use App\Services\Runtime\WslDistro;
 use Illuminate\Support\Str;
 use Native\Desktop\Enums\SystemThemesEnum;
 use Native\Desktop\Facades\Settings;
@@ -540,19 +539,6 @@ class GlobalSettings
             }
         }
 
-        $wslPath = $this->wslConfigPath();
-        if ($wslPath !== null) {
-            try {
-                if (@is_file($wslPath)) {
-                    $decoded = json_decode((string) @file_get_contents($wslPath), true);
-                    if (is_array($decoded)) {
-                        return $decoded;
-                    }
-                }
-            } catch (\Throwable) {
-            }
-        }
-
         return [];
     }
 
@@ -572,21 +558,13 @@ class GlobalSettings
             @file_put_contents($path, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         } catch (\Throwable) {
         }
-
-        $wslPath = $this->wslConfigPath();
-        if ($wslPath !== null) {
-            try {
-                $wslDir = dirname($wslPath);
-                if (! @is_dir($wslDir)) {
-                    @mkdir($wslDir, 0755, true);
-                }
-
-                @file_put_contents($wslPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            } catch (\Throwable) {
-            }
-        }
     }
 
+    /**
+     * The one global config.json: the larakube-ubuntu distro links its own
+     * ~/.larakube/config.json to this file (the CLI's WslBridge::linkToHost()),
+     * so there is no WSL copy to read or mirror.
+     */
     private function hostConfigPath(): string
     {
         $profile = ToolLocator::hostProfile($this->locator->isWindows());
@@ -594,15 +572,6 @@ class GlobalSettings
         return $profile !== ''
             ? rtrim(str_replace('\\', '/', $profile), '/').'/.larakube/config.json'
             : storage_path('larakube/config.json');
-    }
-
-    private function wslConfigPath(): ?string
-    {
-        if (PHP_OS_FAMILY !== 'Windows' || ! $this->locator->isWindows()) {
-            return null;
-        }
-
-        return WslDistro::toWindows(WslDistro::HOME.'/.larakube/config.json');
     }
 
     private function isAgentBridged(string $configPath): bool

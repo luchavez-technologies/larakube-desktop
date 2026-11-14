@@ -592,6 +592,7 @@ test('podman and dnsmasq installability follows the locator OS, not the PHP host
 test('a tool the CLI\'s setup manages answers through setup:status, owner included', function () {
     readinessFakeBinDirectory(['larakube', 'kubectl']);
     Cache::flush();
+    ToolLocator::allowCliToolStatus(true);
     Process::fake([
         '*setup:status*kubectl*--json*' => Process::result(output: json_encode([
             'success' => true,
@@ -620,6 +621,7 @@ test('a tool the CLI\'s setup manages answers through setup:status, owner includ
 test('an older CLI without setup:status falls back to Desktop\'s own lookup', function () {
     $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
     Cache::flush();
+    ToolLocator::allowCliToolStatus(true);
     Process::fake([
         '*setup:status*' => Process::result(errorOutput: 'Command "setup:status" is not defined.', exitCode: 1),
         '*kubectl*version*--client*' => Process::result(output: "Client Version: v1.34.1\n"),
@@ -662,6 +664,7 @@ test('Reinstall runs setup:reinstall for CLI-managed tools and an update for the
 test('runtime lookups of a setup-managed tool use the CLI\'s answer, shared with the Setup screen', function () {
     $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
     Cache::flush();
+    ToolLocator::allowCliToolStatus(true);
     Process::fake([
         '*setup:status*kubectl*--json*' => Process::result(output: json_encode([
             'success' => true,
@@ -684,6 +687,7 @@ test('runtime lookups of a setup-managed tool use the CLI\'s answer, shared with
 test('a CLI that cannot answer is not asked again on every lookup', function () {
     $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
     Cache::flush();
+    ToolLocator::allowCliToolStatus(true);
     Process::fake([
         '*setup:status*' => Process::result(errorOutput: 'Command "setup:status" is not defined.', exitCode: 1),
     ]);
@@ -719,4 +723,52 @@ test('the Setup page reads what the distro image bundles from its manifest', fun
 
     expect($tools)->toMatchArray(['gh' => '2.80.0', 'tea' => '0.16.0', 'git' => '2.43.0', 'base' => '24.04'])
         ->and((new Wsl(windows: false))->bundledTools())->toBeNull();
+});
+
+test('a tool recorded in the CLI\'s tools.json is found and versioned with no process and no database row', function () {
+    $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    ToolLocator::allowCliToolStatus(true);
+    File::ensureDirectoryExists($_SERVER['HOME'].'/.larakube');
+    clearstatcache();
+    File::put($_SERVER['HOME'].'/.larakube/tools.json', json_encode([
+        'kubectl' => [
+            'path' => "{$bin}/kubectl",
+            'real' => realpath("{$bin}/kubectl"),
+            'size' => filesize("{$bin}/kubectl"),
+            'mtime' => filemtime("{$bin}/kubectl"),
+            'version' => 'Client Version: v1.34.1',
+            'channel' => 'larakube',
+        ],
+    ]));
+    Process::fake();
+
+    expect(app(ToolLocator::class)->find('kubectl'))->toBe("{$bin}/kubectl")
+        ->and(app(ReadinessCheck::class)->status('kubectl'))->toMatchArray([
+            'installed' => true,
+            'version' => 'Client Version: v1.34.1',
+            'channel' => 'larakube',
+            'managed' => true,
+        ])
+        ->and(Cache::has('readiness.tool.kubectl'))->toBeFalse();
+
+    Process::assertNothingRan();
+});
+
+test('a recorded tool whose binary changed is asked about again instead of trusting the old version', function () {
+    $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    ToolLocator::allowCliToolStatus(true);
+    File::ensureDirectoryExists($_SERVER['HOME'].'/.larakube');
+    File::put($_SERVER['HOME'].'/.larakube/tools.json', json_encode([
+        'kubectl' => ['path' => "{$bin}/kubectl", 'real' => realpath("{$bin}/kubectl"), 'size' => 1, 'mtime' => 1, 'version' => 'Client Version: v1.0.0', 'channel' => 'homebrew'],
+    ]));
+    Process::fake([
+        '*setup:status*kubectl*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'tools' => [['slug' => 'kubectl', 'installed' => true, 'path' => "{$bin}/kubectl", 'channel' => 'homebrew', 'managed' => true, 'version' => 'Client Version: v1.35.0']],
+        ])),
+    ]);
+
+    expect(app(ReadinessCheck::class)->status('kubectl')['version'])->toBe('Client Version: v1.35.0');
 });

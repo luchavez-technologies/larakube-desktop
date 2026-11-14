@@ -6,7 +6,6 @@ use App\Services\Runtime\WslDistro;
 use App\Services\Wsl;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
@@ -155,18 +154,35 @@ class ToolLocator
      */
     public const SETUP_MANAGED_TOOLS = ['kubectl', 'k9s', 'tofu', 'aws', 'gcloud', 'gh', 'tea'];
 
-    /** Shared with ReadinessCheck, so the Setup screen and every runtime lookup reuse one CLI answer. */
-    public static function statusCacheKey(string $slug): string
+    /** Test seam: whether lookups of setup-managed tools may start the CLI's `setup:status`. */
+    private static bool $asksCli = true;
+
+    public static function allowCliToolStatus(bool $allow): void
     {
-        return "readiness.tool.{$slug}";
+        self::$asksCli = $allow;
     }
 
-    public const CLI_UNAVAILABLE_KEY = 'readiness.setup-status.unavailable';
+    /** @var array<string, mixed>|null the host tools.json, read once per instance */
+    private ?array $recordedTools = null;
+
+    /** @var array<string, array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null> */
+    private array $cliAnswers = [];
+
+    /** Set once the CLI could not answer (missing, or predating setup:status): not asked about any other tool by this instance either. */
+    private bool $cliCannotAnswer = false;
 
     public function find(string $binary): ?string
     {
         if ($this->asksCliFor($binary)) {
-            $status = $this->cliToolStatus($binary);
+            $recorded = $this->recordedTool($binary);
+
+            if ($recorded !== null) {
+                $this->failure = null;
+
+                return $recorded['path'];
+            }
+
+            $status = $this->askCliOnce($binary);
 
             if ($status !== null) {
                 $this->failure = null;
@@ -238,53 +254,175 @@ class ToolLocator
     }
 
     /**
-     * The CLI's answer for one setup-managed tool, remembered for a few
-     * minutes under the same key the Setup screen uses. Null when the CLI is
-     * missing or predates `setup:status`; that is remembered briefly too, so a
-     * lookup storm does not start the CLI over and over.
+     * Where the CLI recorded this side's copy of a tool, from the host's
+     * `~/.larakube/tools.json` (the CLI writes it; Desktop only reads it), or
+     * null when unrecorded or no longer there. No process, no database.
+     *
+     * @return array{path: string, real: string, size: int, mtime: int, version: ?string, channel: ?string}|null
+     */
+    public function recordedTool(string $slug): ?array
+    {
+        $this->recordedTools ??= $this->readToolsFile($this->toolsFile());
+        $entry = $this->recordedTools[$slug] ?? null;
+
+        if (! is_array($entry) || ! is_string($entry['path'] ?? null)) {
+            return null;
+        }
+
+        $path = $entry['path'];
+        $usable = $this->isWindows() ? @is_file($path) : @is_executable($path);
+
+        return $usable ? self::normalizeEntry($entry) : null;
+    }
+
+    /**
+     * The recorded version of the tool at $path, only while that binary is
+     * the one it was read from (same real path, size and mtime); a stat, not
+     * a `--version` run.
+     */
+    public function recordedVersion(string $slug, string $path): ?string
+    {
+        $entry = $this->recordedTool($slug);
+
+        if ($entry === null || ! self::samePath($entry['path'], $path)) {
+            return null;
+        }
+
+        $real = @realpath($path) ?: $path;
+
+        return self::samePath($entry['real'], $real)
+            && $entry['size'] === (int) (@filesize($real) ?: 0)
+            && $entry['mtime'] === (int) (@filemtime($real) ?: 0)
+                ? $entry['version']
+                : null;
+    }
+
+    /**
+     * The version the larakube-ubuntu distro's CLI recorded in its own
+     * tools.json for the binary at $linuxPath, read over `\\wsl.localhost`,
+     * and only while that file's size and mtime still match. Null otherwise.
+     */
+    public function recordedDistroVersion(string $slug, string $linuxPath): ?string
+    {
+        if (! $this->isWindows()) {
+            return null;
+        }
+
+        $entry = $this->readToolsFile(WslDistro::toWindows(WslDistro::HOME.'/.larakube/tools.json'))[$slug] ?? null;
+
+        if (! is_array($entry) || ($entry['path'] ?? null) !== $linuxPath) {
+            return null;
+        }
+
+        $entry = self::normalizeEntry($entry);
+        $binary = WslDistro::toWindows($entry['real']);
+
+        return $entry['size'] === (int) (@filesize($binary) ?: 0) && $entry['mtime'] === (int) (@filemtime($binary) ?: 0)
+            ? $entry['version']
+            : null;
+    }
+
+    /**
+     * Everything the Setup row needs for a setup-managed tool: straight from
+     * tools.json while it is current, otherwise from the CLI (which records
+     * it again). Null when the CLI cannot answer either.
      *
      * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null
      */
     public function cliToolStatus(string $slug, bool $fresh = false): ?array
     {
-        $key = self::statusCacheKey($slug);
-        $cached = $fresh ? null : Cache::get($key);
+        if (! $fresh) {
+            $entry = $this->recordedTool($slug);
+            $version = $entry !== null ? $this->recordedVersion($slug, $entry['path']) : null;
 
-        if (is_array($cached) && is_bool($cached['installed'] ?? null) && is_bool($cached['managed'] ?? null)) {
-            $path = is_string($cached['path'] ?? null) ? $cached['path'] : null;
-            $vanished = $cached['installed'] && $path !== null && ! $this->isWindows() && ! is_file($path);
-
-            if (! $vanished) {
+            if ($entry !== null && $version !== null) {
                 return [
-                    'installed' => $cached['installed'],
-                    'path' => $path,
-                    'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
-                    'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
-                    'channel' => is_string($cached['channel'] ?? null) ? $cached['channel'] : null,
-                    'managed' => $cached['managed'],
+                    'installed' => true,
+                    'path' => $entry['path'],
+                    'version' => $version,
+                    'diagnostic' => null,
+                    'channel' => $entry['channel'],
+                    'managed' => in_array($entry['channel'], ['homebrew', 'larakube'], true),
                 ];
             }
         }
 
-        if (! $fresh && Cache::has(self::CLI_UNAVAILABLE_KEY)) {
+        return $this->askCliOnce($slug, $fresh);
+    }
+
+    /** The host tools.json (Windows: %USERPROFILE%\.larakube\tools.json). */
+    public function toolsFile(): string
+    {
+        $profile = self::hostProfile($this->isWindows());
+
+        return $profile !== '' ? rtrim(str_replace('\\', '/', $profile), '/').'/.larakube/tools.json' : '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function readToolsFile(string $path): array
+    {
+        if ($path === '' || ! @is_file($path)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) @file_get_contents($path), true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @return array{path: string, real: string, size: int, mtime: int, version: ?string, channel: ?string}
+     */
+    public static function normalizeEntry(array $entry): array
+    {
+        $path = (string) $entry['path'];
+
+        return [
+            'path' => $path,
+            'real' => is_string($entry['real'] ?? null) ? $entry['real'] : $path,
+            'size' => (int) ($entry['size'] ?? 0),
+            'mtime' => (int) ($entry['mtime'] ?? 0),
+            'version' => is_string($entry['version'] ?? null) ? $entry['version'] : null,
+            'channel' => is_string($entry['channel'] ?? null) ? $entry['channel'] : null,
+        ];
+    }
+
+    /** Windows paths compare case-insensitively and either slash direction. */
+    public static function samePath(string $a, string $b): bool
+    {
+        $normalize = fn (string $path): string => preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1
+            ? strtolower(str_replace('\\', '/', $path))
+            : $path;
+
+        return $normalize($a) === $normalize($b);
+    }
+
+    /**
+     * Ask the CLI once per tool per instance (it records the answer in
+     * tools.json for every later lookup). Null when the CLI is missing or
+     * predates `setup:status`.
+     *
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null
+     */
+    private function askCliOnce(string $slug, bool $fresh = false): ?array
+    {
+        if (! self::$asksCli || $this->cliCannotAnswer) {
             return null;
         }
 
-        $status = $this->askCliForStatus($slug);
-
-        if ($status === null) {
-            Cache::put(self::CLI_UNAVAILABLE_KEY, true, now()->addMinute());
-
-            return null;
+        if (! $fresh && array_key_exists($slug, $this->cliAnswers)) {
+            return $this->cliAnswers[$slug];
         }
 
-        // A tool that is there but would not report a version is not
-        // remembered, so a cold antivirus scan does not stick for minutes.
-        if (! $status['installed'] || $status['version'] !== null) {
-            Cache::put($key, $status, now()->addMinutes(5));
-        }
+        $this->recordedTools = null;
 
-        return $status;
+        $answer = $this->askCliForStatus($slug);
+        $this->cliCannotAnswer = $answer === null;
+
+        return $this->cliAnswers[$slug] = $answer;
     }
 
     /**

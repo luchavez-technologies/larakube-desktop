@@ -75,6 +75,19 @@ class ReadinessCheck
             ];
         }
 
+        $tool = $this->registry()->find($slug);
+
+        // A setup-managed tool's location, version and owner come from the
+        // CLI's ~/.larakube/tools.json (or the CLI itself when that is stale),
+        // so nothing about it is kept in the database.
+        if ($tool?->managedBySetup() && $this->cliAnswersFor($slug)) {
+            $answer = $this->locator->cliToolStatus($slug, $fresh);
+
+            if ($answer !== null) {
+                return $answer;
+            }
+        }
+
         $key = "readiness.tool.{$slug}";
 
         if ($fresh) {
@@ -109,15 +122,8 @@ class ReadinessCheck
                     'path' => $cachedPath,
                     'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
                     'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
-                    ...(is_bool($cached['managed'] ?? null) ? ['channel' => is_string($cached['channel'] ?? null) ? $cached['channel'] : null, 'managed' => $cached['managed']] : []),
                 ];
             }
-        }
-
-        $tool = $this->registry()->find($slug);
-
-        if ($result === null && $tool?->managedBySetup() && $this->cliAnswersFor($slug)) {
-            $result = $this->locator->cliToolStatus($slug, $fresh);
         }
 
         if ($result === null) {
@@ -131,7 +137,12 @@ class ReadinessCheck
                 $result = ['installed' => false, 'path' => null, 'version' => null, 'diagnostic' => $diagnostic];
                 Cache::put($key, $result, now()->addMinutes(5));
             } else {
-                ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, $tool->versionArgs());
+                // The CLI records its own version in tools.json on every run;
+                // while that binary is unchanged, no `--version` run is needed.
+                $recorded = $slug === 'larakube' ? $this->locator->recordedVersion('larakube', $path) : null;
+                ['version' => $version, 'diagnostic' => $diagnostic] = $recorded !== null
+                    ? ['version' => $recorded, 'diagnostic' => null]
+                    : $this->version($path, $tool->versionArgs());
                 $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
 
                 // Do not cache a failed version probe (e.g. cold Windows Defender scan
@@ -205,7 +216,10 @@ class ReadinessCheck
             return $result;
         }
 
-        ['version' => $version, 'diagnostic' => $diagnostic] = $this->version($path, $this->registry()->find('larakube-wsl')?->versionArgs() ?? ['--version']);
+        $recorded = $this->locator->recordedDistroVersion('larakube', $path);
+        ['version' => $version, 'diagnostic' => $diagnostic] = $recorded !== null
+            ? ['version' => $recorded, 'diagnostic' => null]
+            : $this->version($path, $this->registry()->find('larakube-wsl')?->versionArgs() ?? ['--version']);
         $result = ['installed' => true, 'path' => $path, 'version' => $version, 'diagnostic' => $diagnostic];
 
         if ($version !== null) {
@@ -228,8 +242,6 @@ class ReadinessCheck
             Cache::forget('readiness.tool.larakube.wsl');
             Cache::forget('readiness.tool.larakube-wsl');
         }
-
-        Cache::forget(ToolLocator::CLI_UNAVAILABLE_KEY);
 
         foreach ($slug !== null ? [$slug] : array_keys($this->registry()->all()) as $tool) {
             Cache::forget("readiness.tool.{$tool}");

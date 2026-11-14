@@ -5,7 +5,6 @@ namespace Tests;
 use App\Services\Elevation;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
 abstract class TestCase extends BaseTestCase
@@ -33,11 +32,11 @@ abstract class TestCase extends BaseTestCase
 
         app()->instance(ToolLocator::class, new ToolLocator([]));
 
-        // ...and a CLI that predates `setup:status`, so a tool lookup never
+        // ...and no asking the CLI's `setup:status`, so a tool lookup never
         // starts the real CLI of the machine running the tests (a command
         // Process::fake() has no pattern for still runs for real). A test of
-        // the setup:status path calls Cache::flush() and fakes the answer.
-        Cache::put(ToolLocator::CLI_UNAVAILABLE_KEY, true, now()->addHour());
+        // that path turns it back on and fakes the answer.
+        ToolLocator::allowCliToolStatus(false);
         app()->singleton(Elevation::class, fn () => new Elevation(windows: true));
     }
 
