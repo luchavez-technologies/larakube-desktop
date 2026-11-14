@@ -33,6 +33,9 @@ import ToolCatalogList, {
     type CatalogEntry,
 } from '@/components/setup/tool-catalog';
 import WslCheck, { type WslState } from '@/components/setup/wsl-check';
+import BundledTools, {
+    BundledToolsSkeleton,
+} from '@/components/setup/bundled-tools';
 import { useToolStatus } from '@/lib/tool-status';
 import type { Provider } from '@/types/larakube';
 
@@ -40,6 +43,7 @@ type Props = {
     windows: boolean;
     wsl?: WslState | null;
     catalog: CatalogEntry[];
+    bundled?: Record<string, string> | null;
     providers?: Provider[] | null;
     cliInstallCommand: string;
     cliChannel?: string;
@@ -59,6 +63,7 @@ export default function Readiness({
     windows,
     wsl,
     catalog,
+    bundled,
     providers,
     cliInstallCommand,
     cliChannel = 'canary',
@@ -177,6 +182,14 @@ export default function Readiness({
                                 showLocalOnly={usage === 'apps'}
                                 highlight={highlightTool}
                             />
+                            {windows && usage === 'apps' && (
+                                <Deferred
+                                    data="bundled"
+                                    fallback={<BundledToolsSkeleton />}
+                                >
+                                    <BundledTools tools={bundled} />
+                                </Deferred>
+                            )}
                         </Card>
                         <Card label="Cloud accounts">
                             <Deferred

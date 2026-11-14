@@ -273,6 +273,8 @@ class Wsl
      */
     public function import(): array
     {
+        Cache::forget(self::BUNDLED_TOOLS_CACHE_KEY);
+
         if (! is_file($this->imagePath())) {
             return ['ok' => false, 'message' => 'The image has not been downloaded yet.'];
         }
@@ -439,6 +441,8 @@ class Wsl
      */
     public function update(?array $distro = null, ?string $channel = null): array
     {
+        Cache::forget(self::BUNDLED_TOOLS_CACHE_KEY);
+
         $distro ??= $this->distro();
         if ($distro === null) {
             return ['ok' => false, 'message' => 'LaraKube Linux is not installed yet.'];
@@ -475,6 +479,8 @@ class Wsl
      */
     public function reset(): array
     {
+        Cache::forget(self::BUNDLED_TOOLS_CACHE_KEY);
+
         $distro = $this->distro();
         if ($distro === null) {
             return ['ok' => true, 'message' => 'LaraKube Linux was already removed.'];
@@ -510,6 +516,49 @@ class Wsl
         return Process::timeout(60)->run([
             'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--exec', '/bin/true',
         ])->successful();
+    }
+
+    public const BUNDLED_TOOLS_CACHE_KEY = 'wsl.bundled-tools';
+
+    /**
+     * What the larakube-ubuntu image bundles, and at which versions, from the
+     * manifest the image writes at build time (/etc/larakube-rootfs.json):
+     * the CLI, k3s, kubectl, gh, tea, git and Podman. Read-only — the image,
+     * not Setup, installs and updates them. Null off Windows, without WSL, or
+     * without the distro.
+     *
+     * @return array<string, string>|null
+     */
+    public function bundledTools(): ?array
+    {
+        if (! $this->isWindows() || ! $this->featureEnabled()) {
+            return null;
+        }
+
+        $cached = Cache::get(self::BUNDLED_TOOLS_CACHE_KEY);
+
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        if ($this->distro() === null) {
+            return null;
+        }
+
+        $result = Process::timeout(30)->run([
+            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--exec', '/bin/cat', '/etc/larakube-rootfs.json',
+        ]);
+
+        $manifest = $result->successful() ? json_decode($this->text($result->output()), true) : null;
+
+        if (! is_array($manifest)) {
+            return null;
+        }
+
+        $tools = array_filter($manifest, fn (mixed $version, mixed $name): bool => is_string($name) && is_string($version) && $version !== '', ARRAY_FILTER_USE_BOTH);
+        Cache::put(self::BUNDLED_TOOLS_CACHE_KEY, $tools, now()->addMinutes(10));
+
+        return $tools;
     }
 
     /**

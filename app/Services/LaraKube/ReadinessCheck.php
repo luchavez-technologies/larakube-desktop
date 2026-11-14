@@ -116,12 +116,8 @@ class ReadinessCheck
 
         $tool = $this->registry()->find($slug);
 
-        if ($result === null && $tool?->managedBySetup()) {
-            $result = $this->setupStatus($slug);
-
-            if ($result !== null && (! $result['installed'] || $result['version'] !== null)) {
-                Cache::put($key, $result, now()->addMinutes(5));
-            }
+        if ($result === null && $tool?->managedBySetup() && $this->cliAnswersFor($slug)) {
+            $result = $this->locator->cliToolStatus($slug, $fresh);
         }
 
         if ($result === null) {
@@ -157,56 +153,10 @@ class ReadinessCheck
         return $result;
     }
 
-    /**
-     * Ask the CLI where one of the tools its `setup` manages lives, who owns
-     * it, and its version (`setup:status <tool> --json`), so Desktop and the
-     * CLI never disagree about kubectl/tofu/gcloud/aws. Null when the CLI is
-     * missing or predates the command; the caller then looks for itself.
-     *
-     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null
-     */
-    private function setupStatus(string $slug): ?array
+    /** gh/tea on Windows live in the larakube-ubuntu distro, which the host CLI does not report on. */
+    private function cliAnswersFor(string $slug): bool
     {
-        $cli = $this->locator->find('larakube');
-
-        if ($cli === null) {
-            return null;
-        }
-
-        $isolated = $this->locator->isolate([$cli, 'setup:status', $slug, '--json']);
-
-        try {
-            $result = Process::env($isolated['environment'])
-                ->path($isolated['cwd'] ?? sys_get_temp_dir())
-                ->timeout(60)
-                ->run($isolated['command']);
-        } catch (ProcessTimedOutException) {
-            return null;
-        }
-
-        if (! $result->successful()) {
-            return null;
-        }
-
-        $lines = preg_split('/\R/', trim(str_replace("\0", '', $result->output()))) ?: [];
-        $payload = json_decode((string) end($lines), true);
-        $row = is_array($payload) && ($payload['success'] ?? false) === true ? ($payload['tools'][0] ?? null) : null;
-
-        if (! is_array($row) || ($row['slug'] ?? null) !== $slug || ! is_bool($row['installed'] ?? null)) {
-            return null;
-        }
-
-        $path = is_string($row['path'] ?? null) ? $row['path'] : null;
-        $version = is_string($row['version'] ?? null) ? $row['version'] : null;
-
-        return [
-            'installed' => $row['installed'],
-            'path' => $path,
-            'version' => $version,
-            'diagnostic' => $row['installed'] && $version === null ? "Found at {$path}, but it did not report a version. Reinstall to replace it." : null,
-            'channel' => is_string($row['channel'] ?? null) ? $row['channel'] : null,
-            'managed' => (bool) ($row['managed'] ?? false),
-        ];
+        return ! $this->locator->isWindows() || in_array($slug, ToolLocator::WINDOWS_NATIVE_TOOLS, true);
     }
 
     /**
@@ -278,6 +228,8 @@ class ReadinessCheck
             Cache::forget('readiness.tool.larakube.wsl');
             Cache::forget('readiness.tool.larakube-wsl');
         }
+
+        Cache::forget(ToolLocator::CLI_UNAVAILABLE_KEY);
 
         foreach ($slug !== null ? [$slug] : array_keys($this->registry()->all()) as $tool) {
             Cache::forget("readiness.tool.{$tool}");

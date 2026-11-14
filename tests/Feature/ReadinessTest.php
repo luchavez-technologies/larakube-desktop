@@ -485,8 +485,13 @@ test('Windows catalog includes larakube-wsl and tags every tool as windows or ws
         expect($catalog[$windowsSlug]['environment'])->toBe('windows');
     }
 
-    foreach (['larakube-wsl', 'gh', 'tea', 'git', 'docker', 'podman', 'dnsmasq'] as $wslSlug) {
+    foreach (['larakube-wsl', 'docker', 'dnsmasq'] as $wslSlug) {
         expect($catalog[$wslSlug]['environment'])->toBe('wsl');
+    }
+
+    // The distro image bundles these; Setup lists them as bundled, not installable.
+    foreach (['gh', 'tea', 'git', 'podman'] as $bundledSlug) {
+        expect($catalog)->not->toHaveKey($bundledSlug);
     }
 });
 
@@ -652,4 +657,66 @@ test('Reinstall runs setup:reinstall for CLI-managed tools and an update for the
         ['setup', '--tools=tofu', '--update'],
         ['setup:reinstall', 'tofu'],
     ]);
+});
+
+test('runtime lookups of a setup-managed tool use the CLI\'s answer, shared with the Setup screen', function () {
+    $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    Process::fake([
+        '*setup:status*kubectl*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'tools' => [[
+                'slug' => 'kubectl', 'installed' => true, 'path' => "{$bin}/kubectl",
+                'channel' => 'homebrew', 'managed' => true, 'version' => 'Client Version: v1.34.1',
+            ]],
+        ])),
+    ]);
+
+    $locator = app(ToolLocator::class);
+
+    expect($locator->find('kubectl'))->toBe("{$bin}/kubectl")
+        ->and(app(ReadinessCheck::class)->status('kubectl'))->toMatchArray(['path' => "{$bin}/kubectl", 'channel' => 'homebrew']);
+
+    // One CLI call served both: the lookup and the Setup row.
+    Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'setup:status'), 1);
+});
+
+test('a CLI that cannot answer is not asked again on every lookup', function () {
+    $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    Process::fake([
+        '*setup:status*' => Process::result(errorOutput: 'Command "setup:status" is not defined.', exitCode: 1),
+    ]);
+
+    $locator = app(ToolLocator::class);
+
+    expect($locator->find('kubectl'))->toBe("{$bin}/kubectl")
+        ->and($locator->find('k9s'))->toBeNull();
+
+    Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'setup:status'), 1);
+});
+
+test('on Windows, the tools the distro image bundles leave the installable list', function () {
+    $registry = app(CliToolRegistry::class);
+    $windows = new ToolLocator(directories: [], windows: true, darwin: false);
+    $mac = new ToolLocator(directories: [], windows: false, darwin: true);
+
+    $slugs = fn (ToolLocator $locator): array => array_column($registry->catalog($locator), 'slug');
+
+    expect($slugs($windows))->not->toContain('gh')->not->toContain('tea')->not->toContain('git')->not->toContain('podman')
+        ->and($slugs($windows))->toContain('kubectl')->toContain('larakube-wsl')
+        ->and($slugs($mac))->toContain('gh')->toContain('tea')->toContain('git');
+});
+
+test('the Setup page reads what the distro image bundles from its manifest', function () {
+    Cache::flush();
+    Process::fake([
+        '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"),
+        '*/etc/larakube-rootfs.json*' => Process::result(output: '{"larakube":"0.40.0","kubectl":"v1.34.1","gh":"2.80.0","tea":"0.16.0","git":"2.43.0","podman":"4.9.3","base":"24.04"}'),
+    ]);
+
+    $tools = (new Wsl(windows: true, featureEnabled: true))->bundledTools();
+
+    expect($tools)->toMatchArray(['gh' => '2.80.0', 'tea' => '0.16.0', 'git' => '2.43.0', 'base' => '24.04'])
+        ->and((new Wsl(windows: false))->bundledTools())->toBeNull();
 });

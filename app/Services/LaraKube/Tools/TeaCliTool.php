@@ -28,4 +28,9 @@ class TeaCliTool extends AbstractCliTool
     {
         return true;
     }
+
+    public function bundledInWslImage(): bool
+    {
+        return true;
+    }
 }

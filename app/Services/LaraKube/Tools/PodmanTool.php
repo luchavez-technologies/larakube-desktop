@@ -42,4 +42,9 @@ class PodmanTool extends AbstractCliTool
 
         return $args;
     }
+
+    public function bundledInWslImage(): bool
+    {
+        return true;
+    }
 }

@@ -55,8 +55,22 @@ abstract class AbstractCliTool implements CliToolContract
         return true;
     }
 
+    /**
+     * On Windows the larakube-ubuntu image bundles this tool (it serves
+     * project work, and projects live in the distro), so Setup lists it as
+     * bundled instead of offering an install.
+     */
+    public function bundledInWslImage(): bool
+    {
+        return false;
+    }
+
     public function isSupported(ToolLocator $locator): bool
     {
+        if ($this->bundledInWslImage() && $locator->isWindows()) {
+            return false;
+        }
+
         return ! $this->windowsOnly() || $locator->isWindows();
     }
 

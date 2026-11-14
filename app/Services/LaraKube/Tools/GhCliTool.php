@@ -28,4 +28,9 @@ class GhCliTool extends AbstractCliTool
     {
         return true;
     }
+
+    public function bundledInWslImage(): bool
+    {
+        return true;
+    }
 }

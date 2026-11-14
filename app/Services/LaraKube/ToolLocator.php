@@ -5,6 +5,8 @@ namespace App\Services\LaraKube;
 use App\Services\Runtime\WslDistro;
 use App\Services\Wsl;
 use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
@@ -144,8 +146,35 @@ class ToolLocator
      */
     public const WINDOWS_NATIVE_TOOLS = ['kubectl', 'k9s', 'tofu', 'aws', 'gcloud', 'ssh'];
 
+    /**
+     * Tools the CLI's own `setup` manages. The CLI answers where they live
+     * (`setup:status`), so Desktop and the CLI never disagree. On Windows only
+     * the host-run ones: gh/tea live in the larakube-ubuntu distro there.
+     *
+     * @var list<string>
+     */
+    public const SETUP_MANAGED_TOOLS = ['kubectl', 'k9s', 'tofu', 'aws', 'gcloud', 'gh', 'tea'];
+
+    /** Shared with ReadinessCheck, so the Setup screen and every runtime lookup reuse one CLI answer. */
+    public static function statusCacheKey(string $slug): string
+    {
+        return "readiness.tool.{$slug}";
+    }
+
+    public const CLI_UNAVAILABLE_KEY = 'readiness.setup-status.unavailable';
+
     public function find(string $binary): ?string
     {
+        if ($this->asksCliFor($binary)) {
+            $status = $this->cliToolStatus($binary);
+
+            if ($status !== null) {
+                $this->failure = null;
+
+                return $status['installed'] ? $status['path'] : null;
+            }
+        }
+
         if ($this->isWindows()) {
             if ($binary === 'larakube') {
                 $native = $this->nativeWindowsLaraKubePath();
@@ -197,6 +226,116 @@ class ToolLocator
         }
 
         return $candidates[0];
+    }
+
+    private function asksCliFor(string $binary): bool
+    {
+        if (! in_array($binary, self::SETUP_MANAGED_TOOLS, true)) {
+            return false;
+        }
+
+        return ! $this->isWindows() || in_array($binary, self::WINDOWS_NATIVE_TOOLS, true);
+    }
+
+    /**
+     * The CLI's answer for one setup-managed tool, remembered for a few
+     * minutes under the same key the Setup screen uses. Null when the CLI is
+     * missing or predates `setup:status`; that is remembered briefly too, so a
+     * lookup storm does not start the CLI over and over.
+     *
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null
+     */
+    public function cliToolStatus(string $slug, bool $fresh = false): ?array
+    {
+        $key = self::statusCacheKey($slug);
+        $cached = $fresh ? null : Cache::get($key);
+
+        if (is_array($cached) && is_bool($cached['installed'] ?? null) && is_bool($cached['managed'] ?? null)) {
+            $path = is_string($cached['path'] ?? null) ? $cached['path'] : null;
+            $vanished = $cached['installed'] && $path !== null && ! $this->isWindows() && ! is_file($path);
+
+            if (! $vanished) {
+                return [
+                    'installed' => $cached['installed'],
+                    'path' => $path,
+                    'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
+                    'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
+                    'channel' => is_string($cached['channel'] ?? null) ? $cached['channel'] : null,
+                    'managed' => $cached['managed'],
+                ];
+            }
+        }
+
+        if (! $fresh && Cache::has(self::CLI_UNAVAILABLE_KEY)) {
+            return null;
+        }
+
+        $status = $this->askCliForStatus($slug);
+
+        if ($status === null) {
+            Cache::put(self::CLI_UNAVAILABLE_KEY, true, now()->addMinute());
+
+            return null;
+        }
+
+        // A tool that is there but would not report a version is not
+        // remembered, so a cold antivirus scan does not stick for minutes.
+        if (! $status['installed'] || $status['version'] !== null) {
+            Cache::put($key, $status, now()->addMinutes(5));
+        }
+
+        return $status;
+    }
+
+    /**
+     * `larakube setup:status <tool> --json`.
+     *
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null
+     */
+    private function askCliForStatus(string $slug): ?array
+    {
+        // On Windows only the host's larakube.exe can speak for host tools; a
+        // distro copy would report the distro's binaries instead.
+        $cli = $this->isWindows() ? $this->nativeWindowsLaraKubePath() : $this->find('larakube');
+
+        if ($cli === null) {
+            return null;
+        }
+
+        $isolated = $this->isolate([$cli, 'setup:status', $slug, '--json']);
+
+        try {
+            $result = Process::env($isolated['environment'])
+                ->path($isolated['cwd'] ?? sys_get_temp_dir())
+                ->timeout(30)
+                ->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
+
+        if (! $result->successful()) {
+            return null;
+        }
+
+        $lines = preg_split('/\R/', trim(str_replace("\0", '', $result->output()))) ?: [];
+        $payload = json_decode((string) end($lines), true);
+        $row = is_array($payload) && ($payload['success'] ?? false) === true ? ($payload['tools'][0] ?? null) : null;
+
+        if (! is_array($row) || ($row['slug'] ?? null) !== $slug || ! is_bool($row['installed'] ?? null)) {
+            return null;
+        }
+
+        $path = is_string($row['path'] ?? null) ? $row['path'] : null;
+        $version = is_string($row['version'] ?? null) ? $row['version'] : null;
+
+        return [
+            'installed' => $row['installed'],
+            'path' => $path,
+            'version' => $version,
+            'diagnostic' => $row['installed'] && $version === null ? "Found at {$path}, but it did not report a version. Reinstall to replace it." : null,
+            'channel' => is_string($row['channel'] ?? null) ? $row['channel'] : null,
+            'managed' => (bool) ($row['managed'] ?? false),
+        ];
     }
 
     /**

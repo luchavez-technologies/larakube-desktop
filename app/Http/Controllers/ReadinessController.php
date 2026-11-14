@@ -39,6 +39,9 @@ class ReadinessController extends Controller
             // native prompt just from opening Setup.
             'wsl' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $usage === 'apps' ? $wsl->check() : null),
             'catalog' => $readiness->catalog(),
+            // What the distro image itself carries (gh, tea, git, Podman, k3s…):
+            // shown read-only, since the image — not Setup — installs them.
+            'bundled' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $usage === 'apps' ? $wsl->bundledTools() : null),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
             'cliInstallCommand' => $readiness->cliInstallCommand(),
             'cliChannel' => $installer->channel(),

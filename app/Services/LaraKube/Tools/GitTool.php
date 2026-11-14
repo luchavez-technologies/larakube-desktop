@@ -28,4 +28,9 @@ class GitTool extends AbstractCliTool
     {
         return false;
     }
+
+    public function bundledInWslImage(): bool
+    {
+        return true;
+    }
 }
