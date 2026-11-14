@@ -1,6 +1,9 @@
 <?php
 
 use App\Contracts\CliToolContract;
+use App\Models\Run;
+use App\Services\LaraKube\CliInstaller;
+use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\LocalCluster;
 use App\Services\LaraKube\ReadinessCheck;
@@ -579,4 +582,74 @@ test('podman and dnsmasq installability follows the locator OS, not the PHP host
         ->and($registry->find('podman')->isInstallable($windows))->toBeFalse()
         ->and($registry->find('dnsmasq')->isInstallable($mac))->toBeTrue()
         ->and($registry->find('dnsmasq')->isInstallable($windows))->toBeFalse();
+});
+
+test('a tool the CLI\'s setup manages answers through setup:status, owner included', function () {
+    readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    Process::fake([
+        '*setup:status*kubectl*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'tools' => [[
+                'slug' => 'kubectl', 'installed' => true, 'path' => '/usr/local/bin/kubectl',
+                'channel' => 'other', 'managed' => false, 'version' => 'Client Version: v1.33.9',
+            ]],
+        ])),
+    ]);
+
+    $status = app(ReadinessCheck::class)->status('kubectl');
+
+    expect($status)->toMatchArray([
+        'installed' => true,
+        'path' => '/usr/local/bin/kubectl',
+        'version' => 'Client Version: v1.33.9',
+        'channel' => 'other',
+        'managed' => false,
+        'diagnostic' => null,
+    ]);
+
+    // Remembered with its owner, so the Setup row keeps hiding Update.
+    expect(app(ReadinessCheck::class)->status('kubectl'))->toMatchArray(['channel' => 'other', 'managed' => false]);
+});
+
+test('an older CLI without setup:status falls back to Desktop\'s own lookup', function () {
+    $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
+    Cache::flush();
+    Process::fake([
+        '*setup:status*' => Process::result(errorOutput: 'Command "setup:status" is not defined.', exitCode: 1),
+        '*kubectl*version*--client*' => Process::result(output: "Client Version: v1.34.1\n"),
+    ]);
+
+    expect(app(ReadinessCheck::class)->status('kubectl'))->toMatchArray([
+        'installed' => true,
+        'path' => "{$bin}/kubectl",
+        'version' => 'Client Version: v1.34.1',
+    ]);
+});
+
+test('Reinstall runs setup:reinstall for CLI-managed tools and an update for the rest', function () {
+    $registry = app(CliToolRegistry::class);
+
+    expect($registry->find('kubectl')->reinstallArguments())->toBe(['setup:reinstall', 'kubectl'])
+        ->and($registry->find('gcloud')->reinstallArguments())->toBe(['setup:reinstall', 'gcloud'])
+        ->and($registry->find('podman')->reinstallArguments())->toBe(['runtime:install', '--runtime=podman', '--update'])
+        ->and($registry->find('kubectl')->installArguments(update: true))->toBe(['setup', '--tools=kubectl', '--update']);
+
+    $captured = [];
+    $runner = Mockery::mock(CliRunner::class);
+    $runner->shouldReceive('start')->andReturnUsing(function (...$arguments) use (&$captured) {
+        $captured[] = $arguments[1];
+
+        return new Run;
+    });
+
+    foreach (['Install', 'Update', 'Reinstall'] as $verb) {
+        $registry->find('tofu')->dispatchInstall($runner, app(CliInstaller::class), app(ReadinessCheck::class), 'canary', $verb);
+    }
+
+    expect($captured)->toBe([
+        ['setup', '--tools=tofu'],
+        ['setup', '--tools=tofu', '--update'],
+        ['setup:reinstall', 'tofu'],
+    ]);
 });

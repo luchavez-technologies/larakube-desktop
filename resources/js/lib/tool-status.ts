@@ -5,6 +5,8 @@ export type ToolStatus = {
     path: string | null;
     version: string | null;
     diagnostic?: string | null;
+    channel?: 'homebrew' | 'larakube' | 'system' | 'other' | null;
+    managed?: boolean;
     wsl?: {
         installed: boolean;
         path: string | null;

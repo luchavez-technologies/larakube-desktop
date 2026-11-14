@@ -113,6 +113,25 @@ abstract class AbstractCliTool implements CliToolContract
         return $args;
     }
 
+    public function managedBySetup(): bool
+    {
+        return false;
+    }
+
+    /**
+     * A corrupted or broken copy: the CLI's `setup:reinstall` replaces it
+     * through whoever owns it (Homebrew, the CLI's own download, the SDK's
+     * updater). Tools `setup` does not manage fall back to their update.
+     *
+     * @return list<string>
+     */
+    public function reinstallArguments(): array
+    {
+        return $this->managedBySetup()
+            ? ['setup:reinstall', $this->slug()]
+            : $this->installArguments(update: true);
+    }
+
     public function dispatchInstall(
         CliRunner $runner,
         CliInstaller $installer,
@@ -122,7 +141,11 @@ abstract class AbstractCliTool implements CliToolContract
     ): Run {
         return $runner->start(
             label: "{$verb} {$this->label()}",
-            arguments: $this->installArguments($verb !== 'Install'),
+            arguments: match ($verb) {
+                'Install' => $this->installArguments(),
+                'Reinstall' => $this->reinstallArguments(),
+                default => $this->installArguments(update: true),
+            },
             kind: RunKind::InstallTool,
             subject: $this->slug(),
             targetType: 'tool',

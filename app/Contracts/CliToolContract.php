@@ -53,6 +53,14 @@ interface CliToolContract
      */
     public function installArguments(bool $update = false): array;
 
+    /**
+     * @return list<string>
+     */
+    public function reinstallArguments(): array;
+
+    /** Whether the CLI's own `setup` manages this tool, so `setup:status`/`setup:reinstall` speak for it. */
+    public function managedBySetup(): bool;
+
     public function dispatchInstall(
         CliRunner $runner,
         CliInstaller $installer,

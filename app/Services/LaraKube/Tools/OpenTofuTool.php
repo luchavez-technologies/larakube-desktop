@@ -33,4 +33,9 @@ class OpenTofuTool extends AbstractCliTool
     {
         return true;
     }
+
+    public function managedBySetup(): bool
+    {
+        return true;
+    }
 }

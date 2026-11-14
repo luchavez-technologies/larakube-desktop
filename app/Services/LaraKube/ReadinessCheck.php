@@ -62,7 +62,7 @@ class ReadinessCheck
      * One tool's state on this computer. Remembered for a few minutes, because
      * running `--version` on every tool is what made the Setup page slow.
      *
-     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, wsl?: array{installed: bool, path: ?string, version: ?string, diagnostic: ?string}}
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel?: ?string, managed?: bool, wsl?: array{installed: bool, path: ?string, version: ?string, diagnostic: ?string}}
      */
     public function status(string $slug, bool $fresh = false): array
     {
@@ -109,12 +109,22 @@ class ReadinessCheck
                     'path' => $cachedPath,
                     'version' => is_string($cached['version'] ?? null) ? $cached['version'] : null,
                     'diagnostic' => is_string($cached['diagnostic'] ?? null) ? $cached['diagnostic'] : null,
+                    ...(is_bool($cached['managed'] ?? null) ? ['channel' => is_string($cached['channel'] ?? null) ? $cached['channel'] : null, 'managed' => $cached['managed']] : []),
                 ];
             }
         }
 
+        $tool = $this->registry()->find($slug);
+
+        if ($result === null && $tool?->managedBySetup()) {
+            $result = $this->setupStatus($slug);
+
+            if ($result !== null && (! $result['installed'] || $result['version'] !== null)) {
+                Cache::put($key, $result, now()->addMinutes(5));
+            }
+        }
+
         if ($result === null) {
-            $tool = $this->registry()->find($slug);
             $path = $tool?->locate($this->locator);
 
             if ($path === null) {
@@ -145,6 +155,58 @@ class ReadinessCheck
         }
 
         return $result;
+    }
+
+    /**
+     * Ask the CLI where one of the tools its `setup` manages lives, who owns
+     * it, and its version (`setup:status <tool> --json`), so Desktop and the
+     * CLI never disagree about kubectl/tofu/gcloud/aws. Null when the CLI is
+     * missing or predates the command; the caller then looks for itself.
+     *
+     * @return array{installed: bool, path: ?string, version: ?string, diagnostic: ?string, channel: ?string, managed: bool}|null
+     */
+    private function setupStatus(string $slug): ?array
+    {
+        $cli = $this->locator->find('larakube');
+
+        if ($cli === null) {
+            return null;
+        }
+
+        $isolated = $this->locator->isolate([$cli, 'setup:status', $slug, '--json']);
+
+        try {
+            $result = Process::env($isolated['environment'])
+                ->path($isolated['cwd'] ?? sys_get_temp_dir())
+                ->timeout(60)
+                ->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
+
+        if (! $result->successful()) {
+            return null;
+        }
+
+        $lines = preg_split('/\R/', trim(str_replace("\0", '', $result->output()))) ?: [];
+        $payload = json_decode((string) end($lines), true);
+        $row = is_array($payload) && ($payload['success'] ?? false) === true ? ($payload['tools'][0] ?? null) : null;
+
+        if (! is_array($row) || ($row['slug'] ?? null) !== $slug || ! is_bool($row['installed'] ?? null)) {
+            return null;
+        }
+
+        $path = is_string($row['path'] ?? null) ? $row['path'] : null;
+        $version = is_string($row['version'] ?? null) ? $row['version'] : null;
+
+        return [
+            'installed' => $row['installed'],
+            'path' => $path,
+            'version' => $version,
+            'diagnostic' => $row['installed'] && $version === null ? "Found at {$path}, but it did not report a version. Reinstall to replace it." : null,
+            'channel' => is_string($row['channel'] ?? null) ? $row['channel'] : null,
+            'managed' => (bool) ($row['managed'] ?? false),
+        ];
     }
 
     /**

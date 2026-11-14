@@ -10,6 +10,10 @@ export type Tool = {
     path: string | null;
     version: string | null;
     diagnostic?: string | null;
+    /** Who owns the installed binary, from the CLI's `setup:status` (CLI-managed tools only). */
+    channel?: 'homebrew' | 'larakube' | 'system' | 'other' | null;
+    /** False when the CLI will not update or reinstall it (apt/snap, OrbStack, a manual install). */
+    managed?: boolean;
     wsl?: {
         installed: boolean;
         path: string | null;

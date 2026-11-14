@@ -208,6 +208,17 @@ export function ToolRow({
     );
 }
 
+function ownerLabel(channel: Tool['channel']): string {
+    switch (channel) {
+        case 'homebrew':
+            return 'Homebrew';
+        case 'system':
+            return 'your system package manager';
+        default:
+            return 'another installer';
+    }
+}
+
 function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     const [submitting, setSubmitting] = useState(false);
     const isCorrupted =
@@ -245,6 +256,20 @@ function ToolState({ tool, channel }: { tool: Tool; channel: string }) {
     if (tool.installed) {
         if (!tool.installable) {
             return null;
+        }
+
+        // The CLI leaves a copy apt/snap or another installer owns alone
+        // (a second copy would lose to whichever is first on PATH), so offer
+        // no Update/Reinstall it would refuse; say who to update it with.
+        if (tool.managed === false && !isLaraKubeCli) {
+            return (
+                <span
+                    className="text-muted-foreground text-xs"
+                    title={`${tool.path ?? tool.label} was installed by ${ownerLabel(tool.channel)}. Update it there.`}
+                >
+                    Managed by {ownerLabel(tool.channel)}
+                </span>
+            );
         }
 
         if (isCorrupted) {
