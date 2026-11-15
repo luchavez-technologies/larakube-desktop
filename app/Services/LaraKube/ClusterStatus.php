@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Support\LaraKubeLabels;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
@@ -295,7 +296,7 @@ class ClusterStatus
                 return null;
             }
 
-            $isolated = $this->locator->isolate([$cli, "--context={$context}", 'get', 'sa', '-A', '-l', 'larakube.dev/access-user', '-o', 'json']);
+            $isolated = $this->locator->isolate([$cli, "--context={$context}", 'get', 'sa', '-A', '-l', LaraKubeLabels::ACCESS_USER, '-o', 'json']);
             $result = Process::env($isolated['environment'])->timeout(15)->run($isolated['command']);
 
             if (! $result->successful()) {
@@ -307,7 +308,7 @@ class ClusterStatus
                 return [];
             }
 
-            $bindingsCmd = $this->locator->isolate([$cli, "--context={$context}", 'get', 'clusterrolebinding,rolebinding', '-A', '-l', 'larakube.dev/access-user', '-o', 'json']);
+            $bindingsCmd = $this->locator->isolate([$cli, "--context={$context}", 'get', 'clusterrolebinding,rolebinding', '-A', '-l', LaraKubeLabels::ACCESS_USER, '-o', 'json']);
             $bindingsResult = Process::env($bindingsCmd['environment'])->timeout(15)->run($bindingsCmd['command']);
             $bindingItems = $bindingsResult->successful() ? (json_decode($bindingsResult->output(), true)['items'] ?? []) : [];
 
@@ -316,7 +317,7 @@ class ClusterStatus
 
             if (is_array($bindingItems)) {
                 foreach ($bindingItems as $b) {
-                    $userSa = $b['metadata']['labels']['larakube.dev/access-user'] ?? null;
+                    $userSa = $b['metadata']['labels'][LaraKubeLabels::ACCESS_USER] ?? null;
                     if (! $userSa && ! empty($b['subjects'])) {
                         foreach ($b['subjects'] as $sub) {
                             if (($sub['kind'] ?? '') === 'ServiceAccount') {
@@ -347,7 +348,7 @@ class ClusterStatus
 
             foreach ($items as $sa) {
                 $name = $sa['metadata']['name'] ?? '';
-                $person = $sa['metadata']['annotations']['larakube.dev/person'] ?? $name;
+                $person = $sa['metadata']['annotations'][LaraKubeLabels::PERSON] ?? $name;
                 $ns = $sa['metadata']['namespace'] ?? '';
                 $createdAt = $sa['metadata']['creationTimestamp'] ?? null;
 

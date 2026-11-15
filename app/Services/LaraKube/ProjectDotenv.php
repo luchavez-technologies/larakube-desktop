@@ -3,6 +3,7 @@
 namespace App\Services\LaraKube;
 
 use App\Services\Runtime\WslDistro;
+use App\Support\LaraKubeLabels;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 
 /**
@@ -139,7 +140,7 @@ class ProjectDotenv
                     'restart',
                     'deployment',
                     '-l',
-                    'larakube-preview!=true,larakube.dev/role!=share',
+                    LaraKubeLabels::PREVIEW.'!=true,'.LaraKubeLabels::ROLE.'!=share',
                     '-n',
                     $namespace,
                 ];
