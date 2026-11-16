@@ -379,6 +379,61 @@ class ClusterToolController extends Controller
         return $this->togglePause($request, $server, $tool, pausing: false);
     }
 
+    /**
+     * Re-apply one installed tool with the CLI's current build via `tool:update`, keeping the options it was
+     * installed with. PVCs, Secrets and Commons tenants are kept.
+     */
+    public function update(Request $request, string $server, string $tool): RedirectResponse
+    {
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+        $domain = $request->string('domain')->toString() ?: $request->string('host')->toString();
+        $row = $this->tools->find($context, $tool, $domain);
+
+        abort_if($row === null || ! ($row['installed'] ?? false), 404);
+
+        $host = is_string($row['host'] ?? null) ? $row['host'] : '';
+        abort_if($host === '', 404);
+
+        $displayName = $this->displayName($row);
+
+        $run = app(CliRunner::class)->start(
+            label: 'Update '.$displayName.' on '.$server,
+            arguments: ['tool:update', "--context={$context}", "--tool={$tool}", "--domain={$host}"],
+            kind: RunKind::UpdateClusterTool,
+            subject: $tool,
+            meta: ['server' => $server, 'context' => $context, 'tool' => $tool, 'host' => $host],
+            targetType: 'tool',
+            targetName: $displayName,
+            serverName: $server,
+            context: $context,
+            tool: $tool,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    /** Re-apply every installed tool `tool:outdated` lists, one after another; a failure doesn't stop the rest. */
+    public function updateAll(string $server): RedirectResponse
+    {
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+
+        $run = app(CliRunner::class)->start(
+            label: 'Update all apps on '.$server,
+            arguments: ['tool:update', "--context={$context}", '--all'],
+            kind: RunKind::UpdateAllClusterTools,
+            subject: 'all',
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
     /** Scale an installed tool's pods to zero (or back up) via `tool:pause`/`tool:resume` — never touches PVCs, Secrets, or the registry. */
     private function togglePause(Request $request, string $server, string $tool, bool $pausing): RedirectResponse
     {

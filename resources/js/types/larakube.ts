@@ -416,6 +416,16 @@ export type ClusterTool = {
     commons?: { databases: string[]; redis: string[]; buckets: string[] };
     /** Scaled to zero via `tool:pause` (data preserved) — false on a `--registry-only` read until the verified pass confirms it. */
     paused?: boolean;
+    /**
+     * Whether this CLI build would render the instance differently (`tool:outdated`). `unstamped` is an install from
+     * before updates were tracked, which always counts as behind. Absent until the first sync with a CLI that has it.
+     */
+    update?: {
+        status: 'current' | 'outdated' | 'unstamped';
+        installedRevision: string | null;
+        availableRevision: string;
+        images: string[];
+    } | null;
 };
 
 export function toolCategories(tool: {

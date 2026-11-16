@@ -74,8 +74,10 @@ class SyncClusterToolsJob extends SyncJob
                 return;
             }
 
+            $updates = $this->updateStatuses($locator, $cli, $server->context);
+
             /** @var list<array<string, mixed>> $decoded */
-            DB::transaction(function () use ($server, $decoded): void {
+            DB::transaction(function () use ($server, $decoded, $updates): void {
                 $seenKeys = [];
 
                 foreach ($decoded as $position => $row) {
@@ -97,11 +99,16 @@ class SyncClusterToolsJob extends SyncJob
                     $preservedData = [];
                     if ($existing !== null) {
                         $existingData = $existing->data ?? [];
-                        foreach (['serverInfo', 'queue', 'wiredTools', 'driveInfo', 'extensions', 'status'] as $deepKey) {
+                        foreach (['serverInfo', 'queue', 'wiredTools', 'driveInfo', 'extensions', 'status', 'update'] as $deepKey) {
                             if (array_key_exists($deepKey, $existingData)) {
                                 $preservedData[$deepKey] = $existingData[$deepKey];
                             }
                         }
+                    }
+
+                    // A failed tool:outdated keeps the last known status rather than clearing it.
+                    if ($updates !== null) {
+                        $row['update'] = $updates[$tool.'|'.($host ?? '')] ?? null;
                     }
 
                     CatalogTool::upsertFromPayload($row, $position);
@@ -140,6 +147,46 @@ class SyncClusterToolsJob extends SyncJob
         } catch (\Throwable $e) {
             $this->markError($server->id, $e->getMessage(), $wasAlreadyErrored);
         }
+    }
+
+    /**
+     * Each installed instance's update status from `tool:outdated`, keyed `tool|host`, or null when it couldn't be read
+     * (an older CLI without the command, or a timeout).
+     *
+     * @return ?array<string, array{status: string, installedRevision: ?string, availableRevision: string, images: list<string>}>
+     */
+    private function updateStatuses(ToolLocator $locator, string $cli, string $context): ?array
+    {
+        $isolated = $locator->isolate([$cli, 'tool:outdated', "--context={$context}", '--json', '--no-interaction']);
+
+        try {
+            $result = Process::env($isolated['environment'])->timeout(120)->run($isolated['command']);
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
+
+        $decoded = json_decode(trim($result->output()), true);
+
+        if (! $result->successful() || ! is_array($decoded) || ! array_is_list($decoded)) {
+            return null;
+        }
+
+        $statuses = [];
+
+        foreach ($decoded as $row) {
+            if (! is_array($row) || ! isset($row['tool'], $row['status'])) {
+                continue;
+            }
+
+            $statuses[$row['tool'].'|'.($row['host'] ?? '')] = [
+                'status' => (string) $row['status'],
+                'installedRevision' => isset($row['installedRevision']) ? (string) $row['installedRevision'] : null,
+                'availableRevision' => (string) ($row['availableRevision'] ?? ''),
+                'images' => array_values(array_map('strval', $row['images'] ?? [])),
+            ];
+        }
+
+        return $statuses;
     }
 
     private function markError(int $serverId, string $message, bool $alreadyErrored): void

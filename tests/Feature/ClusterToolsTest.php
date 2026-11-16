@@ -998,6 +998,67 @@ test('resume dispatches tool:resume CLI runner for the installed tool', function
     File::deleteDirectory($bin);
 });
 
+test('update re-applies one installed tool with tool:update, keeping its options', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.update', ['server' => 'workshop-demo', 'tool' => 'sso']), [
+        'domain' => 'sso.example.com',
+    ])->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube",
+        'tool:update',
+        '--context=larakube-203.0.113.21',
+        '--tool=sso',
+        '--domain=sso.example.com',
+        '--no-interaction',
+    ]);
+
+    expect(Run::sole())
+        ->label->toBe('Update SSO on workshop-demo')
+        ->kind->toBe(RunKind::UpdateClusterTool);
+
+    File::deleteDirectory($bin);
+});
+
+test('update 404s for a tool that is not installed', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->post(route('servers.tools.update', ['server' => 'workshop-demo', 'tool' => 'crm']), [
+        'domain' => '',
+    ])->assertNotFound();
+
+    File::deleteDirectory($bin);
+});
+
+test('update all re-applies every behind tool on the server in one run', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.tools.update-all', ['server' => 'workshop-demo']))
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube",
+        'tool:update',
+        '--context=larakube-203.0.113.21',
+        '--all',
+        '--no-interaction',
+    ]);
+
+    expect(Run::sole())
+        ->label->toBe('Update all apps on workshop-demo')
+        ->kind->toBe(RunKind::UpdateAllClusterTools)
+        ->and(RunKind::UpdateAllClusterTools->changesClusterTools())->toBeTrue()
+        ->and(RunKind::UpdateClusterTool->changesClusterTools())->toBeTrue();
+
+    File::deleteDirectory($bin);
+});
+
 test('pause 404s for a tool that is not installed', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();

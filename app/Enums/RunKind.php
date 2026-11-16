@@ -45,6 +45,8 @@ enum RunKind: string
     /** Scale an installed Cluster Tool's pods to zero to free RAM, and back up to their prior count later. Data (PVCs, Secrets) is untouched. */
     case PauseClusterTool = 'pause-cluster-tool';
     case ResumeClusterTool = 'resume-cluster-tool';
+    case UpdateClusterTool = 'update-cluster-tool';
+    case UpdateAllClusterTools = 'update-all-cluster-tools';
     case QuickLaunchApp = 'quick-launch-app';
     case ConnectDomain = 'connect-domain';
     case DisconnectDomain = 'disconnect-domain';
@@ -167,6 +169,8 @@ enum RunKind: string
             self::RebindClusterTool,
             self::PauseClusterTool,
             self::ResumeClusterTool,
+            self::UpdateClusterTool,
+            self::UpdateAllClusterTools,
             self::ConnectDomain,
             self::DisconnectDomain,
             self::QuickLaunchApp,

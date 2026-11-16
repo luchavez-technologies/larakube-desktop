@@ -45,6 +45,8 @@ import {
     store,
     pause as pauseTool,
     resume as resumeTool,
+    update as updateTool,
+    updateAll as updateAllTools,
 } from '@/routes/servers/tools';
 import { isLocalServer as isLocalServerCheck } from '@/lib/servers';
 import {
@@ -219,6 +221,17 @@ export default function ToolsIndex({
             stopPoll();
         }
     }, [toolsSyncing, startPoll, stopPoll]);
+
+    const [updatingAll, setUpdatingAll] = useState(false);
+
+    function handleUpdateAll() {
+        setUpdatingAll(true);
+        router.post(
+            updateAllTools(server.name).url,
+            {},
+            { onFinish: () => setUpdatingAll(false) },
+        );
+    }
 
     function handleRefresh() {
         setRefreshing(true);
@@ -442,6 +455,11 @@ export default function ToolsIndex({
     const installed = installedAll.filter((tool) =>
         matches(tool, query, selectedCategory),
     );
+    const updatesAvailable = installedAll.filter(
+        (tool) =>
+            tool.update?.status === 'outdated' ||
+            tool.update?.status === 'unstamped',
+    ).length;
     const available = useMemo(() => {
         if (catalog) {
             return catalog.data.filter(
@@ -494,6 +512,22 @@ export default function ToolsIndex({
                         <ExternalLink className="size-3.5" />
                         <span>Open server</span>
                     </Link>
+                    {updatesAvailable > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleUpdateAll}
+                            disabled={updatingAll || isSyncing}
+                            className={buttonClass('primary')}
+                            title={`Re-apply ${updatesAvailable} app${updatesAvailable === 1 ? '' : 's'} with this CLI build, one after another. Data and settings are kept.`}
+                        >
+                            <ArrowUpCircle className="size-3.5" />
+                            <span>
+                                {updatingAll
+                                    ? 'Starting…'
+                                    : `Update all (${updatesAvailable})`}
+                            </span>
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={handleRefresh}
@@ -1383,6 +1417,23 @@ function InstalledCard({
     const paused = tool.paused ?? false;
     const [togglingPause, setTogglingPause] = useState(false);
 
+    const updateStatus = tool.update?.status ?? null;
+    const updateAvailable =
+        updateStatus === 'outdated' || updateStatus === 'unstamped';
+    const [updating, setUpdating] = useState(false);
+
+    function handleUpdate() {
+        if (!tool.host) {
+            return;
+        }
+        setUpdating(true);
+        router.post(
+            updateTool({ server: server.name, tool: tool.tool }).url,
+            { domain: tool.host },
+            { onFinish: () => setUpdating(false) },
+        );
+    }
+
     function handleTogglePause() {
         if (!tool.host) {
             return;
@@ -1504,12 +1555,33 @@ function InstalledCard({
             <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-line/60 pt-3.5 text-xs">
                 <button
                     type="button"
-                    disabled
-                    title="Coming soon — upgrade this tool's image version in place when a newer one is available."
-                    className={buttonClass('secondary', 'sm', 'h-8 px-2.5')}
+                    disabled={!updateAvailable || updating || !tool.host}
+                    onClick={handleUpdate}
+                    title={
+                        updateStatus === 'unstamped'
+                            ? 'Re-apply with this CLI build: new images, manifest changes and labels. Data and settings are kept.'
+                            : updateStatus === 'outdated'
+                              ? 'This CLI build has a newer version of this app. Data and settings are kept.'
+                              : updateStatus === 'current'
+                                ? 'Up to date with this CLI build.'
+                                : 'Checking for updates on the next refresh.'
+                    }
+                    className={buttonClass(
+                        updateAvailable ? 'primary' : 'secondary',
+                        'sm',
+                        'h-8 px-2.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
+                    )}
                 >
-                    <ArrowUpCircle className="size-3.5" />
-                    <span>Update</span>
+                    <ArrowUpCircle
+                        className={`size-3.5 ${updating ? 'animate-pulse' : ''}`}
+                    />
+                    <span>
+                        {updating
+                            ? 'Updating…'
+                            : updateAvailable
+                              ? 'Update'
+                              : 'Up to date'}
+                    </span>
                 </button>
                 {tool.host && (
                     <button
