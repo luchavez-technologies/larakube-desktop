@@ -51,13 +51,6 @@ const DOCKER_HUB_HOSTS = [
     'registry-1.docker.io',
 ];
 
-/**
- * A vendor's own registry whose images the same publisher also lists on Docker
- * Hub under the same name (n8n publishes `n8nio/n8n` there as n8n GmbH), so the
- * Docker Hub page is where its versions can be browsed.
- */
-const DOCKER_HUB_MIRRORS = ['docker.n8n.io'];
-
 /** Forgejo-based registries share Forgejo's package page layout. */
 const FORGEJO_HOSTS: Record<
     string,
@@ -81,15 +74,6 @@ export function registrySource(reference: string): RegistrySource {
             url: repo.includes('/')
                 ? `https://hub.docker.com/r/${repo}/tags`
                 : `https://hub.docker.com/_/${repo}/tags`,
-        };
-    }
-
-    if (DOCKER_HUB_MIRRORS.includes(registry)) {
-        return {
-            name: `${registry} (also published on Docker Hub)`,
-            label: 'Docker Hub',
-            icon: SiDocker,
-            url: `https://hub.docker.com/r/${path}/tags`,
         };
     }
 
@@ -132,6 +116,8 @@ export function registrySource(reference: string): RegistrySource {
         };
     }
 
+    // Named as-is, with no link: the row shows where the image is really pulled
+    // from, never a different registry that happens to carry a copy.
     return { name: registry, label: registry, icon: Package, url: null };
 }
 
