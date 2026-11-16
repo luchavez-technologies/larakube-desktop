@@ -210,3 +210,45 @@ export default function ImageRef({
         </div>
     );
 }
+
+/**
+ * The digest(s) the app's pods actually pulled: the exact image running,
+ * which a tag (especially `:latest`) can't prove on its own.
+ */
+export function PulledDigests({ digests }: { digests: string[] }) {
+    if (digests.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mt-1 space-y-0.5">
+            {digests.length > 1 && (
+                <p className="text-[10px] text-warn">
+                    Pods are running {digests.length} different builds (an
+                    update may be rolling out).
+                </p>
+            )}
+            {digests.map((digest) => (
+                <div
+                    key={digest}
+                    className="flex min-w-0 items-center gap-1.5 text-[10px]"
+                >
+                    <span className="shrink-0 text-faint">Pulled</span>
+                    <span
+                        className="truncate font-mono text-soft select-all"
+                        title={digest}
+                    >
+                        {digest.slice(0, 19)}…
+                    </span>
+                    <CopyButton
+                        value={digest}
+                        label=""
+                        copiedLabel=""
+                        title={`Copy ${digest}`}
+                        className="ml-auto h-5 px-1"
+                    />
+                </div>
+            ))}
+        </div>
+    );
+}

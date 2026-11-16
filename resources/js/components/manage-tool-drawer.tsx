@@ -17,7 +17,7 @@ import {
     ArrowRightLeft,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
-import ImageRef from '@/components/image-ref';
+import ImageRef, { PulledDigests } from '@/components/image-ref';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
@@ -624,11 +624,15 @@ export default function ManageToolDrawer({
                                             )}
                                         </div>
                                         <ImageRef container={container} />
+                                        <PulledDigests
+                                            digests={container.digests ?? []}
+                                        />
                                     </div>
                                 ))}
                             </div>
                             <p className="mt-2.5 text-[10px] leading-relaxed text-soft">
-                                Copy any image to look it up on its registry. An
+                                Copy any image to look it up on its registry.
+                                "Pulled" is the exact build the pods run. An
                                 arrow shows the version this LaraKube CLI build
                                 installs on update.
                             </p>

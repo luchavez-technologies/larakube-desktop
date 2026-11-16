@@ -128,7 +128,7 @@ test('each installed tool carries its containers with the exact image each runs'
         '*tool:outdated*' => Process::result(output: json_encode([[
             'tool' => 'n8n', 'host' => 'flow.example.com', 'status' => 'outdated', 'installedRevision' => 'a', 'availableRevision' => 'b', 'images' => [],
             'containers' => [
-                ['component' => 'n8n', 'container' => 'n8n', 'running' => 'docker.n8n.io/n8nio/n8n:2.39.8', 'available' => 'docker.n8n.io/n8nio/n8n:2.47.7', 'primary' => true],
+                ['component' => 'n8n', 'container' => 'n8n', 'running' => 'docker.n8n.io/n8nio/n8n:2.39.8', 'available' => 'docker.n8n.io/n8nio/n8n:2.47.7', 'primary' => true, 'digests' => ['sha256:'.str_repeat('a', 64)]],
                 ['component' => 'helper', 'container' => 'helper', 'running' => 'busybox:1.36', 'available' => null, 'primary' => false],
             ],
         ]])),
@@ -139,7 +139,9 @@ test('each installed tool carries its containers with the exact image each runs'
     $containers = ClusterTool::where('tool', 'n8n')->sole()->toToolArray()['update']['containers'];
 
     expect($containers)->toHaveCount(2)
-        ->and($containers[0])->toBe(['component' => 'n8n', 'container' => 'n8n', 'running' => 'docker.n8n.io/n8nio/n8n:2.39.8', 'available' => 'docker.n8n.io/n8nio/n8n:2.47.7', 'primary' => true])
+        ->and($containers[0])->toBe(['component' => 'n8n', 'container' => 'n8n', 'running' => 'docker.n8n.io/n8nio/n8n:2.39.8', 'available' => 'docker.n8n.io/n8nio/n8n:2.47.7', 'primary' => true, 'digests' => ['sha256:'.str_repeat('a', 64)]])
+        // A CLI from before digests sends none; the row still carries an empty list.
+        ->and($containers[1]['digests'])->toBe([])
         ->and($containers[1]['available'])->toBeNull();
 
     File::deleteDirectory($bin);

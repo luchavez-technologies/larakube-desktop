@@ -194,6 +194,7 @@ class SyncClusterToolsJob extends SyncJob
                     'running' => (string) ($c['running'] ?? ''),
                     'available' => isset($c['available']) ? (string) $c['available'] : null,
                     'primary' => (bool) ($c['primary'] ?? false),
+                    'digests' => array_values(array_filter($c['digests'] ?? [], 'is_string')),
                 ], array_filter($row['containers'] ?? [], 'is_array'))),
             ];
         }

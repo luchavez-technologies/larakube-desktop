@@ -7,6 +7,8 @@ export type ImageContainer = {
     /** What this LaraKube CLI build would install, when its pin is known; null means unknown. */
     available: string | null;
     primary: boolean;
+    /** The sha256 digest(s) the pods actually pulled; more than one means pods differ (e.g. mid-rollout). */
+    digests?: string[];
 };
 
 export type Tool = {
