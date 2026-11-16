@@ -67,6 +67,19 @@ function placeholderStream(seed: ActiveRunSummary): StreamData {
     };
 }
 
+/**
+ * How long a finished run stays before closing itself, like a toast. A failure
+ * stays until dismissed (its log says why), and so does a success that offers
+ * a next step; cancelling was the person's own action, so it goes sooner.
+ */
+function autoCloseAfterMs(stream: StreamData): number | null {
+    if (stream.status === 'succeeded') {
+        return successActions(stream) === null ? 8000 : null;
+    }
+
+    return stream.status === 'cancelled' ? 4000 : null;
+}
+
 /** The "what next" buttons a finished new-project run earns, the same ones its old inline terminal card offered. */
 function successActions(stream: StreamData): ReactNode {
     if (
@@ -133,7 +146,7 @@ function TrackedRun({
     onExpand: (id: number) => void;
     onCollapse: (id: number) => void;
     onDismiss: (id: number) => void;
-    onFinished: (id: number) => void;
+    onFinished: (id: number, stays: boolean) => void;
 }) {
     const [stream, setStream] = useState<StreamData>(() =>
         placeholderStream(seed),
@@ -149,7 +162,7 @@ function TrackedRun({
     const wasRunning = useRef(stream.status === 'running');
     useEffect(() => {
         if (wasRunning.current && stream.status !== 'running') {
-            onFinished(seed.id);
+            onFinished(seed.id, autoCloseAfterMs(stream) === null);
             if (stream.kind === 'install-tool') {
                 // subject is the tool's own slug (ToolInstallController) — no
                 // reason for every other row to recheck itself too.
@@ -195,6 +208,38 @@ function TrackedRun({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seed.id, stream.status]);
 
+    // Counts down only while nobody is looking at it: hovering the card or
+    // having its logs open pauses the close.
+    const closeAfter = autoCloseAfterMs(stream);
+    const [hovered, setHovered] = useState(false);
+    const [remainingMs, setRemainingMs] = useState<number | null>(null);
+    const paused = hovered || expanded;
+
+    useEffect(() => {
+        setRemainingMs(closeAfter);
+    }, [closeAfter]);
+
+    useEffect(() => {
+        if (remainingMs === null || paused) {
+            return;
+        }
+
+        if (remainingMs <= 0) {
+            onDismiss(seed.id);
+
+            return;
+        }
+
+        const tick = 100;
+        const timer = setTimeout(
+            () => setRemainingMs((ms) => (ms === null ? null : ms - tick)),
+            tick,
+        );
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [remainingMs, paused]);
+
     const isRunning = stream.status === 'running';
     const isSucceeded = stream.status === 'succeeded';
     const isFailed = stream.status === 'failed';
@@ -210,6 +255,8 @@ function TrackedRun({
         return (
             <div
                 key="expanded"
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
                 className="mb-2 flex h-[460px] w-[620px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
             >
                 {/* Header */}
@@ -303,9 +350,23 @@ function TrackedRun({
     return (
         <div
             key="collapsed"
-            className="flex items-center gap-3 rounded-full border border-line bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur-md transition-colors hover:bg-surface"
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            className="relative flex items-center gap-3 overflow-hidden rounded-full border border-line bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur-md transition-colors hover:bg-surface"
         >
-            <div className="flex items-center gap-2">
+            {remainingMs !== null && closeAfter !== null && (
+                <span
+                    aria-hidden
+                    className={cn(
+                        'absolute inset-y-0 left-0 transition-[width] duration-100 ease-linear',
+                        isSucceeded ? 'bg-ok-tint' : 'bg-paper',
+                    )}
+                    style={{
+                        width: `${Math.max(0, remainingMs / closeAfter) * 100}%`,
+                    }}
+                />
+            )}
+            <div className="relative flex items-center gap-2">
                 {isRunning && (
                     <RefreshCw className="size-3.5 animate-spin text-brand" />
                 )}
@@ -317,7 +378,7 @@ function TrackedRun({
                 <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
             </div>
 
-            <div className="flex items-center gap-1 border-l border-line pl-2">
+            <div className="relative flex items-center gap-1 border-l border-line pl-2">
                 <button
                     type="button"
                     onClick={() => onExpand(seed.id)}
@@ -402,8 +463,10 @@ export default function RunDrawer() {
         setExpandedId((prev) => (prev === id ? null : prev));
     }
 
-    function finished(id: number) {
-        if (explicitlyCollapsedIds.has(id)) {
+    function finished(id: number, stays: boolean) {
+        // A run that closes itself stays a pill; only one that needs reading
+        // (a failure, or a success with a next step) opens its log.
+        if (!stays || explicitlyCollapsedIds.has(id)) {
             return;
         }
         // Only steal the expanded slot if nothing else is already in it —
