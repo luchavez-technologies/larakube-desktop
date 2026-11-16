@@ -129,10 +129,15 @@ type ToolActivity = {
     apps: Record<string, Exclude<ActivityState, 'queued'>>;
 };
 
+/**
+ * Whether Update / Update all would act on this app. A paused app is left out:
+ * updating it would start it again, so it waits until it's resumed.
+ */
 function needsUpdate(tool: ClusterTool): boolean {
     return (
-        tool.update?.status === 'outdated' ||
-        tool.update?.status === 'unstamped'
+        !(tool.paused ?? false) &&
+        (tool.update?.status === 'outdated' ||
+            tool.update?.status === 'unstamped')
     );
 }
 
@@ -1535,8 +1540,10 @@ function InstalledCard({
     const containers = tool.update?.containers ?? [];
     const primaryContainer =
         containers.find((container) => container.primary) ?? containers[0];
-    const updateAvailable =
+    const updatePending =
         updateStatus === 'outdated' || updateStatus === 'unstamped';
+    // An update waits while the app is paused; applying it would start it again.
+    const updateAvailable = updatePending && !paused;
     const [startingUpdate, setStartingUpdate] = useState(false);
     // Covers the whole run, not just the request: the run HUD shows the log,
     // and the card stays in this state until the run ends and the page reloads.
@@ -1718,17 +1725,19 @@ function InstalledCard({
                     }
                     onClick={handleUpdate}
                     title={
-                        retry
-                            ? 'This update failed. The log is in the run panel; click to try again.'
-                            : activity === 'queued'
-                              ? 'Waiting its turn in Update all.'
-                              : updateStatus === 'unstamped'
-                                ? 'Re-apply with this CLI build: new images, manifest changes and labels. Data and settings are kept.'
-                                : updateStatus === 'outdated'
-                                  ? 'This CLI build has a newer version of this app. Data and settings are kept.'
-                                  : updateStatus === 'current'
-                                    ? 'Up to date with this CLI build.'
-                                    : 'Checking for updates on the next refresh.'
+                        updatePending && paused
+                            ? 'Paused, so the update waits: applying it now would start the app again. Resume it first.'
+                            : retry
+                              ? 'This update failed. The log is in the run panel; click to try again.'
+                              : activity === 'queued'
+                                ? 'Waiting its turn in Update all.'
+                                : updateStatus === 'unstamped'
+                                  ? 'Re-apply with this CLI build: new images, manifest changes and labels. Data and settings are kept.'
+                                  : updateStatus === 'outdated'
+                                    ? 'This CLI build has a newer version of this app. Data and settings are kept.'
+                                    : updateStatus === 'current'
+                                      ? 'Up to date with this CLI build.'
+                                      : 'Checking for updates on the next refresh.'
                     }
                     className={buttonClass(
                         updateAvailable || retry ? 'primary' : 'secondary',
@@ -1758,9 +1767,11 @@ function InstalledCard({
                                   ? 'Retry update'
                                   : updateAvailable
                                     ? 'Update'
-                                    : updateStatus === 'current'
-                                      ? 'Up to date'
-                                      : 'Not checked yet'}
+                                    : updatePending && paused
+                                      ? 'Resume to update'
+                                      : updateStatus === 'current'
+                                        ? 'Up to date'
+                                        : 'Not checked yet'}
                     </span>
                 </button>
                 {tool.host && (

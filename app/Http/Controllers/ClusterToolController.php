@@ -745,6 +745,9 @@ class ClusterToolController extends Controller
                 $states[$m[1]] = 'failed';
             } elseif (preg_match('/Updated .+? \(([^()\s]+)\)\./', $line, $m) === 1) {
                 $states[$m[1]] = 'updated';
+            } elseif (preg_match('/Skipped .+? \(([^()\s]+)\): it is paused/', $line, $m) === 1) {
+                // Left alone on purpose: shown as its normal (paused) self, not as busy.
+                unset($states[$m[1]]);
             } elseif (preg_match('/Updating .+? \(([^()\s]+)\)\.\.\./', $line, $m) === 1) {
                 $states[$m[1]] = 'updating';
             }

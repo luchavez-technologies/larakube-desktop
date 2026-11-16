@@ -1043,7 +1043,7 @@ test('update from the Apps page stays on it, and the card reads as updating unti
     File::deleteDirectory($bin);
 });
 
-test('Update all reports each app as updating, updated or failed from its run log', function () {
+test('Update all reports each app as updating, updated or failed from its run log, and leaves a skipped paused app alone', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
 
@@ -1060,6 +1060,7 @@ test('Update all reports each app as updating, updated or failed from its run lo
             ' LARAKUBE  Update failed: Bulwark (mail.example.com): Stalwart is not installed.',
             ' LARAKUBE  Updating Documenso (sign.example.com)...',
             ' LARAKUBE  Updated Documenso (sign.example.com).',
+            ' LARAKUBE  Skipped n8n (flow.example.com): it is paused. Resume it to update it.',
             ' LARAKUBE  Updating Headlamp (dashboard.example.com)...',
         ]),
     ]);
