@@ -86,7 +86,7 @@ class ClusterToolController extends Controller
             // background re-sync is in flight.
             'toolsSyncing' => $this->tools->contextIsSyncing($context),
             'installing' => $this->installingTools($server),
-            'updating' => $this->updatingTools($server),
+            'toolActivity' => $this->toolActivity($server),
             // An instant DB read — domains used to block on a live CLI
             // round-trip (ExternalDNS + TLS + kubectl) the first time a
             // server's cache went cold, same class of problem the rest of
@@ -286,7 +286,7 @@ class ClusterToolController extends Controller
             tool: $tool,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function destroy(RemoveClusterToolRequest $request, string $server, string $tool): RedirectResponse
@@ -319,7 +319,7 @@ class ClusterToolController extends Controller
             tool: $tool,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function rebind(RebindClusterToolRequest $request, string $server, string $tool): RedirectResponse
@@ -466,7 +466,7 @@ class ClusterToolController extends Controller
             tool: $tool,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     public function wire(Request $request, string $server, string $tool, CliRunner $runner): RedirectResponse
@@ -677,22 +677,80 @@ class ClusterToolController extends Controller
     }
 
     /**
-     * Updates still running on this server, keyed `tool|host` (one app's Update)
-     * or `*` (Update all), so cards keep saying "Updating…" until the run ends.
+     * What's happening to installed apps on this server right now, for the Apps
+     * page's cards: `apps` maps a host (or `tool:<slug>`) to updating / updated / failed / removing
+     * / pausing / resuming, and `all` is the running Update all's run id. Update
+     * all's per-app states come from the "Updating X (host)..." / "Updated X
+     * (host)." / "Update failed: X (host)" lines tool:update prints for each.
      *
-     * @return array<string, int>
+     * @return array{all: int|null, apps: array<string, string>}
      */
-    private function updatingTools(string $server): array
+    private function toolActivity(string $server): array
     {
-        return Run::query()
-            ->whereIn('kind', [RunKind::UpdateClusterTool, RunKind::UpdateAllClusterTools])
+        $runs = Run::query()
+            ->whereIn('kind', [
+                RunKind::UpdateClusterTool,
+                RunKind::UpdateAllClusterTools,
+                RunKind::RemoveClusterTool,
+                RunKind::PauseClusterTool,
+                RunKind::ResumeClusterTool,
+            ])
             ->where('status', RunStatus::Running)
             ->where(fn ($q) => $q->where('server_name', $server)->orWhere('meta->server', $server))
-            ->get()
-            ->mapWithKeys(fn (Run $run): array => [
-                $run->kind === RunKind::UpdateAllClusterTools ? '*' : ($run->meta['tool'] ?? $run->tool ?? $run->subject).'|'.($run->meta['host'] ?? '') => $run->id,
-            ])
-            ->all();
+            ->orderBy('id')
+            ->get();
+
+        $all = null;
+        $apps = [];
+
+        foreach ($runs as $run) {
+            if ($run->kind === RunKind::UpdateAllClusterTools) {
+                $all = $run->id;
+                $apps = [...$apps, ...$this->updateAllProgress((string) $run->output)];
+
+                continue;
+            }
+
+            $state = match ($run->kind) {
+                RunKind::UpdateClusterTool => 'updating',
+                RunKind::RemoveClusterTool => 'removing',
+                RunKind::PauseClusterTool => 'pausing',
+                RunKind::ResumeClusterTool => 'resuming',
+                default => null,
+            };
+
+            if ($state === null) {
+                continue;
+            }
+
+            // A single-instance tool's run records no host; key it by slug instead.
+            $host = $run->meta['host'] ?? '';
+            $apps[$host !== '' ? $host : 'tool:'.($run->meta['tool'] ?? $run->tool ?? $run->subject)] = $state;
+        }
+
+        return ['all' => $all, 'apps' => $apps];
+    }
+
+    /**
+     * Each app's state so far in an Update all run, by host, from its log.
+     *
+     * @return array<string, string>
+     */
+    private function updateAllProgress(string $output): array
+    {
+        $states = [];
+
+        foreach (preg_split('/\R/', $output) ?: [] as $line) {
+            if (preg_match('/Update failed: .+? \(([^()\s]+)\)/', $line, $m) === 1) {
+                $states[$m[1]] = 'failed';
+            } elseif (preg_match('/Updated .+? \(([^()\s]+)\)\./', $line, $m) === 1) {
+                $states[$m[1]] = 'updated';
+            } elseif (preg_match('/Updating .+? \(([^()\s]+)\)\.\.\./', $line, $m) === 1) {
+                $states[$m[1]] = 'updating';
+            }
+        }
+
+        return $states;
     }
 
     /**

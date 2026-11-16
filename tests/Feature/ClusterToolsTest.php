@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityType;
 use App\Enums\RunKind;
+use App\Enums\RunStatus;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Models\Activity;
@@ -1037,10 +1038,60 @@ test('update from the Apps page stays on it, and the card reads as updating unti
 
     $this->flushHeaders()
         ->get(route('servers.tools.index', 'workshop-demo'))
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('updating', ['sso|sso.example.com' => $run->id]));
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('toolActivity', ['all' => null, 'apps' => ['sso.example.com' => 'updating']]));
 
     File::deleteDirectory($bin);
 });
+
+test('Update all reports each app as updating, updated or failed from its run log', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $run = Run::create([
+        'label' => 'Update all apps on workshop-demo',
+        'command' => 'larakube tool:update --all',
+        'kind' => RunKind::UpdateAllClusterTools,
+        'status' => RunStatus::Running,
+        'subject' => 'all',
+        'server_name' => 'workshop-demo',
+        'meta' => ['server' => 'workshop-demo'],
+        'output' => implode("\n", [
+            ' LARAKUBE  Updating Bulwark (mail.example.com)...',
+            ' LARAKUBE  Update failed: Bulwark (mail.example.com): Stalwart is not installed.',
+            ' LARAKUBE  Updating Documenso (sign.example.com)...',
+            ' LARAKUBE  Updated Documenso (sign.example.com).',
+            ' LARAKUBE  Updating Headlamp (dashboard.example.com)...',
+        ]),
+    ]);
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('toolActivity', [
+            'all' => $run->id,
+            'apps' => [
+                'mail.example.com' => 'failed',
+                'sign.example.com' => 'updated',
+                'dashboard.example.com' => 'updating',
+            ],
+        ]));
+
+    File::deleteDirectory($bin);
+});
+
+test('install, remove and pause from the Apps page stay on it, with the log in the run HUD', function (string $method, string $route, array $data) {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    ChildProcess::fake();
+
+    $this->from(route('servers.tools.index', 'workshop-demo'))
+        ->withHeader('X-Inertia', 'true')
+        ->{$method}(route($route, ['server' => 'workshop-demo', 'tool' => 'sso']), $data)
+        ->assertRedirect(route('servers.tools.index', 'workshop-demo'));
+
+    File::deleteDirectory($bin);
+})->with([
+    'pause' => ['post', 'servers.tools.pause', ['domain' => 'sso.example.com']],
+    'remove' => ['delete', 'servers.tools.destroy', ['domain' => 'sso.example.com', 'confirm' => 'sso']],
+]);
 
 test('update 404s for a tool that is not installed', function () {
     $bin = clusterToolsFakeCli();

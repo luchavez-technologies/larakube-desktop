@@ -718,6 +718,8 @@ export default function ManageToolDrawer({
                                         server: server.name,
                                         tool: tool.tool,
                                     })}
+                                    // The run HUD takes over; the card shows "Removing…".
+                                    onSuccess={onClose}
                                     className="space-y-3"
                                 >
                                     {({ errors, processing }) => (

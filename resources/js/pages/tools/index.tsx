@@ -16,6 +16,8 @@ import {
     Download,
     Pause,
     Play,
+    Clock,
+    CheckCircle2,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
@@ -101,13 +103,29 @@ type Props = {
     };
     toolsSyncing: boolean;
     installing: Record<string, number>;
-    /** Running updates: `tool|host` for one app's Update, `*` for Update all. */
-    updating?: Record<string, number>;
+    /** What's happening to installed apps right now (see ClusterToolController::toolActivity()). */
+    toolActivity?: ToolActivity;
     domains?: ServerDomain[] | null;
     activeCommonsServices?: string[] | null;
 };
 
 type Filter = 'all' | 'installed' | 'available' | 'updates';
+
+type ActivityState =
+    | 'queued'
+    | 'updating'
+    | 'updated'
+    | 'failed'
+    | 'removing'
+    | 'pausing'
+    | 'resuming';
+
+type ToolActivity = {
+    /** The running Update all's run id, if any. */
+    all: number | null;
+    /** By host, or `tool:<slug>` for a single-instance tool. */
+    apps: Record<string, Exclude<ActivityState, 'queued'>>;
+};
 
 function needsUpdate(tool: ClusterTool): boolean {
     return (
@@ -187,7 +205,7 @@ export default function ToolsIndex({
     filters: serverFilters,
     toolsSyncing,
     installing,
-    updating = {},
+    toolActivity = { all: null, apps: {} },
     domains,
     activeCommonsServices,
 }: Props) {
@@ -233,6 +251,31 @@ export default function ToolsIndex({
     }, [toolsSyncing, startPoll, stopPoll]);
 
     const [updatingAll, setUpdatingAll] = useState(false);
+
+    const activityRunning =
+        toolActivity.all !== null || Object.keys(toolActivity.apps).length > 0;
+    const { start: startActivityPoll, stop: stopActivityPoll } = usePoll(
+        2000,
+        { only: ['toolActivity'] },
+        { autoStart: activityRunning },
+    );
+    useEffect(() => {
+        if (activityRunning) {
+            startActivityPoll();
+        } else {
+            stopActivityPoll();
+        }
+    }, [activityRunning, startActivityPoll, stopActivityPoll]);
+
+    function activityFor(tool: ClusterTool): ActivityState | undefined {
+        return (
+            toolActivity.apps[tool.host ?? ''] ??
+            toolActivity.apps[`tool:${tool.tool}`] ??
+            (toolActivity.all !== null && needsUpdate(tool)
+                ? 'queued'
+                : undefined)
+        );
+    }
 
     function handleUpdateAll() {
         setUpdatingAll(true);
@@ -474,6 +517,15 @@ export default function ToolsIndex({
             (filter !== 'updates' || needsUpdate(tool)),
     );
     const updatesAvailable = installedAll.filter(needsUpdate).length;
+    const batchStates = installedAll
+        .map(activityFor)
+        .filter((state): state is ActivityState =>
+            ['queued', 'updating', 'updated', 'failed'].includes(state ?? ''),
+        );
+    const batchTotal = batchStates.length;
+    const batchDone = batchStates.filter(
+        (state) => state === 'updated' || state === 'failed',
+    ).length;
 
     // The tab only exists while something needs updating, so once the last
     // update lands, fall back to the full installed list.
@@ -534,13 +586,13 @@ export default function ToolsIndex({
                         <ExternalLink className="size-3.5" />
                         <span>Open server</span>
                     </Link>
-                    {updatesAvailable > 0 && (
+                    {(updatesAvailable > 0 || toolActivity.all !== null) && (
                         <button
                             type="button"
                             onClick={handleUpdateAll}
                             disabled={
                                 updatingAll ||
-                                updating['*'] !== undefined ||
+                                toolActivity.all !== null ||
                                 isSyncing
                             }
                             className={buttonClass('primary')}
@@ -550,8 +602,8 @@ export default function ToolsIndex({
                             <span>
                                 {updatingAll
                                     ? 'Starting…'
-                                    : updating['*'] !== undefined
-                                      ? 'Updating all…'
+                                    : toolActivity.all !== null
+                                      ? `Updating ${batchDone} of ${batchTotal}…`
                                       : `Update all (${updatesAvailable})`}
                             </span>
                         </button>
@@ -751,13 +803,7 @@ export default function ToolsIndex({
                                             key={`${tool.tool}-${tool.host || 'default'}`}
                                             server={server}
                                             tool={tool}
-                                            updateRunning={
-                                                updating[
-                                                    `${tool.tool}|${tool.host ?? ''}`
-                                                ] !== undefined ||
-                                                (updating['*'] !== undefined &&
-                                                    needsUpdate(tool))
-                                            }
+                                            activity={activityFor(tool)}
                                             activeCommonsServices={
                                                 activeCommonsServices ?? []
                                             }
@@ -1449,15 +1495,15 @@ function CheckedAgo({ checkedAt }: { checkedAt: string | null }) {
 function InstalledCard({
     server,
     tool,
-    updateRunning = false,
+    activity,
     activeCommonsServices,
     onManage,
     onCategoryClick,
 }: {
     server: Server;
     tool: ClusterTool;
-    /** An Update (or Update all) run for this app is still going. */
-    updateRunning?: boolean;
+    /** A run acting on this app right now (Update, Update all, Remove, Pause, Resume). */
+    activity?: ActivityState;
     activeCommonsServices?: string[];
     onManage?: (tool: ClusterTool) => void;
     onCategoryClick?: (category: string) => void;
@@ -1477,7 +1523,14 @@ function InstalledCard({
     const [startingUpdate, setStartingUpdate] = useState(false);
     // Covers the whole run, not just the request: the run HUD shows the log,
     // and the card stays in this state until the run ends and the page reloads.
-    const updating = startingUpdate || updateRunning;
+    const updating = startingUpdate || activity === 'updating';
+    const busy =
+        updating ||
+        activity === 'queued' ||
+        activity === 'removing' ||
+        activity === 'pausing' ||
+        activity === 'resuming';
+    const retry = activity === 'failed';
 
     function handleUpdate() {
         if (!tool.host) {
@@ -1554,7 +1607,17 @@ function InstalledCard({
                             )}
                         </div>
                     </div>
-                    {paused ? (
+                    {activity === 'removing' ||
+                    activity === 'pausing' ||
+                    activity === 'resuming' ? (
+                        <StatusPill tone="warn">
+                            {activity === 'removing'
+                                ? 'Removing…'
+                                : activity === 'pausing'
+                                  ? 'Pausing…'
+                                  : 'Resuming…'}
+                        </StatusPill>
+                    ) : paused ? (
                         <StatusPill tone="warn">
                             <Pause className="size-3" />
                             Paused
@@ -1612,40 +1675,63 @@ function InstalledCard({
             <div className="mt-4 flex items-center justify-end gap-1.5 border-t border-line/60 pt-3.5 text-xs">
                 <button
                     type="button"
-                    disabled={!updateAvailable || updating || !tool.host}
+                    disabled={
+                        (!updateAvailable && !retry) ||
+                        busy ||
+                        activity === 'updated' ||
+                        !tool.host
+                    }
                     onClick={handleUpdate}
                     title={
-                        updateStatus === 'unstamped'
-                            ? 'Re-apply with this CLI build: new images, manifest changes and labels. Data and settings are kept.'
-                            : updateStatus === 'outdated'
-                              ? 'This CLI build has a newer version of this app. Data and settings are kept.'
-                              : updateStatus === 'current'
-                                ? 'Up to date with this CLI build.'
-                                : 'Checking for updates on the next refresh.'
+                        retry
+                            ? 'This update failed. The log is in the run panel; click to try again.'
+                            : activity === 'queued'
+                              ? 'Waiting its turn in Update all.'
+                              : updateStatus === 'unstamped'
+                                ? 'Re-apply with this CLI build: new images, manifest changes and labels. Data and settings are kept.'
+                                : updateStatus === 'outdated'
+                                  ? 'This CLI build has a newer version of this app. Data and settings are kept.'
+                                  : updateStatus === 'current'
+                                    ? 'Up to date with this CLI build.'
+                                    : 'Checking for updates on the next refresh.'
                     }
                     className={buttonClass(
-                        updateAvailable ? 'primary' : 'secondary',
+                        updateAvailable || retry ? 'primary' : 'secondary',
                         'sm',
                         'h-8 px-2.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
                     )}
                 >
-                    <ArrowUpCircle
-                        className={`size-3.5 ${updating ? 'animate-pulse' : ''}`}
-                    />
+                    {activity === 'queued' ? (
+                        <Clock className="size-3.5" />
+                    ) : activity === 'updated' ? (
+                        <CheckCircle2 className="size-3.5" />
+                    ) : retry ? (
+                        <RotateCw className="size-3.5" />
+                    ) : (
+                        <ArrowUpCircle
+                            className={`size-3.5 ${updating ? 'animate-pulse' : ''}`}
+                        />
+                    )}
                     <span>
                         {updating
                             ? 'Updating…'
-                            : updateAvailable
-                              ? 'Update'
-                              : updateStatus === 'current'
-                                ? 'Up to date'
-                                : 'Not checked yet'}
+                            : activity === 'queued'
+                              ? 'Queued'
+                              : activity === 'updated'
+                                ? 'Updated'
+                                : retry
+                                  ? 'Retry update'
+                                  : updateAvailable
+                                    ? 'Update'
+                                    : updateStatus === 'current'
+                                      ? 'Up to date'
+                                      : 'Not checked yet'}
                     </span>
                 </button>
                 {tool.host && (
                     <button
                         type="button"
-                        disabled={togglingPause}
+                        disabled={togglingPause || busy}
                         onClick={handleTogglePause}
                         title={
                             paused
@@ -2166,6 +2252,8 @@ function InstallDialog({
                 <Form
                     action={store({ server: server.name, tool: tool.tool })}
                     validationTimeout={250}
+                    // The run HUD takes over from here; the card shows "Installing…".
+                    onSuccess={onClose}
                     className="flex h-full flex-col overflow-hidden"
                 >
                     {({ errors, invalid, validate, processing }) => (
