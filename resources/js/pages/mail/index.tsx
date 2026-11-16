@@ -26,6 +26,7 @@ import SettingsTab, {
     type WiredToolRow,
 } from './settings-tab';
 import type { Server } from '@/types/larakube';
+import { useServerDataReload } from '@/lib/native-events';
 
 type Props = {
     server: Server;
@@ -198,6 +199,27 @@ export default function MailIndex({
     const isSyncing =
         isInstalled &&
         (mailSync.status === 'syncing' || mailSync.status === 'stale');
+
+    useServerDataReload(server.name, {
+        mail: [
+            'isInstalled',
+            'serverInfo',
+            'hasSso',
+            'domains',
+            'accounts',
+            'wiredTools',
+            'mailSync',
+        ],
+        tools: [
+            'isInstalled',
+            'serverInfo',
+            'hasSso',
+            'domains',
+            'accounts',
+            'wiredTools',
+            'mailSync',
+        ],
+    });
 
     const { start: startPoll, stop: stopPoll } = usePoll(
         2000,

@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Enums\ServerDataScope;
 use App\Models\Server;
 use App\Models\SsoGrant;
 use App\Services\LaraKube\ToolLocator;
@@ -14,15 +15,13 @@ use Illuminate\Support\Facades\Process;
  * tool's cluster_tools.data. Shells the CLI directly (not through
  * SsoStatus, which reads this same table).
  */
-class SyncSsoJob extends SyncJob
+class SyncSsoJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 300;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Sso;
     }
 
     public function handle(ToolLocator $locator): void

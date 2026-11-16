@@ -3,6 +3,7 @@
 namespace App\Jobs\Sync;
 
 use App\Enums\ActivityType;
+use App\Enums\ServerDataScope;
 use App\Models\Activity;
 use App\Models\Server;
 use App\Models\ServerDomain;
@@ -16,15 +17,13 @@ use Illuminate\Support\Facades\DB;
  * count — a server with zero connected domains is a normal, "fresh" state,
  * not an unsynced one.
  */
-class SyncServerDomainsJob extends SyncJob
+class SyncServerDomainsJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 1800;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Domains;
     }
 
     public function handle(ClusterStatus $status): void

@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Enums\ServerDataScope;
 use App\Models\MailAccount;
 use App\Models\MailDomain;
 use App\Models\Server;
@@ -16,15 +17,13 @@ use Illuminate\Support\Facades\Process;
  * CLI directly (not through MailStatus, which reads these same tables) —
  * this job is what populates them in the first place.
  */
-class SyncMailJob extends SyncJob
+class SyncMailJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 600;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Mail;
     }
 
     public function handle(ToolLocator $locator): void

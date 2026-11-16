@@ -1,13 +1,13 @@
 <?php
 
 use App\Enums\ActivityType;
-use App\Events\ClusterToolsSynced;
+use App\Enums\ServerDataScope;
+use App\Events\ServerDataSynced;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Models\Activity;
 use App\Models\ClusterTool;
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -91,7 +91,7 @@ test('a failed tool:outdated keeps the last known update status instead of clear
 });
 
 test('a sync tells the open windows its server\'s apps changed, whether it succeeded or recorded an error', function (bool $succeeds) {
-    Event::fake([ClusterToolsSynced::class]);
+    Event::fake([ServerDataSynced::class]);
     $bin = syncClusterToolsFakeCli();
     $server = Server::create(['name' => 'alpha', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-alpha', 'status' => 'ready']);
     ClusterTool::create(['server_id' => $server->id, 'tool' => 'n8n', 'installed' => true, 'sync_status' => 'fresh', 'data' => []]);
@@ -105,19 +105,12 @@ test('a sync tells the open windows its server\'s apps changed, whether it succe
 
     SyncClusterToolsJob::dispatchSync($server->id);
 
-    Event::assertDispatchedTimes(ClusterToolsSynced::class, 1);
-    Event::assertDispatched(ClusterToolsSynced::class, fn (ClusterToolsSynced $event): bool => $event->server === 'alpha');
+    Event::assertDispatchedTimes(ServerDataSynced::class, 1);
+    Event::assertDispatched(ServerDataSynced::class, fn (ServerDataSynced $event): bool => $event->server === 'alpha'
+        && $event->scope === ServerDataScope::Tools->value);
 
     File::deleteDirectory($bin);
 })->with(['succeeded' => [true], 'recorded an error' => [false]]);
-
-test('ClusterToolsSynced reaches windows through NativePHP without going through Laravel broadcasting', function () {
-    $event = new ClusterToolsSynced('alpha');
-
-    // NativePHP's EventWatcher forwards anything whose broadcastOn() includes `nativephp`.
-    expect(array_map('strval', $event->broadcastOn()))->toContain('nativephp')
-        ->and($event)->not->toBeInstanceOf(ShouldBroadcast::class);
-});
 
 test('each installed tool carries its containers with the exact image each runs', function () {
     $bin = syncClusterToolsFakeCli();

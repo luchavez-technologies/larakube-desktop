@@ -8,6 +8,9 @@
  * and subscribing is a harmless no-op; pages keep their polling fallback.
  */
 
+import { router } from '@inertiajs/react';
+import { useEffect, useRef } from 'react';
+
 declare global {
     interface Window {
         Native?: {
@@ -70,5 +73,98 @@ export function onNativeEvent<T = Record<string, unknown>>(
 
 /** Laravel event class names the UI listens for. */
 export const NativeEvents = {
-    clusterToolsSynced: 'App\\Events\\ClusterToolsSynced',
+    serverDataSynced: 'App\\Events\\ServerDataSynced',
+    runStarted: 'App\\Events\\RunStarted',
+    runFinished: 'App\\Events\\RunFinished',
 } as const;
+
+/** The slice of a server's data a ServerDataSynced names (App\\Enums\\ServerDataScope). */
+export type ServerDataScope =
+    | 'tools'
+    | 'mail'
+    | 'drive'
+    | 'openbao'
+    | 'sso'
+    | 'plex'
+    | 'backups'
+    | 'domains'
+    | 'external-dns'
+    | 'tls'
+    | 'cluster-users';
+
+export type ServerDataSyncedPayload = {
+    server: string;
+    scope: ServerDataScope;
+};
+
+export type RunEventPayload = {
+    run: number;
+    kind: string | null;
+    status: string;
+    server: string | null;
+    project: number | null;
+};
+
+/**
+ * Reload props the moment a server's synced data changes. `props` maps each
+ * scope this page shows to the props that scope feeds; other scopes are ignored.
+ */
+export function useServerDataReload(
+    server: string | null | undefined,
+    props: Partial<Record<ServerDataScope, string[]>>,
+): void {
+    const key = JSON.stringify(props);
+
+    useEffect(() => {
+        if (!server) {
+            return;
+        }
+
+        const byScope = JSON.parse(key) as Partial<
+            Record<ServerDataScope, string[]>
+        >;
+
+        return onNativeEvent<ServerDataSyncedPayload>(
+            NativeEvents.serverDataSynced,
+            (payload) => {
+                const only = byScope[payload.scope];
+
+                if (payload.server === server && only && only.length > 0) {
+                    router.reload({ only });
+                }
+            },
+        );
+    }, [server, key]);
+}
+
+/**
+ * Reload props when a run starts or finishes, optionally only for runs that
+ * `matches` accepts (e.g. this page's project).
+ */
+export function useRunReload(
+    only: string[],
+    matches?: (payload: RunEventPayload) => boolean,
+): void {
+    const key = only.join(',');
+    const matchesRef = useRef(matches);
+
+    useEffect(() => {
+        matchesRef.current = matches;
+    });
+
+    useEffect(() => {
+        const handler = (payload: RunEventPayload) => {
+            if (!matchesRef.current || matchesRef.current(payload)) {
+                router.reload({ only: key.split(',') });
+            }
+        };
+
+        const offStarted = onNativeEvent(NativeEvents.runStarted, handler);
+        const offFinished = onNativeEvent(NativeEvents.runFinished, handler);
+
+        return () => {
+            offStarted();
+            offFinished();
+        };
+    }, [key]);
+}

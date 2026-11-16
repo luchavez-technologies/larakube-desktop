@@ -27,6 +27,7 @@ import SyncStatusBadge, {
 } from '@/components/sync-status-badge';
 import sso, { index as ssoIndex } from '@/routes/servers/sso';
 import type { Server } from '@/types/larakube';
+import { useServerDataReload } from '@/lib/native-events';
 
 type WiredToolRow = {
     tool: string;
@@ -153,6 +154,10 @@ export default function SsoIndex({
     const shouldPoll =
         isInstalled &&
         (ssoSync.status === 'syncing' || ssoSync.status === 'stale');
+
+    useServerDataReload(server.name, {
+        sso: ['status', 'grants', 'ssoSync'],
+    });
 
     const { start, stop } = usePoll(
         2000,

@@ -67,6 +67,7 @@ import type {
     Provider,
     Server,
 } from '@/types/larakube';
+import { useServerDataReload } from '@/lib/native-events';
 
 type DnsGroup = {
     group: string;
@@ -167,6 +168,15 @@ export default function ShowServer({
     const installedTools = allTools
         ? allTools.filter((t) => t.installed)
         : null;
+
+    useServerDataReload(server.name, {
+        tools: ['tools', 'lastVerifiedTools'],
+        'external-dns': ['dns'],
+        tls: ['tls'],
+        plex: ['plex'],
+        backups: ['backup'],
+        'cluster-users': ['clusterUsers'],
+    });
 
     const hasUnreadyDns = dnsGroups?.some((g) => !g.ready) ?? false;
     useEffect(() => {

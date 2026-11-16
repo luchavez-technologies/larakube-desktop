@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Enums\ServerDataScope;
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Process;
@@ -10,15 +11,13 @@ use Illuminate\Support\Facades\Process;
  * Mirrors `larakube ocis:show` and `drive:ext:show` for one server's oCIS Drive
  * install into the drive ClusterTool row.
  */
-class SyncDriveJob extends SyncJob
+class SyncDriveJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 600;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Drive;
     }
 
     public function handle(ToolLocator $locator): void

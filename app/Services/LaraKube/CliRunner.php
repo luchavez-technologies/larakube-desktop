@@ -3,6 +3,7 @@
 namespace App\Services\LaraKube;
 
 use App\Enums\RunKind;
+use App\Events\RunStarted;
 use App\Models\Run;
 use App\Services\Elevation;
 use Native\Desktop\Facades\ChildProcess;
@@ -169,6 +170,8 @@ class CliRunner
         ]);
 
         $this->locator->start($command, $run->alias(), $secretEnvironment, $cwd);
+
+        RunStarted::dispatch($run);
 
         return $run;
     }

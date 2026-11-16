@@ -24,6 +24,7 @@ import type {
     RecentRunSummary,
     RunStatus,
 } from '@/types/larakube';
+import { useRunReload } from '@/lib/native-events';
 
 function formatRelativeTime(iso: string | null): string {
     if (!iso) return '—';
@@ -82,6 +83,9 @@ export default function NotificationBell() {
 
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Show a run the moment it starts or ends, from any window, the tray or MCP (ADR 0021).
+    useRunReload(['activeRuns', 'recentRuns', 'notifications']);
 
     // Refresh notifications and active runs on an interval if runs are executing
     useEffect(() => {

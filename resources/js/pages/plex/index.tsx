@@ -44,6 +44,7 @@ import PlexTenantHub from './components/plex-tenant-hub';
 import PlexTopologyCanvas from './components/topology/plex-topology-canvas';
 import type { TopologyProject } from './components/topology/types';
 import PlexEmptyState from './plex-empty-state';
+import { useServerDataReload } from '@/lib/native-events';
 
 function PlexPageHeader({
     server,
@@ -173,6 +174,10 @@ export default function PlexIndex({
 }) {
     const awaitingFirstSync = plex === null && plexSync.status !== 'error';
     const isLocal = isLocalServer(server);
+
+    useServerDataReload(server.name, {
+        plex: ['plex', 'services', 'plexSync'],
+    });
 
     usePoll(
         2000,

@@ -120,6 +120,7 @@ import type {
     Server,
     ServerDomain,
 } from '@/types/larakube';
+import { useRunReload } from '@/lib/native-events';
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
 
@@ -216,6 +217,11 @@ export default function ShowProject({
     const isRunning =
         runs.some((r) => r.status === 'running') ||
         latestRun?.status === 'running';
+
+    useRunReload(
+        ['runs', 'latestRun', 'project', 'server', 'pods'],
+        (run) => run.project === project.id,
+    );
 
     const { start, stop } = usePoll(
         1000,

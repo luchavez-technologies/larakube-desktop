@@ -44,6 +44,7 @@ import type {
     Project,
     ProjectEnvironment,
 } from '@/types/larakube';
+import { useRunReload } from '@/lib/native-events';
 
 type ReadyServer = {
     name: string;
@@ -97,6 +98,8 @@ export default function ShowDevBoxProject({
 }: Props) {
     const [activeEnv, setActiveEnv] = useState('local');
     const [addEnvModalOpen, setAddEnvModalOpen] = useState(false);
+
+    useRunReload(['runs', 'latestRun', 'details'], (run) => run.server === box);
 
     // Follow an action that is still running until it finishes.
     usePoll(

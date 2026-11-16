@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Enums\ServerDataScope;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
 use Throwable;
@@ -11,15 +12,13 @@ use Throwable;
  * the report into the servers table. This prevents live cluster network
  * queries from locking the single-worker web server on page visits.
  */
-class SyncServerExternalDnsJob extends SyncJob
+class SyncServerExternalDnsJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 1800;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::ExternalDns;
     }
 
     public function handle(ClusterStatus $status): void

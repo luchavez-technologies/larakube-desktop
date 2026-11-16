@@ -3,6 +3,7 @@
 namespace App\Jobs\Sync;
 
 use App\Enums\ActivityType;
+use App\Enums\ServerDataScope;
 use App\Models\Activity;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
@@ -15,15 +16,13 @@ use App\Services\LaraKube\ClusterStatus;
  * this is what made the Plex Commons page's Commons Services and Cluster
  * Tools sections take a long time to appear on a cold cache.
  */
-class SyncPlexJob extends SyncJob
+class SyncPlexJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 1800;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Plex;
     }
 
     public function handle(ClusterStatus $status): void

@@ -29,6 +29,7 @@ import type {
     Server,
     ServerDomain,
 } from '@/types/larakube';
+import { useServerDataReload } from '@/lib/native-events';
 
 type Props = {
     server: Server;
@@ -110,6 +111,11 @@ export default function DriveIndex({
         (driveSync.status === 'syncing' ||
             driveSync.status === 'stale' ||
             isDriveRunning);
+
+    useServerDataReload(server.name, {
+        drive: ['serverInfo', 'extensions', 'driveSync'],
+        tools: ['serverInfo', 'extensions', 'driveSync'],
+    });
 
     const { start, stop } = usePoll(
         2000,

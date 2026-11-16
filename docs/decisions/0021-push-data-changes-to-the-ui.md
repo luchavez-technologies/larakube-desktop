@@ -25,14 +25,18 @@ websocket server or broadcast driver is involved. Desktop already used this for
 ## Decision
 
 1. **The server announces what changed, not the data.** An event names the change
-   and its scope, for example `ClusterToolsSynced(server)`. It never carries the
+   and its scope, for example `ServerDataSynced(server, scope)`. It never carries the
    rows themselves. The page reacts with `router.reload({ only: [...] })` scoped to
    the affected props (ADR 0019). SQLite stays the single source of truth (ADR
    0018), and an event can never deliver stale data.
 2. **Fire it where the data becomes true.** That means the end of the job or
    action that wrote the rows, including on a recorded error (the page shows that
-   too). It is not fired when a run merely ends. `SyncClusterToolsJob` fires
-   `ClusterToolsSynced` from a `finally`.
+   too). It is not fired when a run merely ends. Every per-server sync job extends
+   `ServerSyncJob`, whose `AnnounceServerDataSynced` job middleware fires
+   `ServerDataSynced` with the job's `ServerDataScope` once each attempt ends,
+   early returns included. A run's own lifecycle is announced by `RunStarted`
+   (from `CliRunner::start()`) and `RunFinished` (from `RecordRunOutput`, after
+   the final status is saved).
 3. **Events expose `broadcastOn()` but do not implement `ShouldBroadcast(Now)`.**
    `EventWatcher` only needs the method. Implementing the contract would also send
    every event through Laravel's broadcaster, which is the `log` driver here. Event
@@ -41,7 +45,9 @@ websocket server or broadcast driver is involved. Desktop already used this for
    with `window.Native.on()` once, since NativePHP has no way to unsubscribe. It
    re-dispatches each event as a window `CustomEvent`. Pages subscribe with
    `onNativeEvent(name, callback)`, which returns an unsubscribe function, from a
-   `useEffect`. Event names live in `NativeEvents`.
+   `useEffect`. Event names live in `NativeEvents`. Most pages use the
+   `useServerDataReload(server, { scope: props })` and `useRunReload(props, match?)`
+   hooks instead of subscribing by hand.
 5. **Polling becomes the fallback, not the mechanism.** Existing `usePoll()` loops
    stay for a plain browser in development (no `window.Native`) and as a backstop.
    New freshness work starts from an event.

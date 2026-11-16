@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Enums\ServerDataScope;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
 use Throwable;
@@ -14,19 +15,20 @@ use Throwable;
  * live cluster network queries from locking the single-worker web server on
  * page visits.
  */
-class SyncServerBackupJob extends SyncJob
+class SyncServerBackupJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 1800;
 
     /** The dedicated `sync` worker (config/nativephp.php) — ClusterStatus::backup() is already bounded to 15s, so it belongs with the other fast scheduled syncs, not behind a slow per-server CLI job on `default`. */
-    public function __construct(public int $serverId)
+    public function __construct(int $serverId)
     {
+        parent::__construct($serverId);
         $this->onQueue('sync');
     }
 
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Backups;
     }
 
     public function handle(ClusterStatus $status): void

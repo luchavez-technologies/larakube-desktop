@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Events\RunFinished;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
@@ -63,6 +64,8 @@ class RecordRunOutput
 
         $run->appendTo('output', "The command could not be started: {$event->error}\n");
         $run->forceFill(['status' => RunStatus::Failed, 'finished_at' => now()])->save();
+
+        RunFinished::dispatch($run);
     }
 
     public function handleExit(ProcessExited $event): void
@@ -101,6 +104,8 @@ class RecordRunOutput
             'output' => $run->output,
             'finished_at' => now(),
         ])->save();
+
+        RunFinished::dispatch($run);
 
         // What Setup remembered about this computer is out of date once an install ends.
         if ($run->kind === RunKind::InstallTool || $run->kind === RunKind::SetupLocal) {

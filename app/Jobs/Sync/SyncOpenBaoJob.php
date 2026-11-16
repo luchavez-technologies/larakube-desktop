@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Enums\ServerDataScope;
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
@@ -13,15 +14,13 @@ use Illuminate\Support\Facades\Process;
  * rotation wiring, and custom env var counts. Shells the CLI directly (not
  * through OpenBaoStatus, which reads this same table).
  */
-class SyncOpenBaoJob extends SyncJob
+class SyncOpenBaoJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 300;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::OpenBao;
     }
 
     public function handle(ToolLocator $locator): void

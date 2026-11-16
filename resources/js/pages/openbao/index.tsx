@@ -29,6 +29,7 @@ import SyncStatusBadge, {
 } from '@/components/sync-status-badge';
 import openbao, { index as openBaoIndex } from '@/routes/servers/openbao';
 import type { Server } from '@/types/larakube';
+import { useServerDataReload } from '@/lib/native-events';
 
 type StaticRoleRow = {
     tool: string;
@@ -162,6 +163,10 @@ export default function OpenBaoIndex({
     const shouldPoll =
         isInstalled &&
         (openBaoSync.status === 'syncing' || openBaoSync.status === 'stale');
+
+    useServerDataReload(server.name, {
+        openbao: ['status', 'openBaoSync'],
+    });
 
     const { start, stop } = usePoll(
         2000,

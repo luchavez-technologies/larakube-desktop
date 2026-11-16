@@ -3,7 +3,7 @@
 namespace App\Jobs\Sync;
 
 use App\Enums\ActivityType;
-use App\Events\ClusterToolsSynced;
+use App\Enums\ServerDataScope;
 use App\Models\Activity;
 use App\Models\CatalogTool;
 use App\Models\ClusterTool;
@@ -17,15 +17,13 @@ use Illuminate\Support\Facades\Process;
  * Mirrors `larakube tool:list --json --context=…` for one server into the
  * cluster_tools table. Replaces ToolCatalog's Cache-backed verified list.
  */
-class SyncClusterToolsJob extends SyncJob
+class SyncClusterToolsJob extends ServerSyncJob
 {
     public const FRESH_SECONDS = 1800;
 
-    public function __construct(public int $serverId) {}
-
-    protected function uniqueKey(): string
+    public function scope(): ServerDataScope
     {
-        return (string) $this->serverId;
+        return ServerDataScope::Tools;
     }
 
     public function handle(ToolLocator $locator): void
@@ -147,9 +145,6 @@ class SyncClusterToolsJob extends SyncJob
             });
         } catch (\Throwable $e) {
             $this->markError($server->id, $e->getMessage(), $wasAlreadyErrored);
-        } finally {
-            // Fresh rows or a recorded error: either way the page should reload now.
-            ClusterToolsSynced::dispatch($server->name);
         }
     }
 

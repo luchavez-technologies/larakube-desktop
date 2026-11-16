@@ -30,6 +30,7 @@ import SyncStatusBadge, {
 } from '@/components/sync-status-badge';
 import { SCHEDULES, ago, describeSchedule, formatBytes } from '@/lib/backups';
 import type { BackupEntry, BackupStatus, Server } from '@/types/larakube';
+import { useServerDataReload } from '@/lib/native-events';
 
 type TabType = 'snapshots' | 'schedule' | 'destination' | 'recovery';
 
@@ -123,6 +124,10 @@ export default function BackupsIndex({
     const isSyncing =
         !isLocal &&
         (backupSync.status === 'syncing' || backupSync.status === 'stale');
+
+    useServerDataReload(server.name, {
+        backups: ['backup', 'backupSync', 'fleet'],
+    });
 
     const { start: startPoll, stop: stopPoll } = usePoll(
         2000,
