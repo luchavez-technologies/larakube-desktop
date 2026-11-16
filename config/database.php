@@ -41,10 +41,12 @@ return [
             // Several requests run at once (see PHP_CLI_SERVER_WORKERS in the
             // NativePHP plugin): WAL lets readers and a writer overlap, and a
             // busy timeout makes a second writer wait instead of failing.
+            // IMMEDIATE so a transaction never has to upgrade read -> write,
+            // which fails at once instead of waiting (AppServiceProvider).
             'busy_timeout' => 10000,
             'journal_mode' => 'WAL',
             'synchronous' => 'NORMAL',
-            'transaction_mode' => 'DEFERRED',
+            'transaction_mode' => 'IMMEDIATE',
         ],
 
         'mysql' => [

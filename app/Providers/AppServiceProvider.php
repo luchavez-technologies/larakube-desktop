@@ -35,6 +35,12 @@ class AppServiceProvider extends ServiceProvider
     /**
      * NativePHP's runtime `nativephp` SQLite connection omits WAL and busy_timeout,
      * causing `database is locked` errors when web workers, queues, and scheduler overlap.
+     *
+     * Transactions are IMMEDIATE: the database queue reserves a job by reading
+     * then writing inside one transaction, and a DEFERRED transaction that has to
+     * upgrade from read to write fails at once with `database is locked` when
+     * another process wrote first; busy_timeout can't help with that upgrade.
+     * IMMEDIATE takes the write lock at BEGIN, where busy_timeout does wait.
      */
     protected function configureNativeSqlite(): void
     {
@@ -47,7 +53,7 @@ class AppServiceProvider extends ServiceProvider
                 'database.connections.nativephp.busy_timeout' => 10000,
                 'database.connections.nativephp.journal_mode' => 'WAL',
                 'database.connections.nativephp.synchronous' => 'NORMAL',
-                'database.connections.nativephp.transaction_mode' => 'DEFERRED',
+                'database.connections.nativephp.transaction_mode' => 'IMMEDIATE',
             ]);
 
             DB::purge('nativephp');
