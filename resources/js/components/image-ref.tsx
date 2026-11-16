@@ -6,7 +6,7 @@ import {
     SiKubernetes,
     SiRedhat,
 } from '@icons-pack/react-simple-icons';
-import { ArrowRight, Package } from 'lucide-react';
+import { ArrowRight, ExternalLink, Package } from 'lucide-react';
 import type { ComponentType } from 'react';
 import CopyButton from '@/components/copy-button';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -38,6 +38,8 @@ function parse(reference: string): {
 type RegistrySource = {
     /** Who hosts the image, for the tooltip. */
     name: string;
+    /** Short label for the link, e.g. "Docker Hub". */
+    label: string;
     icon: ComponentType<{ className?: string }>;
     /** The image's public page (its versions), or null where no reliable one exists. */
     url: string | null;
@@ -52,10 +54,10 @@ const DOCKER_HUB_HOSTS = [
 /** Forgejo-based registries share Forgejo's package page layout. */
 const FORGEJO_HOSTS: Record<
     string,
-    { name: string; icon: RegistrySource['icon'] }
+    { name: string; label: string; icon: RegistrySource['icon'] }
 > = {
-    'code.forgejo.org': { name: 'Forgejo', icon: SiForgejo },
-    'codeberg.org': { name: 'Codeberg', icon: SiCodeberg },
+    'code.forgejo.org': { name: 'Forgejo', label: 'Forgejo', icon: SiForgejo },
+    'codeberg.org': { name: 'Codeberg', label: 'Codeberg', icon: SiCodeberg },
 };
 
 /** Where an image comes from, and the page that lists its versions when there is one. */
@@ -67,6 +69,7 @@ export function registrySource(reference: string): RegistrySource {
 
         return {
             name: 'Docker Hub',
+            label: 'Docker Hub',
             icon: SiDocker,
             url: repo.includes('/')
                 ? `https://hub.docker.com/r/${repo}/tags`
@@ -77,6 +80,7 @@ export function registrySource(reference: string): RegistrySource {
     if (registry === 'ghcr.io') {
         return {
             name: 'GitHub Container Registry',
+            label: 'GitHub',
             icon: SiGithub,
             url: `https://ghcr.io/${path}`,
         };
@@ -85,6 +89,7 @@ export function registrySource(reference: string): RegistrySource {
     if (registry === 'quay.io') {
         return {
             name: 'Quay.io',
+            label: 'Quay',
             icon: SiRedhat,
             url: `https://quay.io/repository/${path}?tab=tags`,
         };
@@ -105,12 +110,13 @@ export function registrySource(reference: string): RegistrySource {
     if (registry === 'registry.k8s.io') {
         return {
             name: 'the Kubernetes registry',
+            label: 'registry.k8s.io',
             icon: SiKubernetes,
             url: null,
         };
     }
 
-    return { name: registry, icon: Package, url: null };
+    return { name: registry, label: registry, icon: Package, url: null };
 }
 
 /** Drops the implicit `docker.io/` and `library/` so a reference reads the way people search for it. */
@@ -125,8 +131,9 @@ function tagOf(reference: string): string | null {
 }
 
 /**
- * A copyable image reference. Its registry's icon opens the image's page where
- * one exists; an arrow shows the tag an update would install.
+ * A copyable image reference, labelled with where it's hosted and, where that
+ * registry has one, a link to the image's page. An arrow shows the tag an
+ * update would install.
  */
 export default function ImageRef({
     container,
@@ -145,23 +152,12 @@ export default function ImageRef({
 
     return (
         <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
-            {source.url ? (
-                <ExternalLinkButton
-                    url={source.url}
-                    className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-soft hover:bg-badge hover:text-ink"
-                    title={`Open on ${source.name} to see every published version`}
-                    aria-label={`Open on ${source.name}`}
-                >
-                    <SourceIcon className="size-3.5" />
-                </ExternalLinkButton>
-            ) : (
-                <span
-                    className="inline-flex size-5 shrink-0 items-center justify-center text-faint"
-                    title={`From ${source.name}`}
-                >
-                    <SourceIcon className="size-3.5" />
-                </span>
-            )}
+            <span
+                className="inline-flex size-5 shrink-0 items-center justify-center text-faint"
+                title={`From ${source.name}`}
+            >
+                <SourceIcon className="size-3.5" />
+            </span>
             <span
                 className="truncate font-mono text-[11px] text-soft select-all"
                 title={running}
@@ -193,6 +189,16 @@ export default function ImageRef({
                     title={`Copy ${running}`}
                     className="h-6 px-1.5"
                 />
+                {source.url && (
+                    <ExternalLinkButton
+                        url={source.url}
+                        className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium whitespace-nowrap text-brand hover:underline"
+                        title={`Open this image on ${source.name} to see every published version`}
+                    >
+                        <span>{source.label}</span>
+                        <ExternalLink className="size-3" />
+                    </ExternalLinkButton>
+                )}
             </span>
         </div>
     );
