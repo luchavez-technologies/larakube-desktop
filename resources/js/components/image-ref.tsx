@@ -51,6 +51,13 @@ const DOCKER_HUB_HOSTS = [
     'registry-1.docker.io',
 ];
 
+/**
+ * A vendor's own registry whose images the same publisher also lists on Docker
+ * Hub under the same name (n8n publishes `n8nio/n8n` there as n8n GmbH), so the
+ * Docker Hub page is where its versions can be browsed.
+ */
+const DOCKER_HUB_MIRRORS = ['docker.n8n.io'];
+
 /** Forgejo-based registries share Forgejo's package page layout. */
 const FORGEJO_HOSTS: Record<
     string,
@@ -74,6 +81,15 @@ export function registrySource(reference: string): RegistrySource {
             url: repo.includes('/')
                 ? `https://hub.docker.com/r/${repo}/tags`
                 : `https://hub.docker.com/_/${repo}/tags`,
+        };
+    }
+
+    if (DOCKER_HUB_MIRRORS.includes(registry)) {
+        return {
+            name: `${registry} (also published on Docker Hub)`,
+            label: 'Docker Hub',
+            icon: SiDocker,
+            url: `https://hub.docker.com/r/${path}/tags`,
         };
     }
 
@@ -146,6 +162,10 @@ export default function ImageRef({
     const source = registrySource(running);
     const SourceIcon = source.icon;
     const tag = tagOf(running);
+    // Shown without its tag so only the repository truncates; the tag always stays visible.
+    const shown = display(running).split('@')[0];
+    const repositoryPart =
+        tag !== null ? shown.slice(0, shown.length - tag.length - 1) : shown;
     const unpinned = tag === null || tag === 'latest';
     const nextTag =
         available !== null && available !== running ? tagOf(available) : null;
@@ -159,10 +179,11 @@ export default function ImageRef({
                 <SourceIcon className="size-3.5" />
             </span>
             <span
-                className="truncate font-mono text-[11px] text-soft select-all"
+                className="flex min-w-0 font-mono text-[11px] text-soft select-all"
                 title={running}
             >
-                {display(running)}
+                <span className="truncate">{repositoryPart}</span>
+                {tag !== null && <span className="shrink-0">:{tag}</span>}
             </span>
             {nextTag && (
                 <span
