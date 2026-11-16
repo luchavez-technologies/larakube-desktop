@@ -1580,7 +1580,9 @@ function InstalledCard({
                             ? 'Updating…'
                             : updateAvailable
                               ? 'Update'
-                              : 'Up to date'}
+                              : updateStatus === 'current'
+                                ? 'Up to date'
+                                : 'Not checked yet'}
                     </span>
                 </button>
                 {tool.host && (
