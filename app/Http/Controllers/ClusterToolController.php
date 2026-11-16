@@ -11,6 +11,7 @@ use App\Http\Requests\RemoveClusterToolRequest;
 use App\Jobs\Sync\SyncCatalogToolsJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Models\CatalogTool;
+use App\Models\ClusterTool;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\CurrentServer;
@@ -27,6 +28,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -676,6 +678,9 @@ class ClusterToolController extends Controller
         return $stack;
     }
 
+    /** How long a finished run may keep its card busy while waiting for the re-sync, should the sync fail. */
+    private const SETTLING_SECONDS = 180;
+
     /**
      * What's happening to installed apps on this server right now, for the Apps
      * page's cards: `apps` maps a host (or `tool:<slug>`) to updating / updated / failed / removing
@@ -695,10 +700,22 @@ class ClusterToolController extends Controller
                 RunKind::PauseClusterTool,
                 RunKind::ResumeClusterTool,
             ])
-            ->where('status', RunStatus::Running)
+            ->where(fn ($q) => $q->where('status', RunStatus::Running)
+                ->orWhere(fn ($q) => $q->where('status', RunStatus::Succeeded)->where('finished_at', '>=', now()->subSeconds(self::SETTLING_SECONDS))))
             ->where(fn ($q) => $q->where('server_name', $server)->orWhere('meta->server', $server))
             ->orderBy('id')
             ->get();
+
+        // A run that just succeeded still reads as busy until the apps have been
+        // re-synced after it ended: otherwise the card falls back to its old state
+        // (e.g. Pause on an app that is already paused) while the sync runs.
+        $serverId = Server::where('name', $server)->value('id');
+        $lastSynced = $serverId !== null ? ClusterTool::where('server_id', $serverId)->max('last_synced_at') : null;
+        $lastSyncedAt = $lastSynced !== null ? Carbon::parse($lastSynced) : null;
+        $runs = $runs->filter(fn (Run $run): bool => $run->status === RunStatus::Running
+            || $lastSyncedAt === null
+            || $run->finished_at === null
+            || $lastSyncedAt->lessThan($run->finished_at));
 
         $all = null;
         $apps = [];

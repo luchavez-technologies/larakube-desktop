@@ -1043,6 +1043,32 @@ test('update from the Apps page stays on it, and the card reads as updating unti
     File::deleteDirectory($bin);
 });
 
+test('a finished pause keeps the card busy until the apps are re-synced after it, so Pause is not offered again on a paused app', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $server = Server::create(['name' => 'workshop-demo', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'larakube-203.0.113.21', 'status' => 'ready']);
+    $row = ClusterTool::create(['server_id' => $server->id, 'tool' => 'documenso', 'host' => 'sign.example.com', 'installed' => true, 'sync_status' => 'fresh', 'last_synced_at' => now()->subMinute(), 'data' => []]);
+    Run::create([
+        'label' => 'Pause Documenso on workshop-demo',
+        'command' => 'larakube tool:pause',
+        'kind' => RunKind::PauseClusterTool,
+        'status' => RunStatus::Succeeded,
+        'finished_at' => now()->subSeconds(10),
+        'server_name' => 'workshop-demo',
+        'meta' => ['server' => 'workshop-demo', 'host' => 'sign.example.com', 'tool' => 'documenso'],
+    ]);
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('toolActivity', ['all' => null, 'apps' => ['sign.example.com' => 'pausing']]));
+
+    $row->update(['last_synced_at' => now()]);
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('toolActivity', ['all' => null, 'apps' => []]));
+
+    File::deleteDirectory($bin);
+});
+
 test('Update all reports each app as updating, updated or failed from its run log, and leaves a skipped paused app alone', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
