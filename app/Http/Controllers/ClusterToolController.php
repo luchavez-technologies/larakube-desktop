@@ -86,6 +86,7 @@ class ClusterToolController extends Controller
             // background re-sync is in flight.
             'toolsSyncing' => $this->tools->contextIsSyncing($context),
             'installing' => $this->installingTools($server),
+            'updating' => $this->updatingTools($server),
             // An instant DB read — domains used to block on a live CLI
             // round-trip (ExternalDNS + TLS + kubectl) the first time a
             // server's cache went cold, same class of problem the rest of
@@ -410,11 +411,13 @@ class ClusterToolController extends Controller
             tool: $tool,
         );
 
-        return to_route('runs.show', $run);
+        // Stay on the Apps page: the floating run HUD shows the log, and the card
+        // reads "Updating…" from the `updating` prop until the run ends.
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     /** Re-apply every installed tool `tool:outdated` lists, one after another; a failure doesn't stop the rest. */
-    public function updateAll(string $server): RedirectResponse
+    public function updateAll(Request $request, string $server): RedirectResponse
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
@@ -431,7 +434,7 @@ class ClusterToolController extends Controller
             context: $context,
         );
 
-        return to_route('runs.show', $run);
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 
     /** Scale an installed tool's pods to zero (or back up) via `tool:pause`/`tool:resume` — never touches PVCs, Secrets, or the registry. */
@@ -671,6 +674,25 @@ class ClusterToolController extends Controller
         Server::syncFromStack($stack);
 
         return $stack;
+    }
+
+    /**
+     * Updates still running on this server, keyed `tool|host` (one app's Update)
+     * or `*` (Update all), so cards keep saying "Updating…" until the run ends.
+     *
+     * @return array<string, int>
+     */
+    private function updatingTools(string $server): array
+    {
+        return Run::query()
+            ->whereIn('kind', [RunKind::UpdateClusterTool, RunKind::UpdateAllClusterTools])
+            ->where('status', RunStatus::Running)
+            ->where(fn ($q) => $q->where('server_name', $server)->orWhere('meta->server', $server))
+            ->get()
+            ->mapWithKeys(fn (Run $run): array => [
+                $run->kind === RunKind::UpdateAllClusterTools ? '*' : ($run->meta['tool'] ?? $run->tool ?? $run->subject).'|'.($run->meta['host'] ?? '') => $run->id,
+            ])
+            ->all();
     }
 
     /**

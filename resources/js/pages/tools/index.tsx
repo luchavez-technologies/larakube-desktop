@@ -101,6 +101,8 @@ type Props = {
     };
     toolsSyncing: boolean;
     installing: Record<string, number>;
+    /** Running updates: `tool|host` for one app's Update, `*` for Update all. */
+    updating?: Record<string, number>;
     domains?: ServerDomain[] | null;
     activeCommonsServices?: string[] | null;
 };
@@ -185,6 +187,7 @@ export default function ToolsIndex({
     filters: serverFilters,
     toolsSyncing,
     installing,
+    updating = {},
     domains,
     activeCommonsServices,
 }: Props) {
@@ -236,7 +239,7 @@ export default function ToolsIndex({
         router.post(
             updateAllTools(server.name).url,
             {},
-            { onFinish: () => setUpdatingAll(false) },
+            { preserveScroll: true, onFinish: () => setUpdatingAll(false) },
         );
     }
 
@@ -535,7 +538,11 @@ export default function ToolsIndex({
                         <button
                             type="button"
                             onClick={handleUpdateAll}
-                            disabled={updatingAll || isSyncing}
+                            disabled={
+                                updatingAll ||
+                                updating['*'] !== undefined ||
+                                isSyncing
+                            }
                             className={buttonClass('primary')}
                             title={`Re-apply ${updatesAvailable} app${updatesAvailable === 1 ? '' : 's'} with this CLI build, one after another. Data and settings are kept.`}
                         >
@@ -543,7 +550,9 @@ export default function ToolsIndex({
                             <span>
                                 {updatingAll
                                     ? 'Starting…'
-                                    : `Update all (${updatesAvailable})`}
+                                    : updating['*'] !== undefined
+                                      ? 'Updating all…'
+                                      : `Update all (${updatesAvailable})`}
                             </span>
                         </button>
                     )}
@@ -742,6 +751,13 @@ export default function ToolsIndex({
                                             key={`${tool.tool}-${tool.host || 'default'}`}
                                             server={server}
                                             tool={tool}
+                                            updateRunning={
+                                                updating[
+                                                    `${tool.tool}|${tool.host ?? ''}`
+                                                ] !== undefined ||
+                                                (updating['*'] !== undefined &&
+                                                    needsUpdate(tool))
+                                            }
                                             activeCommonsServices={
                                                 activeCommonsServices ?? []
                                             }
@@ -1433,12 +1449,15 @@ function CheckedAgo({ checkedAt }: { checkedAt: string | null }) {
 function InstalledCard({
     server,
     tool,
+    updateRunning = false,
     activeCommonsServices,
     onManage,
     onCategoryClick,
 }: {
     server: Server;
     tool: ClusterTool;
+    /** An Update (or Update all) run for this app is still going. */
+    updateRunning?: boolean;
     activeCommonsServices?: string[];
     onManage?: (tool: ClusterTool) => void;
     onCategoryClick?: (category: string) => void;
@@ -1455,17 +1474,20 @@ function InstalledCard({
     const updateStatus = tool.update?.status ?? null;
     const updateAvailable =
         updateStatus === 'outdated' || updateStatus === 'unstamped';
-    const [updating, setUpdating] = useState(false);
+    const [startingUpdate, setStartingUpdate] = useState(false);
+    // Covers the whole run, not just the request: the run HUD shows the log,
+    // and the card stays in this state until the run ends and the page reloads.
+    const updating = startingUpdate || updateRunning;
 
     function handleUpdate() {
         if (!tool.host) {
             return;
         }
-        setUpdating(true);
+        setStartingUpdate(true);
         router.post(
             updateTool({ server: server.name, tool: tool.tool }).url,
             { domain: tool.host },
-            { onFinish: () => setUpdating(false) },
+            { preserveScroll: true, onFinish: () => setStartingUpdate(false) },
         );
     }
 

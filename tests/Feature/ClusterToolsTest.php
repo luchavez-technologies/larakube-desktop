@@ -1023,6 +1023,25 @@ test('update re-applies one installed tool with tool:update, keeping its options
     File::deleteDirectory($bin);
 });
 
+test('update from the Apps page stays on it, and the card reads as updating until the run ends', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    ChildProcess::fake();
+
+    $this->from(route('servers.tools.index', 'workshop-demo'))
+        ->withHeader('X-Inertia', 'true')
+        ->post(route('servers.tools.update', ['server' => 'workshop-demo', 'tool' => 'sso']), ['domain' => 'sso.example.com'])
+        ->assertRedirect(route('servers.tools.index', 'workshop-demo'));
+
+    $run = Run::sole();
+
+    $this->flushHeaders()
+        ->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('updating', ['sso|sso.example.com' => $run->id]));
+
+    File::deleteDirectory($bin);
+});
+
 test('update 404s for a tool that is not installed', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();
