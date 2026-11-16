@@ -105,7 +105,14 @@ type Props = {
     activeCommonsServices?: string[] | null;
 };
 
-type Filter = 'all' | 'installed' | 'available';
+type Filter = 'all' | 'installed' | 'available' | 'updates';
+
+function needsUpdate(tool: ClusterTool): boolean {
+    return (
+        tool.update?.status === 'outdated' ||
+        tool.update?.status === 'unstamped'
+    );
+}
 
 function matches(
     tool: ClusterTool,
@@ -317,7 +324,13 @@ export default function ToolsIndex({
             q: overrides.q ?? query,
             category: overrides.category ?? selectedCategory,
             source: overrides.source ?? selectedSource,
-            scope: nextScope === 'available' ? 'explore' : nextScope,
+            // Updates is a view of the installed list, so it pages like Installed.
+            scope:
+                nextScope === 'available'
+                    ? 'explore'
+                    : nextScope === 'updates'
+                      ? 'installed'
+                      : nextScope,
             page: overrides.page ?? 1,
             per_page: overrides.per_page ?? (viewMode === 'table' ? 30 : 18),
         };
@@ -452,14 +465,20 @@ export default function ToolsIndex({
         tools?.filter(
             (tool) => !tool.installed && !installedSlugs.has(tool.tool),
         ) ?? [];
-    const installed = installedAll.filter((tool) =>
-        matches(tool, query, selectedCategory),
-    );
-    const updatesAvailable = installedAll.filter(
+    const installed = installedAll.filter(
         (tool) =>
-            tool.update?.status === 'outdated' ||
-            tool.update?.status === 'unstamped',
-    ).length;
+            matches(tool, query, selectedCategory) &&
+            (filter !== 'updates' || needsUpdate(tool)),
+    );
+    const updatesAvailable = installedAll.filter(needsUpdate).length;
+
+    // The tab only exists while something needs updating, so once the last
+    // update lands, fall back to the full installed list.
+    useEffect(() => {
+        if (filter === 'updates' && updatesAvailable === 0) {
+            setFilter('installed');
+        }
+    }, [filter, updatesAvailable]);
     const available = useMemo(() => {
         if (catalog) {
             return catalog.data.filter(
@@ -582,7 +601,18 @@ export default function ToolsIndex({
                                             'Installed',
                                             installedAll.length,
                                         ],
-                                    ] as const
+                                        ...(updatesAvailable > 0
+                                            ? ([
+                                                  [
+                                                      'updates',
+                                                      'Updates',
+                                                      updatesAvailable,
+                                                  ],
+                                              ] as const)
+                                            : []),
+                                    ] as ReadonlyArray<
+                                        readonly [Filter, string, number]
+                                    >
                                 ).map(([value, label, count]) => (
                                     <button
                                         key={value}
@@ -700,7 +730,11 @@ export default function ToolsIndex({
                         <>
                             {filter !== 'available' && (
                                 <Section
-                                    title={`Installed on ${server.name}`}
+                                    title={
+                                        filter === 'updates'
+                                            ? `Needs an update on ${server.name}`
+                                            : `Installed on ${server.name}`
+                                    }
                                     count={installed.length}
                                 >
                                     {installed.map((tool) => (
@@ -719,7 +753,7 @@ export default function ToolsIndex({
                                     ))}
                                 </Section>
                             )}
-                            {filter !== 'installed' && (
+                            {filter !== 'installed' && filter !== 'updates' && (
                                 <Section
                                     title="Available"
                                     count={availableCount}
@@ -1011,7 +1045,7 @@ export default function ToolsIndex({
                                 </section>
                             )}
 
-                            {filter !== 'installed' && (
+                            {filter !== 'installed' && filter !== 'updates' && (
                                 <section>
                                     <h2 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-soft uppercase">
                                         Available{' '}
@@ -1219,6 +1253,7 @@ export default function ToolsIndex({
                         </div>
                     )}
                     {filter !== 'installed' &&
+                        filter !== 'updates' &&
                         catalog &&
                         catalog.meta.last_page > 1 && (
                             <div className="mt-6 flex items-center justify-between border-t border-line/60 pt-4 text-xs text-soft">
