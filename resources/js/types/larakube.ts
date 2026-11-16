@@ -1,3 +1,14 @@
+/** One container an installed app runs, from `tool:outdated --json`. */
+export type ImageContainer = {
+    component: string;
+    container: string;
+    /** The exact image reference the container runs. */
+    running: string;
+    /** What this LaraKube CLI build would install, when its pin is known; null means unknown. */
+    available: string | null;
+    primary: boolean;
+};
+
 export type Tool = {
     slug: string;
     label: string;
@@ -425,6 +436,8 @@ export type ClusterTool = {
         installedRevision: string | null;
         availableRevision: string;
         images: string[];
+        /** Every container with its exact running image; older CLIs don't send it. */
+        containers?: ImageContainer[];
     } | null;
 };
 

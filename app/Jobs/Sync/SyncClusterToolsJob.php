@@ -187,6 +187,14 @@ class SyncClusterToolsJob extends SyncJob
                 'installedRevision' => isset($row['installedRevision']) ? (string) $row['installedRevision'] : null,
                 'availableRevision' => (string) ($row['availableRevision'] ?? ''),
                 'images' => array_values(array_map('strval', $row['images'] ?? [])),
+                // Each container's exact running image (and this build's pin where known), for people to verify.
+                'containers' => array_values(array_map(fn (array $c): array => [
+                    'component' => (string) ($c['component'] ?? ''),
+                    'container' => (string) ($c['container'] ?? ''),
+                    'running' => (string) ($c['running'] ?? ''),
+                    'available' => isset($c['available']) ? (string) $c['available'] : null,
+                    'primary' => (bool) ($c['primary'] ?? false),
+                ], array_filter($row['containers'] ?? [], 'is_array'))),
             ];
         }
 

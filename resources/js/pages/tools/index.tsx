@@ -30,6 +30,7 @@ import CustomEnvFields, {
 import HostPicker from '@/components/host-picker';
 import DomainStatusPills from '@/components/domain-status-pills';
 import { ExternalLinkButton } from '@/lib/open-external';
+import ImageRef from '@/components/image-ref';
 import QrCodePopover from '@/components/qr-code-popover';
 import ToolLogo from '@/components/tool-logo';
 import CommonsCapabilityPills from '@/components/commons-capability-pills';
@@ -1542,6 +1543,9 @@ function InstalledCard({
     const [togglingPause, setTogglingPause] = useState(false);
 
     const updateStatus = tool.update?.status ?? null;
+    const containers = tool.update?.containers ?? [];
+    const primaryContainer =
+        containers.find((container) => container.primary) ?? containers[0];
     const updateAvailable =
         updateStatus === 'outdated' || updateStatus === 'unstamped';
     const [startingUpdate, setStartingUpdate] = useState(false);
@@ -1682,6 +1686,24 @@ function InstalledCard({
                             showDetail
                             className="w-full border-t border-line/50 pt-2"
                         />
+                    )}
+                    {primaryContainer && (
+                        <div className="flex items-center gap-2 border-t border-line/50 pt-2">
+                            <ImageRef
+                                container={primaryContainer}
+                                className="flex-1"
+                            />
+                            {containers.length > 1 && onManage && (
+                                <button
+                                    type="button"
+                                    onClick={() => onManage(tool)}
+                                    className="shrink-0 cursor-pointer text-[11px] font-medium text-brand hover:underline"
+                                    title="See every container and its image in Manage"
+                                >
+                                    +{containers.length - 1} more
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
 

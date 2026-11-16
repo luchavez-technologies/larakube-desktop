@@ -118,3 +118,29 @@ test('ClusterToolsSynced reaches windows through NativePHP without going through
     expect(array_map('strval', $event->broadcastOn()))->toContain('nativephp')
         ->and($event)->not->toBeInstanceOf(ShouldBroadcast::class);
 });
+
+test('each installed tool carries its containers with the exact image each runs', function () {
+    $bin = syncClusterToolsFakeCli();
+    $server = Server::create(['name' => 'alpha', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-alpha', 'status' => 'ready']);
+
+    Process::fake([
+        '*tool:list*' => Process::result(output: json_encode([['tool' => 'n8n', 'host' => 'flow.example.com', 'installed' => true]])),
+        '*tool:outdated*' => Process::result(output: json_encode([[
+            'tool' => 'n8n', 'host' => 'flow.example.com', 'status' => 'outdated', 'installedRevision' => 'a', 'availableRevision' => 'b', 'images' => [],
+            'containers' => [
+                ['component' => 'n8n', 'container' => 'n8n', 'running' => 'docker.n8n.io/n8nio/n8n:2.39.8', 'available' => 'docker.n8n.io/n8nio/n8n:2.47.7', 'primary' => true],
+                ['component' => 'helper', 'container' => 'helper', 'running' => 'busybox:1.36', 'available' => null, 'primary' => false],
+            ],
+        ]])),
+    ]);
+
+    SyncClusterToolsJob::dispatchSync($server->id);
+
+    $containers = ClusterTool::where('tool', 'n8n')->sole()->toToolArray()['update']['containers'];
+
+    expect($containers)->toHaveCount(2)
+        ->and($containers[0])->toBe(['component' => 'n8n', 'container' => 'n8n', 'running' => 'docker.n8n.io/n8nio/n8n:2.39.8', 'available' => 'docker.n8n.io/n8nio/n8n:2.47.7', 'primary' => true])
+        ->and($containers[1]['available'])->toBeNull();
+
+    File::deleteDirectory($bin);
+});

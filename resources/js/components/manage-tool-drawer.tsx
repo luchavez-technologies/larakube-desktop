@@ -8,6 +8,7 @@ import {
     Plus,
     Globe,
     Layers,
+    Box,
     Database,
     Shield,
     Mail,
@@ -16,6 +17,7 @@ import {
     ArrowRightLeft,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
+import ImageRef from '@/components/image-ref';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
@@ -587,6 +589,49 @@ export default function ManageToolDrawer({
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {/* Images: exactly what runs, copyable, so people can verify versions themselves */}
+                    {(tool.update?.containers?.length ?? 0) > 0 && (
+                        <div className="rounded-2xl bg-surface p-4 ring-1 ring-line">
+                            <div className="mb-3 flex items-center justify-between">
+                                <span className="text-[11px] font-semibold tracking-wider text-faint uppercase">
+                                    Images ({tool.update?.containers?.length})
+                                </span>
+                                <Box className="size-3.5 text-faint" />
+                            </div>
+                            <div className="space-y-1.5">
+                                {tool.update?.containers?.map((container) => (
+                                    <div
+                                        key={`${container.component}/${container.container}`}
+                                        className="rounded-xl bg-paper px-3 py-2"
+                                    >
+                                        <div className="mb-0.5 flex items-center gap-1.5 text-[11px]">
+                                            <span className="font-medium text-ink">
+                                                {container.component}
+                                            </span>
+                                            {container.container !==
+                                                container.component && (
+                                                <span className="text-faint">
+                                                    / {container.container}
+                                                </span>
+                                            )}
+                                            {container.primary && (
+                                                <StatusPill tone="ok">
+                                                    main
+                                                </StatusPill>
+                                            )}
+                                        </div>
+                                        <ImageRef container={container} />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="mt-2.5 text-[10px] leading-relaxed text-soft">
+                                Copy any image to look it up on its registry. An
+                                arrow shows the version this LaraKube CLI build
+                                installs on update.
+                            </p>
                         </div>
                     )}
 
