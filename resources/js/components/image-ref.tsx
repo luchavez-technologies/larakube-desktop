@@ -1,4 +1,13 @@
-import { ArrowRight, ExternalLink } from 'lucide-react';
+import {
+    SiCodeberg,
+    SiDocker,
+    SiForgejo,
+    SiGithub,
+    SiKubernetes,
+    SiRedhat,
+} from '@icons-pack/react-simple-icons';
+import { ArrowRight, Package } from 'lucide-react';
+import type { ComponentType } from 'react';
 import CopyButton from '@/components/copy-button';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { cn } from '@/lib/utils';
@@ -26,31 +35,82 @@ function parse(reference: string): {
         : { registry: 'docker.io', path: name, tag };
 }
 
-/** The image's public page, or null for a registry without one we know. */
-export function registryUrl(reference: string): string | null {
+type RegistrySource = {
+    /** Who hosts the image, for the tooltip. */
+    name: string;
+    icon: ComponentType<{ className?: string }>;
+    /** The image's public page (its versions), or null where no reliable one exists. */
+    url: string | null;
+};
+
+const DOCKER_HUB_HOSTS = [
+    'docker.io',
+    'index.docker.io',
+    'registry-1.docker.io',
+];
+
+/** Forgejo-based registries share Forgejo's package page layout. */
+const FORGEJO_HOSTS: Record<
+    string,
+    { name: string; icon: RegistrySource['icon'] }
+> = {
+    'code.forgejo.org': { name: 'Forgejo', icon: SiForgejo },
+    'codeberg.org': { name: 'Codeberg', icon: SiCodeberg },
+};
+
+/** Where an image comes from, and the page that lists its versions when there is one. */
+export function registrySource(reference: string): RegistrySource {
     const { registry, path } = parse(reference);
 
-    if (
-        registry === 'docker.io' ||
-        registry === 'index.docker.io' ||
-        registry === 'registry-1.docker.io'
-    ) {
+    if (DOCKER_HUB_HOSTS.includes(registry)) {
         const repo = path.replace(/^library\//, '');
 
-        return repo.includes('/')
-            ? `https://hub.docker.com/r/${repo}/tags`
-            : `https://hub.docker.com/_/${repo}/tags`;
+        return {
+            name: 'Docker Hub',
+            icon: SiDocker,
+            url: repo.includes('/')
+                ? `https://hub.docker.com/r/${repo}/tags`
+                : `https://hub.docker.com/_/${repo}/tags`,
+        };
     }
 
     if (registry === 'ghcr.io') {
-        return `https://ghcr.io/${path}`;
+        return {
+            name: 'GitHub Container Registry',
+            icon: SiGithub,
+            url: `https://ghcr.io/${path}`,
+        };
     }
 
     if (registry === 'quay.io') {
-        return `https://quay.io/repository/${path}?tab=tags`;
+        return {
+            name: 'Quay.io',
+            icon: SiRedhat,
+            url: `https://quay.io/repository/${path}?tab=tags`,
+        };
     }
 
-    return null;
+    const forgejo = FORGEJO_HOSTS[registry];
+
+    if (forgejo && path.includes('/')) {
+        const owner = path.slice(0, path.indexOf('/'));
+        const name = path.slice(owner.length + 1);
+
+        return {
+            ...forgejo,
+            url: `https://${registry}/${owner}/-/packages/container/${name}`,
+        };
+    }
+
+    if (registry === 'registry.k8s.io') {
+        return {
+            name: 'the Kubernetes registry',
+            icon: SiKubernetes,
+            url: null,
+        };
+    }
+
+    return { name: registry, icon: Package, url: null };
 }
 
 /** Drops the implicit `docker.io/` and `library/` so a reference reads the way people search for it. */
@@ -65,8 +125,8 @@ function tagOf(reference: string): string | null {
 }
 
 /**
- * A copyable image reference, with a link to its registry page and, when this
- * build would install a different tag, what an update brings.
+ * A copyable image reference. Its registry's icon opens the image's page where
+ * one exists; an arrow shows the tag an update would install.
  */
 export default function ImageRef({
     container,
@@ -76,7 +136,8 @@ export default function ImageRef({
     className?: string;
 }) {
     const { running, available } = container;
-    const link = registryUrl(running);
+    const source = registrySource(running);
+    const SourceIcon = source.icon;
     const tag = tagOf(running);
     const unpinned = tag === null || tag === 'latest';
     const nextTag =
@@ -84,6 +145,23 @@ export default function ImageRef({
 
     return (
         <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
+            {source.url ? (
+                <ExternalLinkButton
+                    url={source.url}
+                    className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-soft hover:bg-badge hover:text-ink"
+                    title={`Open on ${source.name} to see every published version`}
+                    aria-label={`Open on ${source.name}`}
+                >
+                    <SourceIcon className="size-3.5" />
+                </ExternalLinkButton>
+            ) : (
+                <span
+                    className="inline-flex size-5 shrink-0 items-center justify-center text-faint"
+                    title={`From ${source.name}`}
+                >
+                    <SourceIcon className="size-3.5" />
+                </span>
+            )}
             <span
                 className="truncate font-mono text-[11px] text-soft select-all"
                 title={running}
@@ -115,15 +193,6 @@ export default function ImageRef({
                     title={`Copy ${running}`}
                     className="h-6 px-1.5"
                 />
-                {link && (
-                    <ExternalLinkButton
-                        url={link}
-                        className="inline-flex h-6 cursor-pointer items-center rounded-md px-1.5 text-soft hover:bg-badge hover:text-ink"
-                        title="Open its registry page to see every published version"
-                    >
-                        <ExternalLink className="size-3.5" />
-                    </ExternalLinkButton>
-                )}
             </span>
         </div>
     );
