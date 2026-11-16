@@ -238,7 +238,7 @@ export function PulledDigests({ digests }: { digests: string[] }) {
                         className="truncate font-mono text-soft select-all"
                         title={digest}
                     >
-                        {digest.slice(0, 19)}…
+                        {digest}
                     </span>
                     <CopyButton
                         value={digest}
