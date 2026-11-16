@@ -2,16 +2,8 @@ import { router } from '@inertiajs/react';
 import { show as runShow } from '@/routes/runs';
 import { show as settingsShow } from '@/routes/settings';
 
-declare global {
-    interface Window {
-        Native?: {
-            on: (
-                event: string,
-                callback: (payload: { reference?: string }) => void,
-            ) => void;
-        };
-    }
-}
+// window.Native is typed in ./native-events.
+import './native-events';
 
 let listening = false;
 
@@ -25,7 +17,9 @@ export function listenForNotificationClicks() {
 
     window.Native.on(
         'Native\\Desktop\\Events\\Notifications\\NotificationClicked',
-        ({ reference = '' }) => {
+        (payload) => {
+            const reference =
+                typeof payload.reference === 'string' ? payload.reference : '';
             if (reference.startsWith('run:')) {
                 router.visit(runShow(Number(reference.slice(4))).url);
             } else if (reference === 'update') {

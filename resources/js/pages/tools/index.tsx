@@ -51,6 +51,7 @@ import {
     updateAll as updateAllTools,
 } from '@/routes/servers/tools';
 import { isLocalServer as isLocalServerCheck } from '@/lib/servers';
+import { NativeEvents, onNativeEvent } from '@/lib/native-events';
 import {
     describeTool,
     toolName,
@@ -251,6 +252,29 @@ export default function ToolsIndex({
     }, [toolsSyncing, startPoll, stopPoll]);
 
     const [updatingAll, setUpdatingAll] = useState(false);
+
+    // Reload the moment this server's apps are re-synced (e.g. right after an
+    // update), instead of the run's reload racing the sync job (ADR 0021).
+    useEffect(
+        () =>
+            onNativeEvent<{ server?: string }>(
+                NativeEvents.clusterToolsSynced,
+                (payload) => {
+                    if (payload.server === server.name) {
+                        router.reload({
+                            only: [
+                                'tools',
+                                'lastVerified',
+                                'checkedAt',
+                                'toolsSyncing',
+                                'toolActivity',
+                            ],
+                        });
+                    }
+                },
+            ),
+        [server.name],
+    );
 
     const activityRunning =
         toolActivity.all !== null || Object.keys(toolActivity.apps).length > 0;

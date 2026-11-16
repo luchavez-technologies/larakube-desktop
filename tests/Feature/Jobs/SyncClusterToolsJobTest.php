@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\ActivityType;
+use App\Events\ClusterToolsSynced;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Models\Activity;
 use App\Models\ClusterTool;
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
@@ -85,4 +88,33 @@ test('a failed tool:outdated keeps the last known update status instead of clear
     expect(ClusterTool::where('tool', 'n8n')->sole()->toToolArray()['update']['status'])->toBe('outdated');
 
     File::deleteDirectory($bin);
+});
+
+test('a sync tells the open windows its server\'s apps changed, whether it succeeded or recorded an error', function (bool $succeeds) {
+    Event::fake([ClusterToolsSynced::class]);
+    $bin = syncClusterToolsFakeCli();
+    $server = Server::create(['name' => 'alpha', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-alpha', 'status' => 'ready']);
+    ClusterTool::create(['server_id' => $server->id, 'tool' => 'n8n', 'installed' => true, 'sync_status' => 'fresh', 'data' => []]);
+
+    Process::fake([
+        '*tool:list*' => $succeeds
+            ? Process::result(output: json_encode([['tool' => 'n8n', 'host' => 'flow.example.com', 'installed' => true]]))
+            : Process::result(output: '', exitCode: 1),
+        '*tool:outdated*' => Process::result(output: '[]'),
+    ]);
+
+    SyncClusterToolsJob::dispatchSync($server->id);
+
+    Event::assertDispatchedTimes(ClusterToolsSynced::class, 1);
+    Event::assertDispatched(ClusterToolsSynced::class, fn (ClusterToolsSynced $event): bool => $event->server === 'alpha');
+
+    File::deleteDirectory($bin);
+})->with(['succeeded' => [true], 'recorded an error' => [false]]);
+
+test('ClusterToolsSynced reaches windows through NativePHP without going through Laravel broadcasting', function () {
+    $event = new ClusterToolsSynced('alpha');
+
+    // NativePHP's EventWatcher forwards anything whose broadcastOn() includes `nativephp`.
+    expect(array_map('strval', $event->broadcastOn()))->toContain('nativephp')
+        ->and($event)->not->toBeInstanceOf(ShouldBroadcast::class);
 });

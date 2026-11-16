@@ -3,6 +3,7 @@
 namespace App\Jobs\Sync;
 
 use App\Enums\ActivityType;
+use App\Events\ClusterToolsSynced;
 use App\Models\Activity;
 use App\Models\CatalogTool;
 use App\Models\ClusterTool;
@@ -146,6 +147,9 @@ class SyncClusterToolsJob extends SyncJob
             });
         } catch (\Throwable $e) {
             $this->markError($server->id, $e->getMessage(), $wasAlreadyErrored);
+        } finally {
+            // Fresh rows or a recorded error: either way the page should reload now.
+            ClusterToolsSynced::dispatch($server->name);
         }
     }
 
