@@ -237,7 +237,7 @@ class CliInstaller
             return [
                 'success' => false,
                 'path' => null,
-                'error' => 'LaraKube Linux (WSL) distribution is not installed.',
+                'error' => 'LaraKube Linux is not installed.',
             ];
         }
 
@@ -245,7 +245,7 @@ class CliInstaller
             return [
                 'success' => false,
                 'path' => null,
-                'error' => 'Could not install LaraKube CLI into larakube-ubuntu WSL distribution.',
+                'error' => 'Could not install the LaraKube CLI into LaraKube Linux.',
             ];
         }
 

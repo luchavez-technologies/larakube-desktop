@@ -33,3 +33,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0019](0019-scope-mutating-router-calls-with-only.md)                        | Scope every mutating router call with `only` — never trigger a full-page reload for a small action      | Accepted |
 | [0020](0020-inertia-forms-sanitation-precognition-and-optimistic-updates.md) | Standardize UI forms on Inertia `<Form>`, `SanitizingFormRequest`, Precognition, and optimistic updates | Accepted |
 | [0021](0021-push-data-changes-to-the-ui.md)                                  | Push data changes to the UI through NativePHP events; polling is the fallback                           | Accepted |
+| [0022](0022-name-the-wsl-system-larakube-linux.md)                           | Call the WSL system "LaraKube Linux"; keep `larakube-ubuntu` as its technical name                      | Accepted |

@@ -203,8 +203,7 @@ export default function DangerZoneTab({ windows = false }: DangerZoneTabProps) {
                                         />
                                         <div>
                                             <span className="font-medium text-ink">
-                                                Remove LaraKube Linux (WSL 2)
-                                                Distro
+                                                Remove LaraKube Linux
                                             </span>
                                             <span className="block text-[11px] text-soft">
                                                 Unregisters{' '}

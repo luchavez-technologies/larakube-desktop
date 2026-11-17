@@ -251,9 +251,9 @@ function LinuxCard() {
                             Distro & Toolchain Update
                         </p>
                         <p className="mt-0.5 text-xs text-soft">
-                            Updates the LaraKube CLI and cloud tools inside your
-                            WSL distro. Preserves all your projects and dotfiles
-                            in{' '}
+                            Updates the LaraKube CLI and cloud tools inside
+                            LaraKube Linux. Preserves all your projects and
+                            dotfiles in{' '}
                             <code className="font-mono text-ink">
                                 /home/larakube
                             </code>
@@ -315,11 +315,11 @@ function LinuxCard() {
                                                 Factory Reset Confirmation
                                             </p>
                                             <p className="mt-1 text-xs text-soft">
-                                                This deletes the{' '}
+                                                This deletes LaraKube Linux (the{' '}
                                                 <code className="font-mono text-ink">
                                                     larakube-ubuntu
                                                 </code>{' '}
-                                                WSL distro. As a safety
+                                                WSL distro). As a safety
                                                 guarantee, your projects will
                                                 automatically be backed up to
                                                 your Windows{' '}
@@ -370,9 +370,9 @@ function LinuxCard() {
                                             Reset LaraKube Linux
                                         </p>
                                         <p className="mt-0.5 text-xs text-soft">
-                                            Completely unregisters the distro to
-                                            start over fresh. Automatically
-                                            backs up existing projects first.
+                                            Removes LaraKube Linux to start over
+                                            fresh. Automatically backs up
+                                            existing projects first.
                                         </p>
                                     </div>
                                     <Button

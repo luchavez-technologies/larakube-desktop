@@ -34,7 +34,7 @@ export default function BundledTools({
     return (
         <div className="mt-4">
             <p className="mb-1 text-xs font-medium tracking-wide text-soft uppercase">
-                Bundled in larakube-ubuntu
+                Included in LaraKube Linux
             </p>
             {entries.map(([name, version]) => (
                 <ListRow key={name}>

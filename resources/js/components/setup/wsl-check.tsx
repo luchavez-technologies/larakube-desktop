@@ -67,7 +67,7 @@ const WSL_STEP_DESCRIPTIONS: Record<WslStep, string> = {
         'Downloading rootfs image with pre-installed Kubernetes & cloud tools (~300 MB)…',
     import: 'Unpacking and registering LaraKube Linux with WSL2. This usually takes 1 to 2 minutes on Windows.',
     backup: 'Creating a safety backup of your projects folder…',
-    reset: 'Removing the older LaraKube Linux distribution…',
+    reset: 'Removing the older LaraKube Linux…',
     restore: 'Restoring your projects back into LaraKube Linux…',
 };
 
