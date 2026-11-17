@@ -68,17 +68,32 @@ function CopyablePath({ path }: { path: string }) {
     );
 }
 
+/** Marks a tool that exists on both Windows and LaraKube Linux. */
+export function AlsoOnBadge({ label }: { label: string }) {
+    return (
+        <span className="inline-flex shrink-0 items-center rounded-md bg-badge px-1.5 py-0.5 text-[10px] font-medium text-soft ring-1 ring-line">
+            {label}
+        </span>
+    );
+}
+
 export function ToolRow({
     entry,
     channel,
     refresh,
     highlight = false,
     installing = false,
+    hideEnvironment = false,
+    alsoOn,
 }: {
     entry: CatalogEntry;
     channel: string;
     refresh: number;
     highlight?: boolean;
+    /** Inside a per-side tab, where the tab already says Windows or LaraKube Linux. */
+    hideEnvironment?: boolean;
+    /** The tool also exists on the other side, e.g. "Also in LaraKube Linux". */
+    alsoOn?: string;
     /** This row's install/update is the one an in-progress "Install everything" run is currently on. */
     installing?: boolean;
 }) {
@@ -129,7 +144,7 @@ export function ToolRow({
                                             ? entry.label
                                             : `${entry.label} · optional`}
                                     </span>
-                                    {entry.environment && (
+                                    {entry.environment && !hideEnvironment && (
                                         <span
                                             className={cn(
                                                 'inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1',
@@ -168,6 +183,7 @@ export function ToolRow({
                                                   : 'Missing'}
                                         </StatusPill>
                                     )}
+                                    {alsoOn && <AlsoOnBadge label={alsoOn} />}
                                     {highlight && !tool?.installed && (
                                         <span className="inline-flex shrink-0 animate-pulse items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand ring-1 ring-brand/20">
                                             Recommended for Observability
@@ -519,12 +535,17 @@ export default function ToolCatalogList({
     highlight,
     onCheckAgain,
     checking = false,
+    hideEnvironment = false,
+    alsoOn = {},
 }: {
     catalog: CatalogEntry[];
     channel: string;
     refresh: number;
     showLocalOnly?: boolean;
     highlight?: string | null;
+    hideEnvironment?: boolean;
+    /** Per slug: the badge for a tool that also exists on the other side. */
+    alsoOn?: Record<string, string>;
     onCheckAgain?: () => void;
     checking?: boolean;
 }) {
@@ -561,6 +582,8 @@ export default function ToolCatalogList({
                         refresh={refresh}
                         highlight={highlight === entry.slug}
                         installing={installingSlug === entry.slug}
+                        hideEnvironment={hideEnvironment}
+                        alsoOn={alsoOn[entry.slug]}
                     />
                 ))}
             <InstallAllButton

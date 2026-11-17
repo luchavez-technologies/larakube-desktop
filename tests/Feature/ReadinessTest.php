@@ -725,6 +725,54 @@ test('the Setup page reads what the distro image bundles from its manifest', fun
         ->and((new Wsl(windows: false))->bundledTools())->toBeNull();
 });
 
+test('the Setup page never wakes a sleeping distro to read its bundled tools', function () {
+    Cache::flush();
+    Process::fake([
+        '*--list*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Stopped         2\n"),
+        '*/etc/larakube-rootfs.json*' => Process::result(output: '{"kubectl":"v1.34.1"}'),
+    ]);
+
+    expect((new Wsl(windows: true, featureEnabled: true))->bundledTools())->toBeNull();
+    Process::assertDidntRun(fn ($process): bool => in_array('/etc/larakube-rootfs.json', (array) $process->command, true));
+});
+
+test('on Windows, the LaraKube Linux tab is told the distro is asleep instead of waking it', function () {
+    readinessFakeBinDirectory(['larakube']);
+    $home = storage_path('framework/testing/home-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($home);
+    $_SERVER['HOME'] = realpath($home);
+    Cache::flush();
+    Process::fake([
+        '*--list*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Stopped         2\n"),
+        '*' => Process::result(output: ''),
+    ]);
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
+
+    $this->post(route('setup.usage'), ['usage' => 'apps']);
+
+    $this->get(route('readiness'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+            ->where('bundled.tools', null)
+            ->where('bundled.asleep', true)));
+    Process::assertDidntRun(fn ($process): bool => in_array('/etc/larakube-rootfs.json', (array) $process->command, true));
+});
+
+test('once read, the bundled tools stay known while the distro sleeps', function () {
+    Cache::flush();
+    Process::fake([
+        '*--list*' => Process::sequence()
+            ->push(Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"))
+            ->push(Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Stopped         2\n")),
+        '*/etc/larakube-rootfs.json*' => Process::result(output: '{"kubectl":"v1.34.1"}'),
+    ]);
+
+    $wsl = new Wsl(windows: true, featureEnabled: true);
+    $wsl->bundledTools();
+    $this->travel(2)->days();
+
+    expect($wsl->bundledTools())->toBe(['kubectl' => 'v1.34.1']);
+});
+
 test('a tool recorded in the CLI\'s tools.json is found and versioned with no process and no database row', function () {
     $bin = readinessFakeBinDirectory(['larakube', 'kubectl']);
     Cache::flush();

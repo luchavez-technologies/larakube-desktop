@@ -33,9 +33,7 @@ import ToolCatalogList, {
     type CatalogEntry,
 } from '@/components/setup/tool-catalog';
 import WslCheck, { type WslState } from '@/components/setup/wsl-check';
-import BundledTools, {
-    BundledToolsSkeleton,
-} from '@/components/setup/bundled-tools';
+import ToolSides, { type BundledState } from '@/components/setup/tool-sides';
 import { useToolStatus } from '@/lib/tool-status';
 import type { Provider } from '@/types/larakube';
 
@@ -43,7 +41,7 @@ type Props = {
     windows: boolean;
     wsl?: WslState | null;
     catalog: CatalogEntry[];
-    bundled?: Record<string, string> | null;
+    bundled?: BundledState | null;
     providers?: Provider[] | null;
     cliInstallCommand: string;
     cliChannel?: string;
@@ -110,6 +108,7 @@ export default function Readiness({
                                 router.reload({
                                     only: [
                                         'providers',
+                                        'bundled',
                                         'wsl',
                                         'localCluster',
                                         'versions',
@@ -175,20 +174,22 @@ export default function Readiness({
                     )}
                     <div className="grid grid-cols-2 items-start gap-4.5">
                         <Card label="Command-line tools">
-                            <ToolCatalogList
-                                catalog={catalog}
-                                channel={selectedChannel}
-                                refresh={refresh}
-                                showLocalOnly={usage === 'apps'}
-                                highlight={highlightTool}
-                            />
-                            {windows && usage === 'apps' && (
-                                <Deferred
-                                    data="bundled"
-                                    fallback={<BundledToolsSkeleton />}
-                                >
-                                    <BundledTools tools={bundled} />
-                                </Deferred>
+                            {windows && usage === 'apps' ? (
+                                <ToolSides
+                                    catalog={catalog}
+                                    bundled={bundled}
+                                    channel={selectedChannel}
+                                    refresh={refresh}
+                                    highlight={highlightTool}
+                                />
+                            ) : (
+                                <ToolCatalogList
+                                    catalog={catalog}
+                                    channel={selectedChannel}
+                                    refresh={refresh}
+                                    showLocalOnly={usage === 'apps'}
+                                    highlight={highlightTool}
+                                />
                             )}
                         </Card>
                         <Card label="Cloud accounts">

@@ -545,11 +545,16 @@ class Wsl
     public const BUNDLED_TOOLS_CACHE_KEY = 'wsl.bundled-tools';
 
     /**
-     * What the larakube-ubuntu image bundles, and at which versions, from the
+     * What the LaraKube Linux image bundles, and at which versions, from the
      * manifest the image writes at build time (/etc/larakube-rootfs.json):
-     * the CLI, k3s, kubectl, gh, tea, git and Podman. Read-only — the image,
-     * not Setup, installs and updates them. Null off Windows, without WSL, or
-     * without the distro.
+     * the CLI, k3s, kubectl, gh, tea, git, Podman, aws and gcloud. Read-only:
+     * the image, not Setup, installs and updates them.
+     *
+     * The manifest only changes with the image, so it is cached until an
+     * import, update or reset forgets it. It is read only while the distro is
+     * running: reading it from a stopped distro would wake it. Null off
+     * Windows, without WSL, without the distro, or while it sleeps with
+     * nothing cached yet.
      *
      * @return array<string, string>|null
      */
@@ -565,7 +570,7 @@ class Wsl
             return $cached;
         }
 
-        if ($this->distro() === null) {
+        if (! $this->distroIsRunning()) {
             return null;
         }
 
@@ -580,7 +585,7 @@ class Wsl
         }
 
         $tools = array_filter($manifest, fn (mixed $version, mixed $name): bool => is_string($name) && is_string($version) && $version !== '', ARRAY_FILTER_USE_BOTH);
-        Cache::put(self::BUNDLED_TOOLS_CACHE_KEY, $tools, now()->addMinutes(10));
+        Cache::forever(self::BUNDLED_TOOLS_CACHE_KEY, $tools);
 
         return $tools;
     }

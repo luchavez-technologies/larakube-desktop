@@ -41,7 +41,16 @@ class ReadinessController extends Controller
             'catalog' => $readiness->catalog(),
             // What the distro image itself carries (gh, tea, git, Podman, k3s…):
             // shown read-only, since the image — not Setup — installs them.
-            'bundled' => Inertia::defer(fn (): ?array => $wsl->isWindows() && $usage === 'apps' ? $wsl->bundledTools() : null),
+            // The LaraKube Linux tab: the image's bundled tools, and whether the distro is asleep (nothing cached and nothing read, so the tab offers Wake up).
+            'bundled' => Inertia::defer(function () use ($wsl, $usage): ?array {
+                if (! $wsl->isWindows() || $usage !== 'apps') {
+                    return null;
+                }
+
+                $tools = $wsl->bundledTools();
+
+                return ['tools' => $tools, 'asleep' => $tools === null && $wsl->distro() !== null && ! $wsl->distroIsRunning()];
+            }),
             'providers' => Inertia::defer(fn (): ?array => $readiness->providers(statusOnly: true)),
             'cliInstallCommand' => $readiness->cliInstallCommand(),
             'cliChannel' => $installer->channel(),
