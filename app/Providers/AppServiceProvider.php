@@ -41,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
      * upgrade from read to write fails at once with `database is locked` when
      * another process wrote first; busy_timeout can't help with that upgrade.
      * IMMEDIATE takes the write lock at BEGIN, where busy_timeout does wait.
+     * See docs/decisions/0023-sqlite-immediate-transactions.md.
      */
     protected function configureNativeSqlite(): void
     {

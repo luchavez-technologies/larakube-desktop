@@ -34,3 +34,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0020](0020-inertia-forms-sanitation-precognition-and-optimistic-updates.md) | Standardize UI forms on Inertia `<Form>`, `SanitizingFormRequest`, Precognition, and optimistic updates | Accepted |
 | [0021](0021-push-data-changes-to-the-ui.md)                                  | Push data changes to the UI through NativePHP events; polling is the fallback                           | Accepted |
 | [0022](0022-name-the-wsl-system-larakube-linux.md)                           | Call the WSL system "LaraKube Linux"; keep `larakube-ubuntu` as its technical name                      | Accepted |
+| [0023](0023-sqlite-immediate-transactions.md)                                | SQLite transactions are IMMEDIATE, so concurrent writers wait instead of failing                        | Accepted |
