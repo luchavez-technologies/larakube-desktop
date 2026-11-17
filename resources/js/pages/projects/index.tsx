@@ -41,6 +41,7 @@ import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import QrCodePopover from '@/components/qr-code-popover';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
+import WakeUpButton from '@/components/wake-up-button';
 import { cn } from '@/lib/utils';
 import { show as showDevBox } from '@/routes/devboxes';
 import { show as showBoxProject } from '@/routes/devboxes/projects';
@@ -55,6 +56,7 @@ export default function ProjectsIndex({
     projects,
     groupColors = {},
     hasActiveRuns = false,
+    localAsleep = false,
     devBoxes,
     box = null,
     boxProjects,
@@ -65,6 +67,7 @@ export default function ProjectsIndex({
     projects: Project[];
     groupColors?: Record<string, string | null>;
     hasActiveRuns?: boolean;
+    localAsleep?: boolean;
     devBoxes?: string[];
     box?: string | null;
     boxProjects?: DevBoxProject[] | null;
@@ -226,6 +229,21 @@ export default function ProjectsIndex({
                 <p className="mb-4 rounded-lg bg-accent-tint px-3 py-2 text-sm text-accent">
                     {errors.path}
                 </p>
+            )}
+            {localAsleep && !box && (
+                <div className="mb-4 flex items-center justify-between gap-4 rounded-xl bg-paper px-4 py-3 ring-1 ring-line ring-inset">
+                    <div>
+                        <p className="text-sm font-medium text-ink">
+                            LaraKube Linux is asleep
+                        </p>
+                        <p className="text-xs text-soft">
+                            WSL stopped it while idle, so your local projects
+                            are offline. Waking it starts k3s again and keeps it
+                            awake while LaraKube Desktop is open.
+                        </p>
+                    </div>
+                    <WakeUpButton size="sm" />
+                </div>
             )}
             <Deferred data="devBoxes" fallback={<></>}>
                 {devBoxes && devBoxes.length > 0 ? (

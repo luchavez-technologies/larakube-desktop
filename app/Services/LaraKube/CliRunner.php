@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Events\RunStarted;
 use App\Models\Run;
 use App\Services\Elevation;
+use App\Services\Wsl;
 use Native\Desktop\Facades\ChildProcess;
 use RuntimeException;
 
@@ -106,6 +107,13 @@ class CliRunner
         // added, through a route test that never touched Elevation at all.
         if (! app()->runningUnitTests() && $this->needsElevation($kind, $environment, $tool, $this->localDnsAlreadyCovers($kind, $environment, $cwd))) {
             $this->elevation->grant();
+        }
+
+        // A local app runs on k3s inside LaraKube Linux, which WSL stops shortly
+        // after this run's wsl.exe exits. Keep the distro awake so the app
+        // `up`/`start` just brought up does not go down with it.
+        if ($devBox === null && $environment === 'local' && in_array($kind, [RunKind::UpProject, RunKind::StartProject, RunKind::HealProject], true)) {
+            app(Wsl::class)->keepAwake();
         }
 
         if ($serverId === null && isset($meta['server_id']) && is_numeric($meta['server_id'])) {

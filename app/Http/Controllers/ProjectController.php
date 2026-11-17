@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\ProjectGroup;
 use App\Models\Run;
@@ -147,6 +148,8 @@ class ProjectController extends Controller
             'projects' => $projects,
             'groupColors' => ProjectGroup::query()->visible()->whereNotNull('color')->pluck('color', 'name'),
             'hasActiveRuns' => $activeRuns->isNotEmpty(),
+            // Kept fresh by SyncLocalClusterJob; true only on Windows, once WSL has idled LaraKube Linux out.
+            'localAsleep' => LocalClusterState::current()->status === LocalCluster::ASLEEP_STATUS,
             // Dev boxes to switch to (experimental), and the apps on the chosen one, asked of the box itself.
             'devBoxes' => Inertia::defer(fn (): array => $this->readyDevBoxNames(), 'devBoxes'),
             'box' => $this->chosenDevBox($request),

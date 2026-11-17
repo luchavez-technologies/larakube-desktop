@@ -31,6 +31,7 @@ import ProviderLogo from '@/components/provider-logo';
 import QrCodePopover from '@/components/qr-code-popover';
 import Redactable from '@/components/redactable';
 import StatusPill from '@/components/status-pill';
+import WakeUpButton from '@/components/wake-up-button';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
 import { cn } from '@/lib/utils';
 import {
@@ -90,6 +91,7 @@ type DashboardProps = {
         context?: string | null;
         status: string;
         tone: 'ok' | 'warn' | 'muted' | 'bad';
+        asleep?: boolean;
     };
     fleetMetrics?: FleetMetrics | null;
     projectCatalog?: FrameworkCatalog | null;
@@ -544,6 +546,15 @@ export default function DashboardIndex({
                                     {localCluster.status}
                                 </span>
                             </div>
+                            {localCluster.asleep && (
+                                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-soft">
+                                    <span>
+                                        WSL stopped it while idle. Local
+                                        projects are offline.
+                                    </span>
+                                    <WakeUpButton />
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

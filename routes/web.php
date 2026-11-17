@@ -15,6 +15,7 @@ use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\DomainStatusController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\LocalClusterController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\NotificationController;
@@ -45,6 +46,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::post('/local-cluster/wake', [LocalClusterController::class, 'wake'])->name('local-cluster.wake');
 
 Route::get('/onboarding', [OnboardingController::class, 'show'])->name('onboarding');
 Route::post('/onboarding/providers', [OnboardingController::class, 'setProviders'])->name('onboarding.providers');

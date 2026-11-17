@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
+use Native\Desktop\Facades\ChildProcess;
 
 /**
  * The Windows side of LaraKube Desktop's own WSL distro, `larakube-ubuntu`: whether WSL and the distro are there,
@@ -501,21 +502,44 @@ class Wsl
             : ['ok' => false, 'message' => trim($this->text($removed->errorOutput().$removed->output())) ?: 'Windows could not remove LaraKube Linux.'];
     }
 
+    /** The ChildProcess alias of the process that holds larakube-ubuntu awake. */
+    public const KEEP_AWAKE_ALIAS = 'wsl-keep-awake';
+
+    /** How long after a wake-up an unreachable k3s still reads as starting, not offline. */
+    public const WAKING_SECONDS = 120;
+
+    private const WOKEN_AT_CACHE_KEY = 'wsl.woken-at';
+
     /**
-     * Starts larakube-ubuntu if WSL has stopped it for being idle, so its
-     * systemd brings k3s back and the shared kubeconfig's local context
-     * (`https://127.0.0.1:6443`, forwarded to Windows by WSL2) answers again.
-     * A no-op returning false off Windows, without WSL, or without the distro.
+     * Wakes larakube-ubuntu and keeps it awake while LaraKube Desktop is open.
+     *
+     * WSL stops a distro shortly after its last wsl.exe process exits, and
+     * systemd services (k3s, Podman) do not count, so a one-shot command only
+     * starts it for a few seconds. A `sleep infinity` held as a Desktop child
+     * process is what WSL counts as activity; it ends with Desktop, after which
+     * WSL lets the distro idle again. False off Windows, without WSL, or
+     * without the distro.
      */
-    public function ensureDistroRunning(): bool
+    public function keepAwake(): bool
     {
-        if (! $this->isWindows() || ! $this->featureEnabled()) {
+        if (! $this->isWindows() || ! $this->featureEnabled() || $this->distro() === null) {
             return false;
         }
 
-        return Process::timeout(60)->run([
-            'wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--exec', '/bin/true',
-        ])->successful();
+        ChildProcess::stop(self::KEEP_AWAKE_ALIAS);
+        ChildProcess::start(
+            ['wsl.exe', '-d', WslDistro::NAME, '--user', WslDistro::USER, '--exec', 'sleep', 'infinity'],
+            alias: self::KEEP_AWAKE_ALIAS,
+        );
+        Cache::put(self::WOKEN_AT_CACHE_KEY, now()->getTimestamp(), self::WAKING_SECONDS);
+
+        return true;
+    }
+
+    /** Whether keepAwake() ran recently enough that k3s may still be starting. */
+    public function isWaking(): bool
+    {
+        return Cache::has(self::WOKEN_AT_CACHE_KEY);
     }
 
     public const BUNDLED_TOOLS_CACHE_KEY = 'wsl.bundled-tools';

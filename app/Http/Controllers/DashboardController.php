@@ -96,13 +96,14 @@ class DashboardController extends Controller
                         'context' => $state->context,
                         'status' => $state->status,
                         'tone' => $state->tone,
+                        'asleep' => $state->status === LocalCluster::ASLEEP_STATUS,
                     ];
                 }
 
                 $result = $localCluster->detect();
                 SyncLocalClusterJob::dispatch();
 
-                return $result;
+                return [...$result, 'asleep' => $result['status'] === LocalCluster::ASLEEP_STATUS];
             }),
 
             'projects' => Inertia::defer(function () use ($inspector): array {

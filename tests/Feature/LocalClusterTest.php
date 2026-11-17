@@ -5,6 +5,7 @@ use App\Services\LaraKube\ToolLocator;
 use App\Services\Wsl;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Native\Desktop\Facades\ChildProcess;
 
 function localClusterFakeBin(): string
 {
@@ -245,11 +246,12 @@ test('detects Docker Desktop and OrbStack distributions correctly', function () 
         ->and($local->resolveLocalEngine('eks-prod', 'https://...amazonaws.com'))->toBeNull();
 });
 
-test('on Windows, an unreachable k3s-larakube wakes the WSL distro once and probes again', function () {
+/** A k3s-larakube kubeconfig answering nothing, on a Windows locator. */
+function windowsK3sLocator(): array
+{
     $dir = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
     File::ensureDirectoryExists($dir);
     File::put("{$dir}/kubectl.exe", '');
-    $locator = new ToolLocator([$dir], windows: true, wslFeatureEnabled: true);
 
     $configJson = json_encode([
         'current-context' => 'k3s-larakube',
@@ -257,21 +259,62 @@ test('on Windows, an unreachable k3s-larakube wakes the WSL distro once and prob
         'clusters' => [['name' => 'k3s-larakube', 'cluster' => ['server' => 'https://127.0.0.1:6443']]],
     ]);
 
+    return [$dir, new ToolLocator([$dir], windows: true, wslFeatureEnabled: true), (string) $configJson];
+}
+
+test('on Windows, an unreachable k3s-larakube in a stopped distro reads as asleep, without waking it', function () {
+    [$dir, $locator, $configJson] = windowsK3sLocator();
+
     Process::fake([
         '*config*view*-o*json*' => Process::result(output: $configJson),
-        '*cluster-info*' => Process::sequence()
-            ->push(Process::result(errorOutput: 'connection refused', exitCode: 1))
-            ->push(Process::result(output: 'Kubernetes control plane is running')),
-        '*wsl.exe*' => Process::result(),
-        '*get*svc*traefik*' => Process::result(output: 'service/traefik'),
+        '*cluster-info*' => Process::result(errorOutput: 'connection refused', exitCode: 1),
+        '*--list*--running*' => Process::result(output: "  NAME     STATE     VERSION\n  Ubuntu   Running   2\n"),
     ]);
 
     $cluster = (new LocalCluster($locator, new Wsl(windows: true, featureEnabled: true)))->detect(fresh: true);
 
-    expect($cluster['context'])->toBe('k3s-larakube')
-        ->and($cluster['tone'])->toBe('ok');
-    Process::assertRan(fn ($process): bool => in_array('/bin/true', (array) $process->command, true));
-    Process::assertRanTimes(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'cluster-info'), 2);
+    expect($cluster['status'])->toBe(LocalCluster::ASLEEP_STATUS)
+        ->and($cluster['tone'])->toBe('muted');
+    // The sync job polls every few seconds: a probe that woke the distro would keep it running forever.
+    Process::assertDidntRun(fn ($process): bool => in_array('--exec', (array) $process->command, true));
+    Process::assertRanTimes(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'cluster-info'), 1);
+
+    File::deleteDirectory($dir);
+});
+
+test('on Windows, a running distro whose k3s has not answered since a wake-up reads as starting', function () {
+    [$dir, $locator, $configJson] = windowsK3sLocator();
+    ChildProcess::fake();
+
+    Process::fake([
+        '*config*view*-o*json*' => Process::result(output: $configJson),
+        '*cluster-info*' => Process::result(errorOutput: 'connection refused', exitCode: 1),
+        '*wsl.exe*' => Process::result(output: "  NAME             STATE     VERSION\n* larakube-ubuntu  Running   2\n"),
+    ]);
+
+    $wsl = new Wsl(windows: true, featureEnabled: true);
+    expect($wsl->keepAwake())->toBeTrue();
+
+    $cluster = (new LocalCluster($locator, $wsl))->detect(fresh: true);
+
+    expect($cluster['status'])->toBe(LocalCluster::STARTING_STATUS)
+        ->and($cluster['tone'])->toBe('warn');
+
+    File::deleteDirectory($dir);
+});
+
+test('on Windows, a running distro whose k3s stays down long after a wake-up reads as offline', function () {
+    [$dir, $locator, $configJson] = windowsK3sLocator();
+
+    Process::fake([
+        '*config*view*-o*json*' => Process::result(output: $configJson),
+        '*cluster-info*' => Process::result(errorOutput: 'connection refused', exitCode: 1),
+        '*--list*--running*' => Process::result(output: "  NAME             STATE     VERSION\n* larakube-ubuntu  Running   2\n"),
+    ]);
+
+    $cluster = (new LocalCluster($locator, new Wsl(windows: true, featureEnabled: true)))->detect(fresh: true);
+
+    expect($cluster['status'])->toBe('Offline / not reachable');
 
     File::deleteDirectory($dir);
 });

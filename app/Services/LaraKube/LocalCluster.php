@@ -21,6 +21,12 @@ class LocalCluster
     /** The context `larakube cluster:setup` gives the k3s cluster inside larakube-ubuntu. */
     public const WSL_K3S_CONTEXT = 'k3s-larakube';
 
+    /** larakube-ubuntu is stopped (WSL idles it out), so its k3s is down with it. */
+    public const ASLEEP_STATUS = 'LaraKube Linux is asleep';
+
+    /** larakube-ubuntu was just woken and k3s has not answered yet. */
+    public const STARTING_STATUS = 'Waking up, k3s is starting';
+
     public function __construct(private ToolLocator $locator, private ?Wsl $wsl = null) {}
 
     public function forget(): void
@@ -188,12 +194,7 @@ class LocalCluster
                 }
 
                 // None reachable, report the preferred candidate as offline
-                return [
-                    'engine' => $targetEngine,
-                    'context' => $targetContext,
-                    'status' => 'Offline / not reachable',
-                    'tone' => 'warn',
-                ];
+                return $this->unreachable($targetEngine, $targetContext);
             }
 
             // Test reachability for targetContext
@@ -202,12 +203,7 @@ class LocalCluster
             $isReachable = $infoResult->successful();
 
             if (! $isReachable) {
-                return [
-                    'engine' => $targetEngine,
-                    'context' => $targetContext,
-                    'status' => 'Offline / not reachable',
-                    'tone' => 'warn',
-                ];
+                return $this->unreachable($targetEngine, (string) $targetContext);
             }
 
             return $this->isProvisioned($kubectl, (string) $targetContext)
@@ -223,25 +219,39 @@ class LocalCluster
         }
     }
 
-    /**
-     * `kubectl cluster-info` against one context. On Windows, a refused
-     * k3s-larakube probe usually means WSL stopped the idle distro, so wake
-     * it once and ask again before reporting the cluster offline.
-     */
+    /** `kubectl cluster-info` against one context. */
     private function probe(string $kubectl, string $context, int $timeout): ProcessResult
     {
         $isolated = $this->locator->isolate([$kubectl, 'cluster-info', "--context={$context}", '--request-timeout=2s']);
-        $result = Process::env($isolated['environment'])->timeout($timeout)->run($isolated['command']);
 
-        if ($result->successful() || $context !== self::WSL_K3S_CONTEXT || ! $this->locator->isWindows()) {
-            return $result;
+        return Process::env($isolated['environment'])->timeout($timeout)->run($isolated['command']);
+    }
+
+    /**
+     * The status for a local context that did not answer. On Windows, an
+     * unreachable k3s-larakube usually means WSL stopped the idle distro, which
+     * Desktop reports as asleep (with a Wake up button) instead of waking it
+     * on its own: the sync job polls every few seconds, so a silent wake would
+     * keep the distro running forever. Right after a wake-up, k3s is still
+     * starting, which is not an outage either.
+     *
+     * @return array{engine: string, context: ?string, status: string, tone: string}
+     */
+    private function unreachable(string $engine, string $context): array
+    {
+        if ($context === self::WSL_K3S_CONTEXT && $this->locator->isWindows()) {
+            $wsl = $this->wsl ?? new Wsl(windows: true);
+
+            if (! $wsl->distroIsRunning()) {
+                return ['engine' => $engine, 'context' => $context, 'status' => self::ASLEEP_STATUS, 'tone' => 'muted'];
+            }
+
+            if ($wsl->isWaking()) {
+                return ['engine' => $engine, 'context' => $context, 'status' => self::STARTING_STATUS, 'tone' => 'warn'];
+            }
         }
 
-        if (! ($this->wsl ?? new Wsl(windows: true))->ensureDistroRunning()) {
-            return $result;
-        }
-
-        return Process::env($isolated['environment'])->timeout($timeout + 10)->run($isolated['command']);
+        return ['engine' => $engine, 'context' => $context, 'status' => 'Offline / not reachable', 'tone' => 'warn'];
     }
 
     /**
