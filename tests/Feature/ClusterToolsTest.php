@@ -1188,6 +1188,23 @@ test('wire triggers capability wire command for the app', function () {
     File::deleteDirectory($bin);
 });
 
+test('wiring Meet names the tool, so the non-interactive run never stops to ask which one', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.apps.wire', ['server' => 'workshop-demo', 'tool' => 'matrix']), [
+        'capability' => 'meet',
+        'domain' => 'chat.example.com',
+    ]);
+
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$bin}/larakube", 'meet:wire', 'production', '--context=larakube-203.0.113.21', '--tool=matrix', '--domain=chat.example.com', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($bin);
+});
+
 test('unwire triggers capability unwire command for the app', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();

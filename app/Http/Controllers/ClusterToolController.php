@@ -495,7 +495,7 @@ class ClusterToolController extends Controller
             'mail' => ['mail:wire', 'production', "--context={$context}", "--tool={$tool}"],
             'rotation' => ['secrets:wire', 'production', "--context={$context}", "--tool={$tool}"],
             'vpn' => ['vpn:wire', 'production', "--context={$context}", "--tool={$tool}"],
-            'meet' => ['meet:wire', 'production', "--context={$context}"],
+            'meet' => ['meet:wire', 'production', "--context={$context}", "--tool={$tool}"],
             default => throw new \InvalidArgumentException("Unsupported capability: {$capability}"),
         };
 

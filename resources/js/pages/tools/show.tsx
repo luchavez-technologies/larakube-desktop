@@ -9,7 +9,7 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
-import { ExternalLink, Plug, Unlink } from 'lucide-react';
+import { ExternalLink, Plug, RotateCw, Unlink } from 'lucide-react';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
 import {
@@ -39,6 +39,12 @@ function WiringPill({ value }: { value: Wiring }) {
     const [label, tone] = wiringLabels[value] ?? [value, 'muted'];
     return <StatusPill tone={tone}>{label}</StatusPill>;
 }
+
+/**
+ * Connections whose wire command is safe to run again on a connected app: it
+ * reuses the stored credentials and Zitadel app, and only rewrites the wiring.
+ */
+const REAPPLIABLE = ['sso', 'mail', 'meet'];
 
 export default function ShowTool({
     server,
@@ -260,6 +266,42 @@ export default function ShowTool({
                                                 <WiringPill
                                                     value={item.value}
                                                 />
+                                                {item.wired &&
+                                                    REAPPLIABLE.includes(
+                                                        item.key,
+                                                    ) && (
+                                                        <Form
+                                                            action={`/servers/${server.name}/apps/${tool.tool}/wire`}
+                                                            method="post"
+                                                        >
+                                                            <input
+                                                                type="hidden"
+                                                                name="capability"
+                                                                value={item.key}
+                                                            />
+                                                            <input
+                                                                type="hidden"
+                                                                name="domain"
+                                                                value={
+                                                                    tool.host ??
+                                                                    ''
+                                                                }
+                                                            />
+                                                            <button
+                                                                type="submit"
+                                                                className={buttonClass(
+                                                                    'ghost',
+                                                                    'xs',
+                                                                )}
+                                                                title={`Re-apply ${item.title} with this CLI build. Keeps its credentials and settings.`}
+                                                            >
+                                                                <RotateCw className="size-3" />
+                                                                <span>
+                                                                    Re-apply
+                                                                </span>
+                                                            </button>
+                                                        </Form>
+                                                    )}
                                                 {item.wired ? (
                                                     <Form
                                                         action={`/servers/${server.name}/apps/${tool.tool}/unwire`}
