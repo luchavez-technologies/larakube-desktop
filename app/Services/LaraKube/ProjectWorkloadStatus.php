@@ -7,6 +7,7 @@ use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Models\LocalClusterState;
 use App\Models\Project;
 use App\Models\Run;
+use App\Services\Wsl;
 use Illuminate\Support\Facades\Process;
 
 class ProjectWorkloadStatus
@@ -34,6 +35,10 @@ class ProjectWorkloadStatus
 
         if ($state->workloads_last_synced_at !== null) {
             return $state->workloads_data ?? [];
+        }
+
+        if ($locator->isWindows() && ! app(Wsl::class)->distroIsRunning()) {
+            return [];
         }
 
         $workloads = $this->fetchLocalWorkloadStatuses($locator);

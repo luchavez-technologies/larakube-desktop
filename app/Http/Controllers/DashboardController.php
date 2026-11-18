@@ -19,6 +19,7 @@ use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use App\Services\Wsl;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -52,12 +53,14 @@ class DashboardController extends Controller
         // Fast SQLite queries: execute instantly for initial shell render
         $recentRuns = Run::query()->latest('id')->take(5)->get(['id', 'label', 'kind', 'status', 'created_at', 'target_type', 'target_name', 'environment']);
 
+        $distroRunning = ! $locator->isWindows() || app(Wsl::class)->distroIsRunning();
+
         return Inertia::render('dashboard/index', [
             'runs' => $recentRuns,
             'defaultProjectParent' => ToolLocator::home(),
 
-            'stats' => Inertia::defer(function () use ($stacks, $readiness): array {
-                $projectsCount = Project::query()->get()->filter(fn (Project $p): bool => $p->existsOnHost())->count();
+            'stats' => Inertia::defer(function () use ($stacks, $readiness, $distroRunning): array {
+                $projectsCount = Project::query()->get()->filter(fn (Project $p): bool => $p->existsOnHost($distroRunning))->count();
 
                 if (Server::activeUnfiltered()->exists()) {
                     $dbServers = Server::active()->get(['id', 'status']);
@@ -106,15 +109,15 @@ class DashboardController extends Controller
                 return [...$result, 'asleep' => $result['status'] === LocalCluster::ASLEEP_STATUS];
             }),
 
-            'projects' => Inertia::defer(function () use ($inspector): array {
+            'projects' => Inertia::defer(function () use ($inspector, $distroRunning): array {
                 return Project::query()
                     ->with('server:id,name,provider,ip')
                     ->latest('id')
                     ->get()
-                    ->filter(fn (Project $p): bool => $p->existsOnHost())
+                    ->filter(fn (Project $p): bool => $p->existsOnHost($distroRunning))
                     ->take(4)
-                    ->map(function (Project $p) use ($inspector): array {
-                        if ($p->last_inspected_at !== null && $p->name !== null && $p->framework !== null) {
+                    ->map(function (Project $p) use ($inspector, $distroRunning): array {
+                        if (! $distroRunning || ($p->last_inspected_at !== null && $p->name !== null && $p->framework !== null)) {
                             $blueprint = is_array($p->blueprint_cache) ? $p->blueprint_cache : [];
 
                             return [

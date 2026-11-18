@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
+use App\Services\Wsl;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -87,18 +88,31 @@ class Project extends Model
         return $this->path;
     }
 
-    public function existsOnHost(): bool
+    public function existsOnHost(?bool $distroRunning = null): bool
     {
         if (app()->runningUnitTests()) {
             if (str_contains($this->path, 'nonexistent')) {
                 return false;
             }
             if (! str_starts_with($this->path, storage_path())) {
+                if (! rescue(fn () => app(ToolLocator::class)->isWindows(), false)) {
+                    return true;
+                }
+            }
+        }
+
+        if ($this->path === '') {
+            return false;
+        }
+
+        if (rescue(fn () => app(ToolLocator::class)->isWindows(), false)) {
+            $awake = $distroRunning ?? rescue(fn (): bool => app(Wsl::class)->distroIsRunning(), false, report: false);
+            if (! $awake) {
                 return true;
             }
         }
 
-        return $this->path !== '' && is_dir($this->hostPath());
+        return is_dir($this->hostPath());
     }
 
     protected static function booted(): void

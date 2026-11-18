@@ -5,6 +5,7 @@ namespace App\Services\LaraKube;
 use App\Models\Project;
 use App\Models\Server;
 use App\Services\Runtime\WslDistro;
+use App\Services\Wsl;
 
 /**
  * Reads a project's LaraKube state from its own files, read-only:
@@ -13,13 +14,17 @@ use App\Services\Runtime\WslDistro;
  */
 class ProjectInspector
 {
+    private ?bool $distroAwake = null;
+
     public function __construct(
         private FrameworkCatalog $catalog,
         private ?GlobalSettings $globalSettings = null,
         private ?ToolLocator $locator = null,
+        private ?Wsl $wsl = null,
     ) {
         $this->globalSettings = $globalSettings ?? rescue(fn () => app(GlobalSettings::class), report: false);
         $this->locator = $locator ?? rescue(fn () => app(ToolLocator::class), report: false);
+        $this->wsl = $wsl ?? rescue(fn () => app(Wsl::class), report: false);
     }
 
     private function hostPath(string $path): string
@@ -55,8 +60,12 @@ class ProjectInspector
     /**
      * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, gitRemote?: ?string, remoteUrl?: ?string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>, forgejoHost?: ?string, teaLoggedIn?: bool, teaLogin?: ?string, teaLogins?: list<array{name: string, host: string, user: string, default: bool}>}}>}
      */
-    public function inspect(string $path, string $environment = 'production'): array
+    public function inspect(string $path, string $environment = 'production', ?bool $allowWslFilesystem = null, ?Project $projectModel = null): array
     {
+        if ($this->shouldSkipWslFilesystem($allowWslFilesystem)) {
+            return $this->inspectFromDatabaseCache($path, $environment, $projectModel);
+        }
+
         $hostPath = $this->hostPath($path);
         $blueprint = $this->readJson("{$hostPath}/.larakube.json");
         $local = $this->readJson("{$hostPath}/.larakube.local.json");
@@ -65,6 +74,81 @@ class ProjectInspector
         $result = $this->inspectBlueprint($blueprint, $local, $environment, $path, $git);
 
         $this->syncToDatabase($path, $result, $blueprint);
+
+        return $result;
+    }
+
+    private function shouldSkipWslFilesystem(?bool $allowWslFilesystem): bool
+    {
+        $locator = $this->locator ?? app(ToolLocator::class);
+        if (! $locator->isWindows()) {
+            return false;
+        }
+
+        if ($allowWslFilesystem !== null) {
+            return ! $allowWslFilesystem;
+        }
+
+        if ($this->distroAwake === null) {
+            $wsl = $this->wsl ?? rescue(fn () => app(Wsl::class), report: false);
+            $this->distroAwake = $wsl !== null ? $wsl->distroIsRunning() : false;
+        }
+
+        return ! $this->distroAwake;
+    }
+
+    /**
+     * Builds a project inspection from cached SQLite columns when LaraKube Linux
+     * is asleep on Windows so `\\wsl.localhost\larakube-ubuntu\…` is never touched.
+     *
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, gitRemote?: ?string, remoteUrl?: ?string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>, forgejoHost?: ?string, teaLoggedIn?: bool, teaLogin?: ?string, teaLogins?: list<array{name: string, host: string, user: string, default: bool}>}}>}
+     */
+    private function inspectFromDatabaseCache(string $path, string $environment, ?Project $projectModel): array
+    {
+        $project = $projectModel ?? Project::with('server')->where('path', $path)->first();
+        $blueprint = is_array($project?->blueprint_cache) ? $project->blueprint_cache : null;
+
+        $local = null;
+        if ($project?->server !== null) {
+            $local = [
+                'environments' => [
+                    $environment => [
+                        'cloud' => array_filter([
+                            'ip' => $project->server->ip,
+                            'context' => $project->server->context,
+                        ], fn (?string $v): bool => $v !== null && $v !== ''),
+                    ],
+                ],
+            ];
+        }
+
+        $emptyGit = [
+            'remote' => null,
+            'platform' => 'github',
+            'repoSlug' => null,
+            'hasWorkflow' => false,
+            'remotes' => [],
+        ];
+
+        $result = $this->inspectBlueprint($blueprint, $local, $environment, $path, $emptyGit, skipFilesystem: true);
+
+        if ($project !== null) {
+            if ($result['name'] === '' || $result['name'] === basename($path)) {
+                $result['name'] = $project->name ?: $result['name'];
+            }
+            if ($result['framework'] === null && $project->framework !== null) {
+                $result['framework'] = $project->framework;
+                $result['deployable'] = array_key_exists($project->framework, $this->deployableFrameworks());
+            }
+            if ($result['webHost'] === null && $project->web_host !== null && $project->web_host !== '') {
+                $result['webHost'] = $project->web_host;
+            }
+            if ($project->last_inspected_at !== null || $blueprint !== null || $project->framework !== null) {
+                $result['initialized'] = true;
+            }
+        }
+
+        $result['exists'] = $path !== '';
 
         return $result;
     }
@@ -121,7 +205,7 @@ class ProjectInspector
      * @param  array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}|null  $git
      * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, gitRemote?: ?string, remoteUrl?: ?string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
      */
-    public function inspectBlueprint(?array $blueprint, ?array $local = null, string $environment = 'production', string $path = '', ?array $git = null): array
+    public function inspectBlueprint(?array $blueprint, ?array $local = null, string $environment = 'production', string $path = '', ?array $git = null, bool $skipFilesystem = false): array
     {
         $git ??= ['remote' => null, 'platform' => 'github', 'repoSlug' => null, 'hasWorkflow' => false, 'remotes' => []];
 
@@ -212,7 +296,7 @@ class ProjectInspector
                     : null;
                 $workflowContents = '';
                 $workflowPlatform = null;
-                if ($path !== '') {
+                if ($path !== '' && ! $skipFilesystem) {
                     foreach ([
                         "{$this->hostPath($path)}/.github/workflows/larakube-deploy-{$name}.yml",
                         "{$this->hostPath($path)}/.forgejo/workflows/larakube-deploy-{$name}.yml",
@@ -325,11 +409,11 @@ class ProjectInspector
 
         return [
             'path' => $path,
-            'exists' => $path !== '' ? is_dir($hostPath) : true,
+            'exists' => $skipFilesystem ? ($path !== '') : ($path !== '' ? is_dir($hostPath) : true),
             'initialized' => $blueprint !== null,
             'name' => $projectName,
             'framework' => $framework,
-            'detectedFramework' => ($blueprint === null && $path !== '' && is_dir($hostPath)) ? $this->detect($path) : null,
+            'detectedFramework' => (! $skipFilesystem && $blueprint === null && $path !== '' && is_dir($hostPath)) ? $this->detect($path) : null,
             'webHost' => is_string($host) && $host !== '' ? $host : null,
             'serverIp' => is_string($ip) && $ip !== '' ? $ip : null,
             'serverContext' => is_string($context) && $context !== '' ? $context : null,

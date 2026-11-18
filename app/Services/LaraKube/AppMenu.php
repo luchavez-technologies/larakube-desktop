@@ -4,6 +4,7 @@ namespace App\Services\LaraKube;
 
 use App\Models\Project;
 use App\Models\Server;
+use App\Services\Wsl;
 use Native\Desktop\Facades\Menu;
 
 class AppMenu
@@ -14,10 +15,13 @@ class AppMenu
     public static function register(): void
     {
         try {
+            $locator = app(ToolLocator::class);
+            $distroRunning = ! $locator->isWindows() || app(Wsl::class)->distroIsRunning();
+
             $recentProjects = Project::query()
                 ->latest('id')
                 ->get()
-                ->filter(fn (Project $p): bool => $p->existsOnHost())
+                ->filter(fn (Project $p): bool => $p->existsOnHost($distroRunning))
                 ->take(5);
         } catch (\Throwable) {
             $recentProjects = collect();

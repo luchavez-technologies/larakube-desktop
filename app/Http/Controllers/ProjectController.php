@@ -33,6 +33,7 @@ use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\Runtime\WslDistro;
 use App\Services\TerminalLauncher;
+use App\Services\Wsl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -108,8 +109,10 @@ class ProjectController extends Controller
         $stackByIp = collect($stacks)->filter(fn (array $s): bool => ! empty($s['ip']))->keyBy('ip');
         $stackByContext = collect($stacks)->filter(fn (array $s): bool => ! empty($s['context']))->keyBy('context');
 
-        $projects = Project::query()->visible()->with('server')->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads, $serverByIp, $serverByContext, $stackByIp, $stackByContext): array {
-            $inspection = $this->inspector->inspect($project->path);
+        $distroRunning = ! $locator->isWindows() || app(Wsl::class)->distroIsRunning();
+
+        $projects = Project::query()->visible()->with('server')->latest('id')->get()->map(function (Project $project) use ($scaffolds, $activeRuns, $workloads, $serverByIp, $serverByContext, $stackByIp, $stackByContext, $distroRunning): array {
+            $inspection = $this->inspector->inspect($project->path, allowWslFilesystem: $distroRunning, projectModel: $project);
             $activeRun = $activeRuns->get($project->id);
 
             $matchedServer = $project->server !== null
