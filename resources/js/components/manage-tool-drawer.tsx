@@ -11,7 +11,7 @@ import {
     Key,
     Server,
     ArrowRightLeft,
-    PanelsTopLeft,
+    ArrowRight,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import StatusPill from '@/components/status-pill';
@@ -201,30 +201,6 @@ export default function ManageToolDrawer({
                                 <ExternalLink className="size-4" />
                                 <span>Open {name}</span>
                             </ExternalLinkButton>
-                            <Link
-                                href={
-                                    showApp(
-                                        {
-                                            server: server.name,
-                                            tool: tool.tool,
-                                        },
-                                        {
-                                            query: tool.host
-                                                ? { domain: tool.host }
-                                                : {},
-                                        },
-                                    ).url
-                                }
-                                className={buttonClass(
-                                    'secondary',
-                                    'md',
-                                    'shrink-0 gap-2',
-                                )}
-                                title={`Configuration, Secrets, logs and images for ${name}`}
-                            >
-                                <PanelsTopLeft className="size-4" />
-                                <span>App page</span>
-                            </Link>
                             <div className="shrink-0 rounded-xl bg-badge p-1 ring-1 ring-line/60">
                                 <QrCodePopover
                                     url={url}
@@ -576,11 +552,30 @@ export default function ManageToolDrawer({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end border-t border-line px-6 py-3.5">
+                <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-3.5">
                     <Button variant="secondary" size="sm" onClick={onClose}>
                         <XCircle className="size-3.5" />
                         <span>Close</span>
                     </Button>
+                    {tool.installed && (
+                        <Link
+                            href={
+                                showApp(
+                                    { server: server.name, tool: tool.tool },
+                                    {
+                                        query: tool.host
+                                            ? { domain: tool.host }
+                                            : {},
+                                    },
+                                ).url
+                            }
+                            className={buttonClass('primary', 'sm', 'gap-1.5')}
+                            title={`Configuration, Secrets, logs and images for ${name}`}
+                        >
+                            <span>Open app page</span>
+                            <ArrowRight className="size-3.5" />
+                        </Link>
+                    )}
                 </div>
             </div>
         </div>
