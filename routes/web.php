@@ -7,6 +7,7 @@ use App\Http\Controllers\CloudflareController;
 use App\Http\Controllers\ClusterAccessController;
 use App\Http\Controllers\ClusterToolController;
 use App\Http\Controllers\ClusterToolEnvController;
+use App\Http\Controllers\ClusterToolInspectController;
 use App\Http\Controllers\CompanionController;
 use App\Http\Controllers\ContextController;
 use App\Http\Controllers\DashboardController;
@@ -279,6 +280,9 @@ Route::post('/servers/{server}/apps/{tool}/rebind', [ClusterToolController::clas
 Route::post('/servers/{server}/apps/{tool}/wire', [ClusterToolController::class, 'wire'])->name('servers.apps.wire');
 Route::post('/servers/{server}/apps/{tool}/unwire', [ClusterToolController::class, 'unwire'])->name('servers.apps.unwire');
 Route::delete('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.apps.destroy');
+Route::get('/servers/{server}/apps/{tool}/resources', [ClusterToolInspectController::class, 'resources'])->name('servers.apps.resources');
+Route::post('/servers/{server}/apps/{tool}/resources/reveal', [ClusterToolInspectController::class, 'reveal'])->name('servers.apps.resources.reveal');
+Route::get('/servers/{server}/apps/{tool}/logs', [ClusterToolInspectController::class, 'logs'])->name('servers.apps.logs');
 Route::get('/servers/{server}/apps/{tool}/env', [ClusterToolEnvController::class, 'status'])->name('servers.apps.env.status');
 Route::post('/servers/{server}/apps/{tool}/env', [ClusterToolEnvController::class, 'update'])->name('servers.apps.env.update');
 

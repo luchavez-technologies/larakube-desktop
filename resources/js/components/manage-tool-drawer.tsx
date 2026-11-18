@@ -1,34 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Form } from '@inertiajs/react';
+import { Form, Link } from '@inertiajs/react';
 import {
     X,
     ExternalLink,
-    Trash2,
     XCircle,
     Plus,
     Globe,
-    Layers,
-    Box,
-    Database,
     Shield,
     Mail,
     Key,
     Server,
     ArrowRightLeft,
+    PanelsTopLeft,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
-import ImageRef, { PulledDigests } from '@/components/image-ref';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import CopyButton from '@/components/copy-button';
 import QrCodePopover from '@/components/qr-code-popover';
 import HostPicker from '@/components/host-picker';
-import ToolEnvCard from '@/components/tool-env-card';
+import { show as showApp } from '@/routes/servers/apps';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
-import { destroy, rebind } from '@/routes/servers/tools';
+import { rebind } from '@/routes/servers/tools';
 import {
     toolName,
     toolTagline,
@@ -77,9 +73,6 @@ export default function ManageToolDrawer({
     useRightDrawerOpen(true);
 
     const [slidIn, setSlidIn] = useState(false);
-    const [isRemoving, setIsRemoving] = useState(false);
-    const [typedConfirm, setTypedConfirm] = useState('');
-    const [purge, setPurge] = useState(false);
     const [isRebinding, setIsRebinding] = useState(false);
     const [newHost, setNewHost] = useState('');
     const [wireSso, setWireSso] = useState(tool.sso === 'wired');
@@ -128,12 +121,6 @@ export default function ManageToolDrawer({
             ],
         ] as const
     ).filter(([, , value]) => value !== 'N/A' && value !== '—');
-
-    const hasCommons =
-        tool.commons &&
-        ((tool.commons.databases && tool.commons.databases.length > 0) ||
-            (tool.commons.redis && tool.commons.redis.length > 0) ||
-            (tool.commons.buckets && tool.commons.buckets.length > 0));
 
     return (
         <div
@@ -214,6 +201,30 @@ export default function ManageToolDrawer({
                                 <ExternalLink className="size-4" />
                                 <span>Open {name}</span>
                             </ExternalLinkButton>
+                            <Link
+                                href={
+                                    showApp(
+                                        {
+                                            server: server.name,
+                                            tool: tool.tool,
+                                        },
+                                        {
+                                            query: tool.host
+                                                ? { domain: tool.host }
+                                                : {},
+                                        },
+                                    ).url
+                                }
+                                className={buttonClass(
+                                    'secondary',
+                                    'md',
+                                    'shrink-0 gap-2',
+                                )}
+                                title={`Configuration, Secrets, logs and images for ${name}`}
+                            >
+                                <PanelsTopLeft className="size-4" />
+                                <span>App page</span>
+                            </Link>
                             <div className="shrink-0 rounded-xl bg-badge p-1 ring-1 ring-line/60">
                                 <QrCodePopover
                                     url={url}
@@ -534,167 +545,6 @@ export default function ManageToolDrawer({
                             </div>
                         </div>
                     )}
-
-                    {/* Custom Environment Variables */}
-                    {tool.installed && (
-                        <ToolEnvCard server={server} tool={tool} />
-                    )}
-
-                    {/* Components & Workloads Card (if multi-component) */}
-                    {tool.components && tool.components.length > 1 && (
-                        <div className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-                            <div className="mb-3 flex items-center justify-between">
-                                <span className="text-[11px] font-semibold tracking-wider text-faint uppercase">
-                                    Components ({tool.components.length})
-                                </span>
-                                <Layers className="size-3.5 text-faint" />
-                            </div>
-                            <div className="space-y-2">
-                                {tool.components.map((comp) => (
-                                    <div
-                                        key={comp.key}
-                                        className="flex items-center justify-between rounded-xl bg-paper px-3 py-2 text-xs"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="truncate font-medium text-ink">
-                                                    {comp.label}
-                                                </span>
-                                                <span className="font-mono text-[11px] text-soft">
-                                                    {comp.deployment}
-                                                </span>
-                                            </div>
-                                            {comp.description && (
-                                                <p className="mt-0.5 text-[10px] text-soft">
-                                                    {comp.description}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-1.5">
-                                            <StatusPill
-                                                tone={
-                                                    comp.role === 'primary'
-                                                        ? 'ok'
-                                                        : 'muted'
-                                                }
-                                            >
-                                                {comp.role}
-                                            </StatusPill>
-                                            {comp.backup && (
-                                                <span className="rounded border border-brand/20 bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                                                    Backup
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Images: exactly what runs, copyable, so people can verify versions themselves */}
-                    {(tool.update?.containers?.length ?? 0) > 0 && (
-                        <div className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-                            <div className="mb-3 flex items-center justify-between">
-                                <span className="text-[11px] font-semibold tracking-wider text-faint uppercase">
-                                    Images ({tool.update?.containers?.length})
-                                </span>
-                                <Box className="size-3.5 text-faint" />
-                            </div>
-                            <div className="space-y-1.5">
-                                {tool.update?.containers?.map((container) => (
-                                    <div
-                                        key={`${container.component}/${container.container}`}
-                                        className="rounded-xl bg-paper px-3 py-2"
-                                    >
-                                        <div className="mb-0.5 flex items-center gap-1.5 text-[11px]">
-                                            <span className="font-medium text-ink">
-                                                {container.component}
-                                            </span>
-                                            {container.container !==
-                                                container.component && (
-                                                <span className="text-faint">
-                                                    / {container.container}
-                                                </span>
-                                            )}
-                                            {container.primary && (
-                                                <StatusPill tone="ok">
-                                                    main
-                                                </StatusPill>
-                                            )}
-                                        </div>
-                                        <ImageRef container={container} />
-                                        <PulledDigests
-                                            digests={container.digests ?? []}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="mt-2.5 text-[10px] leading-relaxed text-soft">
-                                Copy any image to look it up on its registry.
-                                "Pulled" is the exact build the pods run. An
-                                arrow shows the version this LaraKube CLI build
-                                installs on update.
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Commons Backing Services */}
-                    {hasCommons && (
-                        <div className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-                            <div className="mb-2 flex items-center justify-between">
-                                <span className="text-[11px] font-semibold tracking-wider text-faint uppercase">
-                                    Plex Commons Backing
-                                </span>
-                                <Database className="size-3.5 text-faint" />
-                            </div>
-                            <p className="mb-3 text-[11px] text-soft">
-                                Holds shared services on this server's Plex
-                                Commons cluster.
-                            </p>
-                            <div className="space-y-2 text-xs">
-                                {tool.commons?.databases &&
-                                    tool.commons.databases.length > 0 && (
-                                        <div className="flex items-center justify-between rounded-xl bg-paper px-3 py-2">
-                                            <span className="text-soft">
-                                                Database
-                                            </span>
-                                            <span className="font-mono font-medium text-ink">
-                                                {tool.commons.databases.join(
-                                                    ', ',
-                                                )}
-                                            </span>
-                                        </div>
-                                    )}
-                                {tool.commons?.redis &&
-                                    tool.commons.redis.length > 0 && (
-                                        <div className="flex items-center justify-between rounded-xl bg-paper px-3 py-2">
-                                            <span className="text-soft">
-                                                Cache / Queues
-                                            </span>
-                                            <span className="font-mono font-medium text-ink">
-                                                Redis (
-                                                {tool.commons.redis.join(', ')})
-                                            </span>
-                                        </div>
-                                    )}
-                                {tool.commons?.buckets &&
-                                    tool.commons.buckets.length > 0 && (
-                                        <div className="flex items-center justify-between rounded-xl bg-paper px-3 py-2">
-                                            <span className="text-soft">
-                                                Object Storage
-                                            </span>
-                                            <span className="font-mono font-medium text-ink">
-                                                {tool.commons.buckets.join(
-                                                    ', ',
-                                                )}
-                                            </span>
-                                        </div>
-                                    )}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Deploy Another (Multi-instance) */}
                     {canMulti && onDeployAnother && (
                         <div className="rounded-2xl border border-line bg-paper/50 p-4">
@@ -723,152 +573,6 @@ export default function ManageToolDrawer({
                             </div>
                         </div>
                     )}
-
-                    {/* Danger Zone / Remove */}
-                    <div className="rounded-2xl border border-line bg-surface p-4">
-                        {!isRemoving ? (
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <h4 className="text-xs font-semibold text-ink">
-                                        Remove {name}
-                                    </h4>
-                                    <p className="mt-0.5 text-[11px] text-soft">
-                                        Removes {name} and its workloads from{' '}
-                                        {server.name}.
-                                    </p>
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() => setIsRemoving(true)}
-                                >
-                                    <Trash2 className="size-3.5" />
-                                    <span>Remove…</span>
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="space-y-3 rounded-xl border border-accent/40 bg-accent-tint/30 p-3.5">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-accent">
-                                    <Trash2 className="size-4" />
-                                    <span>Confirm removal of {name}?</span>
-                                </div>
-                                <p className="text-xs leading-relaxed text-soft">
-                                    This removes{' '}
-                                    <strong className="text-ink">{name}</strong>{' '}
-                                    from{' '}
-                                    <strong className="text-ink">
-                                        {server.name}
-                                    </strong>
-                                    . It cannot be undone.
-                                </p>
-                                <Form
-                                    action={destroy({
-                                        server: server.name,
-                                        tool: tool.tool,
-                                    })}
-                                    // The run HUD takes over; the card shows "Removing…".
-                                    onSuccess={onClose}
-                                    className="space-y-3"
-                                >
-                                    {({ errors, processing }) => (
-                                        <>
-                                            {tool.host && (
-                                                <input
-                                                    type="hidden"
-                                                    name="domain"
-                                                    value={tool.host}
-                                                />
-                                            )}
-                                            <label className="block">
-                                                <span className="mb-1 block text-xs font-medium text-soft">
-                                                    Type{' '}
-                                                    <code className="font-mono text-accent">
-                                                        {tool.tool}
-                                                    </code>{' '}
-                                                    to confirm:
-                                                </span>
-                                                <input
-                                                    name="confirm"
-                                                    value={typedConfirm}
-                                                    onChange={(e) =>
-                                                        setTypedConfirm(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder={tool.tool}
-                                                    autoFocus
-                                                    autoComplete="off"
-                                                    spellCheck={false}
-                                                    className="w-full rounded-lg border-0 bg-surface px-3 py-2 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-accent"
-                                                />
-                                                {errors.confirm && (
-                                                    <span className="mt-1 block text-xs text-accent">
-                                                        {errors.confirm}
-                                                    </span>
-                                                )}
-                                            </label>
-                                            <label className="flex items-start gap-2.5 rounded-lg bg-surface/80 p-2.5 ring-1 ring-line/50">
-                                                <input
-                                                    type="checkbox"
-                                                    name="purge"
-                                                    value="1"
-                                                    checked={purge}
-                                                    onChange={(e) =>
-                                                        setPurge(
-                                                            e.target.checked,
-                                                        )
-                                                    }
-                                                    className="mt-0.5 accent-accent"
-                                                />
-                                                <span className="text-[11px] leading-relaxed text-ink">
-                                                    <span className="font-medium">
-                                                        Also destroy its data
-                                                    </span>{' '}
-                                                    — database and uploaded
-                                                    files are permanently
-                                                    deleted.
-                                                </span>
-                                            </label>
-                                            <div className="flex items-center justify-end gap-2 pt-1">
-                                                <Button
-                                                    type="button"
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setIsRemoving(false);
-                                                        setTypedConfirm('');
-                                                    }}
-                                                >
-                                                    <XCircle className="size-3.5" />
-                                                    <span>Cancel</span>
-                                                </Button>
-                                                <Button
-                                                    type="submit"
-                                                    variant="dangerFill"
-                                                    size="sm"
-                                                    disabled={
-                                                        typedConfirm !==
-                                                            tool.tool ||
-                                                        processing
-                                                    }
-                                                >
-                                                    <Trash2 className="size-3.5" />
-                                                    <span>
-                                                        {processing
-                                                            ? 'Starting…'
-                                                            : purge
-                                                              ? `Remove & Purge`
-                                                              : `Remove ${name}`}
-                                                    </span>
-                                                </Button>
-                                            </div>
-                                        </>
-                                    )}
-                                </Form>
-                            </div>
-                        )}
-                    </div>
                 </div>
 
                 {/* Footer */}

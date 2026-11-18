@@ -1,16 +1,21 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import AppConfigurationPanel from '@/components/app-configuration-panel';
+import AppLogsPanel from '@/components/app-logs-panel';
 import Button, { buttonClass } from '@/components/button';
 import BackingServicesCard from '@/components/backing-services-card';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
+import ImageRef, { PulledDigests } from '@/components/image-ref';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import { ExternalLink, Plug, RotateCw, Unlink } from 'lucide-react';
+import { useServerDataReload } from '@/lib/native-events';
 import { ExternalLinkButton } from '@/lib/open-external';
+import { cn } from '@/lib/utils';
 import { destroy, index as toolsIndex } from '@/routes/servers/tools';
 import {
     toolName,
@@ -46,6 +51,28 @@ function WiringPill({ value }: { value: Wiring }) {
  */
 const REAPPLIABLE = ['sso', 'mail', 'meet'];
 
+const TABS = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'configuration', label: 'Configuration' },
+    { key: 'logs', label: 'Logs' },
+    { key: 'images', label: 'Images' },
+] as const;
+
+type Tab = (typeof TABS)[number]['key'];
+
+/** The tab named in `?tab=`, so a reload or a shared link opens the same one. */
+function initialTab(): Tab {
+    if (typeof window === 'undefined') {
+        return 'overview';
+    }
+
+    const requested = new URLSearchParams(window.location.search).get('tab');
+
+    return TABS.some((tab) => tab.key === requested)
+        ? (requested as Tab)
+        : 'overview';
+}
+
 export default function ShowTool({
     server,
     tool,
@@ -57,6 +84,16 @@ export default function ShowTool({
     backing?: BackingServices | null;
 }) {
     const [removing, setRemoving] = useState(false);
+    const [tab, setTab] = useState<Tab>(initialTab);
+
+    useServerDataReload(server.name, { tools: ['tool'] });
+
+    function selectTab(next: Tab) {
+        setTab(next);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', next);
+        window.history.replaceState(window.history.state, '', url);
+    }
     const name = toolName(tool);
     const tagline = toolTagline(tool);
     const cats = toolCategories(tool);
@@ -160,7 +197,72 @@ export default function ShowTool({
                 }
             />
 
-            {tool.installed ? (
+            {tool.installed && (
+                <div
+                    role="tablist"
+                    aria-label={`${name} sections`}
+                    className="mb-5 flex gap-1 border-b border-line"
+                >
+                    {TABS.map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={tab === item.key}
+                            onClick={() => selectTab(item.key)}
+                            className={cn(
+                                '-mb-px cursor-pointer border-b-2 px-3 py-2 text-[13px] font-medium transition',
+                                tab === item.key
+                                    ? 'border-ink text-ink'
+                                    : 'border-transparent text-soft hover:text-ink',
+                            )}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {tool.installed && tab === 'configuration' && (
+                <AppConfigurationPanel server={server} tool={tool} />
+            )}
+
+            {tool.installed && tab === 'logs' && (
+                <AppLogsPanel server={server} tool={tool} />
+            )}
+
+            {tool.installed && tab === 'images' && (
+                <Card
+                    label={`Images (${tool.update?.containers?.length ?? 0})`}
+                >
+                    <p className="mb-3 text-xs leading-relaxed text-soft">
+                        Exactly what runs. Copy an image to look it up on its
+                        registry; "Pulled" is the exact build the pods run.
+                    </p>
+                    <div className="space-y-3">
+                        {(tool.update?.containers ?? []).map((container) => (
+                            <div
+                                key={`${container.component}/${container.container}`}
+                                className="rounded-xl bg-paper p-3"
+                            >
+                                <div className="mb-1 text-[11px] font-medium text-soft">
+                                    {container.component}
+                                    {container.container !==
+                                        container.component &&
+                                        ` / ${container.container}`}
+                                    {container.primary && ' · main'}
+                                </div>
+                                <ImageRef container={container} />
+                                <PulledDigests
+                                    digests={container.digests ?? []}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            {!tool.installed || tab !== 'overview' ? null : (
                 <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
                     <div className="space-y-5">
                         <Card label="Access">
@@ -388,7 +490,9 @@ export default function ShowTool({
                         </Card>
                     </div>
                 </div>
-            ) : (
+            )}
+
+            {!tool.installed && (
                 <Card>
                     <p className="py-2 text-sm text-soft">
                         {name} isn't installed on {server.name}. Install it from
