@@ -73,6 +73,14 @@ export default function AppConfigurationPanel({
         void load();
     }, [load]);
 
+    // Your own variables have their own card below; an empty ConfigMap or
+    // Secret (the custom overlay before anything is set) says nothing.
+    const shown = resources?.filter(
+        (resource) =>
+            resource.keys.length > 0 &&
+            !resource.keys.every((key) => key.owner === 'custom'),
+    );
+
     return (
         <div className="space-y-5">
             <Card
@@ -92,8 +100,9 @@ export default function AppConfigurationPanel({
                 }
             >
                 <p className="mb-3 text-xs leading-relaxed text-soft">
-                    Everything this app reads its settings from. Secret values
-                    stay hidden until you reveal one.
+                    Everything this app reads its settings from, apart from your
+                    own variables (below). Secret values stay hidden until you
+                    reveal one.
                 </p>
                 {error && <p className="text-xs text-accent">{error}</p>}
                 {resources === null && !error && (
@@ -106,13 +115,13 @@ export default function AppConfigurationPanel({
                         ))}
                     </div>
                 )}
-                {resources?.length === 0 && (
+                {shown?.length === 0 && (
                     <p className="text-xs text-soft">
                         This app uses no ConfigMaps or Secrets.
                     </p>
                 )}
                 <div className="space-y-3">
-                    {resources?.map((resource) => (
+                    {shown?.map((resource) => (
                         <ResourceBlock
                             key={`${resource.kind}/${resource.name}`}
                             resource={resource}
