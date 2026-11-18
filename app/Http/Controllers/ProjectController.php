@@ -924,6 +924,12 @@ class ProjectController extends Controller
     {
         $validated = $request->validate([
             'environment' => ['nullable', 'string', 'alpha_dash'],
+            'git_remote' => ['nullable', 'string', 'max:100'],
+            'ci_platform' => ['nullable', 'string', Rule::in(['github', 'forgejo', 'gitlab'])],
+            'tea_login' => ['nullable', 'string', 'max:100'],
+            'save_target_only' => ['boolean'],
+            'forgejo_host' => ['nullable', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(:\d{1,5})?$/i'],
+            'git_login_token' => ['nullable', 'string', 'max:512'],
             'registry' => ['nullable', 'string', Rule::in(['ghcr', 'dockerhub', 'gitlab', 'forgejo', 'gar'])],
             'image' => ['nullable', 'string', 'max:255'],
             'branch' => ['nullable', 'string', 'max:255'],
@@ -934,11 +940,89 @@ class ProjectController extends Controller
             'no_semgrep' => ['boolean'],
             'no_trivy' => ['boolean'],
             'rotate' => ['boolean'],
-        ]);
+        ], ['forgejo_host.regex' => 'Enter a valid Forgejo domain like git.example.com.']);
 
         $environment = $validated['environment'] ?? self::ENVIRONMENT;
+
+        if ($request->filled('git_remote') || $request->filled('ci_platform') || $request->has('tea_login')) {
+            $blueprintPath = "{$this->hostPath($project->path)}/.larakube.json";
+            if (is_file($blueprintPath)) {
+                $data = json_decode((string) file_get_contents($blueprintPath), true);
+                if (is_array($data)) {
+                    if (! is_array($data['environments'] ?? null)) {
+                        $data['environments'] = [];
+                    }
+                    if (! is_array($data['environments'][$environment] ?? null)) {
+                        $data['environments'][$environment] = [];
+                    }
+                    if ($request->filled('git_remote')) {
+                        $data['environments'][$environment]['gitRemote'] = $validated['git_remote'];
+                    }
+                    if ($request->filled('ci_platform')) {
+                        $data['environments'][$environment]['ciPlatform'] = $validated['ci_platform'];
+                    }
+                    if ($request->has('tea_login')) {
+                        $teaLogin = trim((string) ($validated['tea_login'] ?? ''));
+                        if ($teaLogin !== '') {
+                            $data['environments'][$environment]['teaLogin'] = $teaLogin;
+                        } else {
+                            unset($data['environments'][$environment]['teaLogin']);
+                        }
+                    }
+                    file_put_contents($blueprintPath, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+                    $this->inspector->inspect($project->path);
+                }
+            }
+        }
+
+        if ($request->filled('git_login_token')) {
+            $token = trim((string) ($validated['git_login_token'] ?? ''));
+            $forgejoHost = strtolower(trim((string) ($validated['forgejo_host'] ?? '')));
+
+            if ($forgejoHost === '') {
+                $inspection = $this->inspector->inspect($project->path);
+                $forgejoHost = strtolower(trim((string) ($inspection['environments'][$environment]['ci']['forgejoHost'] ?? '')));
+            }
+
+            if ($forgejoHost === '') {
+                return back()->withErrors(['git_login_token' => 'Enter your Forgejo domain (e.g. git.example.com).']);
+            }
+
+            $cli = $this->locator->find('larakube');
+            if ($cli === null) {
+                return back()->withErrors(['git_login_token' => 'LaraKube CLI could not be found.']);
+            }
+
+            $result = $this->locator->run(
+                [$cli, 'git:login', $environment, "--domain={$forgejoHost}", '--json', '--no-interaction'],
+                timeout: 30,
+                environment: ['GITEA_SERVER_TOKEN' => $token],
+                cwd: $project->path,
+            );
+
+            $decoded = json_decode(trim($result->output()), true);
+            $cliSucceeded = $result->successful() && (! is_array($decoded) || ($decoded['success'] ?? true) !== false);
+
+            if (! $cliSucceeded) {
+                $error = is_array($decoded) && is_string($decoded['error'] ?? null) && $decoded['error'] !== ''
+                    ? $decoded['error']
+                    : (trim($result->errorOutput() ?: $result->output()) ?: "tea could not log in to {$forgejoHost}.");
+
+                return back()->withErrors(['git_login_token' => $error]);
+            }
+
+            $this->inspector->inspect($project->path);
+        }
+
+        if ($request->boolean('save_target_only')) {
+            return back();
+        }
+
         $args = ['cloud:configure', $environment, '--only=ci'];
 
+        if ($request->filled('ci_platform')) {
+            $args[] = "--platform={$request->string('ci_platform')->toString()}";
+        }
         if ($request->boolean('rotate')) {
             $args[] = '--rotate';
         }

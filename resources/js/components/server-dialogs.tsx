@@ -10,6 +10,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import Button from '@/components/button';
+import ConfirmModal from '@/components/confirm-modal';
 import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import { remove as removeContext } from '@/routes/context';
@@ -348,7 +349,7 @@ export function ServerActions({
     reachable?: boolean;
 }) {
     const [dialog, setDialog] = useState<
-        'restart' | 'destroy' | 'remove' | null
+        'restart' | 'destroy' | 'remove' | 'setup' | null
     >(null);
     const made = server.kind !== 'discovered';
     const canRestart =
@@ -365,13 +366,12 @@ export function ServerActions({
         server.status === 'incomplete';
 
     const setUp = () => {
-        if (
-            window.confirm(
-                `This sets up ${server.name} (already running) for LaraKube — ingress and local DNS, nothing about ${server.name} itself is reinstalled or reconfigured. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?`,
-            )
-        ) {
-            router.post('/setup/local');
-        }
+        setDialog('setup');
+    };
+
+    const confirmSetUp = () => {
+        setDialog(null);
+        router.post('/setup/local');
     };
 
     if (!made && !stale && !needsSetup) {
@@ -459,6 +459,18 @@ export function ServerActions({
                     onClose={() => setDialog(null)}
                 />
             )}
+            <ConfirmModal
+                isOpen={dialog === 'setup'}
+                onClose={() => setDialog(null)}
+                onConfirm={confirmSetUp}
+                title={`Set up ${server.name} for LaraKube?`}
+                description={`This sets up ${server.name} (already running) with Traefik ingress and local DNS. Nothing about ${server.name} itself is reinstalled or reconfigured.`}
+                notice="It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it."
+                confirmLabel="Continue Setup"
+                tone="warn"
+                icon={<Wrench className="size-5" />}
+                confirmIcon={<Wrench className="size-3.5" />}
+            />
         </>
     );
 }

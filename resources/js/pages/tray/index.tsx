@@ -17,6 +17,7 @@ import {
     Plus,
 } from 'lucide-react';
 import TrayLayout from '@/layouts/tray-layout';
+import ConfirmModal from '@/components/confirm-modal';
 import ToolLogo, { brandIcon } from '@/components/tool-logo';
 import EditorLogo from '@/components/editor-logo';
 import ProviderLogo from '@/components/provider-logo';
@@ -348,16 +349,14 @@ export default function TrayIndex(initialProps: TrayProps) {
         });
     };
 
+    const [confirmStopLocalOpen, setConfirmStopLocalOpen] = useState(false);
+
     const stopLocalFleet = () => {
-        const isRemote = activeServer && !activeServer.isLocal;
-        const confirmText = isRemote
-            ? `Stop all local development containers on this computer? (Remote cluster "${activeServer?.name}" will not be affected.)`
-            : 'Stop all local development workloads and containers?';
+        setConfirmStopLocalOpen(true);
+    };
 
-        if (!confirm(confirmText)) {
-            return;
-        }
-
+    const confirmStopLocalFleet = () => {
+        setConfirmStopLocalOpen(false);
         startTransition(async () => {
             setActionMessage('Stopping local workloads...');
             const res = await sendJson<{ success: boolean; message?: string }>(
@@ -1321,6 +1320,21 @@ export default function TrayIndex(initialProps: TrayProps) {
                     </div>
                 </div>
             </div>
+            <ConfirmModal
+                isOpen={confirmStopLocalOpen}
+                onClose={() => setConfirmStopLocalOpen(false)}
+                onConfirm={confirmStopLocalFleet}
+                title="Stop local workloads?"
+                description={
+                    activeServer && !activeServer.isLocal
+                        ? `Stop all local development containers on this computer? Remote cluster "${activeServer.name}" will not be affected.`
+                        : 'Stop all local development workloads and containers?'
+                }
+                confirmLabel="Stop Local"
+                tone="danger"
+                icon={<PowerOff className="size-5" />}
+                confirmIcon={<PowerOff className="size-3.5" />}
+            />
         </TrayLayout>
     );
 }

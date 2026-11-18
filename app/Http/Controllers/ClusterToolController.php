@@ -132,7 +132,7 @@ class ClusterToolController extends Controller
         ]);
     }
 
-    public function domains(string $server, ClusterStatus $status, DomainCatalog $domains, GlobalSettings $settings): JsonResponse
+    public function domains(Request $request, string $server, ClusterStatus $status, DomainCatalog $domains, GlobalSettings $settings): JsonResponse
     {
         $stack = $this->readyServer($server);
         $context = (string) $stack['context'];
@@ -153,7 +153,7 @@ class ClusterToolController extends Controller
 
         return response()->json([
             'domains' => $serverDomains,
-            'activeCommonsServices' => $this->activeServices($status, $context),
+            'activeCommonsServices' => $request->boolean('domains_only') ? [] : $this->activeServices($status, $context),
             'localTld' => $localTld,
             'isLocal' => $isLocal,
         ]);

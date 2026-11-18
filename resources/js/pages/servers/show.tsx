@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import ConfirmModal from '@/components/confirm-modal';
 import CopyButton from '@/components/copy-button';
 import DnsTlsFields, {
     dnsProviderLabel,
@@ -985,19 +986,21 @@ function DomainRow({
     onSetUp: () => void;
 }) {
     const [disconnecting, setDisconnecting] = useState<string | null>(null);
+    const [groupToDisconnect, setGroupToDisconnect] = useState<DnsGroup | null>(
+        null,
+    );
 
     const handleDisconnect = (group: DnsGroup) => {
-        if (
-            !confirm(
-                `Disconnect domain group "${group.group}" from ${server.name}?\n\nDNS reconciliation will stop for: ${group.zones.join(', ')}.\n\nExisting records in Cloudflare will not be deleted.`,
-            )
-        ) {
-            return;
-        }
+        setGroupToDisconnect(group);
+    };
 
-        setDisconnecting(group.group);
+    const confirmDisconnect = () => {
+        if (!groupToDisconnect) return;
+        const target = groupToDisconnect;
+        setGroupToDisconnect(null);
+        setDisconnecting(target.group);
         router.delete(`/servers/${server.name}/dns`, {
-            data: { group: group.group },
+            data: { group: target.group },
             onFinish: () => setDisconnecting(null),
         });
     };
@@ -1109,6 +1112,27 @@ function DomainRow({
                     </li>
                 ))}
             </ul>
+            <ConfirmModal
+                isOpen={groupToDisconnect !== null}
+                onClose={() => setGroupToDisconnect(null)}
+                onConfirm={confirmDisconnect}
+                title={`Disconnect "${groupToDisconnect?.group ?? ''}"?`}
+                description={
+                    <>
+                        DNS reconciliation on <strong>{server.name}</strong>{' '}
+                        will stop for:{' '}
+                        <span className="font-mono text-ink">
+                            {groupToDisconnect?.zones.join(', ')}
+                        </span>
+                        .
+                    </>
+                }
+                notice="Existing DNS records at your provider will not be deleted."
+                confirmLabel="Disconnect Domain"
+                tone="danger"
+                icon={<Trash2 className="size-5" />}
+                confirmIcon={<Trash2 className="size-3.5" />}
+            />
         </div>
     );
 }
@@ -1129,16 +1153,14 @@ function SslRow({
     const enabled = report?.challenge === 'dns';
     const providerLabel = dnsProviderLabel(report?.provider);
     const [pruning, setPruning] = useState(false);
+    const [confirmPruneOpen, setConfirmPruneOpen] = useState(false);
 
     const handlePrune = () => {
-        if (
-            !confirm(
-                `Prune ${unused.length} unused certificate(s) from Traefik on ${server.name}?\n\n• ${unused.join('\n• ')}\n\nTraefik will restart briefly while the certificate store is updated.`,
-            )
-        ) {
-            return;
-        }
+        setConfirmPruneOpen(true);
+    };
 
+    const confirmPrune = () => {
+        setConfirmPruneOpen(false);
         setPruning(true);
         router.post(
             `/servers/${server.name}/tls/prune`,
@@ -1222,6 +1244,26 @@ function SslRow({
                     </Button>
                 </div>
             )}
+            <ConfirmModal
+                isOpen={confirmPruneOpen}
+                onClose={() => setConfirmPruneOpen(false)}
+                onConfirm={confirmPrune}
+                title={`Prune ${unused.length} unused certificate${unused.length === 1 ? '' : 's'}?`}
+                description={
+                    <>
+                        Unused certificates to remove from Traefik on{' '}
+                        <strong>{server.name}</strong>:{' '}
+                        <span className="font-mono text-ink">
+                            {unused.join(', ')}
+                        </span>
+                    </>
+                }
+                notice="Traefik will restart briefly while the certificate store is updated."
+                confirmLabel="Prune Certificates"
+                tone="warn"
+                icon={<Trash2 className="size-5" />}
+                confirmIcon={<Trash2 className="size-3.5" />}
+            />
         </div>
     );
 }

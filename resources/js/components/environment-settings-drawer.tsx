@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Form } from '@inertiajs/react';
+import { Form, router } from '@inertiajs/react';
 import {
     X,
     Server,
@@ -12,6 +12,8 @@ import {
     ChevronDown,
     ShieldCheck,
     ArrowRight,
+    CheckCircle2,
+    AlertTriangle,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import Button from '@/components/button';
@@ -19,6 +21,7 @@ import SelectMenu from '@/components/select-menu';
 import Redactable from '@/components/redactable';
 import ProviderLogo from '@/components/provider-logo';
 import HostPicker from '@/components/host-picker';
+import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import {
@@ -307,23 +310,174 @@ export function CiPipelineForm({
     onSuccess?: () => void;
     onSkip?: () => void;
 }) {
+    const remotes = useMemo(() => project.git?.remotes ?? [], [project.git]);
+    const initialPlatform =
+        currentCi?.platform ?? project.git?.platform ?? 'github';
+    const initialRemote = currentCi?.gitRemote ?? remotes[0]?.name ?? 'origin';
+
     const defaultRegistry =
         currentCi?.registry?.provider ??
-        (project.git?.platform === 'gitlab'
+        (initialPlatform === 'gitlab'
             ? 'gitlab'
-            : project.git?.platform === 'forgejo'
+            : initialPlatform === 'forgejo'
               ? 'forgejo'
               : 'ghcr');
     const defaultImage =
         currentCi?.registry?.image ??
+        currentCi?.repoSlug ??
         project.git?.repoSlug ??
         project.name.toLowerCase();
     const defaultBranch = currentCi?.branch ?? 'main';
 
+    const [gitRemote, setGitRemote] = useState(initialRemote);
+    const [ciPlatform, setCiPlatform] = useState(initialPlatform);
+    const [savingTarget, setSavingTarget] = useState(false);
     const [registry, setRegistry] = useState(defaultRegistry);
     const [image, setImage] = useState(defaultImage);
     const [branch, setBranch] = useState(defaultBranch);
     const [showSecurity, setShowSecurity] = useState(false);
+
+    const matchedRemoteHost = useMemo(() => {
+        const matched = remotes.find((r) => r.name === gitRemote);
+        return matched?.host && matched.host.includes('.') ? matched.host : '';
+    }, [gitRemote, remotes]);
+
+    const resolvedDefaultForgejoHost =
+        currentCi?.forgejoHost ??
+        (typeof currentCi?.registry?.host === 'string'
+            ? currentCi.registry.host
+            : '') ??
+        matchedRemoteHost;
+
+    const [forgejoHost, setForgejoHost] = useState(resolvedDefaultForgejoHost);
+    const [forgejoToken, setForgejoToken] = useState('');
+    const [connectingForgejo, setConnectingForgejo] = useState(false);
+    const [showReconnectForgejo, setShowReconnectForgejo] = useState(false);
+    const [forgejoError, setForgejoError] = useState<string | null>(null);
+    const [forgejoConnectedJustNow, setForgejoConnectedJustNow] =
+        useState(false);
+
+    useEffect(() => {
+        setGitRemote(currentCi?.gitRemote ?? remotes[0]?.name ?? 'origin');
+    }, [currentCi?.gitRemote, environment, remotes]);
+
+    useEffect(() => {
+        setCiPlatform(currentCi?.platform ?? project.git?.platform ?? 'github');
+    }, [currentCi?.platform, environment, project.git?.platform]);
+
+    useEffect(() => {
+        if (resolvedDefaultForgejoHost !== '') {
+            setForgejoHost(resolvedDefaultForgejoHost);
+        }
+    }, [resolvedDefaultForgejoHost, environment]);
+
+    function persistCiTarget(nextRemote: string, nextPlatform: string) {
+        setSavingTarget(true);
+        router.post(
+            configureCiRoute(project.id).url,
+            {
+                environment,
+                git_remote: nextRemote,
+                ci_platform: nextPlatform,
+                save_target_only: true,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setSavingTarget(false),
+            },
+        );
+    }
+
+    function handleConnectForgejo() {
+        const cleanHost = forgejoHost.trim();
+        const cleanToken = forgejoToken.trim();
+        if (cleanHost === '') {
+            setForgejoError(
+                'Enter your Forgejo domain (e.g. git.example.com).',
+            );
+            return;
+        }
+        if (cleanToken === '') {
+            setForgejoError('Paste a Forgejo personal access token.');
+            return;
+        }
+
+        setConnectingForgejo(true);
+        setForgejoError(null);
+        setForgejoConnectedJustNow(false);
+
+        router.post(
+            configureCiRoute(project.id).url,
+            {
+                environment,
+                ci_platform: 'forgejo',
+                git_remote: gitRemote,
+                forgejo_host: cleanHost,
+                git_login_token: cleanToken,
+                save_target_only: true,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    setForgejoToken('');
+                    setShowReconnectForgejo(false);
+                    setForgejoConnectedJustNow(true);
+                },
+                onError: (errs) => {
+                    setForgejoError(
+                        errs.git_login_token ??
+                            errs.forgejo_host ??
+                            'Could not log tea in to Forgejo.',
+                    );
+                },
+                onFinish: () => setConnectingForgejo(false),
+            },
+        );
+    }
+
+    function handleSelectPlatform(nextPlatform: string) {
+        setCiPlatform(nextPlatform);
+        if (
+            nextPlatform === 'forgejo' &&
+            (registry === 'ghcr' || registry === 'gitlab')
+        ) {
+            setRegistry('forgejo');
+        } else if (
+            nextPlatform === 'gitlab' &&
+            (registry === 'ghcr' || registry === 'forgejo')
+        ) {
+            setRegistry('gitlab');
+        } else if (
+            nextPlatform === 'github' &&
+            (registry === 'forgejo' || registry === 'gitlab')
+        ) {
+            setRegistry('ghcr');
+        }
+        persistCiTarget(gitRemote, nextPlatform);
+    }
+
+    function handleSelectRemote(nextRemote: string) {
+        setGitRemote(nextRemote);
+        const matched = remotes.find((r) => r.name === nextRemote);
+        const nextPlatform = matched?.platform ?? ciPlatform;
+        setCiPlatform(nextPlatform);
+        if (matched?.host && matched.host.includes('.')) {
+            setForgejoHost(matched.host);
+        }
+        if (matched?.repoSlug && !currentCi?.registry?.image) {
+            setImage(matched.repoSlug);
+        }
+        setForgejoError(null);
+        setForgejoConnectedJustNow(false);
+        persistCiTarget(nextRemote, nextPlatform);
+    }
+
+    const isTeaConnected = Boolean(currentCi?.teaLoggedIn);
+    const showForgejoTokenForm =
+        ciPlatform === 'forgejo' && (!isTeaConnected || showReconnectForgejo);
+    const trimmedForgejoHost = forgejoHost.trim();
 
     // Security Gate Toggles
     const [withTests, setWithTests] = useState(
@@ -355,6 +509,12 @@ export function CiPipelineForm({
                         name="environment"
                         value={environment}
                     />
+                    <input type="hidden" name="git_remote" value={gitRemote} />
+                    <input
+                        type="hidden"
+                        name="ci_platform"
+                        value={ciPlatform}
+                    />
                     <input type="hidden" name="registry" value={registry} />
                     <input type="hidden" name="branch" value={branch} />
                     <input type="hidden" name="image" value={image} />
@@ -372,21 +532,284 @@ export function CiPipelineForm({
                         <input type="hidden" name="no_trivy" value="1" />
                     )}
 
-                    {project.git?.platform && (
-                        <div className="flex items-center gap-2 rounded-xl border border-line/60 bg-paper/60 px-3 py-2 text-xs text-soft">
-                            {project.git.platform === 'gitlab' ? (
-                                <SiGitlab className="size-3.5 text-[#FC6D26]" />
-                            ) : project.git.platform === 'forgejo' ? (
-                                <SiForgejo className="size-3.5 text-[#FB532A]" />
-                            ) : (
-                                <SiGithub className="size-3.5 text-ink" />
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <div>
+                            <label className="mb-1 flex items-center justify-between text-xs font-medium text-ink">
+                                <span>Git Forge Platform</span>
+                                {savingTarget && (
+                                    <span className="text-[10px] font-normal text-soft">
+                                        Saving…
+                                    </span>
+                                )}
+                            </label>
+                            <SelectMenu
+                                value={ciPlatform}
+                                accent="servers"
+                                disabled={processing || savingTarget}
+                                triggerClassName="py-1.5 text-[13px] rounded-xl"
+                                onChange={handleSelectPlatform}
+                                options={[
+                                    {
+                                        value: 'forgejo',
+                                        label: 'Forgejo / Gitea Actions',
+                                        icon: (
+                                            <SiForgejo className="size-3.5 text-[#FB532A]" />
+                                        ),
+                                    },
+                                    {
+                                        value: 'github',
+                                        label: 'GitHub Actions',
+                                        icon: (
+                                            <SiGithub className="size-3.5 text-ink" />
+                                        ),
+                                    },
+                                    {
+                                        value: 'gitlab',
+                                        label: 'GitLab CI',
+                                        icon: (
+                                            <SiGitlab className="size-3.5 text-[#FC6D26]" />
+                                        ),
+                                    },
+                                ]}
+                            />
+                        </div>
+
+                        {remotes.length > 0 && (
+                            <div>
+                                <label className="mb-1 block text-xs font-medium text-ink">
+                                    Git Remote
+                                </label>
+                                <SelectMenu
+                                    value={gitRemote}
+                                    accent="servers"
+                                    disabled={processing || savingTarget}
+                                    triggerClassName="py-1.5 text-[13px] rounded-xl"
+                                    onChange={handleSelectRemote}
+                                    options={remotes.map((r) => ({
+                                        value: r.name,
+                                        label: r.name,
+                                        description: r.repoSlug || r.host,
+                                        icon:
+                                            r.platform === 'gitlab' ? (
+                                                <SiGitlab className="size-3.5 text-[#FC6D26]" />
+                                            ) : r.platform === 'forgejo' ? (
+                                                <SiForgejo className="size-3.5 text-[#FB532A]" />
+                                            ) : (
+                                                <SiGithub className="size-3.5 text-ink" />
+                                            ),
+                                    }))}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {ciPlatform === 'forgejo' && (
+                        <div className="space-y-2.5 rounded-xl border border-line bg-paper/70 px-3 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs font-medium text-ink">
+                                    <SiForgejo className="size-3.5 text-[#FB532A]" />
+                                    <span>Forgejo CLI (tea)</span>
+                                    {isTeaConnected ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[11px] font-medium text-ok">
+                                            <CheckCircle2 className="size-3" />
+                                            <span>
+                                                Connected
+                                                {currentCi?.teaLogin &&
+                                                currentCi.teaLogin !==
+                                                    trimmedForgejoHost
+                                                    ? ` (${currentCi.teaLogin})`
+                                                    : trimmedForgejoHost !== ''
+                                                      ? ` to ${trimmedForgejoHost}`
+                                                      : ''}
+                                            </span>
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-warn-tint px-2 py-0.5 text-[11px] font-medium text-warn">
+                                            <AlertTriangle className="size-3" />
+                                            <span>Not logged in</span>
+                                        </span>
+                                    )}
+                                </div>
+
+                                {isTeaConnected && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                            setShowReconnectForgejo(
+                                                (prev) => !prev,
+                                            )
+                                        }
+                                    >
+                                        <RotateCw className="size-3" />
+                                        <span>
+                                            {showReconnectForgejo
+                                                ? 'Hide'
+                                                : 'Reconnect'}
+                                        </span>
+                                    </Button>
+                                )}
+                            </div>
+
+                            {(currentCi?.teaLogins?.length ?? 0) > 1 && (
+                                <div className="pt-0.5">
+                                    <label className="mb-1 block text-[11px] font-medium text-ink">
+                                        Forgejo Account (tea login)
+                                    </label>
+                                    <SelectMenu
+                                        value={
+                                            currentCi?.teaLogin ??
+                                            currentCi?.teaLogins?.[0]?.name ??
+                                            ''
+                                        }
+                                        accent="servers"
+                                        disabled={processing || savingTarget}
+                                        triggerClassName="py-1.5 text-xs rounded-xl"
+                                        onChange={(nextLogin) => {
+                                            setSavingTarget(true);
+                                            router.post(
+                                                configureCiRoute(project.id)
+                                                    .url,
+                                                {
+                                                    environment,
+                                                    tea_login: nextLogin,
+                                                    save_target_only: true,
+                                                },
+                                                {
+                                                    preserveScroll: true,
+                                                    preserveState: true,
+                                                    onFinish: () =>
+                                                        setSavingTarget(false),
+                                                },
+                                            );
+                                        }}
+                                        options={(
+                                            currentCi?.teaLogins ?? []
+                                        ).map((login) => ({
+                                            value: login.name,
+                                            label: login.name,
+                                            description: login.user
+                                                ? `@${login.user}`
+                                                : login.host,
+                                        }))}
+                                    />
+                                </div>
                             )}
-                            <span>
-                                Git remote detected:{' '}
-                                <strong className="text-ink">
-                                    {project.git.repoSlug ?? project.git.remote}
-                                </strong>
-                            </span>
+
+                            {forgejoConnectedJustNow && isTeaConnected && (
+                                <p className="text-[11px] text-ok">
+                                    Authenticated tea CLI on{' '}
+                                    <span className="font-mono">
+                                        {trimmedForgejoHost}
+                                    </span>
+                                    . You can now push secrets to Forgejo.
+                                </p>
+                            )}
+
+                            {showForgejoTokenForm && (
+                                <div className="space-y-2 border-t border-line/60 pt-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-soft">
+                                        <span>
+                                            Needs a token with{' '}
+                                            <code className="font-mono text-ink">
+                                                read:user
+                                            </code>{' '}
+                                            and{' '}
+                                            <code className="font-mono text-ink">
+                                                write:repository
+                                            </code>{' '}
+                                            scopes to connect and push secrets
+                                            via{' '}
+                                            <code className="font-mono text-ink">
+                                                tea
+                                            </code>
+                                            .
+                                        </span>
+                                        {trimmedForgejoHost !== '' && (
+                                            <ExternalLinkButton
+                                                url={`https://${trimmedForgejoHost}/user/settings/applications`}
+                                                showIcon
+                                                className="inline-flex cursor-pointer items-center gap-1 font-medium text-brand hover:underline"
+                                            >
+                                                <span>
+                                                    Create token on{' '}
+                                                    {trimmedForgejoHost}
+                                                </span>
+                                            </ExternalLinkButton>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+                                        <input
+                                            type="text"
+                                            value={forgejoHost}
+                                            onChange={(e) => {
+                                                setForgejoHost(e.target.value);
+                                                setForgejoError(null);
+                                            }}
+                                            disabled={
+                                                connectingForgejo || processing
+                                            }
+                                            placeholder="git.example.com"
+                                            className="w-full rounded-xl border-0 bg-surface px-2.5 py-1.5 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-servers sm:col-span-2"
+                                        />
+                                        <div className="flex items-center gap-2 sm:col-span-3">
+                                            <input
+                                                type="password"
+                                                value={forgejoToken}
+                                                onChange={(e) => {
+                                                    setForgejoToken(
+                                                        e.target.value,
+                                                    );
+                                                    setForgejoError(null);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleConnectForgejo();
+                                                    }
+                                                }}
+                                                disabled={
+                                                    connectingForgejo ||
+                                                    processing
+                                                }
+                                                placeholder="Paste Forgejo access token…"
+                                                className="min-w-0 flex-1 rounded-xl border-0 bg-surface px-2.5 py-1.5 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={
+                                                    connectingForgejo ||
+                                                    processing
+                                                }
+                                                onClick={handleConnectForgejo}
+                                            >
+                                                {connectingForgejo ? (
+                                                    <RotateCw className="size-3 animate-spin" />
+                                                ) : (
+                                                    <Key className="size-3" />
+                                                )}
+                                                <span>
+                                                    {connectingForgejo
+                                                        ? 'Connecting…'
+                                                        : 'Connect'}
+                                                </span>
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {(forgejoError ??
+                                        errors.git_login_token) && (
+                                        <p className="text-xs text-accent">
+                                            {forgejoError ??
+                                                errors.git_login_token}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 

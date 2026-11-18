@@ -25,10 +25,12 @@ class ProjectDotenvController extends Controller
         $reveal = $request->boolean('reveal');
 
         $status = $this->dotenv->get($project->path, $environment, $reveal);
+        $inspection = $this->inspector->inspect($project->path);
 
         return response()->json([
             'environment' => $environment,
             'status' => $status,
+            'pushMeta' => $this->dotenv->pushMetadata($project, $environment, $inspection),
         ]);
     }
 
@@ -41,6 +43,8 @@ class ProjectDotenvController extends Controller
         $redeploy = $request->boolean('redeploy');
 
         $result = $this->dotenv->update($project->path, $environment, $variables, $redeploy);
+        $inspection = $this->inspector->inspect($project->path);
+        $result['pushMeta'] = $this->dotenv->pushMetadata($project, $environment, $inspection);
 
         return response()->json($result);
     }
@@ -48,7 +52,13 @@ class ProjectDotenvController extends Controller
     public function push(Request $request, Project $project): RedirectResponse
     {
         $environment = (string) $request->input('environment', 'production');
-        $label = "Push secret keys to {$environment}";
+        $framework = strtolower((string) ($this->inspector->inspect($project->path)['framework'] ?? ''));
+        $isStatic = in_array($framework, ['astro', 'vite', 'vue', 'react', 'svelte', 'solid', 'docusaurus'], true);
+        $label = $isStatic && $environment !== 'local'
+            ? "Push build environment to CI ({$environment})"
+            : "Push secret keys to {$environment}";
+
+        $this->dotenv->forgetRemoteCiCache($project->path, $environment);
 
         return $this->run($project, RunKind::DotenvPush, $label, ['dotenv:push', $environment], $environment);
     }

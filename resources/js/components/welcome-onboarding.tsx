@@ -106,27 +106,9 @@ export default function WelcomeOnboarding({
     }>().props;
     const [mode, setMode] = useState<'tools' | 'projects'>('tools');
 
-    const [dismissed, setDismissed] = useState(() => {
-        if (typeof window === 'undefined') {
-            return false;
-        }
-        try {
-            if (serversCount > 0 || projectsCount > 0) {
-                return (
-                    window.localStorage?.getItem(
-                        'larakube_onboarding_force_show',
-                    ) !== 'true'
-                );
-            }
-            return (
-                window.localStorage?.getItem(
-                    'larakube_onboarding_dismissed',
-                ) === 'true'
-            );
-        } catch {
-            return false;
-        }
-    });
+    const [dismissed, setDismissed] = useState(
+        () => serversCount > 0 || projectsCount > 0,
+    );
 
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] =
@@ -154,13 +136,22 @@ export default function WelcomeOnboarding({
     );
 
     useEffect(() => {
-        if (serversCount > 0 || projectsCount > 0) {
-            if (
-                localStorage.getItem('larakube_onboarding_force_show') !==
-                'true'
-            ) {
-                setDismissed(true);
+        try {
+            if (serversCount > 0 || projectsCount > 0) {
+                setDismissed(
+                    window.localStorage?.getItem(
+                        'larakube_onboarding_force_show',
+                    ) !== 'true',
+                );
+            } else {
+                setDismissed(
+                    window.localStorage?.getItem(
+                        'larakube_onboarding_dismissed',
+                    ) === 'true',
+                );
             }
+        } catch {
+            // ignore
         }
     }, [serversCount, projectsCount]);
 

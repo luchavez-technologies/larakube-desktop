@@ -36,3 +36,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0022](0022-name-the-wsl-system-larakube-linux.md)                           | Call the WSL system "LaraKube Linux"; keep `larakube-ubuntu` as its technical name                      | Accepted |
 | [0023](0023-sqlite-immediate-transactions.md)                                | SQLite transactions are IMMEDIATE, so concurrent writers wait instead of failing                        | Accepted |
 | [0024](0024-app-configuration-transparency.md)                               | An app's configuration is fully visible; Secret values are revealed one at a time                       | Accepted |
+| [0025](0025-no-native-browser-dialogs.md)                                    | No native browser dialogs (`window.confirm`, `alert`, or `prompt`); use `<ConfirmModal>`                | Accepted |

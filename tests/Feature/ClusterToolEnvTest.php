@@ -132,6 +132,36 @@ test('update surfaces a CLI-reported error', function (): void {
     ])->assertOk()->assertJson(['success' => false, 'error' => "Unknown tool 'pocketbase'."]);
 });
 
+test('update supports adding multiple config and secret variables in a single batch', function (): void {
+    $context = clusterToolEnvSandbox();
+
+    Process::fake([
+        ...clusterToolEnvStackFake($context),
+        '*tool:env:set*production*' => Process::result(output: json_encode([
+            'success' => true, 'vaulted' => true, 'restarted' => false,
+        ])),
+    ]);
+
+    $response = $this->postJson('/servers/workshop-demo/apps/pocketbase/env', [
+        'domain' => 'pb.example.com',
+        'set' => ['FEATURE_A' => 'true', 'FEATURE_B' => '42'],
+        'setSecret' => ['API_TOKEN' => 'tok-1', 'WEBHOOK_SECRET' => 'sec-2'],
+        'unset' => [],
+        'restart' => false,
+    ]);
+
+    $response->assertOk()->assertJson(['success' => true, 'vaulted' => true, 'restarted' => false]);
+
+    Process::assertRan(function ($process) {
+        $cmd = implode(' ', (array) $process->command);
+
+        return str_contains($cmd, '--set=FEATURE_A=true')
+            && str_contains($cmd, '--set=FEATURE_B=42')
+            && str_contains($cmd, '--set-secret=API_TOKEN=tok-1')
+            && str_contains($cmd, '--set-secret=WEBHOOK_SECRET=sec-2');
+    });
+});
+
 test('env routes 404 when the server is not ready', function (): void {
     clusterToolEnvSandbox();
 

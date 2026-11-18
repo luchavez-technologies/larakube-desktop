@@ -1,4 +1,12 @@
-import { Deferred, Form, Head, Link, router, usePoll } from '@inertiajs/react';
+import {
+    Deferred,
+    Form,
+    Head,
+    Link,
+    router,
+    usePage,
+    usePoll,
+} from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
     Laptop,
@@ -83,6 +91,40 @@ type Props = {
     readyServers?: ReadyServer[];
 };
 
+const DEVBOX_PROJECT_TABS = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'configuration', label: 'Configuration' },
+] as const;
+
+type DevBoxProjectTab = (typeof DEVBOX_PROJECT_TABS)[number]['key'];
+
+/** The tab named in `?tab=`, so a reload or a shared link opens the same one. */
+function initialDevBoxTab(pageUrl: string): DevBoxProjectTab {
+    const requested = new URL(pageUrl, 'http://localhost').searchParams.get(
+        'tab',
+    );
+
+    return DEVBOX_PROJECT_TABS.some((tab) => tab.key === requested)
+        ? (requested as DevBoxProjectTab)
+        : 'overview';
+}
+
+/** The environment named in `?env=`, falling back to `local` when absent or unknown. */
+function initialDevBoxEnv(pageUrl: string, blueprint?: Project | null): string {
+    const requested = new URL(pageUrl, 'http://localhost').searchParams.get(
+        'env',
+    );
+    if (!requested || requested === 'local') {
+        return 'local';
+    }
+
+    const hasCloudEnv = Object.values(blueprint?.environments ?? {}).some(
+        (env) => !env.isLocal && env.name === requested,
+    );
+
+    return hasCloudEnv ? requested : 'local';
+}
+
 export default function ShowDevBoxProject({
     box,
     name,
@@ -96,8 +138,29 @@ export default function ShowDevBoxProject({
     latestRun,
     readyServers = [],
 }: Props) {
-    const [activeEnv, setActiveEnv] = useState('local');
+    const { url: pageUrl } = usePage();
+    const [activeEnv, setActiveEnv] = useState(() =>
+        initialDevBoxEnv(pageUrl, blueprint),
+    );
+    const [tab, setTab] = useState<DevBoxProjectTab>(() =>
+        initialDevBoxTab(pageUrl),
+    );
     const [addEnvModalOpen, setAddEnvModalOpen] = useState(false);
+    const [envMenuVersion, setEnvMenuVersion] = useState(0);
+
+    function selectTab(next: DevBoxProjectTab) {
+        setTab(next);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', next);
+        window.history.replaceState(window.history.state, '', url);
+    }
+
+    function handleSelectEnv(nextEnv: string) {
+        setActiveEnv(nextEnv);
+        const url = new URL(window.location.href);
+        url.searchParams.set('env', nextEnv);
+        window.history.replaceState(window.history.state, '', url);
+    }
 
     useRunReload(['runs', 'latestRun', 'details'], (run) => run.server === box);
 
@@ -187,211 +250,265 @@ export default function ShowDevBoxProject({
                 }
             >
                 {details && !('state' in details) ? (
-                    <div className="space-y-6">
-                        {/* Multi-Environment Tab Bar */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-paper/60 p-1.5 shadow-2xs backdrop-blur-xs">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                {/* Local Dev Tab */}
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveEnv('local')}
-                                    className={cn(
-                                        'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
-                                        activeEnv === 'local'
-                                            ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
-                                            : 'text-soft hover:bg-paper hover:text-ink',
-                                    )}
-                                >
-                                    <Laptop className="size-3.5 text-brand" />
-                                    <span>DevBox Local</span>
-                                    {details.local === 'running' && (
-                                        <span className="size-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" />
-                                    )}
-                                </button>
+                    <div className="space-y-5">
+                        {/* Unified Section Tabs + Environment Dropdown Bar */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line">
+                            <div
+                                role="tablist"
+                                aria-label={`${name} sections`}
+                                className="flex gap-1"
+                            >
+                                {DEVBOX_PROJECT_TABS.map((item) => (
+                                    <button
+                                        key={item.key}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={tab === item.key}
+                                        onClick={() => selectTab(item.key)}
+                                        className={cn(
+                                            '-mb-px cursor-pointer border-b-2 px-3 py-2.5 text-[13px] font-medium transition',
+                                            tab === item.key
+                                                ? 'border-ink text-ink'
+                                                : 'border-transparent text-soft hover:text-ink',
+                                        )}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </div>
 
-                                {cloudEnvs.length > 0 && (
-                                    <div className="mx-1 h-5 w-px shrink-0 bg-line" />
-                                )}
+                            <div className="flex flex-wrap items-center gap-2 pb-1.5">
+                                <div className="flex h-8 items-center gap-2 rounded-lg bg-surface pl-2.5 ring-1 ring-line">
+                                    <span className="text-xs text-soft">
+                                        Environment
+                                    </span>
+                                    <SelectMenu
+                                        key={envMenuVersion}
+                                        value={activeEnv}
+                                        onChange={handleSelectEnv}
+                                        align="right"
+                                        panelLabel="Project Environments"
+                                        aria-label="Select project environment"
+                                        triggerClassName="h-8 rounded-lg bg-transparent px-2 text-xs font-semibold ring-0 hover:ring-0"
+                                        options={[
+                                            {
+                                                value: 'local',
+                                                label: 'DevBox Local',
+                                                icon: (
+                                                    <Laptop className="size-3.5 shrink-0 text-brand" />
+                                                ),
+                                                badge:
+                                                    details.local ===
+                                                    'running' ? (
+                                                        <span className="size-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" />
+                                                    ) : undefined,
+                                                description:
+                                                    details.environments?.[0]
+                                                        ?.host ??
+                                                    environments.local
+                                                        ?.webHost ??
+                                                    box,
+                                            },
+                                            ...cloudEnvs.map((env) => {
+                                                const isDeploying = runs.some(
+                                                    (r) =>
+                                                        r.kind ===
+                                                            'deploy-app' &&
+                                                        r.status ===
+                                                            'running' &&
+                                                        (r.label.includes(
+                                                            `(${env.name})`,
+                                                        ) ||
+                                                            (!r.label.includes(
+                                                                '(',
+                                                            ) &&
+                                                                env.name ===
+                                                                    'production')),
+                                                );
 
-                                {/* Cloud Environment Tabs */}
-                                {cloudEnvs.map((env) => {
-                                    const isSelected = activeEnv === env.name;
-                                    const isDeploying = runs.some(
-                                        (r) =>
-                                            r.kind === 'deploy-app' &&
-                                            r.status === 'running' &&
-                                            (r.label.includes(
-                                                `(${env.name})`,
-                                            ) ||
-                                                (!r.label.includes('(') &&
-                                                    env.name === 'production')),
-                                    );
+                                                return {
+                                                    value: env.name,
+                                                    label: (
+                                                        <span className="capitalize">
+                                                            {env.name}
+                                                        </span>
+                                                    ),
+                                                    icon: (
+                                                        <Cloud className="size-3.5 shrink-0 text-sky-500" />
+                                                    ),
+                                                    badge: isDeploying ? (
+                                                        <span className="size-2 animate-ping rounded-full bg-brand" />
+                                                    ) : undefined,
+                                                    description:
+                                                        env.webHost ??
+                                                        env.serverName ??
+                                                        'Cloud environment',
+                                                };
+                                            }),
+                                        ]}
+                                        footer={
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setEnvMenuVersion(
+                                                        (v) => v + 1,
+                                                    );
+                                                    setAddEnvModalOpen(true);
+                                                }}
+                                                className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-medium text-brand transition hover:bg-brand/10"
+                                            >
+                                                <Plus className="size-3.5 shrink-0" />
+                                                <span>
+                                                    Create new environment…
+                                                </span>
+                                            </button>
+                                        }
+                                    />
+                                </div>
 
-                                    return (
-                                        <button
-                                            key={env.name}
-                                            type="button"
-                                            onClick={() =>
-                                                setActiveEnv(env.name)
-                                            }
-                                            className={cn(
-                                                'flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all',
-                                                isSelected
-                                                    ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
-                                                    : 'text-soft hover:bg-paper hover:text-ink',
-                                            )}
-                                        >
-                                            <Cloud className="size-3.5" />
-                                            <span className="capitalize">
-                                                {env.name}
-                                            </span>
-                                            {isDeploying && (
-                                                <span className="size-2 animate-ping rounded-full bg-brand" />
-                                            )}
-                                        </button>
-                                    );
-                                })}
-
-                                {/* Add Environment Button */}
-                                <button
-                                    type="button"
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
                                     onClick={() => setAddEnvModalOpen(true)}
-                                    className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-medium text-soft transition-colors hover:bg-paper hover:text-ink"
                                     title="Create a cloud environment, such as staging or production"
                                 >
                                     <Plus className="size-3.5" />
-                                    <span>New environment</span>
-                                </button>
-                            </div>
-
-                            {/* Active Environment Deploy Button */}
-                            {activeEnv !== 'local' && endpoints?.operate && (
-                                <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => {
-                                        router.post(
-                                            `${endpoints.operate}/deploy`,
-                                            { environment: activeEnv },
-                                            { preserveScroll: true },
-                                        );
-                                    }}
-                                    className="gap-1.5"
-                                >
-                                    <ArrowUpCircle className="size-3.5" />
-                                    <span>Deploy to {activeEnv}</span>
+                                    <span>New Environment</span>
                                 </Button>
-                            )}
+
+                                {activeEnv !== 'local' &&
+                                    endpoints?.operate && (
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            onClick={() => {
+                                                router.post(
+                                                    `${endpoints.operate}/deploy`,
+                                                    { environment: activeEnv },
+                                                    { preserveScroll: true },
+                                                );
+                                            }}
+                                        >
+                                            <ArrowUpCircle className="size-3.5" />
+                                            <span>Deploy to {activeEnv}</span>
+                                        </Button>
+                                    )}
+                            </div>
                         </div>
 
-                        {/* Main Grid */}
-                        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-                            <div className="flex flex-col gap-5">
-                                {activeEnv === 'local' ? (
-                                    <>
-                                        <DevelopmentCard
-                                            box={box}
-                                            project={details}
-                                        />
-
-                                        <Deferred
-                                            data="sharing"
-                                            fallback={
-                                                <div className="h-24 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
-                                            }
-                                        >
-                                            <SharingCard
+                        {tab === 'overview' && (
+                            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+                                <div className="flex flex-col gap-5">
+                                    {activeEnv === 'local' ? (
+                                        <>
+                                            <DevelopmentCard
                                                 box={box}
                                                 project={details}
-                                                sharing={sharing}
                                             />
-                                        </Deferred>
 
-                                        <WorkloadScalingCard
-                                            project={{ name }}
-                                            activeEnv="local"
-                                            activeEnvConfig={currentEnvConfig}
-                                            customEndpoints={endpoints?.scaling}
-                                        />
-
-                                        <EnvironmentSecretsCard
-                                            project={{ name }}
-                                            activeEnv="local"
-                                            activeEnvConfig={currentEnvConfig}
-                                            customEndpoints={endpoints?.dotenv}
-                                        />
-
-                                        <Deferred
-                                            data="backing"
-                                            fallback={
-                                                <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
-                                            }
-                                        >
-                                            <BackingServicesCard
-                                                label="Backing Services · DEVBOX LOCAL"
-                                                services={backing}
-                                                hasCommons={
-                                                    backing?.commons ?? false
+                                            <Deferred
+                                                data="sharing"
+                                                fallback={
+                                                    <div className="h-24 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
                                                 }
-                                            />
-                                        </Deferred>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CloudEnvironmentCard
-                                            envName={activeEnv}
-                                            envConfig={currentEnvConfig}
-                                            endpoints={endpoints}
-                                        />
+                                            >
+                                                <SharingCard
+                                                    box={box}
+                                                    project={details}
+                                                    sharing={sharing}
+                                                />
+                                            </Deferred>
 
-                                        <WorkloadScalingCard
-                                            project={{ name }}
-                                            activeEnv={activeEnv}
-                                            activeEnvConfig={currentEnvConfig}
-                                            customEndpoints={endpoints?.scaling}
-                                        />
-
-                                        <EnvironmentSecretsCard
-                                            project={{ name }}
-                                            activeEnv={activeEnv}
-                                            activeEnvConfig={currentEnvConfig}
-                                            customEndpoints={endpoints?.dotenv}
-                                        />
-
-                                        <Deferred
-                                            data="backing"
-                                            fallback={
-                                                <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
-                                            }
-                                        >
-                                            <BackingServicesCard
-                                                label={`Backing Services · ${activeEnv.toUpperCase()}`}
-                                                services={backing}
-                                                hasCommons={
-                                                    backing?.commons ?? false
+                                            <Deferred
+                                                data="backing"
+                                                fallback={
+                                                    <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
                                                 }
+                                            >
+                                                <BackingServicesCard
+                                                    label="Backing Services · DEVBOX LOCAL"
+                                                    services={backing}
+                                                    hasCommons={
+                                                        backing?.commons ??
+                                                        false
+                                                    }
+                                                />
+                                            </Deferred>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CloudEnvironmentCard
+                                                envName={activeEnv}
+                                                envConfig={currentEnvConfig}
+                                                endpoints={endpoints}
                                             />
-                                        </Deferred>
-                                    </>
-                                )}
 
-                                {latestRun && (
-                                    <ProjectTerminalCard run={latestRun} />
-                                )}
+                                            <Deferred
+                                                data="backing"
+                                                fallback={
+                                                    <div className="h-40 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                                                }
+                                            >
+                                                <BackingServicesCard
+                                                    label={`Backing Services · ${activeEnv.toUpperCase()}`}
+                                                    services={backing}
+                                                    hasCommons={
+                                                        backing?.commons ??
+                                                        false
+                                                    }
+                                                />
+                                            </Deferred>
+                                        </>
+                                    )}
+
+                                    {latestRun && (
+                                        <ProjectTerminalCard run={latestRun} />
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col gap-5">
+                                    <DevBoxConnectionCard
+                                        box={box}
+                                        project={details}
+                                        devBox={devBox}
+                                    />
+                                    <RecentRunsCard
+                                        runs={runs}
+                                        activeEnv={activeEnv}
+                                    />
+                                </div>
                             </div>
+                        )}
 
-                            <div className="flex flex-col gap-5">
-                                <DevBoxConnectionCard
-                                    box={box}
-                                    project={details}
-                                    devBox={devBox}
-                                />
-                                <RecentRunsCard
-                                    runs={runs}
+                        {tab === 'configuration' && (
+                            <div className="space-y-5">
+                                <EnvironmentSecretsCard
+                                    project={{ name }}
                                     activeEnv={activeEnv}
+                                    activeEnvConfig={currentEnvConfig}
+                                    customEndpoints={endpoints?.dotenv}
                                 />
+
+                                <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+                                    <div className="flex flex-col gap-5">
+                                        <WorkloadScalingCard
+                                            project={{ name }}
+                                            activeEnv={activeEnv}
+                                            activeEnvConfig={currentEnvConfig}
+                                            customEndpoints={endpoints?.scaling}
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-5">
+                                        <DevBoxConnectionCard
+                                            box={box}
+                                            project={details}
+                                            devBox={devBox}
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Add Environment Modal Popup */}
                         <AddEnvironmentDialog
@@ -404,7 +521,7 @@ export default function ShowDevBoxProject({
                                 `/dev-boxes/${box}/projects/${name}/environments`
                             }
                             readyServers={readyServers ?? []}
-                            onCreated={(newEnv) => setActiveEnv(newEnv)}
+                            onCreated={(newEnv) => handleSelectEnv(newEnv)}
                         />
                     </div>
                 ) : (

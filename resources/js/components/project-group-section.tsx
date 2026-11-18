@@ -14,6 +14,7 @@ import {
     X,
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
+import ConfirmModal from '@/components/confirm-modal';
 import { cn } from '@/lib/utils';
 import { GROUP_COLORS, groupColorClasses } from '@/lib/group-colors';
 import type { Project } from '@/types/larakube';
@@ -45,6 +46,7 @@ export default function ProjectGroupSection({
     const [pendingAction, setPendingAction] = useState<GroupAction | null>(
         null,
     );
+    const [confirmDownOpen, setConfirmDownOpen] = useState(false);
     const classes = groupColorClasses(color);
     const colorPickerRef = useRef<HTMLDivElement>(null);
 
@@ -84,16 +86,7 @@ export default function ProjectGroupSection({
 
     const anyRunning = projects.some((p) => p.localStatus?.state === 'running');
 
-    const runGroupAction = (action: GroupAction) => {
-        if (
-            action === 'down' &&
-            !window.confirm(
-                `Take down all ${projects.length} codebases in "${group}"? Their data is kept.`,
-            )
-        ) {
-            return;
-        }
-
+    const executeGroupAction = (action: GroupAction) => {
         setPendingAction(action);
         router.post(
             `/projects/groups/${encodeURIComponent(group)}/${action}`,
@@ -103,6 +96,16 @@ export default function ProjectGroupSection({
                 onFinish: () => setPendingAction(null),
             },
         );
+    };
+
+    const runGroupAction = (action: GroupAction) => {
+        if (action === 'down') {
+            setConfirmDownOpen(true);
+
+            return;
+        }
+
+        executeGroupAction(action);
     };
 
     const groupActions: {
@@ -353,6 +356,22 @@ export default function ProjectGroupSection({
             <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                 {projects.map((project) => renderCard(project))}
             </div>
+
+            <ConfirmModal
+                isOpen={confirmDownOpen}
+                onClose={() => setConfirmDownOpen(false)}
+                onConfirm={() => {
+                    setConfirmDownOpen(false);
+                    executeGroupAction('down');
+                }}
+                title={`Take down "${group}"?`}
+                description={`Take down all ${projects.length} codebases in "${group}"?`}
+                notice="Databases, storage volumes, and local data are kept."
+                confirmLabel="Take Down All"
+                tone="warn"
+                icon={<PowerOff className="size-5" />}
+                confirmIcon={<PowerOff className="size-3.5" />}
+            />
         </section>
     );
 }

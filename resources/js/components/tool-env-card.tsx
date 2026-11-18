@@ -1,16 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-    Eye,
-    EyeOff,
-    Key,
-    Pencil,
-    Plus,
-    RotateCw,
-    Shield,
-    Trash2,
-    X,
-} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Eye, EyeOff, RotateCw, Save, Shield, X } from 'lucide-react';
 import Button from '@/components/button';
+import Card from '@/components/card';
+import InfoTooltip from '@/components/info-tooltip';
+import EnvironmentVariablesTable, {
+    createDraftRow,
+    normalizeEnvKey,
+    type DraftEnvRow,
+    type EnvTableRow,
+    type StagedEnvChange,
+} from '@/components/environment-variables-table';
 import { cn } from '@/lib/utils';
 import {
     status as statusRoute,
@@ -33,9 +32,6 @@ type StatusResponse = {
     } | null;
 };
 
-/** key -> staged edit; value null means "remove this key" */
-type StagedChange = { value: string | null; secret: boolean };
-
 function csrfToken(): string {
     return (
         (
@@ -54,38 +50,6 @@ function csrfToken(): string {
  * EnvironmentSecretsCard, minus any local/cluster diff — a Cluster App has
  * no local .env file, so the cluster is the only source of truth.
  */
-function normalizeKey(raw: string): string {
-    return raw.trim().toUpperCase().replace(/\s+/g, '_');
-}
-
-/** `KEY=value` lines, ignoring blank lines, comments, `export ` and surrounding quotes. */
-function parseDotenv(text: string): [string, string][] {
-    const entries: [string, string][] = [];
-
-    for (const raw of text.split(/\r?\n/)) {
-        const line = raw.trim().replace(/^export\s+/, '');
-        const equals = line.indexOf('=');
-        if (line === '' || line.startsWith('#') || equals <= 0) {
-            continue;
-        }
-
-        const key = normalizeKey(line.slice(0, equals));
-        let value = line.slice(equals + 1).trim();
-        if (
-            value.length >= 2 &&
-            ((value.startsWith('"') && value.endsWith('"')) ||
-                (value.startsWith("'") && value.endsWith("'")))
-        ) {
-            value = value.slice(1, -1);
-        }
-        if (key !== '') {
-            entries.push([key, value]);
-        }
-    }
-
-    return entries;
-}
-
 export default function ToolEnvCard({
     server,
     tool,
@@ -95,15 +59,12 @@ export default function ToolEnvCard({
 }) {
     const [loading, setLoading] = useState(true);
     const [reveal, setReveal] = useState(false);
+    const revealRef = useRef(false);
     const [data, setData] = useState<StatusResponse['status']>(null);
-    const [staged, setStaged] = useState<Record<string, StagedChange>>({});
-    const [editingKey, setEditingKey] = useState<string | null>(null);
-    const [editingValue, setEditingValue] = useState('');
-    const [isAdding, setIsAdding] = useState(false);
-    const [newKey, setNewKey] = useState('');
-    const [newValue, setNewValue] = useState('');
-    const [newIsSecret, setNewIsSecret] = useState(false);
-    const keyInput = useRef<HTMLInputElement>(null);
+    const [staged, setStaged] = useState<Record<string, StagedEnvChange>>({});
+    const [draftRows, setDraftRows] = useState<DraftEnvRow[]>(() => [
+        createDraftRow(),
+    ]);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{
         text: string;
@@ -114,91 +75,80 @@ export default function ToolEnvCard({
     const statusUrl = statusRoute({ server: server.name, tool: tool.tool }).url;
     const updateUrl = updateRoute({ server: server.name, tool: tool.tool }).url;
 
-    function fetchStatus(showPlaintext: boolean = reveal) {
-        setLoading(true);
-        const url = `${statusUrl}?domain=${encodeURIComponent(domain)}${showPlaintext ? '&reveal=1' : ''}`;
-        fetch(url, { headers: { Accept: 'application/json' } })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((res: StatusResponse | null) => setData(res?.status ?? null))
-            .catch(() => setData(null))
-            .finally(() => setLoading(false));
-    }
+    const fetchStatus = useCallback(
+        (showPlaintext: boolean) => {
+            setLoading(true);
+            const url = `${statusUrl}?domain=${encodeURIComponent(domain)}${showPlaintext ? '&reveal=1' : ''}`;
+            fetch(url, { headers: { Accept: 'application/json' } })
+                .then((res) => (res.ok ? res.json() : null))
+                .then((res: StatusResponse | null) =>
+                    setData(res?.status ?? null),
+                )
+                .catch(() => setData(null))
+                .finally(() => setLoading(false));
+        },
+        [statusUrl, domain],
+    );
 
     useEffect(() => {
         setStaged({});
-        setEditingKey(null);
-        setIsAdding(false);
+        setDraftRows([createDraftRow()]);
         setMessage(null);
-        fetchStatus(reveal);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [server.name, tool.tool, domain]);
+        fetchStatus(revealRef.current);
+    }, [fetchStatus]);
 
     function toggleReveal() {
         const next = !reveal;
+        revealRef.current = next;
         setReveal(next);
         fetchStatus(next);
     }
 
-    function startEdit(item: EnvItem) {
-        setEditingKey(item.key);
-        setEditingValue(staged[item.key]?.value ?? item.value);
-    }
-
-    function commitEdit(item: EnvItem) {
+    function handleStageEdit(key: string, value: string, isSecret: boolean) {
         setStaged((prev) => ({
             ...prev,
-            [item.key]: { value: editingValue, secret: item.secret },
-        }));
-        setEditingKey(null);
-        setEditingValue('');
-    }
-
-    function stageDelete(item: EnvItem) {
-        if (!confirm(`Remove '${item.key}'?`)) return;
-        setStaged((prev) => ({
-            ...prev,
-            [item.key]: { value: null, secret: item.secret },
+            [key]: { value, isSecret },
         }));
     }
 
-    /** Stages the row and keeps the form open, so several can be added before one Save. */
-    function commitNew() {
-        const key = normalizeKey(newKey);
-        if (!key) return;
+    function handleStageDelete(key: string, isSecret: boolean) {
         setStaged((prev) => ({
             ...prev,
-            [key]: { value: newValue, secret: newIsSecret },
+            [key]: { value: null, isSecret },
         }));
-        setNewKey('');
-        setNewValue('');
-        keyInput.current?.focus();
     }
 
-    /**
-     * A pasted `.env` block (KEY=value per line) stages every line at once,
-     * all with the current Secret choice; comments and blank lines are skipped.
-     */
-    function pasteDotenv(text: string): boolean {
-        const entries = parseDotenv(text);
-        if (entries.length === 0) {
-            return false;
-        }
-
+    function handleUnstageKey(key: string) {
         setStaged((prev) => {
             const next = { ...prev };
-            for (const [key, value] of entries) {
-                next[key] = { value, secret: newIsSecret };
-            }
+            delete next[key];
 
             return next;
         });
-        setNewKey('');
-        setNewValue('');
-
-        return true;
     }
 
-    const stagedCount = Object.keys(staged).length;
+    function discardChanges() {
+        setStaged({});
+        setDraftRows([createDraftRow()]);
+    }
+
+    const combinedChanges = useMemo(() => {
+        const map = new Map<string, StagedEnvChange>();
+        for (const [key, change] of Object.entries(staged)) {
+            map.set(key, change);
+        }
+        for (const draft of draftRows) {
+            const key = normalizeEnvKey(draft.key);
+            if (key !== '') {
+                map.set(key, { value: draft.value, isSecret: draft.isSecret });
+            }
+        }
+
+        return map;
+    }, [staged, draftRows]);
+
+    const stagedCount = combinedChanges.size;
+    const hasStaged = stagedCount > 0;
 
     async function handleSave(restart: boolean) {
         setSaving(true);
@@ -207,10 +157,11 @@ export default function ToolEnvCard({
         const set: Record<string, string> = {};
         const setSecret: Record<string, string> = {};
         const unset: string[] = [];
-        for (const [key, change] of Object.entries(staged)) {
+
+        for (const [key, change] of combinedChanges.entries()) {
             if (change.value === null) {
                 unset.push(key);
-            } else if (change.secret) {
+            } else if (change.isSecret) {
                 setSecret[key] = change.value;
             } else {
                 set[key] = change.value;
@@ -245,6 +196,7 @@ export default function ToolEnvCard({
                     type: 'ok',
                 });
                 setStaged({});
+                setDraftRows([createDraftRow()]);
                 fetchStatus(reveal);
             } else {
                 setMessage({
@@ -259,276 +211,188 @@ export default function ToolEnvCard({
         }
     }
 
-    const items = data?.items ?? [];
-    const hasStaged = Object.keys(staged).length > 0;
+    const tableRows = useMemo<EnvTableRow[]>(
+        () =>
+            (data?.items ?? []).map((item) => ({
+                key: item.key,
+                value: item.value,
+                isSecret: item.secret,
+            })),
+        [data],
+    );
 
     return (
-        <div className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-            <div className="mb-3 flex items-center justify-between">
-                <span className="text-[11px] font-semibold tracking-wider text-faint uppercase">
-                    Custom Environment Variables
-                </span>
+        <Card
+            label="Custom Environment Variables"
+            action={
                 <div className="flex items-center gap-2">
                     {data?.vaulted && (
                         <span
-                            className="inline-flex items-center gap-1 text-[10px] font-medium text-brand"
+                            className="bg-brand-tint inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-brand"
                             title="OpenBao Vault is active on this cluster. Secret values are mirrored there for backup."
                         >
                             <Shield className="size-3" />
-                            OpenBao
+                            <span>OpenBao Vault</span>
                         </span>
                     )}
-                    <button
-                        type="button"
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={toggleReveal}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-soft hover:text-ink"
+                        title={
+                            reveal
+                                ? 'Mask secret values'
+                                : 'Peek plaintext values'
+                        }
                     >
                         {reveal ? (
-                            <EyeOff className="size-3" />
+                            <EyeOff className="size-3.5" />
                         ) : (
-                            <Eye className="size-3" />
+                            <Eye className="size-3.5" />
                         )}
-                        {reveal ? 'Hide' : 'Reveal'}
-                    </button>
+                        <span>{reveal ? 'Hide' : 'Reveal'}</span>
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => fetchStatus(reveal)}
+                        disabled={loading}
+                        title="Refresh custom environment variables"
+                    >
+                        <RotateCw
+                            className={cn(
+                                'size-3.5',
+                                loading && 'animate-spin',
+                            )}
+                        />
+                        <span>Refresh</span>
+                    </Button>
                 </div>
-            </div>
+            }
+        >
+            <div className="flex flex-col gap-4">
+                <p className="text-xs leading-relaxed text-soft">
+                    Your own vars layered on top of this app — an external
+                    mail/DB service&apos;s settings, a feature flag — never the
+                    keys its install already manages.
+                </p>
 
-            <p className="mb-3 text-[11px] leading-relaxed text-soft">
-                Your own vars layered on top of this app — an external mail/DB
-                service's settings, a feature flag — never the keys its install
-                already manages.
-            </p>
-
-            {loading ? (
-                <p className="text-[11px] text-soft">Loading…</p>
-            ) : (
-                <div className="space-y-1.5">
-                    {items.length === 0 && !isAdding && (
-                        <p className="rounded-xl border border-dashed border-line px-3 py-2.5 text-center text-[11px] text-soft">
-                            No custom environment variables yet.
-                        </p>
-                    )}
-                    {items.map((item) => {
-                        const change = staged[item.key];
-                        if (change?.value === null) {
-                            return (
-                                <div
-                                    key={item.key}
-                                    className="flex items-center justify-between rounded-lg bg-accent/5 px-3 py-2 text-xs line-through opacity-60"
-                                >
-                                    <span className="font-mono">
-                                        {item.key}
-                                    </span>
-                                    <span className="text-[10px]">removed</span>
-                                </div>
-                            );
-                        }
-
-                        const isEditing = editingKey === item.key;
-
-                        return (
-                            <div
-                                key={item.key}
-                                className={cn(
-                                    'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs',
-                                    change ? 'bg-brand/5' : 'bg-paper',
-                                )}
-                            >
-                                <div className="flex min-w-0 items-center gap-1.5">
-                                    {item.secret && (
-                                        <Key className="size-3 shrink-0 text-faint" />
-                                    )}
-                                    <span className="truncate font-mono font-medium text-ink">
-                                        {item.key}
-                                    </span>
-                                </div>
-                                {isEditing ? (
-                                    <div className="flex items-center gap-1">
-                                        <input
-                                            autoFocus
-                                            value={editingValue}
-                                            onChange={(e) =>
-                                                setEditingValue(e.target.value)
-                                            }
-                                            className="w-36 rounded border-0 bg-surface px-2 py-1 font-mono text-[11px] ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => commitEdit(item)}
-                                            className="text-brand"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingKey(null)}
-                                            className="text-soft"
-                                        >
-                                            <X className="size-3" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="flex shrink-0 items-center gap-2">
-                                        <span className="truncate font-mono text-[11px] text-soft">
-                                            {change?.value ?? item.value}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => startEdit(item)}
-                                            className="text-soft hover:text-ink"
-                                        >
-                                            <Pencil className="size-3" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => stageDelete(item)}
-                                            className="text-soft hover:text-accent"
-                                        >
-                                            <Trash2 className="size-3" />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-
-                    {isAdding ? (
-                        <div className="space-y-2 rounded-lg bg-paper p-2.5">
-                            <div className="flex items-center gap-1.5">
-                                <input
-                                    autoFocus
-                                    ref={keyInput}
-                                    placeholder="KEY, or paste KEY=value lines"
-                                    value={newKey}
-                                    onChange={(e) => setNewKey(e.target.value)}
-                                    onPaste={(e) => {
-                                        if (
-                                            pasteDotenv(
-                                                e.clipboardData.getData('text'),
-                                            )
-                                        ) {
-                                            e.preventDefault();
-                                        }
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            commitNew();
-                                        }
-                                    }}
-                                    className="w-1/2 rounded border-0 bg-surface px-2 py-1 font-mono text-[11px] ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
-                                />
-                                <input
-                                    placeholder="value"
-                                    value={newValue}
-                                    onChange={(e) =>
-                                        setNewValue(e.target.value)
-                                    }
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            commitNew();
-                                        }
-                                    }}
-                                    className="w-1/2 rounded border-0 bg-surface px-2 py-1 font-mono text-[11px] ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
-                                />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-soft">
-                                    <input
-                                        type="checkbox"
-                                        checked={newIsSecret}
-                                        onChange={(e) =>
-                                            setNewIsSecret(e.target.checked)
-                                        }
-                                    />
-                                    Secret
-                                </label>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setIsAdding(false);
-                                            setNewKey('');
-                                            setNewValue('');
-                                            setNewIsSecret(false);
-                                        }}
-                                        className="text-[11px] text-soft"
-                                    >
-                                        Done
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={commitNew}
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-brand"
-                                    >
-                                        <Plus className="size-3" />
-                                        Add
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
+                {message && (
+                    <div
+                        className={cn(
+                            'flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs',
+                            message.type === 'ok'
+                                ? 'border-ok/30 bg-ok-tint text-ok'
+                                : 'border-accent/30 bg-accent-tint text-accent',
+                        )}
+                    >
+                        <span>{message.text}</span>
                         <button
                             type="button"
-                            onClick={() => setIsAdding(true)}
-                            className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line py-2 text-[11px] font-medium text-soft hover:border-brand/50 hover:text-brand"
+                            onClick={() => setMessage(null)}
+                            className="p-1 hover:opacity-70"
                         >
-                            <Plus className="size-3" />
-                            Add Variable
+                            <X className="size-3" />
                         </button>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
 
-            {message && (
-                <p
-                    className={cn(
-                        'mt-2.5 text-[11px]',
-                        message.type === 'ok' ? 'text-ok' : 'text-accent',
-                    )}
-                >
-                    {message.text}
-                </p>
-            )}
+                <EnvironmentVariablesTable
+                    rows={tableRows}
+                    stagedChanges={staged}
+                    onStageEdit={handleStageEdit}
+                    onStageDelete={handleStageDelete}
+                    onUnstageKey={handleUnstageKey}
+                    draftRows={draftRows}
+                    onChangeDraftRows={setDraftRows}
+                    reveal={reveal}
+                    loading={loading}
+                    canToggleSecret
+                    showStatusColumn={false}
+                    secretTargetLabel="custom-secret"
+                    configTargetLabel="custom-config"
+                    emptyMessage="No custom environment variables yet."
+                />
 
-            {hasStaged && (
-                <div className="mt-3 flex items-center justify-end gap-2">
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={saving}
-                        onClick={() => setStaged({})}
-                    >
-                        Discard
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={saving}
-                        onClick={() => handleSave(false)}
-                    >
-                        {saving ? (
-                            <RotateCw className="size-3 animate-spin" />
-                        ) : null}
-                        Save {stagedCount}{' '}
-                        {stagedCount === 1 ? 'change' : 'changes'}
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        disabled={saving}
-                        onClick={() => handleSave(true)}
-                    >
-                        {saving ? (
-                            <RotateCw className="size-3 animate-spin" />
-                        ) : null}
-                        Save &amp; Restart App
-                    </Button>
-                </div>
-            )}
-        </div>
+                {hasStaged && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+                        <span className="text-xs font-medium text-warn">
+                            ⚠ {stagedCount} unsaved change
+                            {stagedCount === 1 ? '' : 's'} staged.
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={saving}
+                                onClick={discardChanges}
+                            >
+                                <X className="size-3.5" />
+                                <span>Discard</span>
+                            </Button>
+                            <InfoTooltip
+                                interactive
+                                align="right"
+                                trigger={
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={saving}
+                                        onClick={() => handleSave(false)}
+                                    >
+                                        {saving ? (
+                                            <RotateCw className="size-3.5 animate-spin" />
+                                        ) : (
+                                            <Save className="size-3.5" />
+                                        )}
+                                        <span>
+                                            Save {stagedCount}{' '}
+                                            {stagedCount === 1
+                                                ? 'change'
+                                                : 'changes'}
+                                        </span>
+                                    </Button>
+                                }
+                            >
+                                Updates the app&apos;s{' '}
+                                <code className="font-mono">custom-config</code>{' '}
+                                ConfigMap and{' '}
+                                <code className="font-mono">custom-secret</code>{' '}
+                                Secret (mirrored to OpenBao if active). Does not
+                                restart running pods.
+                            </InfoTooltip>
+
+                            <InfoTooltip
+                                interactive
+                                align="right"
+                                trigger={
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={saving}
+                                        onClick={() => handleSave(true)}
+                                    >
+                                        <RotateCw
+                                            className={cn(
+                                                'size-3.5',
+                                                saving && 'animate-spin',
+                                            )}
+                                        />
+                                        <span>Save &amp; Restart App</span>
+                                    </Button>
+                                }
+                            >
+                                Saves custom variables to the cluster and
+                                restarts the app&apos;s pods so new values take
+                                effect right away.
+                            </InfoTooltip>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Card>
     );
 }

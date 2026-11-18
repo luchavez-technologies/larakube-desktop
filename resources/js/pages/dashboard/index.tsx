@@ -17,7 +17,7 @@ import {
     X,
     Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -174,13 +174,20 @@ export default function DashboardIndex({
 
     const [dismissedFailedRunId, setDismissedFailedRunId] = useState<
         number | null
-    >(() => {
-        if (typeof window === 'undefined') return null;
-        const stored = window.localStorage.getItem(
-            'larakube_dismissed_failed_run_id',
-        );
-        return stored ? Number(stored) : null;
-    });
+    >(null);
+
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem(
+                'larakube_dismissed_failed_run_id',
+            );
+            if (stored) {
+                setDismissedFailedRunId(Number(stored));
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
 
     // Surface an inline live banner ONLY when a run is actively running or the
     // most recent run failed — replaces the noisy bottom Recent Activity card.

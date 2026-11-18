@@ -21,12 +21,14 @@ use App\Jobs\Sync\SyncServerTlsJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Models\Activity;
 use App\Models\ClusterTool;
+use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\ContextHealth;
+use App\Services\LaraKube\ProjectDotenv;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\RunNotifier;
 use Native\Desktop\Events\ChildProcess\ErrorReceived;
@@ -106,6 +108,16 @@ class RecordRunOutput
         ])->save();
 
         RunFinished::dispatch($run);
+
+        if ($run->kind === RunKind::DotenvPush || $run->kind === RunKind::ConfigureCi) {
+            $projectPath = is_string($run->meta['cwd'] ?? null) && $run->meta['cwd'] !== ''
+                ? $run->meta['cwd']
+                : ($run->project_id !== null ? Project::find($run->project_id)?->path : null);
+            $envName = is_string($run->environment) && $run->environment !== '' ? $run->environment : 'production';
+            if (is_string($projectPath) && $projectPath !== '') {
+                app(ProjectDotenv::class)->forgetRemoteCiCache($projectPath, $envName);
+            }
+        }
 
         // What Setup remembered about this computer is out of date once an install ends.
         if ($run->kind === RunKind::InstallTool || $run->kind === RunKind::SetupLocal) {

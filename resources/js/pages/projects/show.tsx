@@ -5,6 +5,7 @@ import {
     Link,
     router,
     useForm,
+    usePage,
     usePoll,
 } from '@inertiajs/react';
 import type { FormEvent, ReactNode } from 'react';
@@ -123,6 +124,42 @@ import type {
 import { useRunReload } from '@/lib/native-events';
 
 const STATIC = ['vite', 'astro', 'docusaurus'];
+
+const PROJECT_TABS = [
+    { key: 'overview', label: 'Overview', localOnly: false },
+    { key: 'configuration', label: 'Configuration', localOnly: false },
+    { key: 'companions', label: 'Dev Companions', localOnly: true },
+    { key: 'settings', label: 'Settings', localOnly: false },
+] as const;
+
+type ProjectTab = (typeof PROJECT_TABS)[number]['key'];
+
+/** The tab named in `?tab=`, so a reload or a shared link opens the same one. */
+function initialProjectTab(pageUrl: string): ProjectTab {
+    const requested = new URL(pageUrl, 'http://localhost').searchParams.get(
+        'tab',
+    );
+
+    return PROJECT_TABS.some((tab) => tab.key === requested)
+        ? (requested as ProjectTab)
+        : 'overview';
+}
+
+/** The environment named in `?env=`, falling back to `local` when absent or unknown. */
+function initialProjectEnv(pageUrl: string, project: Project): string {
+    const requested = new URL(pageUrl, 'http://localhost').searchParams.get(
+        'env',
+    );
+    if (!requested || requested === 'local') {
+        return 'local';
+    }
+
+    const hasCloudEnv = Object.values(project.environments ?? {}).some(
+        (env) => !env.isLocal && env.name === requested,
+    );
+
+    return hasCloudEnv ? requested : 'local';
+}
 
 type Editor = { slug: string; label: string; category?: 'editor' | 'agent' };
 
@@ -244,11 +281,44 @@ export default function ShowProject({
         [project.environments],
     );
 
+    const { url: pageUrl } = usePage();
+
     // Primary environment switcher state: 'local' | '<cloud-env-name>'
-    const [activeEnv, setActiveEnv] = useState<string>('local');
+    const [activeEnv, setActiveEnv] = useState<string>(() =>
+        initialProjectEnv(pageUrl, project),
+    );
+    const [tab, setTab] = useState<ProjectTab>(() =>
+        initialProjectTab(pageUrl),
+    );
     const [deployModalOpen, setDeployModalOpen] = useState(false);
     const [addEnvModalOpen, setAddEnvModalOpen] = useState(false);
     const [removeEnvTarget, setRemoveEnvTarget] = useState<string | null>(null);
+    const [settingsSection, setSettingsSection] =
+        useState<EnvironmentSettingsDrawerSection | null>(null);
+
+    function selectTab(next: ProjectTab) {
+        setTab(next);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', next);
+        window.history.replaceState(window.history.state, '', url);
+    }
+
+    function handleSelectEnv(nextEnv: string) {
+        setActiveEnv(nextEnv);
+        const url = new URL(window.location.href);
+        url.searchParams.set('env', nextEnv);
+        if (nextEnv !== 'local' && tab === 'companions') {
+            setTab('overview');
+            url.searchParams.set('tab', 'overview');
+        }
+        window.history.replaceState(window.history.state, '', url);
+    }
+
+    const visibleTabs = PROJECT_TABS.filter(
+        (item) => !item.localOnly || activeEnv === 'local',
+    );
+    const activeTab: ProjectTab =
+        activeEnv !== 'local' && tab === 'companions' ? 'overview' : tab;
 
     // Active cloud environment config when viewing cloud tabs
     const activeCloudEnvName =
@@ -442,10 +512,14 @@ export default function ShowProject({
                 </Card>
             ) : (
                 <div className="space-y-5">
-                    {/* Top-Level Environment Switcher Bar */}
-                    <EnvironmentSwitchBar
+                    {/* Unified Section Tabs + Environment Dropdown Bar */}
+                    <ProjectTabAndEnvBar
+                        project={project}
+                        visibleTabs={visibleTabs}
+                        activeTab={activeTab}
+                        onSelectTab={selectTab}
                         activeEnv={activeEnv}
-                        onSelectEnv={setActiveEnv}
+                        onSelectEnv={handleSelectEnv}
                         cloudEnvs={cloudEnvs}
                         readyServers={readyServers}
                         onAddEnv={() => setAddEnvModalOpen(true)}
@@ -453,51 +527,113 @@ export default function ShowProject({
                         runs={runs}
                     />
 
-                    {/* Main Layout Grid */}
-                    <div className="grid grid-cols-[1fr_360px] items-start gap-5">
-                        {/* Main Column (Left): Segregated by Environment */}
-                        <div className="flex flex-col gap-5">
-                            {activeEnv === 'local' ? (
-                                <>
-                                    {project.initialized ? (
-                                        <LocalClusterCard
+                    {activeTab === 'overview' && (
+                        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_360px]">
+                            {/* Main Column (Left): Segregated by Environment */}
+                            <div className="flex flex-col gap-5">
+                                {activeEnv === 'local' ? (
+                                    <>
+                                        {project.initialized ? (
+                                            <LocalClusterCard
+                                                project={project}
+                                                runs={runs}
+                                                pods={pods?.local ?? []}
+                                                healthMetrics={
+                                                    healthMetrics?.local ?? null
+                                                }
+                                                podMetrics={
+                                                    podMetrics?.local ?? null
+                                                }
+                                            />
+                                        ) : (
+                                            <Card
+                                                label="Not set up for LaraKube yet"
+                                                tone="warn"
+                                            >
+                                                <p className="mb-3 text-xs text-soft">
+                                                    This folder was added as-is
+                                                    — LaraKube hasn&apos;t
+                                                    initialized it. Set it up to
+                                                    get the local cluster,
+                                                    backing services, and
+                                                    secrets management for this
+                                                    project.
+                                                </p>
+                                                <InitForm
+                                                    project={project}
+                                                    frameworks={frameworks}
+                                                    wizardFrameworks={
+                                                        wizardFrameworks
+                                                    }
+                                                    email={email}
+                                                    laravelOptions={
+                                                        laravelOptions
+                                                    }
+                                                />
+                                                <InitStatus
+                                                    latestRun={latestRun}
+                                                />
+                                            </Card>
+                                        )}
+
+                                        {project.initialized && (
+                                            <Deferred
+                                                data="pods"
+                                                fallback={
+                                                    <WorkloadsPodsCardSkeleton />
+                                                }
+                                            >
+                                                <WorkloadsPodsCard
+                                                    project={project}
+                                                    activeEnv="local"
+                                                    pods={pods?.local ?? []}
+                                                    runs={runs}
+                                                    k9sInstalled={k9sInstalled}
+                                                    onOpenK9s={() =>
+                                                        handleOpenK9s('local')
+                                                    }
+                                                    launchingK9s={launchingK9s}
+                                                />
+                                            </Deferred>
+                                        )}
+
+                                        {project.initialized && (
+                                            <EnvironmentBackingServicesCard
+                                                key={activeEnv}
+                                                project={project}
+                                                currentEnv={activeEnvConfig}
+                                                services={backing?.[activeEnv]}
+                                            />
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <CloudEnvironmentOverviewCard
                                             project={project}
-                                            runs={runs}
-                                            pods={pods?.local ?? []}
-                                            healthMetrics={
-                                                healthMetrics?.local ?? null
+                                            activeEnv={activeEnv}
+                                            activeEnvConfig={activeEnvConfig}
+                                            activeServer={activeServer}
+                                            activeServerProvider={
+                                                activeServerProvider
                                             }
-                                            podMetrics={
-                                                podMetrics?.local ?? null
+                                            activeHost={activeHost}
+                                            readyServers={readyServers}
+                                            runs={runs}
+                                            pods={pods?.[activeEnv] ?? []}
+                                            domains={
+                                                domains?.[activeEnv] ?? null
+                                            }
+                                            onOpenDeploy={() =>
+                                                setDeployModalOpen(true)
+                                            }
+                                            onOpenCi={() =>
+                                                setDeployModalOpen(true)
+                                            }
+                                            onOpenSettings={(section) =>
+                                                setSettingsSection(section)
                                             }
                                         />
-                                    ) : (
-                                        <Card
-                                            label="Not set up for LaraKube yet"
-                                            tone="warn"
-                                        >
-                                            <p className="mb-3 text-xs text-soft">
-                                                This folder was added as-is —
-                                                LaraKube hasn't initialized it.
-                                                Set it up to get the local
-                                                cluster, backing services, and
-                                                secrets management for this
-                                                project.
-                                            </p>
-                                            <InitForm
-                                                project={project}
-                                                frameworks={frameworks}
-                                                wizardFrameworks={
-                                                    wizardFrameworks
-                                                }
-                                                email={email}
-                                                laravelOptions={laravelOptions}
-                                            />
-                                            <InitStatus latestRun={latestRun} />
-                                        </Card>
-                                    )}
 
-                                    {project.initialized && (
                                         <Deferred
                                             data="pods"
                                             fallback={
@@ -506,167 +642,168 @@ export default function ShowProject({
                                         >
                                             <WorkloadsPodsCard
                                                 project={project}
-                                                activeEnv="local"
-                                                pods={pods?.local ?? []}
+                                                activeEnv={activeEnv}
+                                                pods={pods?.[activeEnv] ?? []}
                                                 runs={runs}
+                                                serverName={activeServer?.name}
                                                 k9sInstalled={k9sInstalled}
                                                 onOpenK9s={() =>
-                                                    handleOpenK9s('local')
+                                                    handleOpenK9s(activeEnv)
                                                 }
                                                 launchingK9s={launchingK9s}
                                             />
                                         </Deferred>
-                                    )}
 
-                                    {project.initialized && (
-                                        <ProjectFeaturesCard
-                                            project={project}
-                                            currentEnv={activeEnvConfig}
-                                            pods={pods?.local ?? []}
-                                        />
-                                    )}
+                                        <Deferred
+                                            data={[
+                                                'healthMetrics',
+                                                'podMetrics',
+                                                'deployMetrics',
+                                            ]}
+                                            fallback={
+                                                <Card
+                                                    label={`App Health & Telemetry · ${activeEnv.toUpperCase()}`}
+                                                >
+                                                    <div className="animate-pulse p-4 text-xs text-soft">
+                                                        Loading workload
+                                                        telemetry…
+                                                    </div>
+                                                </Card>
+                                            }
+                                        >
+                                            <AppPerformanceMetricsCard
+                                                activeEnv={activeEnv}
+                                                healthMetrics={healthMetrics}
+                                                podMetrics={podMetrics}
+                                                deployMetrics={deployMetrics}
+                                            />
+                                        </Deferred>
 
-                                    {project.initialized && (
                                         <EnvironmentBackingServicesCard
                                             key={activeEnv}
                                             project={project}
                                             currentEnv={activeEnvConfig}
                                             services={backing?.[activeEnv]}
                                         />
-                                    )}
+                                    </>
+                                )}
+                            </div>
 
-                                    <Deferred
-                                        data="companions"
-                                        fallback={
-                                            <LocalDevCompanionsCardSkeleton
-                                                localTld={localTld}
+                            {/* Sidebar Column (Right): Activity */}
+                            <div className="flex flex-col gap-5">
+                                <RecentRunsCard
+                                    runs={runs}
+                                    activeEnv={activeEnv}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'configuration' && (
+                        <div className="space-y-5">
+                            {activeEnv === 'local' && !project.initialized ? (
+                                <Card
+                                    label="Not set up for LaraKube yet"
+                                    tone="warn"
+                                >
+                                    <p className="mb-3 text-xs text-soft">
+                                        This folder was added as-is — LaraKube
+                                        hasn&apos;t initialized it. Set it up to
+                                        get the local cluster, backing services,
+                                        and secrets management for this project.
+                                    </p>
+                                    <InitForm
+                                        project={project}
+                                        frameworks={frameworks}
+                                        wizardFrameworks={wizardFrameworks}
+                                        email={email}
+                                        laravelOptions={laravelOptions}
+                                    />
+                                    <InitStatus latestRun={latestRun} />
+                                </Card>
+                            ) : (
+                                <EnvironmentSecretsCard
+                                    project={project}
+                                    activeEnv={activeEnv}
+                                    activeEnvConfig={activeEnvConfig}
+                                    refreshKey={
+                                        latestRun
+                                            ? `${latestRun.id}:${latestRun.status}`
+                                            : null
+                                    }
+                                    onOpenPipelineSettings={
+                                        activeEnv !== 'local'
+                                            ? () =>
+                                                  setSettingsSection('pipeline')
+                                            : undefined
+                                    }
+                                />
+                            )}
+
+                            {(project.initialized || activeEnv !== 'local') &&
+                                (project.framework === 'laravel' ||
+                                Boolean(project.phpVersion) ? (
+                                    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_360px]">
+                                        <div className="flex flex-col gap-5">
+                                            <ProjectFeaturesCard
+                                                project={project}
+                                                currentEnv={activeEnvConfig}
+                                                pods={pods?.[activeEnv] ?? []}
                                             />
-                                        }
-                                    >
-                                        <LocalDevCompanionsCard
-                                            project={project}
-                                            companions={companions}
-                                            companionCredentials={
-                                                companionCredentials
-                                            }
-                                            localTld={localTld}
-                                        />
-                                    </Deferred>
+                                            <WorkloadScalingCard
+                                                project={project}
+                                                activeEnv={activeEnv}
+                                                activeEnvConfig={
+                                                    activeEnvConfig
+                                                }
+                                            />
+                                        </div>
 
-                                    {project.initialized && (
-                                        <EnvironmentSecretsCard
+                                        <div className="flex flex-col gap-5">
+                                            <PhpExtensionsCard
+                                                project={project}
+                                                activeEnv={activeEnv}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-5">
+                                        <ProjectFeaturesCard
+                                            project={project}
+                                            currentEnv={activeEnvConfig}
+                                            pods={pods?.[activeEnv] ?? []}
+                                        />
+                                        <WorkloadScalingCard
                                             project={project}
                                             activeEnv={activeEnv}
                                             activeEnvConfig={activeEnvConfig}
                                         />
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <CloudEnvironmentOverviewCard
-                                        project={project}
-                                        activeEnv={activeEnv}
-                                        activeEnvConfig={activeEnvConfig}
-                                        activeServer={activeServer}
-                                        activeServerProvider={
-                                            activeServerProvider
-                                        }
-                                        activeHost={activeHost}
-                                        readyServers={readyServers}
-                                        runs={runs}
-                                        pods={pods?.[activeEnv] ?? []}
-                                        domains={domains?.[activeEnv] ?? null}
-                                        onOpenDeploy={() =>
-                                            setDeployModalOpen(true)
-                                        }
-                                        onOpenCi={() =>
-                                            setDeployModalOpen(true)
-                                        }
-                                    />
-
-                                    <Deferred
-                                        data="pods"
-                                        fallback={<WorkloadsPodsCardSkeleton />}
-                                    >
-                                        <WorkloadsPodsCard
-                                            project={project}
-                                            activeEnv={activeEnv}
-                                            pods={pods?.[activeEnv] ?? []}
-                                            runs={runs}
-                                            serverName={activeServer?.name}
-                                            k9sInstalled={k9sInstalled}
-                                            onOpenK9s={() =>
-                                                handleOpenK9s(activeEnv)
-                                            }
-                                            launchingK9s={launchingK9s}
-                                        />
-                                    </Deferred>
-
-                                    <Deferred
-                                        data={[
-                                            'healthMetrics',
-                                            'podMetrics',
-                                            'deployMetrics',
-                                        ]}
-                                        fallback={
-                                            <Card
-                                                label={`App Health & Telemetry · ${activeEnv.toUpperCase()}`}
-                                            >
-                                                <div className="animate-pulse p-4 text-xs text-soft">
-                                                    Loading workload telemetry…
-                                                </div>
-                                            </Card>
-                                        }
-                                    >
-                                        <AppPerformanceMetricsCard
-                                            activeEnv={activeEnv}
-                                            healthMetrics={healthMetrics}
-                                            podMetrics={podMetrics}
-                                            deployMetrics={deployMetrics}
-                                        />
-                                    </Deferred>
-
-                                    <WorkloadScalingCard
-                                        project={project}
-                                        activeEnv={activeEnv}
-                                        activeEnvConfig={activeEnvConfig}
-                                    />
-
-                                    <ProjectFeaturesCard
-                                        project={project}
-                                        currentEnv={activeEnvConfig}
-                                        pods={pods?.[activeEnv] ?? []}
-                                    />
-
-                                    <EnvironmentBackingServicesCard
-                                        key={activeEnv}
-                                        project={project}
-                                        currentEnv={activeEnvConfig}
-                                        services={backing?.[activeEnv]}
-                                    />
-
-                                    <EnvironmentSecretsCard
-                                        project={project}
-                                        activeEnv={activeEnv}
-                                        activeEnvConfig={activeEnvConfig}
-                                    />
-                                </>
-                            )}
+                                    </div>
+                                ))}
                         </div>
+                    )}
 
-                        {/* Sidebar Column (Right): Runtime, Settings, Activity */}
-                        <div className="flex flex-col gap-5">
-                            {(project.framework === 'laravel' ||
-                                Boolean(project.phpVersion)) && (
-                                <PhpExtensionsCard
-                                    project={project}
-                                    activeEnv={activeEnv}
+                    {activeTab === 'settings' && (
+                        <ProjectSettingsCard project={project} />
+                    )}
+
+                    {activeTab === 'companions' && activeEnv === 'local' && (
+                        <Deferred
+                            data="companions"
+                            fallback={
+                                <LocalDevCompanionsCardSkeleton
+                                    localTld={localTld}
                                 />
-                            )}
-                            <ProjectSettingsCard project={project} />
-                            <RecentRunsCard runs={runs} activeEnv={activeEnv} />
-                        </div>
-                    </div>
+                            }
+                        >
+                            <LocalDevCompanionsCard
+                                project={project}
+                                companions={companions}
+                                companionCredentials={companionCredentials}
+                                localTld={localTld}
+                            />
+                        </Deferred>
+                    )}
 
                     {/* Deploy Modal Popup */}
                     <DeployDialog
@@ -695,7 +832,7 @@ export default function ShowProject({
                         onClose={() => setAddEnvModalOpen(false)}
                         project={project}
                         readyServers={readyServers}
-                        onCreated={(newEnv) => setActiveEnv(newEnv)}
+                        onCreated={(newEnv) => handleSelectEnv(newEnv)}
                     />
 
                     {/* Remove Environment Modal Popup */}
@@ -703,8 +840,27 @@ export default function ShowProject({
                         environment={removeEnvTarget}
                         onClose={() => setRemoveEnvTarget(null)}
                         project={project}
-                        onRemoved={() => setActiveEnv('local')}
+                        onRemoved={() => handleSelectEnv('local')}
                     />
+
+                    {/* Environment Settings Drawer (available across Overview & Configuration tabs) */}
+                    {activeEnv !== 'local' && (
+                        <EnvironmentSettingsDrawer
+                            isOpen={settingsSection !== null}
+                            onClose={() => setSettingsSection(null)}
+                            project={project}
+                            environment={activeEnv}
+                            activeServer={activeServer}
+                            readyServers={readyServers}
+                            activeHost={activeHost}
+                            domains={domains?.[activeEnv] ?? null}
+                            activeCi={
+                                activeEnvConfig?.ci ??
+                                project.environments?.[activeEnv]?.ci
+                            }
+                            initialSection={settingsSection}
+                        />
+                    )}
 
                     {/* K9s Recommendation Modal Popup */}
                     {k9sModalOpen && (
@@ -787,8 +943,12 @@ export default function ShowProject({
     );
 }
 
-/** Top navigation bar for toggling between Local Dev and Cloud Environments */
-function EnvironmentSwitchBar({
+/** Unified section tablist + right-aligned Environment dropdown & New Environment button */
+function ProjectTabAndEnvBar({
+    project,
+    visibleTabs,
+    activeTab,
+    onSelectTab,
     activeEnv,
     onSelectEnv,
     cloudEnvs,
@@ -797,6 +957,14 @@ function EnvironmentSwitchBar({
     onRemoveEnv,
     runs,
 }: {
+    project: Project;
+    visibleTabs: ReadonlyArray<{
+        key: ProjectTab;
+        label: string;
+        localOnly: boolean;
+    }>;
+    activeTab: ProjectTab;
+    onSelectTab: (tab: ProjectTab) => void;
     activeEnv: string;
     onSelectEnv: (env: string) => void;
     cloudEnvs: ProjectEnvironment[];
@@ -805,6 +973,7 @@ function EnvironmentSwitchBar({
     onRemoveEnv: (env: string) => void;
     runs: RecentRun[];
 }) {
+    const [menuVersion, setMenuVersion] = useState(0);
     const isLocalActive = activeEnv === 'local';
     const isLocalRunning = runs.some(
         (r) =>
@@ -816,9 +985,6 @@ function EnvironmentSwitchBar({
             ].includes(r.kind ?? '') && r.status === 'running',
     );
 
-    // Only the cloud environments the project really has: none until one is created.
-    const envsToRender = cloudEnvs;
-
     const activeDeploy = runs.find(
         (r) =>
             r.kind === 'deploy-app' &&
@@ -827,118 +993,164 @@ function EnvironmentSwitchBar({
                 (!r.label.includes('(') && activeEnv === 'production')),
     );
 
-    return (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-paper/60 p-1.5 shadow-2xs backdrop-blur-xs">
-            {/* Tabs List */}
-            <div className="flex flex-wrap items-center gap-1.5">
-                {/* Local Dev Tab */}
-                <button
-                    type="button"
-                    onClick={() => onSelectEnv('local')}
-                    className={cn(
-                        'flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
-                        isLocalActive
-                            ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
-                            : 'text-soft hover:bg-paper hover:text-ink',
-                    )}
-                >
-                    <Laptop className="size-3.5 text-brand" />
-                    <span>Local Dev</span>
-                    {isLocalRunning && (
-                        <span className="size-2 animate-ping rounded-full bg-brand" />
-                    )}
-                </button>
+    const localHost =
+        project.environments?.['local']?.webHost ??
+        `${project.name}.${project.effectiveTld || project.localTld || project.globalTld || 'kube'}`;
 
-                <div className="mx-1 h-5 w-px shrink-0 bg-line" />
+    const envOptions = [
+        {
+            value: 'local',
+            label: 'Local Dev',
+            icon: <Laptop className="size-3.5 shrink-0 text-brand" />,
+            badge: isLocalRunning ? (
+                <span className="size-2 animate-ping rounded-full bg-brand" />
+            ) : undefined,
+            description: localHost,
+        },
+        ...cloudEnvs.map((env) => {
+            const isDeploying = runs.some(
+                (r) =>
+                    r.kind === 'deploy-app' &&
+                    r.status === 'running' &&
+                    (r.label.includes(`(${env.name})`) ||
+                        (!r.label.includes('(') && env.name === 'production')),
+            );
+            const serverProvider = resolveServerProvider(
+                env.serverName,
+                env.serverProvider,
+                readyServers,
+            );
 
-                {/* Cloud Environment Tabs */}
-                {envsToRender.map((env) => {
-                    const isSelected = activeEnv === env.name;
-                    const isRunning = runs.some(
-                        (r) =>
-                            r.kind === 'deploy-app' &&
-                            r.status === 'running' &&
-                            (r.label.includes(`(${env.name})`) ||
-                                (!r.label.includes('(') &&
-                                    env.name === 'production')),
-                    );
-                    const serverProvider = resolveServerProvider(
-                        env.serverName,
-                        env.serverProvider,
-                        readyServers,
-                    );
-
-                    return (
-                        <div
-                            key={env.name}
-                            className={cn(
-                                'group flex items-center gap-1 rounded-xl pr-1 text-xs font-semibold transition-all',
-                                isSelected
-                                    ? 'bg-surface text-ink shadow-2xs ring-1 ring-line'
-                                    : 'text-soft hover:bg-paper hover:text-ink',
+            return {
+                value: env.name,
+                label: <span className="uppercase">{env.name}</span>,
+                icon: serverProvider ? (
+                    <ProviderLogo
+                        provider={serverProvider}
+                        size="xs"
+                        className="size-4 rounded-sm border-0 p-0 shadow-none"
+                    />
+                ) : (
+                    <Cloud className="size-3.5 shrink-0 text-sky-500" />
+                ),
+                badge:
+                    env.serverName || isDeploying ? (
+                        <span className="inline-flex items-center gap-1.5">
+                            {env.serverName && (
+                                <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-normal text-soft">
+                                    {env.serverName}
+                                </span>
                             )}
-                        >
-                            <button
-                                type="button"
-                                onClick={() => onSelectEnv(env.name)}
-                                className="flex items-center gap-1.5 py-2 pl-3"
-                            >
-                                {serverProvider ? (
-                                    <ProviderLogo
-                                        provider={serverProvider}
-                                        size="xs"
-                                        className="size-4 rounded-sm border-0 p-0 shadow-none"
-                                    />
-                                ) : (
-                                    <Cloud className="size-3.5 text-sky-500" />
-                                )}
-                                <span className="uppercase">{env.name}</span>
-                                {env.serverName && (
-                                    <span className="rounded bg-line/60 px-1 text-[10px] font-normal text-soft">
-                                        {env.serverName}
-                                    </span>
-                                )}
-                                {isRunning && (
-                                    <span className="size-2 animate-ping rounded-full bg-brand" />
-                                )}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRemoveEnv(env.name);
-                                }}
-                                title={`Remove ${env.name} from this project's blueprint`}
-                                className="rounded-lg p-1 text-soft opacity-0 transition-opacity group-hover:opacity-100 hover:bg-paper hover:text-accent"
-                            >
-                                <X className="size-3" />
-                            </button>
-                        </div>
-                    );
-                })}
+                            {isDeploying && (
+                                <span className="size-2 animate-ping rounded-full bg-brand" />
+                            )}
+                        </span>
+                    ) : undefined,
+                description: env.webHost ?? 'No domain configured',
+            };
+        }),
+    ];
 
-                {/* Add Environment Button */}
-                <button
-                    type="button"
+    return (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line">
+            {/* Section Tabs (Left) */}
+            <div
+                role="tablist"
+                aria-label={`${project.name} sections`}
+                className="flex gap-1"
+            >
+                {visibleTabs.map((item) => (
+                    <button
+                        key={item.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === item.key}
+                        onClick={() => onSelectTab(item.key)}
+                        className={cn(
+                            '-mb-px cursor-pointer border-b-2 px-3 py-2.5 text-[13px] font-medium transition',
+                            activeTab === item.key
+                                ? 'border-ink text-ink'
+                                : 'border-transparent text-soft hover:text-ink',
+                        )}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Environment Dropdown + New Environment Button (Right) */}
+            <div className="flex flex-wrap items-center gap-2 pb-1.5">
+                {!isLocalActive && activeDeploy && (
+                    <StatusPill tone="busy">
+                        {`Deploying (${activeEnv})`}
+                    </StatusPill>
+                )}
+
+                <div className="flex h-8 items-center gap-2 rounded-lg bg-surface pl-2.5 ring-1 ring-line">
+                    <span className="text-xs text-soft">Environment</span>
+                    <SelectMenu
+                        key={menuVersion}
+                        value={activeEnv}
+                        onChange={onSelectEnv}
+                        align="right"
+                        panelLabel="Project Environments"
+                        aria-label="Select project environment"
+                        triggerClassName="h-8 rounded-lg bg-transparent px-2 text-xs font-semibold ring-0 hover:ring-0"
+                        options={envOptions}
+                        footer={
+                            <div className="flex flex-col gap-0.5">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setMenuVersion((v) => v + 1);
+                                        onAddEnv();
+                                    }}
+                                    className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-medium text-brand transition hover:bg-brand/10"
+                                >
+                                    <Plus className="size-3.5 shrink-0" />
+                                    <span>Create new environment…</span>
+                                </button>
+                                {!isLocalActive && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMenuVersion((v) => v + 1);
+                                            onRemoveEnv(activeEnv);
+                                        }}
+                                        className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-medium text-accent transition hover:bg-accent-tint"
+                                    >
+                                        <Trash2 className="size-3.5 shrink-0" />
+                                        <span>
+                                            Remove {activeEnv} environment…
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
+                        }
+                    />
+                </div>
+
+                <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={onAddEnv}
-                    className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-medium text-soft transition-colors hover:bg-paper hover:text-ink"
                     title="Create a cloud environment, such as staging or production"
                 >
                     <Plus className="size-3.5" />
-                    <span>New environment</span>
-                </button>
-            </div>
+                    <span>New Environment</span>
+                </Button>
 
-            {/* Contextual Action on the Right */}
-            {!isLocalActive && (
-                <div className="flex items-center gap-2 pr-1">
-                    {activeDeploy && (
-                        <StatusPill tone="busy">
-                            {`Deploying (${activeEnv})`}
-                        </StatusPill>
-                    )}
-                </div>
-            )}
+                {!isLocalActive && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveEnv(activeEnv)}
+                        title={`Remove ${activeEnv} from this project's blueprint`}
+                    >
+                        <Trash2 className="size-3.5 text-soft hover:text-accent" />
+                    </Button>
+                )}
+            </div>
         </div>
     );
 }
@@ -957,6 +1169,7 @@ function CloudEnvironmentOverviewCard({
     domains,
     onOpenDeploy,
     onOpenCi: _onOpenCi,
+    onOpenSettings,
 }: {
     project: Project;
     activeEnv: string;
@@ -970,9 +1183,17 @@ function CloudEnvironmentOverviewCard({
     domains?: ServerDomain[] | null;
     onOpenDeploy: () => void;
     onOpenCi?: () => void;
+    onOpenSettings?: (section: EnvironmentSettingsDrawerSection) => void;
 }) {
-    const [settingsSection, setSettingsSection] =
+    const [localSettingsSection, setLocalSettingsSection] =
         useState<EnvironmentSettingsDrawerSection | null>(null);
+    const openSettingsSection = (section: EnvironmentSettingsDrawerSection) => {
+        if (onOpenSettings) {
+            onOpenSettings(section);
+        } else {
+            setLocalSettingsSection(section);
+        }
+    };
 
     const activeCi =
         activeEnvConfig?.ci ?? project.environments?.[activeEnv]?.ci;
@@ -1086,7 +1307,7 @@ function CloudEnvironmentOverviewCard({
             <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
                     {/* Server Details */}
-                    <div className="rounded-xl border border-line bg-paper/60 p-3">
+                    <div className="min-w-0 rounded-xl border border-line bg-paper/60 p-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Target Server
@@ -1094,7 +1315,9 @@ function CloudEnvironmentOverviewCard({
                             {activeServer ? (
                                 <button
                                     type="button"
-                                    onClick={() => setSettingsSection('server')}
+                                    onClick={() =>
+                                        openSettingsSection('server')
+                                    }
                                     className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                 >
                                     Change
@@ -1103,13 +1326,13 @@ function CloudEnvironmentOverviewCard({
                         </div>
 
                         {activeServer ? (
-                            <div className="mt-2.5 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
+                            <div className="mt-2.5 flex min-w-0 items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 items-center gap-3">
                                     <ProviderLogo
                                         provider={activeServerProvider}
                                         size="sm"
                                     />
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5">
                                             <Link
                                                 href={
@@ -1122,14 +1345,14 @@ function CloudEnvironmentOverviewCard({
                                                 {activeServer.name}
                                             </Link>
                                             {activeServerProvider && (
-                                                <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                <span className="shrink-0 rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
                                                     {providerLabels[
                                                         activeServerProvider
                                                     ] ?? activeServerProvider}
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="mt-0.5 font-mono text-[11px] text-soft">
+                                        <p className="mt-0.5 truncate font-mono text-[11px] text-soft">
                                             {activeServer.ip ? (
                                                 <Redactable
                                                     value={activeServer.ip}
@@ -1147,7 +1370,9 @@ function CloudEnvironmentOverviewCard({
                                 <span>No server linked yet. </span>
                                 <button
                                     type="button"
-                                    onClick={() => setSettingsSection('server')}
+                                    onClick={() =>
+                                        openSettingsSection('server')
+                                    }
                                     className="cursor-pointer font-medium text-brand hover:underline"
                                 >
                                     Link server
@@ -1157,14 +1382,14 @@ function CloudEnvironmentOverviewCard({
                     </div>
 
                     {/* Public Address Details */}
-                    <div className="rounded-xl border border-line bg-paper/60 p-3">
+                    <div className="min-w-0 rounded-xl border border-line bg-paper/60 p-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Public Address
                             </span>
                             <button
                                 type="button"
-                                onClick={() => setSettingsSection('address')}
+                                onClick={() => openSettingsSection('address')}
                                 className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                             >
                                 {activeHost ? 'Edit' : 'Configure'}
@@ -1207,7 +1432,7 @@ function CloudEnvironmentOverviewCard({
                                 <button
                                     type="button"
                                     onClick={() =>
-                                        setSettingsSection('address')
+                                        openSettingsSection('address')
                                     }
                                     className="cursor-pointer font-medium text-brand hover:underline"
                                 >
@@ -1218,7 +1443,7 @@ function CloudEnvironmentOverviewCard({
                     </div>
 
                     {/* Delivery Pipeline Details */}
-                    <div className="rounded-xl border border-line bg-paper/60 p-3">
+                    <div className="min-w-0 rounded-xl border border-line bg-paper/60 p-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium tracking-wider text-soft uppercase">
                                 Delivery Pipeline
@@ -1228,7 +1453,7 @@ function CloudEnvironmentOverviewCard({
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            setSettingsSection('pipeline')
+                                            openSettingsSection('pipeline')
                                         }
                                         className="flex cursor-pointer items-center gap-1 text-[11px] text-soft hover:text-ink focus:outline-none"
                                         title="Rotate scoped deployer secrets"
@@ -1239,7 +1464,7 @@ function CloudEnvironmentOverviewCard({
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            setSettingsSection('pipeline')
+                                            openSettingsSection('pipeline')
                                         }
                                         className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                     >
@@ -1250,7 +1475,7 @@ function CloudEnvironmentOverviewCard({
                                 <button
                                     type="button"
                                     onClick={() =>
-                                        setSettingsSection('pipeline')
+                                        openSettingsSection('pipeline')
                                     }
                                     className="cursor-pointer text-[11px] font-medium text-brand hover:underline focus:outline-none"
                                 >
@@ -1260,8 +1485,8 @@ function CloudEnvironmentOverviewCard({
                         </div>
 
                         {activeCi?.hasWorkflow ? (
-                            <div className="mt-2.5 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
+                            <div className="mt-2.5 flex min-w-0 items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 items-center gap-3">
                                     <div className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-line/60 bg-surface shadow-2xs">
                                         {activeCi.platform === 'gitlab' ? (
                                             <SiGitlab className="size-4 text-[#FC6D26]" />
@@ -1271,7 +1496,7 @@ function CloudEnvironmentOverviewCard({
                                             <SiGithub className="size-4 text-ink" />
                                         )}
                                     </div>
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5">
                                             <span className="truncate text-xs font-semibold text-ink">
                                                 {activeCi.platform === 'gitlab'
@@ -1281,11 +1506,18 @@ function CloudEnvironmentOverviewCard({
                                                       ? 'Forgejo'
                                                       : 'GitHub Actions'}
                                             </span>
-                                            <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                            <span className="shrink-0 rounded bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-soft">
                                                 {activeCi.branch ?? 'main'}
                                             </span>
                                         </div>
-                                        <p className="mt-0.5 truncate font-mono text-[11px] text-soft">
+                                        <p
+                                            className="mt-0.5 truncate font-mono text-[11px] text-soft"
+                                            title={
+                                                activeCi.registry?.image
+                                                    ? `${activeCi.registry.provider ?? 'ghcr'}:${activeCi.registry.image}`
+                                                    : `${activeCi.platform === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows'}`
+                                            }
+                                        >
                                             {activeCi.registry?.image
                                                 ? `${activeCi.registry.provider ?? 'ghcr'}:${activeCi.registry.image}`
                                                 : `${activeCi.platform === 'gitlab' ? '.gitlab-ci.yml' : '.github/workflows'}`}
@@ -1299,7 +1531,7 @@ function CloudEnvironmentOverviewCard({
                                 <button
                                     type="button"
                                     onClick={() =>
-                                        setSettingsSection('pipeline')
+                                        openSettingsSection('pipeline')
                                     }
                                     className="cursor-pointer font-medium text-brand hover:underline"
                                 >
@@ -1310,18 +1542,20 @@ function CloudEnvironmentOverviewCard({
                     </div>
                 </div>
 
-                <EnvironmentSettingsDrawer
-                    isOpen={settingsSection !== null}
-                    onClose={() => setSettingsSection(null)}
-                    project={project}
-                    environment={activeEnv}
-                    activeServer={activeServer}
-                    readyServers={readyServers}
-                    activeHost={activeHost}
-                    domains={domains}
-                    activeCi={activeCi}
-                    initialSection={settingsSection}
-                />
+                {!onOpenSettings && (
+                    <EnvironmentSettingsDrawer
+                        isOpen={localSettingsSection !== null}
+                        onClose={() => setLocalSettingsSection(null)}
+                        project={project}
+                        environment={activeEnv}
+                        activeServer={activeServer}
+                        readyServers={readyServers}
+                        activeHost={activeHost}
+                        domains={domains}
+                        activeCi={activeCi}
+                        initialSection={localSettingsSection}
+                    />
+                )}
 
                 {/* Deploy & Workload Action Banner */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
@@ -3643,51 +3877,58 @@ function ProjectSettingsCard({ project }: { project: Project }) {
 
     return (
         <Card label="Project Settings">
-            <div className="space-y-4">
+            <div className="divide-y divide-line">
                 {/* Infrastructure Maintenance */}
-                <div>
-                    <h4 className="text-xs font-semibold text-ink">
-                        Infrastructure Maintenance
-                    </h4>
-                    <p className="mt-1 text-xs leading-relaxed text-soft">
-                        Regenerates Dockerfiles and Kubernetes manifests from
-                        your blueprint DNA without touching databases or live
-                        workloads.
-                    </p>
-                    <div className="mt-2.5">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            disabled={healing}
-                            onClick={() => setConfirmHealOpen(true)}
-                            className="w-full justify-center gap-1.5"
-                            title="Regenerate manifests from .larakube.json"
-                        >
-                            <HeartPulse className="size-3.5 text-brand" />
-                            <span>
-                                {healing ? 'Healing…' : 'Heal Infrastructure'}
-                            </span>
-                        </Button>
+                <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <h4 className="text-xs font-semibold text-ink">
+                            Infrastructure Maintenance
+                        </h4>
+                        <p className="mt-1 text-xs leading-relaxed text-soft">
+                            Regenerates Dockerfiles and Kubernetes manifests
+                            from your blueprint DNA without touching databases
+                            or live workloads.
+                        </p>
                     </div>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={healing}
+                        onClick={() => setConfirmHealOpen(true)}
+                        className="shrink-0 gap-1.5"
+                        title="Regenerate manifests from .larakube.json"
+                    >
+                        <HeartPulse className="size-3.5 text-brand" />
+                        <span>
+                            {healing ? 'Healing…' : 'Heal Infrastructure'}
+                        </span>
+                    </Button>
                 </div>
 
-                <div className="border-t border-line pt-3">
+                {/* Remove Project */}
+                <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <h4 className="text-xs font-semibold text-ink">
+                            Remove from LaraKube Desktop
+                        </h4>
+                        <p className="mt-1 text-xs leading-relaxed text-soft">
+                            Only forgets the project in Desktop by default. Your
+                            local files, database, and cloud servers stay
+                            untouched unless you choose to delete the folder
+                            too.
+                        </p>
+                    </div>
                     <Button
                         type="button"
                         variant="danger"
                         size="sm"
                         onClick={() => setConfirmDeleteOpen(true)}
-                        className="w-full justify-center gap-1.5"
+                        className="shrink-0 gap-1.5"
                     >
                         <Trash2 className="size-3.5" />
                         <span>Remove from LaraKube Desktop</span>
                     </Button>
-                    <p className="mt-2 text-center text-xs leading-relaxed text-soft">
-                        Only forgets the project in Desktop by default. Your
-                        local files, database, and cloud servers stay untouched
-                        unless you choose to delete the folder too.
-                    </p>
                 </div>
             </div>
 

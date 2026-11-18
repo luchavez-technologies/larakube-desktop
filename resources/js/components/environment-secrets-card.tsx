@@ -1,27 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
 import {
+    AlertTriangle,
     ArrowDownCircle,
     ArrowUpCircle,
-    Check,
+    CheckCircle2,
+    Clock,
     Eye,
     EyeOff,
     FileText,
-    Globe,
     Info,
-    Lock,
-    Pencil,
-    Plus,
+    Key,
     Rocket,
     RotateCw,
-    Search,
     Shield,
-    Trash2,
     X,
 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
-import StatusPill from '@/components/status-pill';
+import ConfirmModal from '@/components/confirm-modal';
+import InfoTooltip from '@/components/info-tooltip';
+import EnvironmentVariablesTable, {
+    createDraftRow,
+    normalizeEnvKey,
+    type DraftEnvRow,
+    type EnvTableRow,
+    type StagedEnvChange,
+} from '@/components/environment-variables-table';
 import { cn } from '@/lib/utils';
 import {
     pull as pullRoute,
@@ -50,6 +55,15 @@ type DriftSummary = {
     canReadSecrets: boolean;
 };
 
+type PushMetadata = {
+    platform: string;
+    secretName: string;
+    existsOnCi: boolean | null;
+    lastPushedAt: string | null;
+    localUpdatedAt: string | null;
+    modifiedSincePush: boolean;
+};
+
 type DriftStatusResponse = {
     environment: string;
     status: {
@@ -58,13 +72,59 @@ type DriftStatusResponse = {
         items: DriftItem[];
         summary: DriftSummary;
     } | null;
+    pushMeta?: PushMetadata | null;
 };
+
+function formatPushTimestamp(
+    iso: string,
+    nowMs: number | null,
+): { label: string; title: string } | null {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    const timeText = date.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+    const dateText = date.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+    });
+    const title = date.toLocaleString();
+
+    if (nowMs === null) {
+        return { label: `${dateText} · ${timeText}`, title };
+    }
+
+    const diffSec = Math.max(0, Math.round((nowMs - date.getTime()) / 1000));
+    if (diffSec < 60) {
+        return { label: `just now · ${timeText}`, title };
+    }
+    if (diffSec < 3600) {
+        return {
+            label: `${Math.floor(diffSec / 60)}m ago · ${timeText}`,
+            title,
+        };
+    }
+    if (diffSec < 86400) {
+        return {
+            label: `${Math.floor(diffSec / 3600)}h ago · ${timeText}`,
+            title,
+        };
+    }
+
+    return { label: `${dateText} · ${timeText}`, title };
+}
 
 export default function EnvironmentSecretsCard({
     project,
     activeEnv,
     activeEnvConfig,
     customEndpoints,
+    onOpenPipelineSettings,
+    refreshKey,
 }: {
     project: { id?: number; name?: string; framework?: string | null };
     activeEnv: string;
@@ -75,31 +135,28 @@ export default function EnvironmentSecretsCard({
         pull?: string;
         update?: string;
     };
+    onOpenPipelineSettings?: () => void;
+    refreshKey?: string | number | null;
 }) {
     const [loading, setLoading] = useState(true);
     const [reveal, setReveal] = useState(false);
+    const revealRef = useRef(false);
     const [data, setData] = useState<DriftStatusResponse['status'] | null>(
         null,
     );
-    const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState<
-        'all' | 'secrets' | 'config' | 'drift'
-    >('all');
+    const [pushMeta, setPushMeta] = useState<PushMetadata | null>(null);
+    const [nowMs, setNowMs] = useState<number | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'push' | 'pull' | null>(
+        null,
+    );
 
-    // Staged variable updates: key -> newValue (or null for deletion)
     const [stagedChanges, setStagedChanges] = useState<
-        Record<string, string | null>
+        Record<string, StagedEnvChange>
     >({});
-    const [editingKey, setEditingKey] = useState<string | null>(null);
-    const [editingValue, setEditingValue] = useState('');
+    const [draftRows, setDraftRows] = useState<DraftEnvRow[]>(() => [
+        createDraftRow(),
+    ]);
 
-    // Inline Add Form
-    const [isAdding, setIsAdding] = useState(false);
-    const [newKey, setNewKey] = useState('');
-    const [newValue, setNewValue] = useState('');
-    const [newIsSecret, setNewIsSecret] = useState(false);
-
-    // Network states
     const [saving, setSaving] = useState(false);
     const [pushing, setPushing] = useState(false);
     const [pulling, setPulling] = useState(false);
@@ -121,98 +178,125 @@ export default function EnvironmentSecretsCard({
         customEndpoints?.update ??
         (project.id ? updateRoute({ project: project.id }).url : '');
 
-    const envFilename = activeEnv === 'local' ? '.env' : `.env.${activeEnv}`;
+    const editable = Boolean(updateUrl);
+    const isLocalEnv = activeEnv === 'local';
+    const envFilename = isLocalEnv ? '.env' : `.env.${activeEnv}`;
     const isStaticSpa =
-        ['astro', 'vite', 'vue', 'react', 'svelte', 'solid'].includes(
-            project.framework?.toLowerCase() ?? '',
-        ) && !activeEnvConfig?.components?.includes('ssr');
+        [
+            'astro',
+            'vite',
+            'vue',
+            'react',
+            'svelte',
+            'solid',
+            'docusaurus',
+        ].includes(project.framework?.toLowerCase() ?? '') &&
+        !activeEnvConfig?.components?.includes('ssr');
+    const isStaticCloud = !isLocalEnv && isStaticSpa;
+    const ciPlatform = activeEnvConfig?.ci?.platform ?? 'github';
+    const ciPlatformLabel =
+        ciPlatform === 'forgejo'
+            ? 'Forgejo'
+            : ciPlatform === 'gitlab'
+              ? 'GitLab CI'
+              : 'GitHub Actions';
+    const buildSecretName = `${activeEnv.toUpperCase()}_BUILD_ENV`;
 
     const isOpenBaoActive =
         Boolean(data?.summary?.rotated && data.summary.rotated > 0) ||
         Boolean(activeEnvConfig?.components?.includes('openbao')) ||
         Boolean(activeEnvConfig?.plex?.includes('openbao'));
 
-    function fetchStatus(showPlaintext: boolean = reveal) {
-        if (!statusUrl) return;
-        setLoading(true);
-        const url = `${statusUrl}?environment=${encodeURIComponent(activeEnv)}${showPlaintext ? '&reveal=1' : ''}`;
-        fetch(url, { headers: { Accept: 'application/json' } })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((res: DriftStatusResponse | null) => {
-                setData(res?.status ?? null);
-            })
-            .catch(() => setData(null))
-            .finally(() => setLoading(false));
-    }
+    const fetchStatus = useCallback(
+        (showPlaintext: boolean) => {
+            if (!statusUrl) return;
+            setLoading(true);
+            const url = `${statusUrl}?environment=${encodeURIComponent(activeEnv)}${showPlaintext ? '&reveal=1' : ''}`;
+            fetch(url, { headers: { Accept: 'application/json' } })
+                .then((res) => (res.ok ? res.json() : null))
+                .then((res: DriftStatusResponse | null) => {
+                    setData(res?.status ?? null);
+                    setPushMeta(res?.pushMeta ?? null);
+                })
+                .catch(() => {
+                    setData(null);
+                    setPushMeta(null);
+                })
+                .finally(() => setLoading(false));
+        },
+        [activeEnv, statusUrl],
+    );
+
+    const prevRefreshKeyRef = useRef(refreshKey);
+    useEffect(() => {
+        setNowMs(Date.now());
+        setStagedChanges({});
+        setDraftRows([createDraftRow()]);
+        setMessage(null);
+        fetchStatus(revealRef.current);
+    }, [fetchStatus]);
 
     useEffect(() => {
-        setStagedChanges({});
-        setEditingKey(null);
-        setIsAdding(false);
-        setMessage(null);
-        fetchStatus(reveal);
-    }, [activeEnv, statusUrl]);
+        if (prevRefreshKeyRef.current === refreshKey) {
+            return;
+        }
+        prevRefreshKeyRef.current = refreshKey;
+        setNowMs(Date.now());
+        fetchStatus(revealRef.current);
+    }, [fetchStatus, refreshKey]);
 
     function toggleReveal() {
         const nextReveal = !reveal;
+        revealRef.current = nextReveal;
         setReveal(nextReveal);
         fetchStatus(nextReveal);
     }
 
-    function startEdit(item: DriftItem) {
-        setEditingKey(item.key);
-        setEditingValue(stagedChanges[item.key] ?? item.local ?? '');
-    }
-
-    function cancelEdit() {
-        setEditingKey(null);
-        setEditingValue('');
-    }
-
-    function commitEdit(key: string) {
+    function handleStageEdit(key: string, value: string, isSecret: boolean) {
         setStagedChanges((prev) => ({
             ...prev,
-            [key]: editingValue,
-        }));
-        setEditingKey(null);
-        setEditingValue('');
-    }
-
-    function stageDelete(key: string) {
-        if (!confirm(`Are you sure you want to remove '${key}'?`)) {
-            return;
-        }
-        setStagedChanges((prev) => ({
-            ...prev,
-            [key]: null,
+            [key]: { value, isSecret },
         }));
     }
 
-    function commitNew() {
-        const key = newKey.trim().toUpperCase().replace(/\s+/g, '_');
-        if (!key) return;
+    function handleStageDelete(key: string, isSecret: boolean) {
         setStagedChanges((prev) => ({
             ...prev,
-            [key]: newValue,
+            [key]: { value: null, isSecret },
         }));
-        setIsAdding(false);
-        setNewKey('');
-        setNewValue('');
-        setNewIsSecret(false);
     }
 
-    function cancelNew() {
-        setIsAdding(false);
-        setNewKey('');
-        setNewValue('');
-        setNewIsSecret(false);
+    function handleUnstageKey(key: string) {
+        setStagedChanges((prev) => {
+            const next = { ...prev };
+            delete next[key];
+
+            return next;
+        });
     }
 
     function discardChanges() {
         setStagedChanges({});
-        setEditingKey(null);
-        setIsAdding(false);
+        setDraftRows([createDraftRow()]);
     }
+
+    const stagedVariables = useMemo(() => {
+        const merged: Record<string, string | null> = {};
+        for (const [key, change] of Object.entries(stagedChanges)) {
+            merged[key] = change.value;
+        }
+        for (const draft of draftRows) {
+            const key = normalizeEnvKey(draft.key);
+            if (key !== '') {
+                merged[key] = draft.value;
+            }
+        }
+
+        return merged;
+    }, [stagedChanges, draftRows]);
+
+    const stagedCount = Object.keys(stagedVariables).length;
+    const hasStagedChanges = stagedCount > 0;
 
     async function handleSave(redeploy: boolean) {
         if (!updateUrl) return;
@@ -229,12 +313,12 @@ export default function EnvironmentSecretsCard({
                         (
                             document.querySelector(
                                 'meta[name="csrf-token"]',
-                            ) as HTMLMetaElement
+                            ) as HTMLMetaElement | null
                         )?.content ?? '',
                 },
                 body: JSON.stringify({
                     environment: activeEnv,
-                    variables: stagedChanges,
+                    variables: stagedVariables,
                     redeploy,
                 }),
             });
@@ -243,9 +327,14 @@ export default function EnvironmentSecretsCard({
             if (result.success) {
                 setMessage({
                     text: result.message,
-                    type: 'ok',
+                    type: result.warning ? 'warn' : 'ok',
                 });
                 setStagedChanges({});
+                setDraftRows([createDraftRow()]);
+                if (result.pushMeta) {
+                    setPushMeta(result.pushMeta);
+                    setNowMs(Date.now());
+                }
                 if (result.status) {
                     setData(result.status);
                 } else {
@@ -268,21 +357,30 @@ export default function EnvironmentSecretsCard({
     }
 
     function handlePush() {
-        if (
-            !confirm(
-                `Push secret variables from local ${envFilename} into the cluster secrets for '${activeEnv}'?`,
-            )
-        ) {
-            return;
-        }
+        setConfirmAction('push');
+    }
+
+    function executePush() {
+        setConfirmAction(null);
         setPushing(true);
         router.post(
             pushUrl,
             { environment: activeEnv },
             {
                 preserveScroll: true,
+                preserveState: true,
+                only: ['runs', 'latestRun'],
+                onSuccess: () => {
+                    setMessage({
+                        text: isStaticCloud
+                            ? `Pushing ${envFilename} to ${ciPlatformLabel} (${buildSecretName})…`
+                            : `Pushing ${envFilename} secrets to ${activeEnv}…`,
+                        type: 'ok',
+                    });
+                },
                 onFinish: () => {
                     setPushing(false);
+                    setNowMs(Date.now());
                     fetchStatus(reveal);
                 },
             },
@@ -290,19 +388,25 @@ export default function EnvironmentSecretsCard({
     }
 
     function handlePull() {
-        if (
-            !confirm(
-                `Pull secret variables from the cluster into your local ${envFilename} file? Existing lines will be updated.`,
-            )
-        ) {
-            return;
-        }
+        setConfirmAction('pull');
+    }
+
+    function executePull() {
+        setConfirmAction(null);
         setPulling(true);
         router.post(
             pullUrl,
             { environment: activeEnv },
             {
                 preserveScroll: true,
+                preserveState: true,
+                only: ['runs', 'latestRun'],
+                onSuccess: () => {
+                    setMessage({
+                        text: `Pulling ${activeEnv} secrets into ${envFilename}…`,
+                        type: 'ok',
+                    });
+                },
                 onFinish: () => {
                     setPulling(false);
                     fetchStatus(reveal);
@@ -311,73 +415,31 @@ export default function EnvironmentSecretsCard({
         );
     }
 
-    // Merge cluster/local items with staged changes
-    const displayedItems = useMemo(() => {
-        const rawItems = data?.items ?? [];
-        const map = new Map<string, DriftItem>();
+    const tableRows = useMemo<EnvTableRow[]>(
+        () =>
+            (data?.items ?? []).map((item) => ({
+                key: item.key,
+                value: item.local,
+                isSecret: item.isSecret,
+                status: item.status,
+                isExcluded: item.isExcluded,
+                clusterValue: item.cluster,
+            })),
+        [data],
+    );
 
-        for (const item of rawItems) {
-            map.set(item.key, { ...item });
-        }
-
-        // Apply staged changes
-        for (const [key, value] of Object.entries(stagedChanges)) {
-            if (value === null) {
-                // Staged deletion
-                if (map.has(key)) {
-                    map.set(key, {
-                        ...map.get(key)!,
-                        local: null,
-                        status: 'only_cluster',
-                    });
-                }
-            } else {
-                const existing = map.get(key);
-                const isSecret =
-                    existing?.isSecret ??
-                    (key.includes('SECRET') ||
-                        key.includes('KEY') ||
-                        key.includes('PASSWORD') ||
-                        key.includes('TOKEN'));
-
-                map.set(key, {
-                    key,
-                    status: existing?.cluster !== null ? 'drift' : 'only_local',
-                    isSecret,
-                    isExcluded: existing?.isExcluded ?? false,
-                    local: value,
-                    cluster: existing?.cluster ?? null,
-                });
-            }
-        }
-
-        let list = Array.from(map.values());
-
-        // Apply search filter
-        if (search.trim()) {
-            const q = search.trim().toLowerCase();
-            list = list.filter((i) => i.key.toLowerCase().includes(q));
-        }
-
-        // Apply type filter
-        if (filter === 'secrets') {
-            list = list.filter((i) => i.isSecret);
-        } else if (filter === 'config') {
-            list = list.filter((i) => !i.isSecret);
-        } else if (filter === 'drift') {
-            list = list.filter(
-                (i) =>
-                    i.status === 'drift' ||
-                    i.status === 'only_local' ||
-                    i.status === 'only_cluster',
-            );
-        }
-
-        return list.sort((a, b) => a.key.localeCompare(b.key));
-    }, [data, stagedChanges, search, filter]);
-
-    const hasStagedChanges = Object.keys(stagedChanges).length > 0;
     const summary = data?.summary;
+    const mountedLocalCount = isLocalEnv
+        ? (data?.items ?? []).filter(
+              (item) =>
+                  (!item.isSecret || isStaticSpa) &&
+                  (item.status === 'only_local' ||
+                      item.status === 'only local'),
+          ).length
+        : 0;
+    const unpushedLocalCount = isStaticCloud
+        ? 0
+        : Math.max(0, (summary?.onlyLocal ?? 0) - mountedLocalCount);
 
     return (
         <Card
@@ -398,7 +460,6 @@ export default function EnvironmentSecretsCard({
                         variant="secondary"
                         size="sm"
                         onClick={toggleReveal}
-                        className="gap-1.5"
                         title={
                             reveal
                                 ? 'Mask secret values'
@@ -418,7 +479,6 @@ export default function EnvironmentSecretsCard({
                         size="sm"
                         onClick={() => fetchStatus(reveal)}
                         disabled={loading}
-                        className="gap-1.5"
                         title="Refresh environment variables status"
                     >
                         <RotateCw
@@ -442,50 +502,257 @@ export default function EnvironmentSecretsCard({
                         </span>
                         <span>↔</span>
                         <span className="font-mono text-ink">
-                            {data?.namespace
-                                ? `${data.namespace} (app-secrets / app-config)`
-                                : 'Cluster Secret / ConfigMap'}
+                            {isStaticCloud
+                                ? `${ciPlatformLabel} (${buildSecretName})`
+                                : data?.namespace
+                                  ? `${data.namespace} (app-secrets / app-config)`
+                                  : 'Cluster Secret / ConfigMap'}
                         </span>
+                        {isStaticCloud && onOpenPipelineSettings && (
+                            <button
+                                type="button"
+                                onClick={onOpenPipelineSettings}
+                                className="cursor-pointer text-[11px] font-medium text-brand hover:underline"
+                                title="Change target Git Remote or Git Forge platform"
+                            >
+                                Change
+                            </button>
+                        )}
                     </div>
 
-                    {summary && (
-                        <div className="flex items-center gap-3">
-                            <span className="font-medium text-ok">
-                                {summary.inSync} in sync
-                            </span>
-                            {summary.drift > 0 && (
-                                <span className="font-medium text-warn">
-                                    {summary.drift} drifted
-                                </span>
-                            )}
-                            {summary.onlyLocal > 0 && (
-                                <span className="font-medium text-soft">
-                                    {summary.onlyLocal} local only
-                                </span>
-                            )}
-                            {summary.rotated > 0 && (
-                                <span className="font-medium text-brand">
-                                    {summary.rotated} rotated by Vault
-                                </span>
-                            )}
+                    {(summary || pushMeta) && (
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            {(() => {
+                                const pushedDisplay = pushMeta?.lastPushedAt
+                                    ? formatPushTimestamp(
+                                          pushMeta.lastPushedAt,
+                                          nowMs,
+                                      )
+                                    : null;
+
+                                if (isStaticCloud && pushMeta) {
+                                    if (
+                                        pushMeta.existsOnCi === false &&
+                                        !pushedDisplay
+                                    ) {
+                                        return (
+                                            <span
+                                                className="inline-flex items-center gap-1 rounded-full bg-warn-tint px-2 py-0.5 text-[11px] font-medium text-warn"
+                                                title={`${buildSecretName} was not found in ${ciPlatformLabel} Actions secrets yet`}
+                                            >
+                                                <Clock className="size-3" />
+                                                <span>
+                                                    Not on {ciPlatformLabel} yet
+                                                </span>
+                                            </span>
+                                        );
+                                    }
+
+                                    if (
+                                        pushMeta.modifiedSincePush &&
+                                        pushedDisplay
+                                    ) {
+                                        return (
+                                            <span
+                                                className="inline-flex items-center gap-1 rounded-full bg-warn-tint px-2 py-0.5 text-[11px] font-medium text-warn"
+                                                title={`${envFilename} was modified on disk after the last recorded push (${pushedDisplay.title})`}
+                                            >
+                                                <Clock className="size-3" />
+                                                <span>
+                                                    Edited locally · Last pushed{' '}
+                                                    {pushedDisplay.label}
+                                                </span>
+                                            </span>
+                                        );
+                                    }
+
+                                    if (pushedDisplay) {
+                                        return (
+                                            <span
+                                                className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[11px] font-medium text-ok"
+                                                title={`Last pushed to ${ciPlatformLabel} (${buildSecretName}): ${pushedDisplay.title}`}
+                                            >
+                                                <CheckCircle2 className="size-3" />
+                                                <span>
+                                                    Last pushed{' '}
+                                                    {pushedDisplay.label}
+                                                </span>
+                                            </span>
+                                        );
+                                    }
+
+                                    if (pushMeta.existsOnCi === true) {
+                                        return (
+                                            <span
+                                                className="inline-flex items-center gap-1 rounded-full bg-ok-tint px-2 py-0.5 text-[11px] font-medium text-ok"
+                                                title={`${buildSecretName} exists in ${ciPlatformLabel} Actions secrets (write-only; values cannot be read back)`}
+                                            >
+                                                <CheckCircle2 className="size-3" />
+                                                <span>
+                                                    Present on {ciPlatformLabel}
+                                                </span>
+                                            </span>
+                                        );
+                                    }
+                                } else if (!isLocalEnv && pushedDisplay) {
+                                    return (
+                                        <span
+                                            className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[11px] font-medium text-soft ring-1 ring-line"
+                                            title={`Last pushed for ${activeEnv}: ${pushedDisplay.title}`}
+                                        >
+                                            <Clock className="size-3" />
+                                            <span>
+                                                Last pushed{' '}
+                                                {pushedDisplay.label}
+                                            </span>
+                                        </span>
+                                    );
+                                }
+
+                                return null;
+                            })()}
+
+                            {summary &&
+                                (isStaticCloud ? (
+                                    <span
+                                        className="font-medium text-ink"
+                                        title={`Variables synced from ${envFilename} into ${buildSecretName} on ${ciPlatformLabel} for image builds`}
+                                    >
+                                        {tableRows.length} build-time (.env)
+                                    </span>
+                                ) : (
+                                    <>
+                                        <span className="font-medium text-ok">
+                                            {summary.inSync} in sync
+                                        </span>
+                                        {mountedLocalCount > 0 && (
+                                            <span
+                                                className="font-medium text-ok"
+                                                title="Variables read directly from your mounted .env file in Local Dev"
+                                            >
+                                                {mountedLocalCount} mounted
+                                                (.env)
+                                            </span>
+                                        )}
+                                        {summary.drift > 0 && (
+                                            <span className="font-medium text-warn">
+                                                {summary.drift} drifted
+                                            </span>
+                                        )}
+                                        {unpushedLocalCount > 0 && (
+                                            <span className="font-medium text-warn">
+                                                {unpushedLocalCount} local only
+                                            </span>
+                                        )}
+                                        {summary.rotated > 0 && (
+                                            <span className="font-medium text-brand">
+                                                {summary.rotated} rotated by
+                                                Vault
+                                            </span>
+                                        )}
+                                    </>
+                                ))}
                         </div>
                     )}
                 </div>
+
+                {/* Local Dev .env mount advisory banner */}
+                {isLocalEnv && (
+                    <div className="flex items-center gap-2 rounded-xl border border-line bg-paper/60 px-3 py-2 text-xs text-soft">
+                        <Info className="size-3.5 shrink-0 text-brand" />
+                        <span>
+                            <strong>Local Dev Mount:</strong> Your{' '}
+                            <code className="font-mono text-ink">.env</code>{' '}
+                            file is mounted directly into local pods
+                            {isStaticSpa ? (
+                                <>
+                                    , so variables stay live from disk (
+                                    <strong className="text-ink">
+                                        Mounted
+                                    </strong>
+                                    ). No cluster secret push needed.
+                                </>
+                            ) : (
+                                <>
+                                    , so non-secret keys stay live from disk (
+                                    <strong className="text-ink">
+                                        Mounted
+                                    </strong>
+                                    ). Secret keys are synced to{' '}
+                                    <code className="font-mono text-ink">
+                                        app-secrets
+                                    </code>
+                                    .
+                                </>
+                            )}
+                        </span>
+                    </div>
+                )}
 
                 {/* Static SPA advisory banner */}
                 {isStaticSpa && (
                     <div className="flex items-center gap-2 rounded-xl border border-line bg-paper/60 px-3 py-2 text-xs text-soft">
                         <Info className="size-3.5 shrink-0 text-brand" />
                         <span>
-                            <strong>Static SPA Notice:</strong> Public variables
-                            (
-                            <code className="font-mono text-ink">PUBLIC_*</code>
-                            , <code className="font-mono text-ink">VITE_*</code>
-                            ) are baked into JavaScript bundles at build time.
-                            Updating them requires a build/redeploy.
+                            <strong>Static SPA Notice:</strong> Static sites are
+                            compiled into bundles at image build time and served
+                            by Caddy with no runtime Kubernetes Secret.
+                            {isStaticCloud ? (
+                                <>
+                                    {' '}
+                                    Pushing syncs{' '}
+                                    <code className="font-mono text-ink">
+                                        {envFilename}
+                                    </code>{' '}
+                                    to{' '}
+                                    <code className="font-mono text-ink">
+                                        {buildSecretName}
+                                    </code>{' '}
+                                    in {ciPlatformLabel}.
+                                </>
+                            ) : (
+                                ' Production variables are injected during CI or manual image builds.'
+                            )}
                         </span>
                     </div>
                 )}
+
+                {/* Forgejo CLI (tea) authentication callout for static cloud */}
+                {isStaticCloud &&
+                    ciPlatform === 'forgejo' &&
+                    activeEnvConfig?.ci?.teaLoggedIn === false && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warn/30 bg-warn-tint/50 px-3 py-2 text-xs text-ink">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="size-3.5 shrink-0 text-warn" />
+                                <span>
+                                    <strong>Forgejo CLI not logged in:</strong>{' '}
+                                    Connect{' '}
+                                    <code className="font-mono text-ink">
+                                        tea
+                                    </code>{' '}
+                                    {activeEnvConfig?.ci?.forgejoHost
+                                        ? `to ${activeEnvConfig.ci.forgejoHost}`
+                                        : 'to your Forgejo instance'}{' '}
+                                    before pushing{' '}
+                                    <code className="font-mono text-ink">
+                                        {buildSecretName}
+                                    </code>
+                                    .
+                                </span>
+                            </div>
+                            {onOpenPipelineSettings && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onOpenPipelineSettings}
+                                >
+                                    <Key className="size-3.5 text-ink" />
+                                    <span>Connect Forgejo (tea)</span>
+                                </Button>
+                            )}
+                        </div>
+                    )}
 
                 {/* Notification / Feedback Banner */}
                 {message && (
@@ -511,362 +778,45 @@ export default function EnvironmentSecretsCard({
                     </div>
                 )}
 
-                {/* Search & Filter Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-soft" />
-                            <input
-                                type="text"
-                                placeholder="Search variables…"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="h-8 rounded-lg border border-line bg-surface pr-3 pl-8 text-xs text-ink placeholder:text-soft focus:border-brand focus:outline-hidden"
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                            <button
-                                type="button"
-                                onClick={() => setFilter('all')}
-                                className={cn(
-                                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                                    filter === 'all'
-                                        ? 'bg-paper font-semibold text-ink'
-                                        : 'text-soft hover:text-ink',
-                                )}
-                            >
-                                All
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setFilter('secrets')}
-                                className={cn(
-                                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                                    filter === 'secrets'
-                                        ? 'bg-paper font-semibold text-ink'
-                                        : 'text-soft hover:text-ink',
-                                )}
-                            >
-                                Secrets
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setFilter('config')}
-                                className={cn(
-                                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                                    filter === 'config'
-                                        ? 'bg-paper font-semibold text-ink'
-                                        : 'text-soft hover:text-ink',
-                                )}
-                            >
-                                Config
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setFilter('drift')}
-                                className={cn(
-                                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                                    filter === 'drift'
-                                        ? 'bg-paper font-semibold text-ink'
-                                        : 'text-soft hover:text-ink',
-                                )}
-                            >
-                                Drifted
-                            </button>
-                        </div>
-                    </div>
-
-                    {!isAdding && (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                                setIsAdding(true);
-                                setNewKey('');
-                                setNewValue('');
-                            }}
-                            className="gap-1.5"
-                        >
-                            <Plus className="size-3.5" />
-                            <span>Add Variable</span>
-                        </Button>
-                    )}
-                </div>
-
-                {/* Inline Add Variable Form */}
-                {isAdding && (
-                    <div className="bg-brand-tint/20 flex flex-wrap items-center gap-2 rounded-xl border border-brand/30 p-3">
-                        <input
-                            type="text"
-                            placeholder="KEY_NAME (e.g. STRIPE_KEY)"
-                            value={newKey}
-                            onChange={(e) => setNewKey(e.target.value)}
-                            className="h-8 min-w-[180px] flex-1 rounded-lg border border-line bg-surface px-3 font-mono text-xs font-semibold text-ink focus:border-brand focus:outline-hidden"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Value"
-                            value={newValue}
-                            onChange={(e) => setNewValue(e.target.value)}
-                            className="h-8 min-w-[180px] flex-1 rounded-lg border border-line bg-surface px-3 font-mono text-xs text-ink focus:border-brand focus:outline-hidden"
-                        />
-                        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink select-none">
-                            <input
-                                type="checkbox"
-                                checked={newIsSecret}
-                                onChange={(e) =>
-                                    setNewIsSecret(e.target.checked)
-                                }
-                                className="rounded border-line"
-                            />
-                            <span>Is Secret</span>
-                        </label>
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={commitNew}
-                            className="gap-1"
-                        >
-                            <Check className="size-3.5" />
-                            <span>Stage</span>
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={cancelNew}
-                            className="gap-1"
-                        >
-                            <X className="size-3.5" />
-                            <span>Cancel</span>
-                        </Button>
-                    </div>
-                )}
-
-                {/* Variables Table */}
-                <div className="overflow-hidden rounded-xl border border-line">
-                    <table className="w-full border-collapse text-left text-xs">
-                        <thead>
-                            <tr className="border-b border-line bg-paper/60 text-soft">
-                                <th className="px-3 py-2 font-medium">
-                                    Variable
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                    Target
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                    Value (Local)
-                                </th>
-                                <th className="px-3 py-2 font-medium">
-                                    Status
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-line bg-surface">
-                            {displayedItems.length === 0 ? (
-                                <tr>
-                                    <td
-                                        colSpan={5}
-                                        className="px-4 py-8 text-center text-soft"
-                                    >
-                                        {loading
-                                            ? 'Loading environment variables…'
-                                            : search
-                                              ? 'No variables match your search.'
-                                              : 'No environment variables found.'}
-                                    </td>
-                                </tr>
-                            ) : (
-                                displayedItems.map((item) => {
-                                    const isEditing = editingKey === item.key;
-                                    const isStaged = item.key in stagedChanges;
-                                    const isDeleted =
-                                        stagedChanges[item.key] === null;
-
-                                    return (
-                                        <tr
-                                            key={item.key}
-                                            className={cn(
-                                                'transition-colors hover:bg-paper/40',
-                                                isStaged &&
-                                                    'bg-brand-tint/10 font-medium',
-                                                isDeleted &&
-                                                    'line-through opacity-50',
-                                            )}
-                                        >
-                                            {/* Key Column */}
-                                            <td className="px-3 py-2.5 font-mono">
-                                                <div className="flex items-center gap-2">
-                                                    {item.isSecret ? (
-                                                        <span title="Secret (OpenBao / app-secrets)">
-                                                            <Lock className="size-3 shrink-0 text-amber-500" />
-                                                        </span>
-                                                    ) : (
-                                                        <span title="Public Config (app-config)">
-                                                            <Globe className="size-3 shrink-0 text-blue-500" />
-                                                        </span>
-                                                    )}
-                                                    <span className="font-semibold text-ink">
-                                                        {item.key}
-                                                    </span>
-                                                    {item.status ===
-                                                        'rotated' && (
-                                                        <span
-                                                            className="py-0.2 rounded-full bg-ok-tint px-1.5 text-[10px] text-ok"
-                                                            title="Generated or rotated by OpenBao Vault"
-                                                        >
-                                                            Vault Rotated
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            {/* Target Destination Column */}
-                                            <td className="px-3 py-2.5 text-soft">
-                                                <span className="font-mono text-[11px]">
-                                                    {item.isSecret
-                                                        ? 'app-secrets'
-                                                        : 'app-config'}
-                                                </span>
-                                            </td>
-
-                                            {/* Value Column */}
-                                            <td className="px-3 py-2.5 font-mono">
-                                                {isEditing ? (
-                                                    <div className="flex items-center gap-1.5">
-                                                        <input
-                                                            type="text"
-                                                            value={editingValue}
-                                                            onChange={(e) =>
-                                                                setEditingValue(
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            className="h-7 w-full min-w-[140px] rounded border border-brand bg-surface px-2 text-xs text-ink focus:outline-hidden"
-                                                            autoFocus
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                commitEdit(
-                                                                    item.key,
-                                                                )
-                                                            }
-                                                            className="rounded p-1 text-ok hover:bg-paper"
-                                                            title="Apply change"
-                                                        >
-                                                            <Check className="size-3.5" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={cancelEdit}
-                                                            className="rounded p-1 text-soft hover:bg-paper"
-                                                            title="Cancel"
-                                                        >
-                                                            <X className="size-3.5" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <span className="break-all text-ink">
-                                                        {item.local === null ? (
-                                                            <span className="text-soft italic">
-                                                                (not on disk)
-                                                            </span>
-                                                        ) : item.isSecret &&
-                                                          !reveal ? (
-                                                            '••••••••••••'
-                                                        ) : item.local ===
-                                                          '' ? (
-                                                            <span className="text-soft italic">
-                                                                (empty)
-                                                            </span>
-                                                        ) : (
-                                                            item.local
-                                                        )}
-                                                    </span>
-                                                )}
-                                            </td>
-
-                                            {/* Status Badge Column */}
-                                            <td className="px-3 py-2.5">
-                                                {item.status === 'in_sync' ? (
-                                                    <StatusPill tone="ok">
-                                                        In Sync
-                                                    </StatusPill>
-                                                ) : item.status === 'drift' ? (
-                                                    <StatusPill tone="warn">
-                                                        Drifted
-                                                    </StatusPill>
-                                                ) : item.status ===
-                                                  'only_local' ? (
-                                                    <StatusPill tone="muted">
-                                                        Local Only
-                                                    </StatusPill>
-                                                ) : item.status ===
-                                                  'only_cluster' ? (
-                                                    <StatusPill tone="bad">
-                                                        Cluster Only
-                                                    </StatusPill>
-                                                ) : item.status ===
-                                                  'rotated' ? (
-                                                    <StatusPill tone="ok">
-                                                        Vault Managed
-                                                    </StatusPill>
-                                                ) : (
-                                                    <StatusPill tone="muted">
-                                                        {item.status}
-                                                    </StatusPill>
-                                                )}
-                                            </td>
-
-                                            {/* Row Actions */}
-                                            <td className="px-3 py-2.5 text-right">
-                                                {!isEditing && (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                startEdit(item)
-                                                            }
-                                                            className="rounded-md p-1.5 text-soft transition-colors hover:bg-paper hover:text-ink"
-                                                            title="Edit variable"
-                                                        >
-                                                            <Pencil className="size-3.5" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                stageDelete(
-                                                                    item.key,
-                                                                )
-                                                            }
-                                                            className="rounded-md p-1.5 text-soft transition-colors hover:bg-paper hover:text-accent"
-                                                            title="Delete variable"
-                                                        >
-                                                            <Trash2 className="size-3.5" />
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                {/* Reusable Excel-Style Table */}
+                <EnvironmentVariablesTable
+                    rows={tableRows}
+                    stagedChanges={stagedChanges}
+                    onStageEdit={handleStageEdit}
+                    onStageDelete={handleStageDelete}
+                    onUnstageKey={handleUnstageKey}
+                    draftRows={draftRows}
+                    onChangeDraftRows={setDraftRows}
+                    reveal={reveal}
+                    loading={loading}
+                    editable={editable}
+                    canToggleSecret={false}
+                    showStatusColumn
+                    isLocalEnv={isLocalEnv}
+                    isStaticSite={isStaticSpa}
+                    secretTargetLabel="app-secrets"
+                    configTargetLabel="app-config"
+                />
 
                 {/* Bottom Action Footer */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                     <div className="text-xs text-soft">
                         {hasStagedChanges ? (
                             <span className="font-medium text-warn">
-                                ⚠ {Object.keys(stagedChanges).length} unsaved
-                                change(s) staged.
+                                ⚠ {stagedCount} unsaved change
+                                {stagedCount === 1 ? '' : 's'} staged.
+                            </span>
+                        ) : isStaticCloud ? (
+                            <span>
+                                Build-time variables are synced to{' '}
+                                <span className="font-medium text-ink">
+                                    {ciPlatformLabel}
+                                </span>{' '}
+                                (
+                                <code className="font-mono text-ink">
+                                    {buildSecretName}
+                                </code>
+                                ) and mounted during image builds.
                             </span>
                         ) : (
                             <span>
@@ -880,100 +830,290 @@ export default function EnvironmentSecretsCard({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        {hasStagedChanges ? (
+                        {hasStagedChanges && editable ? (
                             <>
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={discardChanges}
-                                    className="gap-1.5"
                                 >
                                     <X className="size-3.5" />
                                     <span>Discard</span>
                                 </Button>
 
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => handleSave(false)}
-                                    disabled={saving}
-                                    className="gap-1.5"
-                                    title="Save to disk and push to cluster secrets"
-                                >
-                                    <ArrowUpCircle className="size-3.5 text-ink" />
-                                    <span>
-                                        {saving ? 'Saving…' : 'Save & Push'}
-                                    </span>
-                                </Button>
+                                {isStaticCloud ? (
+                                    <InfoTooltip
+                                        interactive
+                                        align="right"
+                                        trigger={
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={() =>
+                                                    handleSave(false)
+                                                }
+                                                disabled={saving}
+                                            >
+                                                <ArrowUpCircle className="size-3.5" />
+                                                <span>
+                                                    {saving
+                                                        ? 'Saving…'
+                                                        : `Save & Push to ${ciPlatformLabel}`}
+                                                </span>
+                                            </Button>
+                                        }
+                                    >
+                                        Writes changes to {envFilename} on disk
+                                        and uploads {buildSecretName} to{' '}
+                                        {ciPlatformLabel} Secrets so the next
+                                        image build picks them up.
+                                    </InfoTooltip>
+                                ) : (
+                                    <>
+                                        <InfoTooltip
+                                            interactive
+                                            align="right"
+                                            trigger={
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        handleSave(false)
+                                                    }
+                                                    disabled={saving}
+                                                >
+                                                    <ArrowUpCircle className="size-3.5 text-ink" />
+                                                    <span>
+                                                        {saving
+                                                            ? 'Saving…'
+                                                            : 'Save & Push'}
+                                                    </span>
+                                                </Button>
+                                            }
+                                        >
+                                            Writes changes to {envFilename} on
+                                            disk and pushes secret keys to the
+                                            cluster (
+                                            <code className="font-mono">
+                                                app-secrets
+                                            </code>{' '}
+                                            / OpenBao). Running pods are not
+                                            restarted.
+                                        </InfoTooltip>
 
-                                <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => handleSave(true)}
-                                    disabled={saving}
-                                    className="gap-1.5"
-                                    title="Save to disk, push to cluster secrets, and restart all application pods"
-                                >
-                                    <Rocket className="size-3.5" />
-                                    <span>
-                                        {saving
-                                            ? 'Redeploying…'
-                                            : activeEnv === 'local'
-                                              ? 'Save & Restart'
-                                              : 'Save & Redeploy'}
-                                    </span>
-                                </Button>
+                                        <InfoTooltip
+                                            interactive
+                                            align="right"
+                                            trigger={
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        handleSave(true)
+                                                    }
+                                                    disabled={saving}
+                                                >
+                                                    <Rocket className="size-3.5" />
+                                                    <span>
+                                                        {saving
+                                                            ? 'Redeploying…'
+                                                            : activeEnv ===
+                                                                'local'
+                                                              ? 'Save & Restart'
+                                                              : 'Save & Redeploy'}
+                                                    </span>
+                                                </Button>
+                                            }
+                                        >
+                                            Writes changes to {envFilename},
+                                            pushes secret keys to the cluster,
+                                            and performs a rolling restart of
+                                            app pods so new values take effect
+                                            immediately.
+                                        </InfoTooltip>
+                                    </>
+                                )}
                             </>
-                        ) : (
-                            <>
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={pushing}
-                                    onClick={handlePush}
-                                    className="gap-1.5"
-                                    title="Push secret keys from disk to the cluster"
-                                >
-                                    <ArrowUpCircle className="size-3.5 text-ink" />
-                                    <span>
-                                        {pushing
-                                            ? 'Pushing…'
-                                            : 'Push to Cluster'}
-                                    </span>
-                                </Button>
-
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={pulling}
-                                    onClick={handlePull}
-                                    className="gap-1.5"
-                                    title="Pull secret keys from the cluster into local disk"
-                                >
-                                    <ArrowDownCircle className="size-3.5 text-ink" />
-                                    <span>
-                                        {pulling ? 'Pulling…' : 'Pull to Disk'}
-                                    </span>
-                                </Button>
-
-                                {activeEnv !== 'local' && (
+                        ) : isStaticCloud ? (
+                            <InfoTooltip
+                                interactive
+                                align="right"
+                                trigger={
                                     <Button
                                         variant="secondary"
                                         size="sm"
-                                        disabled={saving}
-                                        onClick={() => handleSave(true)}
-                                        className="gap-1.5"
-                                        title="Trigger a zero-downtime rolling restart across all application pods"
+                                        disabled={pushing}
+                                        onClick={handlePush}
                                     >
-                                        <RotateCw className="size-3.5 text-ink" />
-                                        <span>Redeploy Pods</span>
+                                        <ArrowUpCircle className="size-3.5 text-ink" />
+                                        <span>
+                                            {pushing
+                                                ? 'Pushing…'
+                                                : `Push to ${ciPlatformLabel}`}
+                                        </span>
                                     </Button>
+                                }
+                            >
+                                Uploads {envFilename} from disk as{' '}
+                                <code className="font-mono">
+                                    {buildSecretName}
+                                </code>{' '}
+                                in {ciPlatformLabel} Secrets so CI builds
+                                receive your build-time variables.
+                            </InfoTooltip>
+                        ) : (
+                            <>
+                                <InfoTooltip
+                                    interactive
+                                    align="right"
+                                    trigger={
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={pushing}
+                                            onClick={handlePush}
+                                        >
+                                            <ArrowUpCircle className="size-3.5 text-ink" />
+                                            <span>
+                                                {pushing
+                                                    ? 'Pushing…'
+                                                    : 'Push to Cluster'}
+                                            </span>
+                                        </Button>
+                                    }
+                                >
+                                    Pushes secret keys from {envFilename} on
+                                    disk into the cluster&apos;s{' '}
+                                    <code className="font-mono">
+                                        app-secrets
+                                    </code>{' '}
+                                    Secret (and OpenBao when active).
+                                </InfoTooltip>
+
+                                <InfoTooltip
+                                    interactive
+                                    align="right"
+                                    trigger={
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={pulling}
+                                            onClick={handlePull}
+                                        >
+                                            <ArrowDownCircle className="size-3.5 text-ink" />
+                                            <span>
+                                                {pulling
+                                                    ? 'Pulling…'
+                                                    : 'Pull to Disk'}
+                                            </span>
+                                        </Button>
+                                    }
+                                >
+                                    Pulls secret keys from the cluster (OpenBao
+                                    or{' '}
+                                    <code className="font-mono">
+                                        app-secrets
+                                    </code>
+                                    ) into your local {envFilename} file.
+                                </InfoTooltip>
+
+                                {activeEnv !== 'local' && editable && (
+                                    <InfoTooltip
+                                        interactive
+                                        align="right"
+                                        trigger={
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={saving}
+                                                onClick={() => handleSave(true)}
+                                            >
+                                                <RotateCw className="size-3.5 text-ink" />
+                                                <span>Redeploy Pods</span>
+                                            </Button>
+                                        }
+                                    >
+                                        Triggers a zero-downtime rolling restart
+                                        across all application pods so updated
+                                        variables take effect.
+                                    </InfoTooltip>
                                 )}
                             </>
                         )}
                     </div>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={confirmAction === 'push'}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={executePush}
+                title={
+                    isStaticCloud
+                        ? `Push ${buildSecretName} to ${ciPlatformLabel}?`
+                        : `Push ${envFilename} secrets to ${activeEnv}?`
+                }
+                description={
+                    isStaticCloud ? (
+                        <>
+                            Uploads build-time variables from your local{' '}
+                            <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                {envFilename}
+                            </code>{' '}
+                            to{' '}
+                            <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                {buildSecretName}
+                            </code>{' '}
+                            in <strong>{ciPlatformLabel}</strong> so CI image
+                            builds pick them up.
+                        </>
+                    ) : (
+                        <>
+                            Pushes secret variables from your local{' '}
+                            <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                                {envFilename}
+                            </code>{' '}
+                            into the cluster secrets for{' '}
+                            <strong>{activeEnv}</strong>.
+                        </>
+                    )
+                }
+                notice={
+                    isStaticCloud
+                        ? 'CI secrets are write-only — overwrite happens immediately and existing keys cannot be read back.'
+                        : undefined
+                }
+                confirmLabel={
+                    isStaticCloud
+                        ? `Push to ${ciPlatformLabel}`
+                        : 'Push to Cluster'
+                }
+                tone="brand"
+                icon={<ArrowUpCircle className="size-5" />}
+                confirmIcon={<ArrowUpCircle className="size-3.5" />}
+            />
+
+            <ConfirmModal
+                isOpen={confirmAction === 'pull'}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={executePull}
+                title={`Pull secrets into ${envFilename}?`}
+                description={
+                    <>
+                        Pull secret variables from the{' '}
+                        <strong>{activeEnv}</strong> cluster into your local{' '}
+                        <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                            {envFilename}
+                        </code>{' '}
+                        file. Existing lines matching cluster keys will be
+                        updated on disk.
+                    </>
+                }
+                confirmLabel="Pull to Disk"
+                tone="warn"
+                icon={<ArrowDownCircle className="size-5" />}
+                confirmIcon={<ArrowDownCircle className="size-3.5" />}
+            />
         </Card>
     );
 }

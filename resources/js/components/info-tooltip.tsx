@@ -12,6 +12,8 @@ type Props = {
     align?: 'center' | 'right';
     /** Which side of the trigger the panel opens toward. Pick 'bottom' when the trigger sits near the top of its scroll area (a page heading, a list's first row). Pick 'right' or 'left' when the trigger sits in a column too narrow for the panel's own width (a sidebar), so it opens into the wider area beside the column instead of clipping within it. */
     side?: 'top' | 'bottom' | 'right' | 'left';
+    /** Set true when `trigger` is itself an interactive control (such as a `<Button>`), so the tooltip wrapper does not add `role="button"` or intercept clicks. */
+    interactive?: boolean;
 };
 
 const GAP = 6;
@@ -73,6 +75,7 @@ export default function InfoTooltip({
     className,
     align = 'center',
     side = 'top',
+    interactive = false,
 }: Props) {
     const [open, setOpen] = useState(false);
     const anchorRef = useRef<HTMLSpanElement>(null);
@@ -97,18 +100,21 @@ export default function InfoTooltip({
             className={cn('relative inline-flex', className)}
             onMouseEnter={() => setOpen(true)}
             onMouseLeave={() => setOpen(false)}
-            onClick={(event) => event.stopPropagation()}
+            onClick={
+                interactive ? undefined : (event) => event.stopPropagation()
+            }
         >
             <span
                 ref={anchorRef}
-                tabIndex={0}
-                role="button"
-                aria-label="More information"
+                tabIndex={interactive ? undefined : 0}
+                role={interactive ? undefined : 'button'}
+                aria-label={interactive ? undefined : 'More information'}
                 onFocus={() => setOpen(true)}
                 onBlur={() => setOpen(false)}
                 className={cn(
-                    'inline-flex cursor-help items-center outline-none',
-                    trigger
+                    'inline-flex items-center outline-none',
+                    interactive ? undefined : 'cursor-help',
+                    trigger || interactive
                         ? undefined
                         : 'size-3.5 justify-center rounded-full text-faint hover:text-soft',
                 )}

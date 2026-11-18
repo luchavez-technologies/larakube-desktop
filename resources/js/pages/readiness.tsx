@@ -16,10 +16,12 @@ import {
     RotateCw,
     XCircle,
     Settings2,
+    Wrench,
 } from 'lucide-react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import CloudAccountsModal from '@/components/cloud-accounts-modal';
+import ConfirmModal from '@/components/confirm-modal';
 import AwsPolicyHelper from '@/components/aws-policy-helper';
 import { ListRow, TwoLine } from '@/components/list-row';
 import ProviderLogo from '@/components/provider-logo';
@@ -329,14 +331,15 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
         cluster.engine !== 'None' &&
         cluster.engine !== 'Unknown';
 
-    const start = () => {
-        const message = detectedUnprovisioned
-            ? `This sets up ${cluster!.engine} (already running) for LaraKube — ingress and local DNS, nothing about ${cluster!.engine} itself is reinstalled or reconfigured. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?`
-            : 'This installs a local Kubernetes cluster (k3s) so you can run apps on this computer. It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it. Continue?';
+    const [confirmStartOpen, setConfirmStartOpen] = useState(false);
 
-        if (window.confirm(message)) {
-            router.post('/setup/local');
-        }
+    const start = () => {
+        setConfirmStartOpen(true);
+    };
+
+    const confirmStart = () => {
+        setConfirmStartOpen(false);
+        router.post('/setup/local');
     };
 
     return (
@@ -353,7 +356,8 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
                                 size="sm"
                                 onClick={start}
                             >
-                                Set up local development
+                                <Wrench className="size-3.5" />
+                                <span>Set up local development</span>
                             </Button>
                         )
                     }
@@ -372,6 +376,26 @@ function LocalDevelopment({ cluster }: { cluster?: Props['localCluster'] }) {
                     <p className="mt-2 text-xs text-accent">{errors.local}</p>
                 )}
             </Card>
+            <ConfirmModal
+                isOpen={confirmStartOpen}
+                onClose={() => setConfirmStartOpen(false)}
+                onConfirm={confirmStart}
+                title={
+                    detectedUnprovisioned
+                        ? `Set up ${cluster!.engine} for LaraKube?`
+                        : 'Set up local Kubernetes cluster?'
+                }
+                description={
+                    detectedUnprovisioned
+                        ? `This sets up ${cluster!.engine} (already running) with Traefik ingress and local DNS. Nothing about ${cluster!.engine} itself is reinstalled or reconfigured.`
+                        : 'This installs a local Kubernetes cluster (k3s) so you can run apps on this computer.'
+                }
+                notice="It needs administrator access for a few minutes: LaraKube Desktop allows it only while the setup runs, then removes it."
+                confirmLabel="Continue Setup"
+                tone="warn"
+                icon={<Wrench className="size-5" />}
+                confirmIcon={<Wrench className="size-3.5" />}
+            />
         </div>
     );
 }

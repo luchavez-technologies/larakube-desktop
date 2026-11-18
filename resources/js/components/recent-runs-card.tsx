@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Card from '@/components/card';
 import StatusPill from '@/components/status-pill';
 import { runStatus } from '@/lib/servers';
@@ -15,6 +15,56 @@ export type RecentRun = {
     environment?: string | null;
 };
 
+function formatRunTimestamp(
+    iso?: string | null,
+    nowMs?: number | null,
+): {
+    text: string;
+    title?: string;
+} {
+    if (!iso || nowMs === null || nowMs === undefined) {
+        return { text: '\u00A0' };
+    }
+
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+        return { text: '—' };
+    }
+
+    const now = new Date(nowMs);
+    const diffMs = Math.max(0, nowMs - date.getTime());
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    const timeStr = date.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+
+    let prefix: string;
+    if (diffMins < 1) {
+        prefix = 'just now';
+    } else if (diffMins < 60) {
+        prefix = `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+        prefix = `${diffHours}h ago`;
+    } else {
+        prefix = date.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year:
+                date.getFullYear() !== now.getFullYear()
+                    ? 'numeric'
+                    : undefined,
+        });
+    }
+
+    return {
+        text: `${prefix} · ${timeStr}`,
+        title: date.toLocaleString(),
+    };
+}
+
 export default function RecentRunsCard({
     runs,
     activeEnv,
@@ -23,6 +73,13 @@ export default function RecentRunsCard({
     activeEnv: string;
 }) {
     const [filterByEnv, setFilterByEnv] = useState(true);
+    const [nowMs, setNowMs] = useState<number | null>(null);
+
+    useEffect(() => {
+        setNowMs(Date.now());
+        const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+        return () => window.clearInterval(id);
+    }, []);
 
     const filteredRuns = useMemo(() => {
         if (!filterByEnv) return runs;
@@ -91,16 +148,28 @@ export default function RecentRunsCard({
             ) : (
                 filteredRuns.map((run) => {
                     const [label, tone] = runStatus[run.status];
+                    const timestamp = formatRunTimestamp(run.created_at, nowMs);
                     return (
                         <Link
                             key={run.id}
                             href={showRun(run.id).url}
                             className="-mx-1 flex items-center justify-between gap-3 rounded border-t border-line px-1 py-2 transition-colors first:border-t-0 hover:bg-paper"
                         >
-                            <span className="truncate text-[13px]">
-                                {run.label}
-                            </span>
-                            <StatusPill tone={tone}>{label}</StatusPill>
+                            <div className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px] text-ink">
+                                    {run.label}
+                                </span>
+                                <time
+                                    dateTime={run.created_at || undefined}
+                                    title={timestamp.title}
+                                    className="mt-0.5 block font-mono text-[11px] text-soft"
+                                >
+                                    {timestamp.text}
+                                </time>
+                            </div>
+                            <StatusPill tone={tone} className="shrink-0">
+                                {label}
+                            </StatusPill>
                         </Link>
                     );
                 })

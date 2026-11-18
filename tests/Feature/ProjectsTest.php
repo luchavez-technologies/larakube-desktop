@@ -11,6 +11,7 @@ use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ToolLocator;
 use App\Services\TerminalLauncher;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -1440,6 +1441,512 @@ test('projects.features.add and projects.features.remove update .larakube.json',
 
     $config = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
     expect($config['features'])->toBe(['horizon']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project dotenv update applies batch adds, edits, and removals at once and project page supports configuration tab query', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'environments' => [
+            'production' => [],
+        ],
+    ]));
+    File::put("{$sandbox['app']}/.env", "APP_NAME=OldApp\nREMOVE_ME=gone\n");
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => []])),
+        '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
+        '*dotenv:push*' => Process::result(output: json_encode(['success' => true])),
+        '*dotenv*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'local',
+            'namespace' => 'shop-local',
+            'items' => [
+                ['key' => 'APP_NAME', 'status' => 'in-sync', 'isSecret' => false, 'isExcluded' => false, 'local' => 'NewApp', 'cluster' => 'NewApp'],
+                ['key' => 'BATCH_ONE', 'status' => 'in-sync', 'isSecret' => false, 'isExcluded' => false, 'local' => 'alpha', 'cluster' => 'alpha'],
+                ['key' => 'BATCH_SECRET', 'status' => 'in-sync', 'isSecret' => true, 'isExcluded' => false, 'local' => 's3cr3t', 'cluster' => 's3cr3t'],
+            ],
+            'summary' => ['drift' => 0, 'onlyLocal' => 0, 'onlyCluster' => 0, 'hidden' => 0, 'inSync' => 3, 'rotated' => 0, 'canReadSecrets' => true],
+        ])),
+    ]);
+
+    $this->postJson(route('projects.dotenv.update', $project), [
+        'environment' => 'local',
+        'variables' => [
+            'APP_NAME' => 'NewApp',
+            'REMOVE_ME' => null,
+            'BATCH_ONE' => 'alpha',
+            'BATCH_SECRET' => 's3cr3t',
+        ],
+        'redeploy' => false,
+    ])->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('status.summary.inSync', 3);
+
+    $envContents = File::get("{$sandbox['app']}/.env");
+    expect($envContents)
+        ->toContain('APP_NAME=NewApp')
+        ->toContain('BATCH_ONE=alpha')
+        ->toContain('BATCH_SECRET=s3cr3t')
+        ->not->toContain('REMOVE_ME=');
+
+    $this->get(route('projects.show', ['project' => $project, 'tab' => 'configuration']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('projects/show'));
+
+    $this->get(route('projects.show', ['project' => $project, 'tab' => 'companions']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('projects/show'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('static project dotenv push labels CI build sync and update reports CI secret confirmation', function () {
+    $sandbox = projectsSandbox();
+    ChildProcess::fake();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => [
+            'production' => [],
+        ],
+    ]));
+    File::put("{$sandbox['app']}/.env.production", "ALGOLIA_APP_ID=OLD_ID\nALGOLIA_API_KEY=old-key\n");
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->post(route('projects.dotenv.push', $project), ['environment' => 'production'])
+        ->assertRedirect();
+
+    $run = Run::latest('id')->first();
+    expect($run->kind)->toBe(RunKind::DotenvPush)
+        ->and($run->label)->toBe('Push build environment to CI (production)');
+
+    Process::fake([
+        '*dotenv:push*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'production',
+            'namespace' => 'docs-production',
+            'backend' => 'forgejo',
+            'secretName' => 'PRODUCTION_BUILD_ENV',
+            'pushed' => 2,
+            'keys' => ['ALGOLIA_APP_ID', 'ALGOLIA_API_KEY'],
+        ])),
+        '*dotenv*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'production',
+            'namespace' => 'docs-production',
+            'items' => [
+                ['key' => 'ALGOLIA_APP_ID', 'status' => 'only local', 'isSecret' => false, 'isExcluded' => false, 'local' => 'NEW_ID', 'cluster' => null],
+                ['key' => 'ALGOLIA_API_KEY', 'status' => 'only local', 'isSecret' => true, 'isExcluded' => false, 'local' => '••••••', 'cluster' => null],
+            ],
+            'summary' => ['drift' => 0, 'onlyLocal' => 2, 'onlyCluster' => 0, 'hidden' => 0, 'inSync' => 0, 'rotated' => 0, 'canReadSecrets' => true],
+        ])),
+    ]);
+
+    $this->postJson(route('projects.dotenv.update', $project), [
+        'environment' => 'production',
+        'variables' => [
+            'ALGOLIA_APP_ID' => 'NEW_ID',
+        ],
+        'redeploy' => false,
+    ])->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('message', 'Environment variables saved to .env.production and pushed to Forgejo (PRODUCTION_BUILD_ENV).');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('multi-remote git detection handles ssh:// Forgejo URLs and instant CI target updates per environment', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+    ChildProcess::fake();
+
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", <<<'INI'
+[core]
+    repositoryformatversion = 0
+[remote "origin"]
+    url = ssh://git@git.luchtech.dev:2222/luchaveztech/larakube-docs.git
+    fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "github"]
+    url = github:luchavez-technologies/larakube-docs.git
+    fetch = +refs/heads/*:refs/remotes/github/*
+INI);
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => [
+            'production' => [
+                'registry' => [
+                    'provider' => 'forgejo',
+                    'image' => 'luchaveztech/larakube-docs',
+                    'host' => 'git.luchtech.dev',
+                ],
+            ],
+        ],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => []])),
+        '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
+    ]);
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('projects/show')
+            ->where('project.git.platform', 'forgejo')
+            ->where('project.git.repoSlug', 'luchaveztech/larakube-docs')
+            ->has('project.git.remotes', 2)
+            ->where('project.environments.production.ci.platform', 'forgejo')
+            ->where('project.environments.production.ci.gitRemote', 'origin'));
+
+    $this->post(route('projects.ci', $project), [
+        'environment' => 'production',
+        'git_remote' => 'github',
+        'ci_platform' => 'github',
+        'save_target_only' => true,
+    ])->assertRedirect();
+
+    expect(Run::count())->toBe(0);
+
+    $updatedBlueprint = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($updatedBlueprint['environments']['production']['gitRemote'])->toBe('github')
+        ->and($updatedBlueprint['environments']['production']['ciPlatform'])->toBe('github');
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('project.environments.production.ci.platform', 'github')
+            ->where('project.environments.production.ci.gitRemote', 'github'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project inspector exposes forgejoHost and teaLoggedIn from native tea config', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = ssh://git@git.luchtech.dev:2222/luchaveztech/larakube-docs.git\n");
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => [
+            'production' => [],
+        ],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => []])),
+        '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
+    ]);
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('project.environments.production.ci.platform', 'forgejo')
+            ->where('project.environments.production.ci.forgejoHost', 'git.luchtech.dev')
+            ->where('project.environments.production.ci.teaLoggedIn', false));
+
+    $teaConfigDir = "{$sandbox['home']}/.config/tea";
+    File::ensureDirectoryExists($teaConfigDir);
+    File::put("{$teaConfigDir}/config.yml", <<<'YAML'
+logins:
+- name: git.luchtech.dev
+  url: https://git.luchtech.dev
+  token: tok-secret-123
+  default: true
+preferences:
+  editor: false
+YAML);
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('project.environments.production.ci.forgejoHost', 'git.luchtech.dev')
+            ->where('project.environments.production.ci.teaLoggedIn', true));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('configuring CI can log tea in to Forgejo via larakube git:login subprocess', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = ssh://git@git.luchtech.dev:2222/luchaveztech/larakube-docs.git\n");
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => [
+            'production' => [],
+        ],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*git:login*' => Process::result(output: json_encode([
+            'success' => true,
+            'host' => 'git.luchtech.dev',
+            'environment' => 'production',
+        ])),
+    ]);
+
+    $this->post(route('projects.ci', $project), [
+        'environment' => 'production',
+        'ci_platform' => 'forgejo',
+        'git_remote' => 'origin',
+        'forgejo_host' => 'git.luchtech.dev',
+        'git_login_token' => 'forgejo-pat-xyz',
+        'save_target_only' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(Run::count())->toBe(0);
+
+    Process::assertRan(function (PendingProcess $process): bool {
+        $command = is_array($process->command) ? implode(' ', $process->command) : (string) $process->command;
+
+        return str_contains($command, 'git:login')
+            && str_contains($command, 'production')
+            && str_contains($command, '--domain=git.luchtech.dev')
+            && str_contains($command, '--json')
+            && str_contains($command, '--no-interaction')
+            && ($process->environment['GITEA_SERVER_TOKEN'] ?? null) === 'forgejo-pat-xyz'
+            && ! str_contains($command, 'forgejo-pat-xyz');
+    });
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('configuring CI surfaces git:login failure as a git_login_token validation error', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => ['production' => []],
+    ]));
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*git:login*' => Process::result(
+            output: json_encode(['success' => false, 'error' => 'tea could not log in to git.luchtech.dev: 401 Unauthorized']),
+            exitCode: 1,
+        ),
+    ]);
+
+    $this->post(route('projects.ci', $project), [
+        'environment' => 'production',
+        'ci_platform' => 'forgejo',
+        'forgejo_host' => 'git.luchtech.dev',
+        'git_login_token' => 'bad-token',
+        'save_target_only' => true,
+    ])->assertSessionHasErrors('git_login_token');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('dotenv status reports pushMeta including remote Forgejo secret status, lastPushedAt, and modifiedSincePush', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::put("{$sandbox['bin']}/tea", "#!/bin/sh\n");
+    chmod("{$sandbox['bin']}/tea", 0755);
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = ssh://git@git.luchtech.dev:2222/luchaveztech/larakube-docs.git\n");
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => ['production' => []],
+    ]));
+    File::put("{$sandbox['app']}/.env.production", "ALGOLIA_APP_ID=L42693MTAB\n");
+
+    $pushedAt = now()->subHours(2)->utc();
+    touch("{$sandbox['app']}/.env.production", $pushedAt->copy()->subMinutes(5)->getTimestamp());
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*dotenv*production*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'production',
+            'namespace' => 'docs-production',
+            'items' => [
+                ['key' => 'ALGOLIA_APP_ID', 'status' => 'only_local', 'isSecret' => false, 'isExcluded' => false, 'local' => 'L42693MTAB', 'cluster' => null],
+            ],
+            'summary' => ['drift' => 0, 'onlyLocal' => 1, 'onlyCluster' => 0, 'hidden' => 0, 'inSync' => 0, 'rotated' => 0, 'canReadSecrets' => true],
+        ])),
+        '*actions*secrets*list*' => Process::result(output: json_encode([
+            ['name' => 'PRODUCTION_BUILD_ENV', 'created_at' => $pushedAt->toIso8601String()],
+        ])),
+    ]);
+
+    $this->getJson(route('projects.dotenv.status', ['project' => $project, 'environment' => 'production']))
+        ->assertOk()
+        ->assertJsonPath('pushMeta.platform', 'forgejo')
+        ->assertJsonPath('pushMeta.secretName', 'PRODUCTION_BUILD_ENV')
+        ->assertJsonPath('pushMeta.existsOnCi', true)
+        ->assertJsonPath('pushMeta.modifiedSincePush', false);
+
+    // Editing .env.production after the last push flips modifiedSincePush to true.
+    touch("{$sandbox['app']}/.env.production", $pushedAt->copy()->addMinutes(5)->getTimestamp());
+
+    $this->getJson(route('projects.dotenv.status', ['project' => $project, 'environment' => 'production']))
+        ->assertOk()
+        ->assertJsonPath('pushMeta.existsOnCi', true)
+        ->assertJsonPath('pushMeta.modifiedSincePush', true);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('dotenv update records lastPushedAt and returns pushMeta, and succeeded DotenvPush runs provide fallback timestamp', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = git@github.com:acme/docs.git\n");
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => ['production' => []],
+    ]));
+    File::put("{$sandbox['app']}/.env.production", "ALGOLIA_APP_ID=OLD\n");
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*dotenv:push*' => Process::result(output: json_encode([
+            'success' => true,
+            'backend' => 'github',
+            'secretName' => 'PRODUCTION_BUILD_ENV',
+        ])),
+        '*dotenv*production*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'production',
+            'namespace' => 'docs-production',
+            'items' => [],
+            'summary' => ['drift' => 0, 'onlyLocal' => 0, 'onlyCluster' => 0, 'hidden' => 0, 'inSync' => 0, 'rotated' => 0, 'canReadSecrets' => true],
+        ])),
+    ]);
+
+    $response = $this->postJson(route('projects.dotenv.update', $project), [
+        'environment' => 'production',
+        'variables' => ['ALGOLIA_APP_ID' => 'NEW'],
+    ])->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('pushMeta.platform', 'github')
+        ->assertJsonPath('pushMeta.secretName', 'PRODUCTION_BUILD_ENV');
+
+    expect($response->json('pushMeta.lastPushedAt'))->not->toBeNull();
+
+    // Clear cache and verify succeeded Run::DotenvPush supplies lastPushedAt.
+    Cache::flush();
+    $runFinishedAt = now()->subMinutes(10);
+    Run::create([
+        'label' => 'Push build environment to CI (production)',
+        'command' => ['larakube', 'dotenv:push', 'production'],
+        'kind' => RunKind::DotenvPush,
+        'status' => RunStatus::Succeeded,
+        'project_id' => $project->id,
+        'subject' => "project:{$project->id}",
+        'environment' => 'production',
+        'finished_at' => $runFinishedAt,
+    ]);
+
+    $statusResponse = $this->getJson(route('projects.dotenv.status', ['project' => $project, 'environment' => 'production']))
+        ->assertOk();
+
+    expect($statusResponse->json('pushMeta.lastPushedAt'))->not->toBeNull();
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project inspector auto-detects custom Forgejo domains from tea config and supports per-env teaLogin selection', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::ensureDirectoryExists("{$sandbox['app']}/.git");
+    File::put("{$sandbox['app']}/.git/config", "[remote \"origin\"]\n\turl = ssh://git@code.acme.dev:2222/acme/docs.git\n");
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'docs',
+        'framework' => 'docusaurus',
+        'environments' => [
+            'production' => [],
+        ],
+    ]));
+
+    $teaConfigDir = "{$sandbox['home']}/.config/tea";
+    File::ensureDirectoryExists($teaConfigDir);
+    File::put("{$teaConfigDir}/config.yml", <<<'YAML'
+logins:
+- name: acme-personal
+  url: https://code.acme.dev
+  token: tok-personal
+  user: alice
+  default: true
+- name: acme-work
+  url: https://code.acme.dev
+  token: tok-work
+  user: alice-work
+  default: false
+YAML);
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => []])),
+        '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
+    ]);
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('project.git.platform', 'forgejo')
+            ->where('project.environments.production.ci.platform', 'forgejo')
+            ->where('project.environments.production.ci.forgejoHost', 'code.acme.dev')
+            ->where('project.environments.production.ci.teaLoggedIn', true)
+            ->where('project.environments.production.ci.teaLogin', 'acme-personal')
+            ->has('project.environments.production.ci.teaLogins', 2));
+
+    $this->post(route('projects.ci', $project), [
+        'environment' => 'production',
+        'tea_login' => 'acme-work',
+        'save_target_only' => true,
+    ])->assertRedirect();
+
+    $updatedBlueprint = json_decode((string) File::get("{$sandbox['app']}/.larakube.json"), true);
+    expect($updatedBlueprint['environments']['production']['teaLogin'])->toBe('acme-work');
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('project.environments.production.ci.teaLogin', 'acme-work'));
 
     File::deleteDirectory($sandbox['home']);
 });

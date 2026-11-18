@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
-import { Deferred, Head, Link } from '@inertiajs/react';
+import { Deferred, Head, Link, router } from '@inertiajs/react';
 import {
     ArrowUpCircle,
     Check,
@@ -18,6 +18,7 @@ import {
 import { SiGithub } from '@icons-pack/react-simple-icons';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import ConfirmModal from '@/components/confirm-modal';
 import CopyButton from '@/components/copy-button';
 import DevBoxExportModal from '@/components/devbox-export-modal';
 import DevBoxGrantModal from '@/components/devbox-grant-modal';
@@ -615,6 +616,9 @@ function CollaboratorList({
     collaborators?: Collaborator[] | null;
     ready: boolean;
 }) {
+    const [revokeTarget, setRevokeTarget] = useState<Collaborator | null>(null);
+    const [revoking, setRevoking] = useState(false);
+
     if (collaborators == null) {
         return (
             <p className="py-2 text-xs text-soft">
@@ -632,70 +636,102 @@ function CollaboratorList({
         );
     }
 
+    const confirmRevoke = () => {
+        if (!revokeTarget) return;
+        const target = revokeTarget;
+        const isGithub = target.type === 'github';
+        setRevoking(true);
+        router.post(
+            `/dev-boxes/${box}/access/revoke`,
+            isGithub ? { github: target.name } : { pubkey: target.key },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setRevoking(false);
+                    setRevokeTarget(null);
+                },
+            },
+        );
+    };
+
     return (
-        <div className="divide-y divide-line">
-            {collaborators.map((collab) => {
-                const isGithub = collab.type === 'github';
-                const keySnippet =
-                    collab.key.length > 36
-                        ? `${collab.key.slice(0, 16)}…${collab.key.slice(-12)}`
-                        : collab.key;
+        <>
+            <div className="divide-y divide-line">
+                {collaborators.map((collab) => {
+                    const isGithub = collab.type === 'github';
+                    const keySnippet =
+                        collab.key.length > 36
+                            ? `${collab.key.slice(0, 16)}…${collab.key.slice(-12)}`
+                            : collab.key;
 
-                return (
-                    <div
-                        key={`${collab.type}-${collab.name}`}
-                        className="flex items-center justify-between py-2.5 first:pt-1 last:pb-1"
-                    >
-                        <div className="flex items-center gap-2.5">
-                            <div className="flex size-7 items-center justify-center rounded-lg bg-badge text-soft">
-                                {isGithub ? (
-                                    <SiGithub className="size-3.5" />
-                                ) : (
-                                    <Key className="size-3.5" />
-                                )}
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold text-ink">
-                                        {isGithub
-                                            ? `@${collab.name}`
-                                            : collab.name}
-                                    </span>
-                                    <span className="rounded bg-paper px-1 py-0.5 font-mono text-[9px] text-soft uppercase">
-                                        {collab.type}
-                                    </span>
+                    return (
+                        <div
+                            key={`${collab.type}-${collab.name}`}
+                            className="flex items-center justify-between py-2.5 first:pt-1 last:pb-1"
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <div className="flex size-7 items-center justify-center rounded-lg bg-badge text-soft">
+                                    {isGithub ? (
+                                        <SiGithub className="size-3.5" />
+                                    ) : (
+                                        <Key className="size-3.5" />
+                                    )}
                                 </div>
-                                <p className="font-mono text-[11px] text-faint">
-                                    {keySnippet}
-                                </p>
+                                <div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-ink">
+                                            {isGithub
+                                                ? `@${collab.name}`
+                                                : collab.name}
+                                        </span>
+                                        <span className="rounded bg-paper px-1 py-0.5 font-mono text-[9px] text-soft uppercase">
+                                            {collab.type}
+                                        </span>
+                                    </div>
+                                    <p className="font-mono text-[11px] text-faint">
+                                        {keySnippet}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
 
-                        {ready && (
-                            <Link
-                                href={`/dev-boxes/${box}/access/revoke`}
-                                method="post"
-                                data={
-                                    isGithub
-                                        ? { github: collab.name }
-                                        : { pubkey: collab.key }
-                                }
-                                as="button"
-                                onBefore={() =>
-                                    window.confirm(
-                                        `Revoke access for ${collab.name || 'this collaborator'} on this Dev Box?`,
-                                    )
-                                }
-                                className={buttonClass('danger', 'sm', 'gap-1')}
-                                title="Revoke access"
-                            >
-                                <Trash2 className="size-3" />
-                                <span>Revoke</span>
-                            </Link>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
+                            {ready && (
+                                <Button
+                                    type="button"
+                                    variant="danger"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => setRevokeTarget(collab)}
+                                    title="Revoke access"
+                                >
+                                    <Trash2 className="size-3" />
+                                    <span>Revoke</span>
+                                </Button>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            <ConfirmModal
+                isOpen={revokeTarget !== null}
+                onClose={() => setRevokeTarget(null)}
+                onConfirm={confirmRevoke}
+                processing={revoking}
+                title="Revoke collaborator access?"
+                description={
+                    <>
+                        Revoke SSH access for{' '}
+                        <strong>
+                            {revokeTarget?.name || 'this collaborator'}
+                        </strong>{' '}
+                        on this Dev Box?
+                    </>
+                }
+                confirmLabel={revoking ? 'Revoking…' : 'Revoke Access'}
+                tone="danger"
+                icon={<Trash2 className="size-5" />}
+                confirmIcon={<Trash2 className="size-3.5" />}
+            />
+        </>
     );
 }

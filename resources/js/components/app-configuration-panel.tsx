@@ -84,9 +84,11 @@ export default function AppConfigurationPanel({
     const customResources = resources?.filter(isCustom);
 
     return (
-        // Two columns on wide windows: the list scrolls while the editor for
-        // your own variables stays beside it, in reach.
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="space-y-5">
+            <div id="custom-variables" className="scroll-mt-6">
+                <ToolEnvCard server={server} tool={tool} />
+            </div>
+
             <Card
                 label="ConfigMaps & Secrets"
                 action={
@@ -144,7 +146,7 @@ export default function AppConfigurationPanel({
                             <>
                                 <GroupHeading
                                     title="Your custom variables"
-                                    detail="Where the variables you add yourself are stored. Edit them in the card below."
+                                    detail="Where the variables you add yourself are stored. Edit them in the Custom Environment Variables table above."
                                     className="mt-6"
                                 />
                                 <div className="space-y-3">
@@ -163,13 +165,6 @@ export default function AppConfigurationPanel({
                     </>
                 )}
             </Card>
-
-            <div
-                id="custom-variables"
-                className="scroll-mt-6 xl:sticky xl:top-6 xl:order-last"
-            >
-                <ToolEnvCard server={server} tool={tool} />
-            </div>
         </div>
     );
 }

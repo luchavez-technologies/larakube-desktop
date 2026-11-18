@@ -284,18 +284,17 @@ export default function AppLayout({
         }
     }, [props.theme]);
 
-    const [collapsed, setCollapsed] = useState<boolean>(() => {
-        if (typeof window === 'undefined') {
-            return false;
-        }
+    const [collapsed, setCollapsed] = useState(false);
+
+    useEffect(() => {
         try {
-            return (
-                localStorage.getItem('larakube_sidebar_collapsed') === 'true'
-            );
+            if (localStorage.getItem('larakube_sidebar_collapsed') === 'true') {
+                setCollapsed(true);
+            }
         } catch {
-            return false;
+            // ignore
         }
-    });
+    }, []);
 
     const toggleSidebar = () => {
         setCollapsed((prev) => {

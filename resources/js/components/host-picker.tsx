@@ -196,9 +196,13 @@ export default function HostPicker({
     const [loadingDomains, setLoadingDomains] = useState(false);
     const lastFetchedServerRef = useRef<string | null>(null);
 
+    const hasDomainsProp = Boolean(domains && domains.length > 0);
+
     // Fetch domains dynamically if not passed via props but serverName is available
     useEffect(() => {
-        if ((domains && domains.length > 0) || !serverName) {
+        if (hasDomainsProp || !serverName) {
+            setLoadingDomains(false);
+
             return;
         }
         if (lastFetchedServerRef.current === serverName) {
@@ -209,7 +213,11 @@ export default function HostPicker({
         let cancelled = false;
         setLoadingDomains(true);
 
-        fetch(`/servers/${encodeURIComponent(serverName)}/domains`)
+        const url = onDomainsLoadedRef.current
+            ? `/servers/${encodeURIComponent(serverName)}/domains`
+            : `/servers/${encodeURIComponent(serverName)}/domains?domains_only=1`;
+
+        fetch(url)
             .then((res) => (res.ok ? res.json() : { domains: [] }))
             .then(
                 (data: {
@@ -243,8 +251,9 @@ export default function HostPicker({
 
         return () => {
             cancelled = true;
+            setLoadingDomains(false);
         };
-    }, [serverName, domains]);
+    }, [serverName, hasDomainsProp]);
 
     const activeDomains = useMemo(() => {
         if (domains && domains.length > 0) return domains;

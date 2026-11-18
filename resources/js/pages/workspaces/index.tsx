@@ -1,3 +1,4 @@
+import { useState, type FormEvent } from 'react';
 import {
     Deferred,
     Head,
@@ -7,9 +8,9 @@ import {
     usePoll,
 } from '@inertiajs/react';
 import { ExternalLink, Pause, Play, Plus, Trash2 } from 'lucide-react';
-import type { FormEvent } from 'react';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import ConfirmModal from '@/components/confirm-modal';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
@@ -386,6 +387,7 @@ function WorkspaceRow({
     const editorUrl = editor?.url ?? null;
     const [label, tone] = statusTone[workspace.status];
     const data = { server };
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
     return (
         <div className="border-t border-line py-4 first:border-t-0 first:pt-0">
@@ -450,17 +452,7 @@ function WorkspaceRow({
                     <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => {
-                            if (
-                                window.confirm(
-                                    `Delete workspace ${workspace.name}? Work that is not pushed is lost.`,
-                                )
-                            ) {
-                                router.delete(destroy(workspace.name).url, {
-                                    data,
-                                });
-                            }
-                        }}
+                        onClick={() => setConfirmDeleteOpen(true)}
                     >
                         <Trash2 className="size-3.5" />
                         <span>Delete</span>
@@ -516,6 +508,23 @@ function WorkspaceRow({
                     />
                 </ListRow>
             </div>
+            <ConfirmModal
+                isOpen={confirmDeleteOpen}
+                onClose={() => setConfirmDeleteOpen(false)}
+                onConfirm={() => {
+                    setConfirmDeleteOpen(false);
+                    router.delete(destroy(workspace.name).url, {
+                        data,
+                    });
+                }}
+                title={`Delete workspace ${workspace.name}?`}
+                description={`This permanently deletes workspace ${workspace.name}.`}
+                notice="Any commits or changes that have not been pushed to git will be lost."
+                confirmLabel="Delete Workspace"
+                tone="danger"
+                icon={<Trash2 className="size-5" />}
+                confirmIcon={<Trash2 className="size-3.5" />}
+            />
         </div>
     );
 }

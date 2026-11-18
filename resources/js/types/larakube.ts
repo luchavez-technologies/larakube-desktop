@@ -532,6 +532,14 @@ export function toolName(tool: {
     return brand || (tool.label ? describeTool(tool.label).summary : 'Tool');
 }
 
+export type GitRemoteInfo = {
+    name: string;
+    remote: string;
+    host: string;
+    repoSlug: string;
+    platform: string;
+};
+
 export type ProjectEnvironment = {
     name: string;
     isLocal: boolean;
@@ -555,6 +563,8 @@ export type ProjectEnvironment = {
     >;
     ci?: {
         platform: string;
+        gitRemote?: string | null;
+        remoteUrl?: string | null;
         repoSlug: string | null;
         hasWorkflow: boolean;
         branch: string;
@@ -573,6 +583,15 @@ export type ProjectEnvironment = {
             noTrivy?: boolean;
             [key: string]: unknown;
         } | null;
+        forgejoHost?: string | null;
+        teaLoggedIn?: boolean;
+        teaLogin?: string | null;
+        teaLogins?: {
+            name: string;
+            host: string;
+            user: string;
+            default: boolean;
+        }[];
     } | null;
 };
 
@@ -693,6 +712,7 @@ export type Project = {
         platform: string;
         repoSlug: string | null;
         hasWorkflow: boolean;
+        remotes?: GitRemoteInfo[];
     } | null;
     environments?: Record<string, ProjectEnvironment>;
     /** The latest create run's status, on the Projects list only. */

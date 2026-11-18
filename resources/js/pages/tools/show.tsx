@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import AppConfigurationPanel from '@/components/app-configuration-panel';
 import AppLogsPanel from '@/components/app-logs-panel';
@@ -61,12 +61,10 @@ const TABS = [
 type Tab = (typeof TABS)[number]['key'];
 
 /** The tab named in `?tab=`, so a reload or a shared link opens the same one. */
-function initialTab(): Tab {
-    if (typeof window === 'undefined') {
-        return 'overview';
-    }
-
-    const requested = new URLSearchParams(window.location.search).get('tab');
+function initialTab(pageUrl: string): Tab {
+    const requested = new URL(pageUrl, 'http://localhost').searchParams.get(
+        'tab',
+    );
 
     return TABS.some((tab) => tab.key === requested)
         ? (requested as Tab)
@@ -83,8 +81,9 @@ export default function ShowTool({
     /** undefined while loading, null when the tool holds nothing on the Commons. */
     backing?: BackingServices | null;
 }) {
+    const { url: pageUrl } = usePage();
     const [removing, setRemoving] = useState(false);
-    const [tab, setTab] = useState<Tab>(initialTab);
+    const [tab, setTab] = useState<Tab>(() => initialTab(pageUrl));
 
     useServerDataReload(server.name, { tools: ['tool'] });
 

@@ -53,7 +53,7 @@ class ProjectInspector
     }
 
     /**
-     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, gitRemote?: ?string, remoteUrl?: ?string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>, forgejoHost?: ?string, teaLoggedIn?: bool, teaLogin?: ?string, teaLogins?: list<array{name: string, host: string, user: string, default: bool}>}}>}
      */
     public function inspect(string $path, string $environment = 'production'): array
     {
@@ -118,12 +118,12 @@ class ProjectInspector
     /**
      * @param  array<string, mixed>|null  $blueprint
      * @param  array<string, mixed>|null  $local
-     * @param  array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}|null  $git
-     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
+     * @param  array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}|null  $git
+     * @return array{path: string, exists: bool, initialized: bool, name: string, framework: ?string, detectedFramework: ?string, webHost: ?string, serverIp: ?string, serverContext: ?string, deployable: bool, localTld: ?string, globalTld: string, effectiveTld: string, database: ?string, cacheDriver: ?string, objectStorage: ?string, phpVersion: ?string, serverVariation: ?string, additionalExtensions: list<string>, features: list<string>, git: array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes?: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}, environments: array<string, array{name: string, isLocal: bool, webHost: ?string, serverIp: ?string, serverContext: ?string, serverName?: ?string, serverProvider?: ?string, plex: list<string>, managed: list<string>, components: list<string>, features: list<string>, replicas: array<string, mixed>, autoscale: array<string, mixed>, resources: array<string, mixed>, ci: array{platform: string, gitRemote?: ?string, remoteUrl?: ?string, repoSlug: ?string, hasWorkflow: bool, branch: string, registry: ?array<string, mixed>, securityAudit: ?array<string, mixed>}}>}
      */
     public function inspectBlueprint(?array $blueprint, ?array $local = null, string $environment = 'production', string $path = '', ?array $git = null): array
     {
-        $git ??= ['remote' => null, 'platform' => 'github', 'repoSlug' => null, 'hasWorkflow' => false];
+        $git ??= ['remote' => null, 'platform' => 'github', 'repoSlug' => null, 'hasWorkflow' => false, 'remotes' => []];
 
         // A blueprint with no framework is Laravel: the LaraKube CLI reads null that way.
         $framework = is_string($blueprint['framework'] ?? null) ? $blueprint['framework'] : ($blueprint !== null ? 'laravel' : null);
@@ -171,6 +171,90 @@ class ProjectInspector
                     $components[] = 'ssr';
                 }
 
+                $remotes = is_array($git['remotes'] ?? null) ? $git['remotes'] : [];
+                $savedRemote = is_array($envConfig) && is_string($envConfig['gitRemote'] ?? null) && $envConfig['gitRemote'] !== ''
+                    ? $envConfig['gitRemote']
+                    : null;
+                $savedPlatform = is_array($envConfig) && is_string($envConfig['ciPlatform'] ?? null) && in_array($envConfig['ciPlatform'], ['github', 'forgejo', 'gitlab'], true)
+                    ? $envConfig['ciPlatform']
+                    : null;
+
+                $matchedRemote = null;
+                if ($savedRemote !== null) {
+                    foreach ($remotes as $candidate) {
+                        if ($candidate['name'] === $savedRemote) {
+                            $matchedRemote = $candidate;
+                            break;
+                        }
+                    }
+                }
+                if ($matchedRemote === null && is_array($registry) && is_string($registry['host'] ?? null) && $registry['host'] !== '') {
+                    $regHost = strtolower($registry['host']);
+                    foreach ($remotes as $candidate) {
+                        if ($candidate['host'] === $regHost) {
+                            $matchedRemote = $candidate;
+                            break;
+                        }
+                    }
+                }
+                if ($matchedRemote === null) {
+                    foreach ($remotes as $candidate) {
+                        if ($candidate['name'] === 'origin') {
+                            $matchedRemote = $candidate;
+                            break;
+                        }
+                    }
+                    $matchedRemote ??= $remotes[0] ?? null;
+                }
+
+                $registryProvider = is_array($registry) && is_string($registry['provider'] ?? null)
+                    ? strtolower($registry['provider'])
+                    : null;
+                $workflowContents = '';
+                $workflowPlatform = null;
+                if ($path !== '') {
+                    foreach ([
+                        "{$this->hostPath($path)}/.github/workflows/larakube-deploy-{$name}.yml",
+                        "{$this->hostPath($path)}/.forgejo/workflows/larakube-deploy-{$name}.yml",
+                        "{$this->hostPath($path)}/.gitea/workflows/larakube-deploy-{$name}.yml",
+                    ] as $workflowPath) {
+                        if (is_file($workflowPath)) {
+                            $workflowContents = (string) file_get_contents($workflowPath);
+                            if (preg_match('/^\s*REGISTRY_PROVIDER:\s*forgejo\b/m', $workflowContents) === 1) {
+                                $workflowPlatform = 'forgejo';
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                $resolvedPlatform = $savedPlatform
+                    ?? (in_array($matchedRemote['platform'] ?? null, ['forgejo', 'gitlab'], true) ? $matchedRemote['platform'] : null)
+                    ?? (in_array($registryProvider, ['forgejo', 'gitlab'], true) ? $registryProvider : null)
+                    ?? $workflowPlatform
+                    ?? ($matchedRemote['platform'] ?? $git['platform']);
+
+                $forgejoHost = $resolvedPlatform === 'forgejo'
+                    ? $this->resolveForgejoHost($registry, $matchedRemote, $workflowContents)
+                    : null;
+                $allTeaLogins = $resolvedPlatform === 'forgejo' ? $this->teaLogins() : [];
+                $savedTeaLogin = is_string($envConfig['teaLogin'] ?? null) && trim($envConfig['teaLogin']) !== ''
+                    ? trim($envConfig['teaLogin'])
+                    : null;
+                $hostTeaLogins = $forgejoHost !== null
+                    ? $this->matchingTeaLogins($forgejoHost, $allTeaLogins)
+                    : [];
+                $resolvedTeaLogin = $forgejoHost !== null
+                    ? $this->resolveTeaLoginName($forgejoHost, $savedTeaLogin, $allTeaLogins)
+                    : null;
+                $teaLoggedIn = $resolvedTeaLogin !== null;
+
+                $resolvedRepoSlug = ($matchedRemote['repoSlug'] ?? '') !== ''
+                    ? $matchedRemote['repoSlug']
+                    : (is_array($registry) && is_string($registry['image'] ?? null) && $registry['image'] !== ''
+                        ? $registry['image']
+                        : $git['repoSlug']);
+
                 $environments[$name] = [
                     'name' => $name,
                     'isLocal' => $name === 'local',
@@ -185,12 +269,18 @@ class ProjectInspector
                     'autoscale' => is_array($envConfig['autoscale'] ?? null) ? $envConfig['autoscale'] : [],
                     'resources' => is_array($envConfig['resources'] ?? null) ? $envConfig['resources'] : [],
                     'ci' => [
-                        'platform' => $git['platform'],
-                        'repoSlug' => $git['repoSlug'],
+                        'platform' => $resolvedPlatform,
+                        'gitRemote' => $matchedRemote['name'] ?? $savedRemote ?? 'origin',
+                        'remoteUrl' => $matchedRemote['remote'] ?? $git['remote'],
+                        'repoSlug' => $resolvedRepoSlug,
                         'hasWorkflow' => $git['hasWorkflow'],
                         'branch' => $envBranch,
                         'registry' => $registry,
                         'securityAudit' => $securityAudit,
+                        'forgejoHost' => $forgejoHost,
+                        'teaLoggedIn' => $teaLoggedIn,
+                        'teaLogin' => $resolvedTeaLogin,
+                        'teaLogins' => $hostTeaLogins,
                     ],
                 ];
             }
@@ -225,6 +315,8 @@ class ProjectInspector
                     'branch' => 'main',
                     'registry' => null,
                     'securityAudit' => null,
+                    'forgejoHost' => null,
+                    'teaLoggedIn' => false,
                 ],
             ];
         }
@@ -262,32 +354,49 @@ class ProjectInspector
     }
 
     /**
-     * @return array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool}
+     * @return array{remote: ?string, platform: string, repoSlug: ?string, hasWorkflow: bool, remotes: list<array{name: string, remote: string, host: string, repoSlug: string, platform: string}>}
      */
     public function detectGit(string $path): array
     {
         $hostPath = $this->hostPath($path);
-        $remote = null;
+        $remotes = [];
+        $allTeaLogins = $this->teaLogins();
         $configFile = "{$hostPath}/.git/config";
         if (is_file($configFile)) {
             $content = (string) file_get_contents($configFile);
-            if (preg_match('/\[remote\s+"origin"\][^\[]*?url\s*=\s*(.+)/i', $content, $m)) {
-                $remote = trim($m[1]);
+            if (preg_match_all('/\[remote\s+"([^"]+)"\]([^\[]*)/i', $content, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $remoteName = trim($match[1]);
+                    $section = $match[2];
+                    if (! preg_match('/^\s*url\s*=\s*(.+)$/mi', $section, $urlMatch)) {
+                        continue;
+                    }
+
+                    $rawUrl = trim($urlMatch[1]);
+                    $parsed = $this->parseGitRemoteUrl($rawUrl, $allTeaLogins);
+                    $remotes[] = [
+                        'name' => $remoteName,
+                        'remote' => $rawUrl,
+                        'host' => $parsed['host'] ?? '',
+                        'repoSlug' => $parsed['repoSlug'] ?? '',
+                        'platform' => $parsed['platform'] ?? 'github',
+                    ];
+                }
             }
         }
 
-        $platform = 'github';
-        $repoSlug = null;
-
-        if ($remote !== null && preg_match('#^(?:https?://|git@)([^/:]+)[:/](.+?)(?:\.git)?$#', $remote, $m)) {
-            $host = strtolower($m[1]);
-            $repoSlug = trim($m[2]);
-            $platform = match (true) {
-                str_contains($host, 'gitlab') => 'gitlab',
-                str_contains($host, 'forgejo') || str_contains($host, 'gitea') || str_contains($host, 'codeberg') => 'forgejo',
-                default => 'github',
-            };
+        $primary = null;
+        foreach ($remotes as $candidate) {
+            if ($candidate['name'] === 'origin') {
+                $primary = $candidate;
+                break;
+            }
         }
+        $primary ??= $remotes[0] ?? null;
+
+        $remote = $primary['remote'] ?? null;
+        $platform = $primary['platform'] ?? 'github';
+        $repoSlug = ($primary['repoSlug'] ?? '') !== '' ? $primary['repoSlug'] : null;
 
         // The CLI's own generator (ConfiguresCloudEnvironment::configureGha/
         // configureForgejo) names each environment's workflow
@@ -306,7 +415,42 @@ class ProjectInspector
             'platform' => $platform,
             'repoSlug' => $repoSlug,
             'hasWorkflow' => $hasWorkflow,
+            'remotes' => $remotes,
         ];
+    }
+
+    /**
+     * @param  list<array{name: string, host: string, user: string, default: bool}>  $teaLogins
+     * @return array{host: string, repoSlug: string, platform: ?string}|null
+     */
+    private function parseGitRemoteUrl(string $remote, array $teaLogins = []): ?array
+    {
+        $remote = trim($remote);
+
+        if (preg_match('#^[a-z][a-z0-9+.-]*://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+?)(?:\.git)?/?$#i', $remote, $m)
+            || preg_match('#^(?:[^@]+@)?([^:/]+):(.+?)(?:\.git)?/?$#', $remote, $m)) {
+            $host = strtolower(trim($m[1]));
+            $repoSlug = ltrim(trim($m[2]), '/');
+            $platform = match (true) {
+                str_contains($host, 'gitlab') => 'gitlab',
+                str_contains($host, 'forgejo')
+                    || str_contains($host, 'gitea')
+                    || str_contains($host, 'codeberg')
+                    || str_starts_with($host, 'git.')
+                    || str_contains($host, '.git.') => 'forgejo',
+                str_contains($host, 'github') => 'github',
+                $teaLogins !== [] && $this->matchingTeaLogins($host, $teaLogins) !== [] => 'forgejo',
+                default => null,
+            };
+
+            return [
+                'host' => $host,
+                'repoSlug' => $repoSlug,
+                'platform' => $platform,
+            ];
+        }
+
+        return null;
     }
 
     /**
@@ -331,6 +475,210 @@ class ProjectInspector
             in_array('vite', $packages, true) => 'vite',
             default => null,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $registry
+     * @param  array{name: string, remote: string, host: string, repoSlug: string, platform: string}|null  $matchedRemote
+     */
+    private function resolveForgejoHost(?array $registry, ?array $matchedRemote, string $workflowContents): ?string
+    {
+        if (is_array($registry) && is_string($registry['host'] ?? null) && trim($registry['host']) !== '') {
+            return strtolower(trim($registry['host']));
+        }
+
+        $remoteHost = $matchedRemote['host'] ?? '';
+        if ($remoteHost !== '' && str_contains($remoteHost, '.')) {
+            return strtolower($remoteHost);
+        }
+
+        if ($workflowContents !== '' && preg_match('/^\s*REGISTRY_HOST:\s*[\'"]?([^\'"\s#]+)/m', $workflowContents, $match)) {
+            $host = strtolower(trim($match[1]));
+            if ($host !== '') {
+                return $host;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Reads all authenticated `tea` CLI logins from native `config.yml` files.
+     *
+     * @return list<array{name: string, host: string, user: string, default: bool}>
+     */
+    private function teaLogins(): array
+    {
+        $home = $this->hostPath(ToolLocator::home());
+        if ($home === '') {
+            return [];
+        }
+
+        $xdgConfig = trim((string) getenv('XDG_CONFIG_HOME'));
+        $candidates = array_values(array_unique(array_filter([
+            "{$home}/Library/Application Support/tea/config.yml",
+            $xdgConfig !== '' ? rtrim($xdgConfig, '/').'/tea/config.yml' : null,
+            "{$home}/.config/tea/config.yml",
+        ])));
+
+        $all = [];
+        $seenNames = [];
+        foreach ($candidates as $configPath) {
+            if (! is_file($configPath)) {
+                continue;
+            }
+
+            foreach ($this->parseTeaConfigLogins((string) file_get_contents($configPath)) as $login) {
+                $key = strtolower($login['name']);
+                if (! isset($seenNames[$key])) {
+                    $seenNames[$key] = true;
+                    $all[] = $login;
+                }
+            }
+        }
+
+        return $all;
+    }
+
+    /**
+     * @param  list<array{name: string, host: string, user: string, default: bool}>  $allLogins
+     * @return list<array{name: string, host: string, user: string, default: bool}>
+     */
+    private function matchingTeaLogins(string $host, array $allLogins): array
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return [];
+        }
+
+        $matched = [];
+        foreach ($allLogins as $login) {
+            $nameLower = strtolower($login['name']);
+            $urlHost = $login['host'];
+            $hostMatch = $nameLower === $host
+                || $urlHost === $host
+                || ($urlHost !== '' && (str_starts_with($urlHost, $host.':') || str_starts_with($host, $urlHost.':')));
+
+            if ($hostMatch) {
+                $matched[] = $login;
+            }
+        }
+
+        return $matched;
+    }
+
+    /**
+     * @param  list<array{name: string, host: string, user: string, default: bool}>  $allLogins
+     */
+    private function resolveTeaLoginName(string $host, ?string $preferredLogin, array $allLogins): ?string
+    {
+        $matches = $this->matchingTeaLogins($host, $allLogins);
+        if ($matches === []) {
+            return null;
+        }
+
+        if ($preferredLogin !== null && $preferredLogin !== '') {
+            foreach ($matches as $match) {
+                if (strcasecmp($match['name'], $preferredLogin) === 0) {
+                    return $match['name'];
+                }
+            }
+        }
+
+        $hostLower = strtolower(trim($host));
+        foreach ($matches as $match) {
+            if (strtolower($match['name']) === $hostLower) {
+                return $match['name'];
+            }
+        }
+
+        foreach ($matches as $match) {
+            if ($match['default']) {
+                return $match['name'];
+            }
+        }
+
+        return $matches[0]['name'];
+    }
+
+    /**
+     * @return list<array{name: string, host: string, user: string, default: bool}>
+     */
+    private function parseTeaConfigLogins(string $content): array
+    {
+        $lines = preg_split('/\R/', $content) ?: [];
+        $inLogins = false;
+        $entries = [];
+        $current = null;
+
+        foreach ($lines as $line) {
+            if (! $inLogins) {
+                if (preg_match('/^logins:\s*$/i', $line)) {
+                    $inLogins = true;
+                }
+
+                continue;
+            }
+
+            // A non-indented non-list line begins the next top-level YAML key.
+            if ($line !== '' && ! str_starts_with($line, ' ') && ! str_starts_with($line, "\t") && ! str_starts_with($line, '-') && ! str_starts_with($line, '#')) {
+                break;
+            }
+
+            if (preg_match('/^\s*-\s*(.*)$/', $line, $itemMatch)) {
+                if ($current !== null) {
+                    $entries[] = $current;
+                }
+                $current = [];
+                $remainder = trim($itemMatch[1]);
+                if (preg_match('/^([A-Za-z0-9_-]+):\s*(.*)$/', $remainder, $kv)) {
+                    $current[strtolower($kv[1])] = trim($kv[2], " \t'\"");
+                }
+
+                continue;
+            }
+
+            if ($current !== null && preg_match('/^\s+([A-Za-z0-9_-]+):\s*(.*)$/', $line, $kv)) {
+                $current[strtolower($kv[1])] = trim($kv[2], " \t'\"");
+            }
+        }
+
+        if ($current !== null) {
+            $entries[] = $current;
+        }
+
+        $logins = [];
+        foreach ($entries as $entry) {
+            $token = trim($entry['token'] ?? '');
+            if ($token === '') {
+                continue;
+            }
+
+            $name = trim($entry['name'] ?? '');
+            $url = $entry['url'] ?? '';
+            $urlHost = '';
+            if ($url !== '') {
+                $parsedHost = parse_url($url, PHP_URL_HOST);
+                $parsedPort = parse_url($url, PHP_URL_PORT);
+                $urlHost = strtolower(is_string($parsedHost) ? $parsedHost : '');
+                if ($urlHost !== '' && is_int($parsedPort)) {
+                    $urlHost .= ':'.$parsedPort;
+                }
+            }
+
+            if ($name === '' && $urlHost === '') {
+                continue;
+            }
+
+            $logins[] = [
+                'name' => $name !== '' ? $name : $urlHost,
+                'host' => $urlHost,
+                'user' => trim($entry['user'] ?? ''),
+                'default' => strtolower($entry['default'] ?? '') === 'true',
+            ];
+        }
+
+        return $logins;
     }
 
     /**

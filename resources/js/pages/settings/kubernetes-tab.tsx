@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Archive, ArrowRightLeft, Layers, Trash2 } from 'lucide-react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import ConfirmModal from '@/components/confirm-modal';
 import StatusPill from '@/components/status-pill';
 
 type KubernetesTabProps = {
@@ -13,18 +15,21 @@ export default function KubernetesTab({
     contexts = [],
     currentContext = null,
 }: KubernetesTabProps) {
+    const [contextToRemove, setContextToRemove] = useState<string | null>(null);
+
     function switchContext(name: string) {
         router.post('/context/switch', { context: name });
     }
 
     function removeContext(name: string) {
-        if (
-            confirm(
-                `Are you sure you want to remove context "${name}" from ~/.kube/config?`,
-            )
-        ) {
-            router.post('/context/remove', { context: name });
-        }
+        setContextToRemove(name);
+    }
+
+    function confirmRemoveContext() {
+        if (!contextToRemove) return;
+        const target = contextToRemove;
+        setContextToRemove(null);
+        router.post('/context/remove', { context: target });
     }
 
     function backupContexts() {
@@ -125,6 +130,30 @@ export default function KubernetesTab({
                     )}
                 </div>
             </Card>
+
+            <ConfirmModal
+                isOpen={contextToRemove !== null}
+                onClose={() => setContextToRemove(null)}
+                onConfirm={confirmRemoveContext}
+                title="Remove Kubernetes context?"
+                description={
+                    <>
+                        Are you sure you want to remove context{' '}
+                        <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
+                            {contextToRemove}
+                        </code>{' '}
+                        from{' '}
+                        <code className="font-mono text-ink">
+                            ~/.kube/config
+                        </code>
+                        ?
+                    </>
+                }
+                confirmLabel="Remove Context"
+                tone="danger"
+                icon={<Trash2 className="size-5" />}
+                confirmIcon={<Trash2 className="size-3.5" />}
+            />
         </div>
     );
 }
