@@ -310,6 +310,7 @@ Route::delete('/servers/{server}/tools/{tool}', [ClusterToolController::class, '
 Route::get('/servers/{server}/tools/{tool}/env', [ClusterToolEnvController::class, 'status'])->name('servers.tools.env.status');
 Route::post('/servers/{server}/tools/{tool}/env', [ClusterToolEnvController::class, 'update'])->name('servers.tools.env.update');
 Route::get('/quick-actions/fields', [QuickActionController::class, 'fields'])->name('quick-actions.fields');
+Route::get('/quick-actions/fit', [QuickActionController::class, 'fit'])->name('quick-actions.fit');
 Route::post('/quick-actions/launch', [QuickActionController::class, 'launch'])->name('quick-actions.launch');
 
 Route::post('/companions/add', [CompanionController::class, 'add'])->name('companions.add');

@@ -69,6 +69,7 @@ import type {
     Server,
 } from '@/types/larakube';
 import { useServerDataReload } from '@/lib/native-events';
+import { formatMemoryBytes, type CapacityAssessment } from '@/lib/capacity';
 
 type DnsGroup = {
     group: string;
@@ -103,6 +104,7 @@ export default function ShowServer({
     backup,
     clusterUsers,
     nodeMetrics,
+    capacity,
     reachable,
     diagnosis,
     providers,
@@ -118,6 +120,7 @@ export default function ShowServer({
     backup?: BackupStatus | null;
     clusterUsers?: ClusterUser[] | null;
     nodeMetrics?: NodeMetrics | null;
+    capacity?: CapacityAssessment | null;
     /** The live kubectl reachability check — optimistically true until it loads, so a healthy cluster never flashes a warning. */
     reachable?: boolean;
     diagnosis?: DiagnoseReport | null;
@@ -177,6 +180,7 @@ export default function ShowServer({
         plex: ['plex'],
         backups: ['backup'],
         'cluster-users': ['clusterUsers'],
+        capacity: ['capacity'],
     });
 
     const hasUnreadyDns = dnsGroups?.some((g) => !g.ready) ?? false;
@@ -280,7 +284,10 @@ export default function ShowServer({
                                 </Card>
                             }
                         >
-                            <NodeMetricsCard metrics={nodeMetrics} />
+                            <NodeMetricsCard
+                                metrics={nodeMetrics}
+                                capacity={capacity}
+                            />
                         </Deferred>
                     )}
 
@@ -853,7 +860,13 @@ export default function ShowServer({
     );
 }
 
-function NodeMetricsCard({ metrics }: { metrics?: NodeMetrics | null }) {
+function NodeMetricsCard({
+    metrics,
+    capacity,
+}: {
+    metrics?: NodeMetrics | null;
+    capacity?: CapacityAssessment | null;
+}) {
     if (!metrics) {
         return null;
     }
@@ -937,6 +950,8 @@ function NodeMetricsCard({ metrics }: { metrics?: NodeMetrics | null }) {
                 </div>
             </div>
 
+            {capacity && <MemoryBreakdownBar capacity={capacity} />}
+
             {metrics.nodes.length > 1 && (
                 <div className="mt-3 divide-y divide-line rounded-lg border border-line bg-surface/40 p-2.5">
                     <p className="mb-2 text-[11px] font-semibold tracking-wider text-soft uppercase">
@@ -971,6 +986,109 @@ function NodeMetricsCard({ metrics }: { metrics?: NodeMetrics | null }) {
                 </div>
             )}
         </Card>
+    );
+}
+
+function MemoryBreakdownBar({ capacity }: { capacity: CapacityAssessment }) {
+    const total = Math.max(1, capacity.node.allocatable_memory_bytes);
+    const systemBytes = capacity.breakdown.system.memory_bytes;
+    const platformBytes = capacity.breakdown.platform.memory_bytes;
+    const appsBytes = capacity.breakdown.apps.reduce(
+        (sum, app) => sum + app.memory_bytes,
+        0,
+    );
+    const freeBytes = capacity.breakdown.free.memory_bytes;
+    const reserveBytes = systemBytes + platformBytes;
+
+    const segments = [
+        {
+            key: 'system',
+            label: 'System',
+            bytes: systemBytes,
+            color: 'bg-slate-500',
+            title: `System (k3s + OS): ${formatMemoryBytes(systemBytes)}`,
+        },
+        {
+            key: 'platform',
+            label: 'Platform',
+            bytes: platformBytes,
+            color: 'bg-sky-500',
+            title: `Platform (Traefik, DNS, Secrets, Plex): ${formatMemoryBytes(platformBytes)}`,
+        },
+        {
+            key: 'apps',
+            label: 'Apps',
+            bytes: appsBytes,
+            color: 'bg-violet-500',
+            title:
+                capacity.breakdown.apps.length > 0
+                    ? capacity.breakdown.apps
+                          .map(
+                              (a) =>
+                                  `${a.label}${a.paused ? ' (paused)' : ''}: ${formatMemoryBytes(a.memory_bytes)}`,
+                          )
+                          .join('\n')
+                    : 'Apps: 0 MB',
+        },
+        {
+            key: 'free',
+            label: 'Free',
+            bytes: freeBytes,
+            color: 'bg-emerald-500/70',
+            title: `Free (after ${Math.round(capacity.node.margin_fraction * 100)}% safety margin): ${formatMemoryBytes(freeBytes)}`,
+        },
+    ];
+
+    return (
+        <div className="mt-3 rounded-lg border border-line bg-surface/40 p-3">
+            <div className="mb-2 flex items-center justify-between text-xs">
+                <span className="font-medium text-ink">
+                    Memory Breakdown ({formatMemoryBytes(total)} allocatable)
+                </span>
+                <span className="font-mono text-[11px] text-faint">
+                    basis: {capacity.node.basis}
+                </span>
+            </div>
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface">
+                {segments.map((seg) => {
+                    const pct = Math.max(0, (seg.bytes / total) * 100);
+                    if (pct <= 0) return null;
+
+                    return (
+                        <div
+                            key={seg.key}
+                            title={seg.title}
+                            className={cn('h-full transition-all', seg.color)}
+                            style={{ width: `${pct}%` }}
+                        />
+                    );
+                })}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-soft">
+                {segments.map((seg) => (
+                    <span
+                        key={seg.key}
+                        title={seg.title}
+                        className="inline-flex items-center gap-1.5"
+                    >
+                        <span
+                            className={cn(
+                                'inline-block size-2 rounded-full',
+                                seg.color,
+                            )}
+                        />
+                        <span>{seg.label}:</span>
+                        <span className="font-mono font-medium text-ink">
+                            {formatMemoryBytes(seg.bytes)}
+                        </span>
+                    </span>
+                ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-faint">
+                k3s and the OS reserve ~{formatMemoryBytes(reserveBytes)} before
+                any app runs
+            </p>
+        </div>
     );
 }
 

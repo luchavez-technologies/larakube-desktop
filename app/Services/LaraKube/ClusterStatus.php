@@ -85,6 +85,31 @@ class ClusterStatus
     }
 
     /**
+     * Live node capacity breakdown and optional per-tool fit verdict
+     * (`cluster:capacity --context=... [--tool=...] --json`).
+     *
+     * @param  list<string>  $toolOptions
+     * @return array<string, mixed>|null
+     */
+    public function capacity(string $context, ?string $tool = null, array $toolOptions = []): ?array
+    {
+        $args = ['cluster:capacity', "--context={$context}", '--json'];
+        if ($tool !== null && $tool !== '') {
+            $args[] = "--tool={$tool}";
+        }
+        foreach ($toolOptions as $opt) {
+            $flag = ltrim((string) $opt, '-');
+            if ($flag !== '') {
+                $args[] = "--tool-options={$flag}";
+            }
+        }
+
+        $report = $this->json($args, 20, wholeOutput: true);
+
+        return is_array($report) && isset($report['node'], $report['breakdown']) ? $report : null;
+    }
+
+    /**
      * Plain-language cluster health — node pressure, OOM kills, pods stuck
      * Pending for lack of room — from `cloud:diagnose --json`. The one check
      * that explains *why* a cluster is unreachable instead of just saying so.

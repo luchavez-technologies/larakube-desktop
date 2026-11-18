@@ -93,7 +93,8 @@ export type ServerDataScope =
     | 'domains'
     | 'external-dns'
     | 'tls'
-    | 'cluster-users';
+    | 'cluster-users'
+    | 'capacity';
 
 export type ServerDataSyncedPayload = {
     server: string;

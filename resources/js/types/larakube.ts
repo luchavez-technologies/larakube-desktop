@@ -411,6 +411,8 @@ export type ClusterTool = {
     paid?: boolean;
     /** The exact command that removes this instance. */
     removeCommand?: string;
+    footprint?: import('@/lib/capacity').ToolFootprint | null;
+    alternatives?: string[];
     components?: ClusterToolComponent[];
     sso: Wiring;
     mail: Wiring;

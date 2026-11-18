@@ -6,6 +6,7 @@ use App\Enums\RunKind;
 use App\Http\Requests\QuickLaunchAppRequest;
 use App\Models\Server;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\FrameworkForm;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolCatalog;
@@ -44,6 +45,45 @@ class QuickActionController extends Controller
             'fields' => $this->optionFields($row, $isLocal),
             'needsAdminEmail' => $needsAdminEmail,
         ]);
+    }
+
+    /**
+     * Live pre-install capacity fit check (`cluster:capacity --tool=... --json`)
+     * for the Quick Launch modal.
+     */
+    public function fit(Request $request, ClusterStatus $status): JsonResponse
+    {
+        $request->validate([
+            'tool' => ['required', 'string', 'max:64'],
+            'server' => ['required', 'string', 'max:128'],
+            'options' => ['nullable'],
+        ]);
+
+        $stack = $this->readyServer($request->string('server')->toString());
+        $context = (string) $stack['context'];
+        $tool = $request->string('tool')->trim()->lower()->toString();
+        $row = $this->tools->find($context, $tool);
+
+        abort_if($row === null, 404);
+
+        $rawOptions = $request->input('options', []);
+        if (is_string($rawOptions)) {
+            $decoded = json_decode($rawOptions, true);
+            $rawOptions = is_array($decoded) ? $decoded : [];
+        }
+
+        $isLocal = Server::isStackLocal($stack);
+        $resolved = app(FrameworkForm::class)->resolve(
+            $this->optionFields($row, $isLocal),
+            is_array($rawOptions) ? $rawOptions : [],
+        );
+
+        $assessment = $status->capacity($context, $tool, $resolved['flags']);
+        if ($assessment === null) {
+            return response()->json(['assessment' => null], 503);
+        }
+
+        return response()->json(['assessment' => $assessment]);
     }
 
     public function launch(QuickLaunchAppRequest $request, CliRunner $runner): JsonResponse

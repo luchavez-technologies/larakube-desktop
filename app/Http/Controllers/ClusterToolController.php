@@ -67,6 +67,8 @@ class ClusterToolController extends Controller
         // on a first visit, the registry) shows while the live check runs.
         return Inertia::render('tools/index', [
             'server' => $stack,
+            'capacity' => Server::where('name', $stack['name'])->first()?->capacity_data,
+            'capacity' => \App\Models\Server::where('name', $stack['name'])->first()?->capacity_data,
             'servers' => array_values(array_filter($this->stacks->all() ?? [], fn (array $s): bool => $s['status'] === 'ready')),
             'lastVerified' => $last['tools'] ?? null,
             'checkedAt' => isset($last['checkedAt']) ? date(DATE_ATOM, $last['checkedAt']) : null,

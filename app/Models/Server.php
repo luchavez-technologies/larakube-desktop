@@ -61,6 +61,10 @@ use Illuminate\Support\Carbon;
  * @property list<array<string, mixed>>|null $cluster_users_data
  * @property Carbon|null $cluster_users_last_synced_at
  * @property string|null $cluster_users_last_sync_error
+ * @property string $capacity_sync_status
+ * @property array<string, mixed>|null $capacity_data
+ * @property Carbon|null $capacity_last_synced_at
+ * @property string|null $capacity_last_sync_error
  * @property-read CloudProvider|null $cloudProvider
  * @property-read CloudRegion|null $cloudRegion
  * @property-read CloudSize|null $cloudSize
@@ -116,6 +120,10 @@ class Server extends Model
         'cluster_users_data',
         'cluster_users_last_synced_at',
         'cluster_users_last_sync_error',
+        'capacity_sync_status',
+        'capacity_data',
+        'capacity_last_synced_at',
+        'capacity_last_sync_error',
     ];
 
     protected static function booted(): void
@@ -209,6 +217,8 @@ class Server extends Model
             'tls_last_synced_at' => 'datetime',
             'cluster_users_data' => 'array',
             'cluster_users_last_synced_at' => 'datetime',
+            'capacity_data' => 'array',
+            'capacity_last_synced_at' => 'datetime',
         ];
     }
 

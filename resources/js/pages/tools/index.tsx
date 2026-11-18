@@ -52,6 +52,11 @@ import {
     updateAll as updateAllTools,
 } from '@/routes/servers/tools';
 import { isLocalServer as isLocalServerCheck } from '@/lib/servers';
+import {
+    estimateToolFit,
+    formatMemoryBytes,
+    type CapacityAssessment,
+} from '@/lib/capacity';
 import { useServerDataReload } from '@/lib/native-events';
 import {
     describeTool,
@@ -1840,7 +1845,11 @@ function AvailableCard({
     onInstall: () => void;
     onCategoryClick?: (category: string) => void;
 }) {
-    const { untested } = usePage<{ untested: Untested }>().props;
+    const { untested, capacity } = usePage<{
+        untested: Untested;
+        capacity?: CapacityAssessment | null;
+    }>().props;
+    const fit = estimateToolFit(tool.footprint, capacity);
     const { summary } = describeTool(tool.label);
     const name = toolName(tool);
     const tagline = toolTagline(tool);
@@ -1878,6 +1887,30 @@ function AvailableCard({
                 <p className="line-clamp-2 min-h-[32px] text-xs leading-relaxed text-soft">
                     {summary || tagline}
                 </p>
+
+                {tool.footprint && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="font-mono text-soft">
+                            Needs ~
+                            {formatMemoryBytes(tool.footprint.memory_bytes)} RAM
+                        </span>
+                        {fit === 'fits' && (
+                            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500">
+                                Fits
+                            </span>
+                        )}
+                        {fit === 'tight' && (
+                            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+                                Tight
+                            </span>
+                        )}
+                        {fit === 'wont_fit' && (
+                            <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-500">
+                                Won&apos;t fit
+                            </span>
+                        )}
+                    </div>
+                )}
 
                 {cats.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-0.5">

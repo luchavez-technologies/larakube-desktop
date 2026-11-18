@@ -20,4 +20,5 @@ enum ServerDataScope: string
     case ExternalDns = 'external-dns';
     case Tls = 'tls';
     case ClusterUsers = 'cluster-users';
+    case Capacity = 'capacity';
 }

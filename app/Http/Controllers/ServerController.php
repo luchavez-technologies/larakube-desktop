@@ -8,6 +8,7 @@ use App\Http\Requests\DestroyServerRequest;
 use App\Http\Requests\StoreServerRequest;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Jobs\Sync\SyncServerBackupJob;
+use App\Jobs\Sync\SyncServerCapacityJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServersJob;
@@ -469,6 +470,9 @@ class ServerController extends Controller
             'clusterUsers' => $this->isColumnFresh($serverModel?->cluster_users_last_synced_at, SyncServerClusterUsersJob::FRESH_SECONDS)
                 ? $serverModel->cluster_users_data
                 : Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
+            'capacity' => $this->isColumnFresh($serverModel?->capacity_last_synced_at, SyncServerCapacityJob::FRESH_SECONDS)
+                ? $serverModel->capacity_data
+                : Inertia::defer(fn (): ?array => $context !== null ? $status->capacity($context) : null, 'capacity'),
             'nodeMetrics' => Inertia::defer(fn (): ?array => $context !== null ? $clusterMetrics->nodeMetrics($context) : null, 'nodeMetrics'),
             // "Ready" only ever meant "provisioning finished" — this is the live
             // signal that overrides the badge when the cluster stopped answering since.

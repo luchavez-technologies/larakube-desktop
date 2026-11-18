@@ -11,9 +11,11 @@ import {
     AlertTriangle,
     ArrowLeft,
     ArrowRight,
+    ArrowUpCircle,
     CheckCircle2,
     Circle,
     ExternalLink,
+    Pause,
     RefreshCw,
     RotateCw,
     Sparkles,
@@ -37,6 +39,7 @@ import StatusPill from '@/components/status-pill';
 import QrCodePopover from '@/components/qr-code-popover';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { sendJson } from '@/lib/http';
+import { formatMemoryBytes, type CapacityAssessment } from '@/lib/capacity';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import {
@@ -263,6 +266,66 @@ export default function QuickLaunchModal({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [wireSso, setWireSso] = useState<boolean>(false);
     const [wireMail, setWireMail] = useState<boolean>(false);
+    const [fitAssessment, setFitAssessment] =
+        useState<CapacityAssessment | null>(null);
+    const [fitCheckTick, setFitCheckTick] = useState<number>(0);
+    const [pausingCandidate, setPausingCandidate] = useState<string | null>(
+        null,
+    );
+
+    const fitBlocked =
+        fitAssessment?.verdict === 'wont_fit_now' ||
+        fitAssessment?.verdict === 'never_fits';
+
+    useEffect(() => {
+        if (!isOpen || !selectedServerName || currentStep !== 4) {
+            return;
+        }
+
+        const controller = new AbortController();
+        const params = new URLSearchParams({
+            tool: selectedAppId,
+            server: selectedServerName,
+            options: JSON.stringify(options),
+        });
+
+        fetch(`/quick-actions/fit?${params.toString()}`, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                setFitAssessment(data?.assessment ?? null);
+            })
+            .catch(() => {});
+
+        return () => controller.abort();
+    }, [
+        isOpen,
+        selectedAppId,
+        selectedServerName,
+        options,
+        currentStep,
+        fitCheckTick,
+    ]);
+
+    const handlePauseCandidate = async (
+        toolSlug: string,
+        instance?: string | null,
+    ) => {
+        if (!selectedServerName) return;
+        setPausingCandidate(toolSlug);
+        try {
+            await sendJson(
+                `/servers/${encodeURIComponent(selectedServerName)}/tools/${encodeURIComponent(toolSlug)}/pause`,
+                'POST',
+                instance ? { instance } : {},
+            );
+            setFitCheckTick((t) => t + 1);
+        } finally {
+            setPausingCandidate(null);
+        }
+    };
     const [submitting, setSubmitting] = useState<boolean>(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [confirmCommonsRestart, setConfirmCommonsRestart] =
@@ -1605,6 +1668,134 @@ export default function QuickLaunchModal({
                                         </div>
                                     </div>
 
+                                    {fitBlocked && fitAssessment && (
+                                        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5 text-xs">
+                                            <p className="font-semibold text-rose-500">
+                                                Won&apos;t fit on{' '}
+                                                {selectedServerName}
+                                            </p>
+                                            <p className="mt-1 text-[11px] text-soft">
+                                                Needs{' '}
+                                                <strong className="font-mono text-ink">
+                                                    {formatMemoryBytes(
+                                                        fitAssessment.demand
+                                                            ?.memory_bytes ?? 0,
+                                                    )}
+                                                </strong>{' '}
+                                                RAM · Free:{' '}
+                                                <strong className="font-mono text-ink">
+                                                    {formatMemoryBytes(
+                                                        fitAssessment.node
+                                                            .free_memory_bytes,
+                                                    )}
+                                                </strong>
+                                            </p>
+
+                                            {(fitAssessment.pause_candidates
+                                                ?.length ?? 0) > 0 && (
+                                                <div className="mt-3 space-y-1.5">
+                                                    <p className="text-[11px] font-medium text-ink">
+                                                        1. Pause unused apps
+                                                    </p>
+                                                    {fitAssessment.pause_candidates?.map(
+                                                        (candidate) => (
+                                                            <div
+                                                                key={`${candidate.tool}-${candidate.instance ?? ''}`}
+                                                                className="flex items-center justify-between rounded-lg border border-line bg-surface px-2.5 py-1.5"
+                                                            >
+                                                                <span className="text-[11px] text-ink">
+                                                                    {
+                                                                        candidate.label
+                                                                    }{' '}
+                                                                    <span className="font-mono text-faint">
+                                                                        (
+                                                                        {formatMemoryBytes(
+                                                                            candidate.memory_bytes,
+                                                                        )}
+                                                                        )
+                                                                    </span>
+                                                                </span>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    disabled={
+                                                                        pausingCandidate ===
+                                                                        candidate.tool
+                                                                    }
+                                                                    onClick={() =>
+                                                                        void handlePauseCandidate(
+                                                                            candidate.tool,
+                                                                            candidate.instance,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Pause className="size-3.5" />
+                                                                    <span>
+                                                                        {pausingCandidate ===
+                                                                        candidate.tool
+                                                                            ? 'Pausing…'
+                                                                            : 'Pause'}
+                                                                    </span>
+                                                                </Button>
+                                                            </div>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                <Link
+                                                    href={`/servers/${encodeURIComponent(selectedServerName)}`}
+                                                    className={buttonClass(
+                                                        'secondary',
+                                                        'sm',
+                                                    )}
+                                                >
+                                                    <ArrowUpCircle className="size-3.5" />
+                                                    <span>Upsize server</span>
+                                                </Link>
+                                                {fitAssessment.alternatives_that_fit?.map(
+                                                    (alt) => {
+                                                        const supportedAlt =
+                                                            APPS.find(
+                                                                (a) =>
+                                                                    a.id ===
+                                                                    alt.tool,
+                                                            );
+                                                        if (!supportedAlt)
+                                                            return null;
+
+                                                        return (
+                                                            <Button
+                                                                key={alt.tool}
+                                                                type="button"
+                                                                variant="secondary"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    setSelectedAppId(
+                                                                        supportedAlt.id,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Zap className="size-3.5" />
+                                                                <span>
+                                                                    Try{' '}
+                                                                    {alt.label}{' '}
+                                                                    (
+                                                                    {formatMemoryBytes(
+                                                                        alt.memory_bytes,
+                                                                    )}
+                                                                    )
+                                                                </span>
+                                                            </Button>
+                                                        );
+                                                    },
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Readiness Notice */}
                                     <div className="rounded-xl border border-line bg-surface p-3 text-xs text-soft">
                                         <p className="font-medium text-ink">
@@ -1685,7 +1876,8 @@ export default function QuickLaunchModal({
                                         disabled={
                                             submitting ||
                                             readyServers.length === 0 ||
-                                            !domain
+                                            !domain ||
+                                            fitBlocked
                                         }
                                     >
                                         <Rocket className="size-3.5" />

@@ -157,6 +157,19 @@ class InstallClusterToolTool extends Tool implements Completable
             $optionFlags[] = '--no-plex';
         }
 
+        $assessment = app(ClusterStatus::class)->capacity($context, $tool, $optionFlags);
+        if ($assessment !== null && in_array($assessment['verdict'] ?? null, ['wont_fit_now', 'never_fits'], true)) {
+            return Response::error((string) json_encode([
+                'error' => "Insufficient capacity on {$server} for {$tool}.",
+                'verdict' => $assessment['verdict'],
+                'demand' => $assessment['demand'] ?? null,
+                'node' => $assessment['node'] ?? null,
+                'pause_candidates' => $assessment['pause_candidates'] ?? [],
+                'alternatives_that_fit' => $assessment['alternatives_that_fit'] ?? [],
+                'upsize_hint' => $assessment['upsize_hint'] ?? 'Upsize via cloud:scale',
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        }
+
         $run = app(CliRunner::class)->start(
             label: "Install {$tool} on {$server}",
             arguments: [

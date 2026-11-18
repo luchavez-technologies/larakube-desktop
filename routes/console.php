@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\Sync\SyncAllServerBackupsJob;
+use App\Jobs\Sync\SyncAllServerCapacityJob;
 use App\Jobs\Sync\SyncAllServerClusterUsersJob;
 use App\Jobs\Sync\SyncAllServerExternalDnsJob;
 use App\Jobs\Sync\SyncAllServerPlexJob;
@@ -30,6 +31,7 @@ Schedule::job(new SyncLocalWorkloadsJob)->everyMinute()->withoutOverlapping();
 // every few minutes is enough, and NativeAppServiceProvider::warmSync()
 // already triggers an immediate sync on app boot.
 Schedule::job(new SyncAllServerBackupsJob)->everyFiveMinutes()->withoutOverlapping();
+Schedule::job(new SyncAllServerCapacityJob)->everyFiveMinutes()->withoutOverlapping();
 
 // plex:show enumerates every installed Cluster Tool's Commons resources, so
 // it is slower than backup:status — SyncPlexJob's own FRESH_SECONDS (1800)
