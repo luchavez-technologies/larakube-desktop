@@ -24,6 +24,7 @@ import ProviderLogo from '@/components/provider-logo';
 import ConcentricRadialGauge from '@/components/metrics/concentric-radial-gauge';
 import { openExternalUrl } from '@/lib/open-external';
 import { sendJson } from '@/lib/http';
+import { NativeEvents, onNativeEvent } from '@/lib/native-events';
 import { cn } from '@/lib/utils';
 
 type ServerItem = {
@@ -259,12 +260,24 @@ export default function TrayIndex(initialProps: TrayProps) {
         }
     };
 
-    // Auto-refresh telemetry every 5 seconds
+    // Refresh immediately on pushed sync events, with a 30s backstop poll.
     useEffect(() => {
+        const offWorkloads = onNativeEvent(
+            NativeEvents.localWorkloadsSynced,
+            () => void refreshData(),
+        );
+        const offServers = onNativeEvent(
+            NativeEvents.serversSynced,
+            () => void refreshData(),
+        );
         const timer = setInterval(() => {
             void refreshData();
-        }, 5000);
-        return () => clearInterval(timer);
+        }, 30000);
+        return () => {
+            offWorkloads();
+            offServers();
+            clearInterval(timer);
+        };
     }, [selectedServerId, activeTab]);
 
     const handleTabChange = (tab: 'projects' | 'clusters') => {

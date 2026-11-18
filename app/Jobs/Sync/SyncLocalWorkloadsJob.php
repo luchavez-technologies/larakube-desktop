@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Sync;
 
+use App\Events\LocalWorkloadsSynced;
 use App\Models\LocalClusterState;
 use App\Services\LaraKube\ProjectWorkloadStatus;
 use App\Services\LaraKube\ToolLocator;
@@ -61,6 +62,8 @@ class SyncLocalWorkloadsJob extends SyncJob
                 'workloads_sync_status' => 'error',
                 'workloads_last_sync_error' => $e->getMessage(),
             ]);
+        } finally {
+            LocalWorkloadsSynced::dispatch();
         }
     }
 }

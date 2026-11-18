@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Events\RunFinished;
+use App\Events\ServersSynced;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
 use App\Jobs\Sync\SyncLocalClusterJob;
@@ -267,6 +268,7 @@ class RecordRunOutput
                 }
             }
             SyncServersJob::dispatch();
+            ServersSynced::dispatch();
         }
 
         if ($run->kind === RunKind::DestroyServer) {
@@ -275,6 +277,7 @@ class RecordRunOutput
                 $destroyedServer->update(['status' => 'destroyed']);
             }
             SyncServersJob::dispatch();
+            ServersSynced::dispatch();
         }
 
         if ($run->kind === RunKind::ContextRemove) {

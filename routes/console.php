@@ -19,17 +19,12 @@ Artisan::command('inspire', function () {
 
 Schedule::command('icon:sync')->monthlyOn(1, '00:00');
 
-// Local cluster status is user-actionable within the same session (up/down,
-// start/stop), so it needs to be short — but RecordRunOutput/warmSync also
-// dispatch this immediately on anything that actually changes it, this tick
-// is just the floor for drift caused outside the app (e.g. the user stops
-// their local cluster from a terminal).
-Schedule::job(new SyncLocalClusterJob)->everyFifteenSeconds()->withoutOverlapping();
+// Local cluster status and local project replica counts are pushed via
+// LocalWorkloadsSynced (and dispatched immediately by RecordRunOutput/warmSync),
+// so a 1-minute tick is enough as the backstop for external terminal drift.
+Schedule::job(new SyncLocalClusterJob)->everyMinute()->withoutOverlapping();
 
-// Same reasoning as SyncLocalClusterJob above — local project replica
-// counts are what the Projects page's Running/Paused/Down badges are built
-// from, and are equally user-actionable within the same session.
-Schedule::job(new SyncLocalWorkloadsJob)->everyFifteenSeconds()->withoutOverlapping();
+Schedule::job(new SyncLocalWorkloadsJob)->everyMinute()->withoutOverlapping();
 
 // Cloud backup status is lower-stakes staleness than local cluster state —
 // every few minutes is enough, and NativeAppServiceProvider::warmSync()

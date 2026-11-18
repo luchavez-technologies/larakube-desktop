@@ -24,7 +24,11 @@ import type {
     RecentRunSummary,
     RunStatus,
 } from '@/types/larakube';
-import { useRunReload } from '@/lib/native-events';
+import {
+    NativeEvents,
+    useNativeEventReload,
+    useRunReload,
+} from '@/lib/native-events';
 
 function formatRelativeTime(iso: string | null): string {
     if (!iso) return '—';
@@ -86,8 +90,9 @@ export default function NotificationBell() {
 
     // Show a run the moment it starts or ends, from any window, the tray or MCP (ADR 0021).
     useRunReload(['activeRuns', 'recentRuns', 'notifications']);
+    useNativeEventReload(NativeEvents.notificationCreated, ['notifications']);
 
-    // Refresh notifications and active runs on an interval if runs are executing
+    // Backstop poll while runs are executing (events carry the immediate updates).
     useEffect(() => {
         if (!isRunning) return;
 
@@ -95,7 +100,7 @@ export default function NotificationBell() {
             router.reload({
                 only: ['activeRuns', 'recentRuns', 'notifications'],
             });
-        }, 4000);
+        }, 15000);
 
         return () => clearInterval(interval);
     }, [isRunning]);

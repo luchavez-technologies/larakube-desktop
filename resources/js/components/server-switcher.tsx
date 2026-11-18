@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import ProviderLogo from '@/components/provider-logo';
 import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
+import { NativeEvents, useNativeEventReload } from '@/lib/native-events';
 import { serverKindLabel, type ServerKind } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import type { Server } from '@/types/larakube';
@@ -35,6 +36,8 @@ export default function ServerSwitcher({
     buildHref: (serverName: string) => string;
     accent?: Accent;
 }) {
+    useNativeEventReload(NativeEvents.serversSynced, ['servers']);
+
     return (
         <div className="flex h-9 items-center gap-2.5 rounded-lg bg-surface pl-3 ring-1 ring-line">
             <span className="text-xs text-soft">Server</span>

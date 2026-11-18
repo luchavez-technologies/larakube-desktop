@@ -76,6 +76,9 @@ export const NativeEvents = {
     serverDataSynced: 'App\\Events\\ServerDataSynced',
     runStarted: 'App\\Events\\RunStarted',
     runFinished: 'App\\Events\\RunFinished',
+    localWorkloadsSynced: 'App\\Events\\LocalWorkloadsSynced',
+    serversSynced: 'App\\Events\\ServersSynced',
+    notificationCreated: 'App\\Events\\NotificationCreated',
 } as const;
 
 /** The slice of a server's data a ServerDataSynced names (App\\Enums\\ServerDataScope). */
@@ -167,4 +170,15 @@ export function useRunReload(
             offFinished();
         };
     }, [key]);
+}
+
+/** Reload the given Inertia props whenever `event` arrives from NativePHP. */
+export function useNativeEventReload(event: string, only: string[]): void {
+    const key = only.join(',');
+
+    useEffect(() => {
+        return onNativeEvent(event, () => {
+            router.reload({ only: key.split(',') });
+        });
+    }, [event, key]);
 }

@@ -50,7 +50,11 @@ import { show as showServer } from '@/routes/servers';
 import EditorMenu from '@/components/editor-menu';
 import BoxProjectActions from '@/components/box-project-actions';
 import type { DevBoxProject, Editor, Project } from '@/types/larakube';
-import { useRunReload } from '@/lib/native-events';
+import {
+    NativeEvents,
+    useNativeEventReload,
+    useRunReload,
+} from '@/lib/native-events';
 
 export default function ProjectsIndex({
     projects,
@@ -78,10 +82,11 @@ export default function ProjectsIndex({
     const { errors } = usePage().props as { errors: Record<string, string> };
 
     useRunReload(['projects', 'hasActiveRuns'], (run) => run.project !== null);
+    useNativeEventReload(NativeEvents.localWorkloadsSynced, ['projects']);
 
     // Follow a running up, down, start or stop until it finishes.
     usePoll(
-        2000,
+        10000,
         { only: ['projects', 'hasActiveRuns'] },
         { autoStart: hasActiveRuns, keepAlive: false },
     );

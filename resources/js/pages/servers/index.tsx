@@ -17,6 +17,7 @@ import Redactable from '@/components/redactable';
 import { ServerActions } from '@/components/server-dialogs';
 import StatusPill, { type Tone } from '@/components/status-pill';
 import ViewToggle, { type ViewMode } from '@/components/view-toggle';
+import { NativeEvents, useNativeEventReload } from '@/lib/native-events';
 import { getServerStatusBadge, serverEndpointLabel } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import { create, show } from '@/routes/servers';
@@ -29,6 +30,7 @@ export default function ServersIndex({
     servers?: Server[] | null;
 }) {
     const { hideProjects } = usePage<{ hideProjects?: boolean }>().props;
+    useNativeEventReload(NativeEvents.serversSynced, ['servers']);
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [showImport, setShowImport] = useState(false);
     const [refreshing, setRefreshing] = useState(false);

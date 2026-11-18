@@ -16,6 +16,7 @@ import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
 import LogPanel from '@/components/log-panel';
 import StatusPill from '@/components/status-pill';
+import { NativeEvents, onNativeEvent } from '@/lib/native-events';
 import { cn } from '@/lib/utils';
 import { start, stop } from '@/routes/projects';
 import type { RecentRun } from '@/components/recent-runs-card';
@@ -158,6 +159,21 @@ export default function WorkloadsPodsCard({
             },
         );
     };
+
+    useEffect(() => {
+        if (activeEnv !== 'local') return;
+
+        return onNativeEvent(NativeEvents.localWorkloadsSynced, () => {
+            if (
+                typeof document !== 'undefined' &&
+                (document.hidden || selectedPodForLogs || refreshing)
+            ) {
+                return;
+            }
+
+            router.reload({ only: ['pods'] });
+        });
+    }, [activeEnv, selectedPodForLogs, refreshing]);
 
     useEffect(() => {
         if (autoRefreshInterval <= 0) return;

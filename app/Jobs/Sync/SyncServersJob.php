@@ -3,6 +3,7 @@
 namespace App\Jobs\Sync;
 
 use App\Enums\ActivityType;
+use App\Events\ServersSynced;
 use App\Models\Activity;
 use App\Models\Server;
 use App\Services\LaraKube\StackCatalog;
@@ -76,5 +77,7 @@ class SyncServersJob extends SyncJob
                 ->where('status', '!=', 'missing')
                 ->update(['status' => 'missing', 'sync_status' => 'fresh', 'last_synced_at' => now(), 'last_sync_error' => null]);
         });
+
+        ServersSynced::dispatch();
     }
 }

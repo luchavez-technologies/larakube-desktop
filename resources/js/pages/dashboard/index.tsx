@@ -33,6 +33,7 @@ import Redactable from '@/components/redactable';
 import StatusPill from '@/components/status-pill';
 import WakeUpButton from '@/components/wake-up-button';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
+import { NativeEvents, useNativeEventReload } from '@/lib/native-events';
 import { cn } from '@/lib/utils';
 import {
     isLocalServer,
@@ -208,6 +209,12 @@ export default function DashboardIndex({
             );
         }
     }
+
+    useNativeEventReload(NativeEvents.localWorkloadsSynced, [
+        'localCluster',
+        'projects',
+        'stats',
+    ]);
 
     return (
         <>

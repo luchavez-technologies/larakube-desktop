@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ActivityType;
+use App\Events\NotificationCreated;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -38,6 +39,13 @@ class Activity extends Model
         'meta',
         'occurred_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function (Activity $activity): void {
+            NotificationCreated::dispatch($activity->id);
+        });
+    }
 
     /**
      * @return array<string, string>

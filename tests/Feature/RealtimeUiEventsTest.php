@@ -1,13 +1,19 @@
 <?php
 
+use App\Enums\ActivityType;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
 use App\Enums\ServerDataScope;
+use App\Events\LocalWorkloadsSynced;
+use App\Events\NotificationCreated;
 use App\Events\RunFinished;
 use App\Events\RunStarted;
 use App\Events\ServerDataSynced;
+use App\Events\ServersSynced;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
+use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Jobs\Sync\SyncLocalWorkloadsJob;
 use App\Jobs\Sync\SyncMailJob;
 use App\Jobs\Sync\SyncOpenBaoJob;
 use App\Jobs\Sync\SyncPlexJob;
@@ -15,14 +21,19 @@ use App\Jobs\Sync\SyncServerBackupJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
+use App\Jobs\Sync\SyncServersJob;
 use App\Jobs\Sync\SyncServerTlsJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Listeners\RecordRunOutput;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\Elevation;
 use App\Services\LaraKube\CliRunner;
+use App\Services\LaraKube\LocalCluster;
+use App\Services\LaraKube\ProjectWorkloadStatus;
+use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Support\Facades\Event;
@@ -141,4 +152,75 @@ test('the UI events reach windows through NativePHP without going through Larave
     'ServerDataSynced' => fn () => new ServerDataSynced('alpha', ServerDataScope::Tools),
     'RunStarted' => fn () => new RunStarted(realtimeUiEventsRun()),
     'RunFinished' => fn () => new RunFinished(realtimeUiEventsRun()),
+    'LocalWorkloadsSynced' => fn () => new LocalWorkloadsSynced,
+    'ServersSynced' => fn () => new ServersSynced,
+    'NotificationCreated' => fn () => new NotificationCreated(1),
 ]);
+
+test('local sync jobs announce LocalWorkloadsSynced when they finish', function () {
+    Event::fake([LocalWorkloadsSynced::class]);
+
+    $cluster = mock(LocalCluster::class);
+    $cluster->shouldReceive('detect')->andReturn([
+        'engine' => 'k3s',
+        'context' => 'k3s-larakube',
+        'status' => 'Running',
+        'tone' => 'success',
+    ]);
+    app()->instance(LocalCluster::class, $cluster);
+
+    $workloads = mock(ProjectWorkloadStatus::class);
+    $workloads->shouldReceive('fetchLocalWorkloadStatuses')->andReturn([]);
+    app()->instance(ProjectWorkloadStatus::class, $workloads);
+
+    SyncLocalClusterJob::dispatchSync();
+    SyncLocalWorkloadsJob::dispatchSync();
+
+    Event::assertDispatchedTimes(LocalWorkloadsSynced::class, 2);
+});
+
+test('server sync and server create or destroy runs announce ServersSynced', function () {
+    Event::fake([ServersSynced::class]);
+    Process::fake();
+
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('everything')->andReturn([]);
+    app()->instance(StackCatalog::class, $stacks);
+
+    SyncServersJob::dispatchSync();
+
+    Queue::fake();
+
+    $createRun = Run::create([
+        'label' => 'Create alpha',
+        'kind' => RunKind::CreateServer,
+        'server_name' => 'alpha',
+        'command' => ['larakube', 'cloud:create'],
+    ]);
+    (new RecordRunOutput)->handleExit(new ProcessExited($createRun->alias(), 0));
+
+    $destroyRun = Run::create([
+        'label' => 'Destroy alpha',
+        'kind' => RunKind::DestroyServer,
+        'server_name' => 'alpha',
+        'command' => ['larakube', 'cloud:destroy'],
+    ]);
+    (new RecordRunOutput)->handleExit(new ProcessExited($destroyRun->alias(), 0));
+
+    Event::assertDispatchedTimes(ServersSynced::class, 3);
+});
+
+test('creating an Activity row announces NotificationCreated', function () {
+    Event::fake([NotificationCreated::class]);
+    $server = Server::create(['name' => 'alpha', 'provider' => 'do', 'kind' => 'vps', 'status' => 'ready']);
+
+    $activity = Activity::create([
+        'server_id' => $server->id,
+        'type' => ActivityType::ServerFirstSynced,
+        'title' => 'First synced alpha',
+        'occurred_at' => now(),
+    ]);
+
+    Event::assertDispatchedTimes(NotificationCreated::class, 1);
+    Event::assertDispatched(NotificationCreated::class, fn (NotificationCreated $event): bool => $event->activity === $activity->id);
+});
