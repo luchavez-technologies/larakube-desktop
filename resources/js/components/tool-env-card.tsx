@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Eye,
     EyeOff,
@@ -54,6 +54,38 @@ function csrfToken(): string {
  * EnvironmentSecretsCard, minus any local/cluster diff — a Cluster App has
  * no local .env file, so the cluster is the only source of truth.
  */
+function normalizeKey(raw: string): string {
+    return raw.trim().toUpperCase().replace(/\s+/g, '_');
+}
+
+/** `KEY=value` lines, ignoring blank lines, comments, `export ` and surrounding quotes. */
+function parseDotenv(text: string): [string, string][] {
+    const entries: [string, string][] = [];
+
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim().replace(/^export\s+/, '');
+        const equals = line.indexOf('=');
+        if (line === '' || line.startsWith('#') || equals <= 0) {
+            continue;
+        }
+
+        const key = normalizeKey(line.slice(0, equals));
+        let value = line.slice(equals + 1).trim();
+        if (
+            value.length >= 2 &&
+            ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'")))
+        ) {
+            value = value.slice(1, -1);
+        }
+        if (key !== '') {
+            entries.push([key, value]);
+        }
+    }
+
+    return entries;
+}
+
 export default function ToolEnvCard({
     server,
     tool,
@@ -71,6 +103,7 @@ export default function ToolEnvCard({
     const [newKey, setNewKey] = useState('');
     const [newValue, setNewValue] = useState('');
     const [newIsSecret, setNewIsSecret] = useState(false);
+    const keyInput = useRef<HTMLInputElement>(null);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{
         text: string;
@@ -128,18 +161,44 @@ export default function ToolEnvCard({
         }));
     }
 
+    /** Stages the row and keeps the form open, so several can be added before one Save. */
     function commitNew() {
-        const key = newKey.trim().toUpperCase().replace(/\s+/g, '_');
+        const key = normalizeKey(newKey);
         if (!key) return;
         setStaged((prev) => ({
             ...prev,
             [key]: { value: newValue, secret: newIsSecret },
         }));
-        setIsAdding(false);
         setNewKey('');
         setNewValue('');
-        setNewIsSecret(false);
+        keyInput.current?.focus();
     }
+
+    /**
+     * A pasted `.env` block (KEY=value per line) stages every line at once,
+     * all with the current Secret choice; comments and blank lines are skipped.
+     */
+    function pasteDotenv(text: string): boolean {
+        const entries = parseDotenv(text);
+        if (entries.length === 0) {
+            return false;
+        }
+
+        setStaged((prev) => {
+            const next = { ...prev };
+            for (const [key, value] of entries) {
+                next[key] = { value, secret: newIsSecret };
+            }
+
+            return next;
+        });
+        setNewKey('');
+        setNewValue('');
+
+        return true;
+    }
+
+    const stagedCount = Object.keys(staged).length;
 
     async function handleSave(restart: boolean) {
         setSaving(true);
@@ -338,9 +397,25 @@ export default function ToolEnvCard({
                             <div className="flex items-center gap-1.5">
                                 <input
                                     autoFocus
-                                    placeholder="KEY"
+                                    ref={keyInput}
+                                    placeholder="KEY, or paste KEY=value lines"
                                     value={newKey}
                                     onChange={(e) => setNewKey(e.target.value)}
+                                    onPaste={(e) => {
+                                        if (
+                                            pasteDotenv(
+                                                e.clipboardData.getData('text'),
+                                            )
+                                        ) {
+                                            e.preventDefault();
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            commitNew();
+                                        }
+                                    }}
                                     className="w-1/2 rounded border-0 bg-surface px-2 py-1 font-mono text-[11px] ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
                                 />
                                 <input
@@ -349,6 +424,12 @@ export default function ToolEnvCard({
                                     onChange={(e) =>
                                         setNewValue(e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            commitNew();
+                                        }
+                                    }}
                                     className="w-1/2 rounded border-0 bg-surface px-2 py-1 font-mono text-[11px] ring-1 ring-line outline-none focus:ring-2 focus:ring-brand"
                                 />
                             </div>
@@ -366,16 +447,22 @@ export default function ToolEnvCard({
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => setIsAdding(false)}
+                                        onClick={() => {
+                                            setIsAdding(false);
+                                            setNewKey('');
+                                            setNewValue('');
+                                            setNewIsSecret(false);
+                                        }}
                                         className="text-[11px] text-soft"
                                     >
-                                        Cancel
+                                        Done
                                     </button>
                                     <button
                                         type="button"
                                         onClick={commitNew}
-                                        className="text-[11px] font-medium text-brand"
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-brand"
                                     >
+                                        <Plus className="size-3" />
                                         Add
                                     </button>
                                 </div>
@@ -426,7 +513,8 @@ export default function ToolEnvCard({
                         {saving ? (
                             <RotateCw className="size-3 animate-spin" />
                         ) : null}
-                        Save
+                        Save {stagedCount}{' '}
+                        {stagedCount === 1 ? 'change' : 'changes'}
                     </Button>
                     <Button
                         type="button"
