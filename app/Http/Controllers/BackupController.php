@@ -9,8 +9,11 @@ use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\StackCatalog;
+use App\Services\LaraKube\ToolLocator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -269,6 +272,45 @@ class BackupController extends Controller
             $apply ? RunKind::BackupPrune : RunKind::BackupCheck,
             $arguments,
         );
+    }
+
+    /** Dry-run retention preview in JSON for the Desktop slide-over drawer. */
+    public function prunePreview(string $server, StackCatalog $stacks, ToolLocator $locator): JsonResponse
+    {
+        $stack = $this->stack($server, $stacks);
+        $cli = $locator->find('larakube');
+
+        if ($cli === null) {
+            return response()->json(['success' => false, 'error' => 'LaraKube CLI binary not found.'], 500);
+        }
+
+        $isolated = $locator->isolate([
+            $cli,
+            'backup:prune',
+            'production',
+            "--context={$stack['context']}",
+            '--json',
+            '--no-interaction',
+        ]);
+
+        try {
+            $result = Process::env($isolated['environment'])->timeout(120)->run($isolated['command']);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'error' => 'Could not preview backups: '.$e->getMessage()], 500);
+        }
+
+        $cleanOutput = trim(str_replace("\0", '', $result->output()));
+        $lines = $cleanOutput !== '' ? (preg_split('/\R/', $cleanOutput) ?: []) : [];
+        $data = $lines !== [] ? json_decode((string) end($lines), true) : null;
+
+        if (! is_array($data)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Update the LaraKube CLI in Setup to use visual prune previews.',
+            ], 422);
+        }
+
+        return response()->json($data, ($data['success'] ?? false) ? 200 : 422);
     }
 
     /** Shows the recovery card file in the system's file manager. It is never read here. */

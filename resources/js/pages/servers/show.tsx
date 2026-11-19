@@ -97,7 +97,8 @@ type Dialog =
 
 const SERVER_TABS = [
     { key: 'overview', label: 'Overview' },
-    { key: 'infrastructure', label: 'Infrastructure' },
+    { key: 'workloads', label: 'Projects & Apps' },
+    { key: 'storage', label: 'Storage & Backups' },
     { key: 'settings', label: 'Settings' },
 ] as const;
 
@@ -317,416 +318,424 @@ export default function ShowServer({
                 </div>
             </div>
 
-            {activeTab === 'overview' && (
+            {(activeTab === 'overview' || activeTab === 'workloads') && (
                 <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">
-                    <div className="flex flex-col gap-4.5">
-                        {server.kind === 'vps' && (unreachable || ready) && (
-                            <Deferred
-                                data="diagnosis"
-                                fallback={
-                                    <Card label="Diagnose">
-                                        <CheckingRow title="Checking cluster health…" />
-                                    </Card>
-                                }
-                            >
-                                <DiagnoseCard
-                                    diagnosis={diagnosis}
-                                    unreachable={unreachable}
-                                    onRepair={() => setDialog('repair')}
-                                    onResize={() => setDialog('resize')}
-                                />
-                            </Deferred>
-                        )}
+                    {activeTab === 'overview' && (
+                        <div className="flex flex-col gap-4.5">
+                            {server.kind === 'vps' &&
+                                (unreachable || ready) && (
+                                    <Deferred
+                                        data="diagnosis"
+                                        fallback={
+                                            <Card label="Diagnose">
+                                                <CheckingRow title="Checking cluster health…" />
+                                            </Card>
+                                        }
+                                    >
+                                        <DiagnoseCard
+                                            diagnosis={diagnosis}
+                                            unreachable={unreachable}
+                                            onRepair={() => setDialog('repair')}
+                                            onResize={() => setDialog('resize')}
+                                        />
+                                    </Deferred>
+                                )}
 
-                        {ready && (
-                            <Deferred
-                                data="nodeMetrics"
-                                fallback={
-                                    <Card label="Cluster Hardware & Capacity">
-                                        <CheckingRow title="Checking cluster hardware metrics…" />
-                                    </Card>
-                                }
-                            >
-                                <NodeMetricsCard
-                                    metrics={nodeMetrics}
-                                    capacity={capacity}
-                                />
-                            </Deferred>
-                        )}
+                            {ready && (
+                                <Deferred
+                                    data="nodeMetrics"
+                                    fallback={
+                                        <Card label="Cluster Hardware & Capacity">
+                                            <CheckingRow title="Checking cluster hardware metrics…" />
+                                        </Card>
+                                    }
+                                >
+                                    <NodeMetricsCard
+                                        metrics={nodeMetrics}
+                                        capacity={capacity}
+                                    />
+                                </Deferred>
+                            )}
 
-                        {!hideProjects && (
-                            <Card
-                                label={`Hosted Projects${projects && projects.length > 0 ? ` · ${projects.length}` : ''}`}
-                                action={
-                                    ready ? (
-                                        <Link
-                                            href={projectsIndex().url}
-                                            className={buttonClass(
-                                                'ghost',
-                                                'sm',
-                                            )}
-                                        >
-                                            View all
-                                        </Link>
-                                    ) : null
-                                }
-                            >
-                                {!projects || projects.length === 0 ? (
-                                    <div className="py-6 text-center">
-                                        <FolderGit2 className="mx-auto mb-2 size-8 text-faint" />
-                                        <p className="text-sm font-medium text-ink">
-                                            No projects hosted on this server
-                                            yet
-                                        </p>
-                                        <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
-                                            Deploy an app from your workspace or
-                                            create a new one and link it to{' '}
-                                            {server.name}.
-                                        </p>
-                                        {ready && (
-                                            <div className="mt-4 flex items-center justify-center gap-2.5">
-                                                <Link
-                                                    href={projectsIndex().url}
-                                                    className={buttonClass(
-                                                        'secondary',
-                                                        'sm',
-                                                    )}
-                                                >
-                                                    <FolderGit2 className="size-3.5" />
-                                                    <span>Browse Projects</span>
-                                                </Link>
-                                                <Link
-                                                    href={projectsCreate().url}
-                                                    className={buttonClass(
-                                                        'primary',
-                                                        'sm',
-                                                    )}
-                                                >
-                                                    <Plus className="size-3.5" />
-                                                    <span>New Project</span>
-                                                </Link>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="divide-y divide-line">
-                                        {projects.map((project) => {
-                                            const matchingEnvs = Object.values(
-                                                project.environments ?? {},
-                                            ).filter(
-                                                (env) =>
-                                                    (server.ip &&
-                                                        env.serverIp ===
-                                                            server.ip) ||
-                                                    (server.context &&
-                                                        env.serverContext ===
-                                                            server.context),
-                                            );
+                            <Card label="Domain & SSL">
+                                <Deferred
+                                    data="dns"
+                                    fallback={
+                                        <CheckingRow title="Connect a domain" />
+                                    }
+                                >
+                                    <DomainRow
+                                        server={server}
+                                        groups={dnsGroups}
+                                        disabled={!ready}
+                                        onSetUp={() => setDialog('domain')}
+                                    />
+                                </Deferred>
+                                <Deferred
+                                    data="tls"
+                                    fallback={
+                                        <CheckingRow title="Automatic SSL certificates" />
+                                    }
+                                >
+                                    <SslRow
+                                        server={server}
+                                        report={tlsReport}
+                                        disabled={!ready}
+                                        onEnable={() => setDialog('ssl')}
+                                    />
+                                </Deferred>
+                            </Card>
+                        </div>
+                    )}
 
-                                            return (
-                                                <div
-                                                    key={project.id}
-                                                    className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
-                                                >
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <Link
-                                                                href={
-                                                                    showProject(
-                                                                        project.id,
-                                                                    ).url
-                                                                }
-                                                                className="truncate text-sm font-semibold hover:underline"
-                                                            >
-                                                                {project.name}
-                                                            </Link>
-                                                            <span className="rounded bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize">
-                                                                {project.framework ??
-                                                                    'laravel'}
-                                                            </span>
-                                                            {matchingEnvs.map(
-                                                                (env) => (
-                                                                    <span
-                                                                        key={
-                                                                            env.name
-                                                                        }
-                                                                        className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft"
-                                                                    >
-                                                                        {
-                                                                            env.name
-                                                                        }
-                                                                    </span>
-                                                                ),
-                                                            )}
-                                                        </div>
-                                                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-soft">
-                                                            {project.webHost ? (
-                                                                <>
-                                                                    <span className="font-mono text-ink">
-                                                                        {
-                                                                            project.webHost
-                                                                        }
-                                                                    </span>
-                                                                    <DomainStatusPills
-                                                                        host={
-                                                                            project.webHost
-                                                                        }
-                                                                    />
-                                                                </>
-                                                            ) : (
-                                                                <span>
-                                                                    No web host
-                                                                    configured
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                    {activeTab === 'workloads' && (
+                        <div className="col-span-full flex max-w-4xl flex-col gap-4.5">
+                            {!hideProjects && (
+                                <Card
+                                    label={`Hosted Projects${projects && projects.length > 0 ? ` · ${projects.length}` : ''}`}
+                                    action={
+                                        ready ? (
+                                            <Link
+                                                href={projectsIndex().url}
+                                                className={buttonClass(
+                                                    'ghost',
+                                                    'sm',
+                                                )}
+                                            >
+                                                View all
+                                            </Link>
+                                        ) : null
+                                    }
+                                >
+                                    {!projects || projects.length === 0 ? (
+                                        <div className="py-6 text-center">
+                                            <FolderGit2 className="mx-auto mb-2 size-8 text-faint" />
+                                            <p className="text-sm font-medium text-ink">
+                                                No projects hosted on this
+                                                server yet
+                                            </p>
+                                            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
+                                                Deploy an app from your
+                                                workspace or create a new one
+                                                and link it to {server.name}.
+                                            </p>
+                                            {ready && (
+                                                <div className="mt-4 flex items-center justify-center gap-2.5">
                                                     <Link
                                                         href={
-                                                            showProject(
-                                                                project.id,
-                                                            ).url
+                                                            projectsIndex().url
                                                         }
                                                         className={buttonClass(
                                                             'secondary',
                                                             'sm',
                                                         )}
                                                     >
-                                                        <span>Manage</span>
-                                                        <ArrowRight className="size-3.5" />
+                                                        <FolderGit2 className="size-3.5" />
+                                                        <span>
+                                                            Browse Projects
+                                                        </span>
                                                     </Link>
+                                                    <Link
+                                                        href={
+                                                            projectsCreate().url
+                                                        }
+                                                        className={buttonClass(
+                                                            'primary',
+                                                            'sm',
+                                                        )}
+                                                    >
+                                                        <Plus className="size-3.5" />
+                                                        <span>New Project</span>
+                                                    </Link>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y divide-line">
+                                            {projects.map((project) => {
+                                                const matchingEnvs =
+                                                    Object.values(
+                                                        project.environments ??
+                                                            {},
+                                                    ).filter(
+                                                        (env) =>
+                                                            (server.ip &&
+                                                                env.serverIp ===
+                                                                    server.ip) ||
+                                                            (server.context &&
+                                                                env.serverContext ===
+                                                                    server.context),
+                                                    );
+
+                                                return (
+                                                    <div
+                                                        key={project.id}
+                                                        className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
+                                                    >
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <Link
+                                                                    href={
+                                                                        showProject(
+                                                                            project.id,
+                                                                        ).url
+                                                                    }
+                                                                    className="truncate text-sm font-semibold hover:underline"
+                                                                >
+                                                                    {
+                                                                        project.name
+                                                                    }
+                                                                </Link>
+                                                                <span className="rounded bg-paper px-2 py-0.5 text-[11px] font-medium text-soft capitalize">
+                                                                    {project.framework ??
+                                                                        'laravel'}
+                                                                </span>
+                                                                {matchingEnvs.map(
+                                                                    (env) => (
+                                                                        <span
+                                                                            key={
+                                                                                env.name
+                                                                            }
+                                                                            className="rounded bg-paper px-1.5 py-0.5 font-mono text-[10px] text-soft"
+                                                                        >
+                                                                            {
+                                                                                env.name
+                                                                            }
+                                                                        </span>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-soft">
+                                                                {project.webHost ? (
+                                                                    <>
+                                                                        <span className="font-mono text-ink">
+                                                                            {
+                                                                                project.webHost
+                                                                            }
+                                                                        </span>
+                                                                        <DomainStatusPills
+                                                                            host={
+                                                                                project.webHost
+                                                                            }
+                                                                        />
+                                                                    </>
+                                                                ) : (
+                                                                    <span>
+                                                                        No web
+                                                                        host
+                                                                        configured
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <Link
+                                                            href={
+                                                                showProject(
+                                                                    project.id,
+                                                                ).url
+                                                            }
+                                                            className={buttonClass(
+                                                                'secondary',
+                                                                'sm',
+                                                            )}
+                                                        >
+                                                            <span>Manage</span>
+                                                            <ArrowRight className="size-3.5" />
+                                                        </Link>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </Card>
+                            )}
+
+                            <Card
+                                label={`Apps${installedTools && installedTools.length > 0 ? ` · ${installedTools.length}` : ''}`}
+                                action={
+                                    ready ? (
+                                        <Link
+                                            href={toolsIndex(server.name).url}
+                                            className={buttonClass(
+                                                'ghost',
+                                                'sm',
+                                            )}
+                                        >
+                                            <LayoutGrid className="size-3.5" />
+                                            <span>Browse apps</span>
+                                        </Link>
+                                    ) : null
+                                }
+                            >
+                                {allTools == null || installedTools == null ? (
+                                    <CheckingRow title="Checking cluster tools…" />
+                                ) : installedTools.length === 0 ? (
+                                    <div className="py-6 text-center">
+                                        <Wrench className="mx-auto mb-2 size-8 text-faint" />
+                                        <p className="text-sm font-medium text-ink">
+                                            No cluster tools installed yet
+                                        </p>
+                                        <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
+                                            Equip your server with Stalwart
+                                            Mail, Authentik SSO, NetBird VPN,
+                                            Vaultwarden, GlitchTip, and more in
+                                            one click.
+                                        </p>
+                                        {ready && (
+                                            <div className="mt-4 flex justify-center">
+                                                <Link
+                                                    href={
+                                                        toolsIndex(server.name)
+                                                            .url
+                                                    }
+                                                    className={buttonClass(
+                                                        'primary',
+                                                        'sm',
+                                                    )}
+                                                >
+                                                    <Plus className="size-3.5" />
+                                                    <span>
+                                                        Browse tools catalog
+                                                    </span>
+                                                </Link>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-line">
+                                        {installedTools.map((tool) => {
+                                            const url =
+                                                tool.url?.split(' ')[0] ?? null;
+                                            const name = toolName(tool);
+                                            const tagline = toolTagline(tool);
+                                            const href = toolsIndex(
+                                                server.name,
+                                                {
+                                                    query: {
+                                                        manage: tool.tool,
+                                                        ...(tool.host
+                                                            ? {
+                                                                  domain: tool.host,
+                                                              }
+                                                            : {}),
+                                                    },
+                                                },
+                                            ).url;
+
+                                            return (
+                                                <div
+                                                    key={`${tool.tool}-${tool.host || 'default'}`}
+                                                    className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
+                                                >
+                                                    <div className="flex min-w-0 items-center gap-3">
+                                                        <ToolLogo
+                                                            tool={tool}
+                                                            size="md"
+                                                        />
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <Link
+                                                                    href={href}
+                                                                    className="truncate text-sm font-semibold hover:underline"
+                                                                >
+                                                                    {name}
+                                                                </Link>
+                                                                {tagline && (
+                                                                    <span className="max-w-[200px] truncate rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-soft">
+                                                                        {
+                                                                            tagline
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-2 truncate text-xs text-soft">
+                                                                {tool.host ? (
+                                                                    <>
+                                                                        <span className="font-mono text-ink">
+                                                                            {
+                                                                                tool.host
+                                                                            }
+                                                                        </span>
+                                                                        <DomainStatusPills
+                                                                            host={
+                                                                                tool.host
+                                                                            }
+                                                                        />
+                                                                    </>
+                                                                ) : (
+                                                                    tool.label
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex shrink-0 items-center gap-2">
+                                                        {url && (
+                                                            <ExternalLinkButton
+                                                                url={url}
+                                                                className={buttonClass(
+                                                                    'secondary',
+                                                                    'sm',
+                                                                )}
+                                                            >
+                                                                <span>
+                                                                    Open
+                                                                </span>
+                                                                <ExternalLink className="size-3" />
+                                                            </ExternalLinkButton>
+                                                        )}
+                                                        <Link
+                                                            href={href}
+                                                            className={buttonClass(
+                                                                'ghost',
+                                                                'sm',
+                                                            )}
+                                                        >
+                                                            Details
+                                                        </Link>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 )}
                             </Card>
-                        )}
+                        </div>
+                    )}
 
-                        <Card
-                            label={`Apps${installedTools && installedTools.length > 0 ? ` · ${installedTools.length}` : ''}`}
-                            action={
-                                ready ? (
-                                    <Link
-                                        href={toolsIndex(server.name).url}
-                                        className={buttonClass('ghost', 'sm')}
-                                    >
-                                        <LayoutGrid className="size-3.5" />
-                                        <span>Browse apps</span>
-                                    </Link>
-                                ) : null
-                            }
-                        >
-                            {allTools == null || installedTools == null ? (
-                                <CheckingRow title="Checking cluster tools…" />
-                            ) : installedTools.length === 0 ? (
-                                <div className="py-6 text-center">
-                                    <Wrench className="mx-auto mb-2 size-8 text-faint" />
-                                    <p className="text-sm font-medium text-ink">
-                                        No cluster tools installed yet
-                                    </p>
-                                    <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
-                                        Equip your server with Stalwart Mail,
-                                        Authentik SSO, NetBird VPN, Vaultwarden,
-                                        GlitchTip, and more in one click.
-                                    </p>
-                                    {ready && (
-                                        <div className="mt-4 flex justify-center">
-                                            <Link
-                                                href={
-                                                    toolsIndex(server.name).url
-                                                }
-                                                className={buttonClass(
-                                                    'primary',
-                                                    'sm',
-                                                )}
-                                            >
-                                                <Plus className="size-3.5" />
-                                                <span>
-                                                    Browse tools catalog
-                                                </span>
-                                            </Link>
-                                        </div>
+                    {activeTab === 'overview' && (
+                        <div className="flex flex-col gap-4.5">
+                            {ready && (
+                                <Card label="Connection">
+                                    {errors?.terminal && (
+                                        <p className="border-b border-line px-4 py-2 text-xs text-accent">
+                                            {errors.terminal}
+                                        </p>
                                     )}
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-line">
-                                    {installedTools.map((tool) => {
-                                        const url =
-                                            tool.url?.split(' ')[0] ?? null;
-                                        const name = toolName(tool);
-                                        const tagline = toolTagline(tool);
-                                        const href = toolsIndex(server.name, {
-                                            query: {
-                                                manage: tool.tool,
-                                                ...(tool.host
-                                                    ? { domain: tool.host }
-                                                    : {}),
-                                            },
-                                        }).url;
-
-                                        return (
-                                            <div
-                                                key={`${tool.tool}-${tool.host || 'default'}`}
-                                                className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
-                                            >
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <ToolLogo
-                                                        tool={tool}
-                                                        size="md"
-                                                    />
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <Link
-                                                                href={href}
-                                                                className="truncate text-sm font-semibold hover:underline"
-                                                            >
-                                                                {name}
-                                                            </Link>
-                                                            {tagline && (
-                                                                <span className="max-w-[200px] truncate rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-soft">
-                                                                    {tagline}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-wrap items-center gap-2 truncate text-xs text-soft">
-                                                            {tool.host ? (
-                                                                <>
-                                                                    <span className="font-mono text-ink">
-                                                                        {
-                                                                            tool.host
-                                                                        }
-                                                                    </span>
-                                                                    <DomainStatusPills
-                                                                        host={
-                                                                            tool.host
-                                                                        }
-                                                                    />
-                                                                </>
-                                                            ) : (
-                                                                tool.label
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-2">
-                                                    {url && (
-                                                        <ExternalLinkButton
-                                                            url={url}
-                                                            className={buttonClass(
-                                                                'secondary',
-                                                                'sm',
-                                                            )}
-                                                        >
-                                                            <span>Open</span>
-                                                            <ExternalLink className="size-3" />
-                                                        </ExternalLinkButton>
-                                                    )}
-                                                    <Link
-                                                        href={href}
-                                                        className={buttonClass(
-                                                            'ghost',
-                                                            'sm',
-                                                        )}
-                                                    >
-                                                        Details
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </Card>
-                    </div>
-
-                    <div className="flex flex-col gap-4.5">
-                        {ready && (
-                            <Card label="Connection">
-                                {errors?.terminal && (
-                                    <p className="border-b border-line px-4 py-2 text-xs text-accent">
-                                        {errors.terminal}
-                                    </p>
-                                )}
-                                {server.context && (
-                                    <ListRow
-                                        stack
-                                        action={
-                                            <div className="flex items-center gap-1.5">
-                                                <CopyButton
-                                                    value={server.context}
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={
-                                                        !k9sInstalled ||
-                                                        openingTerminal !== null
-                                                    }
-                                                    title={
-                                                        k9sInstalled
-                                                            ? 'Open k9s for this context in a terminal'
-                                                            : 'Install k9s from Setup to use this'
-                                                    }
-                                                    onClick={() =>
-                                                        handleOpenTerminal(
-                                                            'kubectl',
-                                                        )
-                                                    }
-                                                >
-                                                    <SquareTerminal
-                                                        className={cn(
-                                                            'size-3.5',
-                                                            openingTerminal ===
-                                                                'kubectl' &&
-                                                                'animate-spin',
-                                                        )}
-                                                    />
-                                                    <span>
-                                                        {openingTerminal ===
-                                                        'kubectl'
-                                                            ? 'Opening…'
-                                                            : 'Open in Terminal'}
-                                                    </span>
-                                                </Button>
-                                            </div>
-                                        }
-                                    >
-                                        <TwoLine
-                                            title="kubectl context"
-                                            detail={
-                                                <Redactable
-                                                    value={server.context}
-                                                    kind="account"
-                                                />
-                                            }
-                                            mono
-                                            truncate={false}
-                                        />
-                                    </ListRow>
-                                )}
-                                {server.kind === 'vps' ? (
-                                    <>
+                                    {server.context && (
                                         <ListRow
                                             stack
                                             action={
                                                 <div className="flex items-center gap-1.5">
                                                     <CopyButton
-                                                        value={`ssh ${server.name}`}
+                                                        value={server.context}
                                                     />
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
                                                         disabled={
+                                                            !k9sInstalled ||
                                                             openingTerminal !==
-                                                            null
+                                                                null
                                                         }
-                                                        title="Open an SSH session in a terminal"
+                                                        title={
+                                                            k9sInstalled
+                                                                ? 'Open k9s for this context in a terminal'
+                                                                : 'Install k9s from Setup to use this'
+                                                        }
                                                         onClick={() =>
                                                             handleOpenTerminal(
-                                                                'ssh',
+                                                                'kubectl',
                                                             )
                                                         }
                                                     >
@@ -734,13 +743,13 @@ export default function ShowServer({
                                                             className={cn(
                                                                 'size-3.5',
                                                                 openingTerminal ===
-                                                                    'ssh' &&
+                                                                    'kubectl' &&
                                                                     'animate-spin',
                                                             )}
                                                         />
                                                         <span>
                                                             {openingTerminal ===
-                                                            'ssh'
+                                                            'kubectl'
                                                                 ? 'Opening…'
                                                                 : 'Open in Terminal'}
                                                         </span>
@@ -749,90 +758,120 @@ export default function ShowServer({
                                             }
                                         >
                                             <TwoLine
-                                                title="SSH"
-                                                detail={`ssh ${server.name}`}
+                                                title="kubectl context"
+                                                detail={
+                                                    <Redactable
+                                                        value={server.context}
+                                                        kind="account"
+                                                    />
+                                                }
                                                 mono
                                                 truncate={false}
                                             />
                                         </ListRow>
-                                        {Boolean(
-                                            server.port && server.port !== 22,
-                                        ) && (
+                                    )}
+                                    {server.kind === 'vps' ? (
+                                        <>
                                             <ListRow
+                                                stack
                                                 action={
-                                                    server.ip ? (
+                                                    <div className="flex items-center gap-1.5">
                                                         <CopyButton
-                                                            value={`ssh -p ${server.port} larakube@${server.ip}`}
+                                                            value={`ssh ${server.name}`}
                                                         />
-                                                    ) : undefined
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            disabled={
+                                                                openingTerminal !==
+                                                                null
+                                                            }
+                                                            title="Open an SSH session in a terminal"
+                                                            onClick={() =>
+                                                                handleOpenTerminal(
+                                                                    'ssh',
+                                                                )
+                                                            }
+                                                        >
+                                                            <SquareTerminal
+                                                                className={cn(
+                                                                    'size-3.5',
+                                                                    openingTerminal ===
+                                                                        'ssh' &&
+                                                                        'animate-spin',
+                                                                )}
+                                                            />
+                                                            <span>
+                                                                {openingTerminal ===
+                                                                'ssh'
+                                                                    ? 'Opening…'
+                                                                    : 'Open in Terminal'}
+                                                            </span>
+                                                        </Button>
+                                                    </div>
                                                 }
                                             >
                                                 <TwoLine
-                                                    title="SSH Port"
-                                                    detail={
-                                                        server.ip
-                                                            ? `Port ${server.port} (direct: ssh -p ${server.port} larakube@${server.ip})`
-                                                            : `Port ${server.port}`
+                                                    title="SSH"
+                                                    detail={`ssh ${server.name}`}
+                                                    mono
+                                                    truncate={false}
+                                                />
+                                            </ListRow>
+                                            {Boolean(
+                                                server.port &&
+                                                server.port !== 22,
+                                            ) && (
+                                                <ListRow
+                                                    action={
+                                                        server.ip ? (
+                                                            <CopyButton
+                                                                value={`ssh -p ${server.port} larakube@${server.ip}`}
+                                                            />
+                                                        ) : undefined
                                                     }
+                                                >
+                                                    <TwoLine
+                                                        title="SSH Port"
+                                                        detail={
+                                                            server.ip
+                                                                ? `Port ${server.port} (direct: ssh -p ${server.port} larakube@${server.ip})`
+                                                                : `Port ${server.port}`
+                                                        }
+                                                        mono
+                                                    />
+                                                </ListRow>
+                                            )}
+                                            <ListRow>
+                                                <TwoLine
+                                                    title="Login user"
+                                                    detail="larakube (root login disabled)"
                                                     mono
                                                 />
                                             </ListRow>
-                                        )}
+                                        </>
+                                    ) : (
                                         <ListRow>
                                             <TwoLine
-                                                title="Login user"
-                                                detail="larakube (root login disabled)"
-                                                mono
+                                                title="Access mode"
+                                                detail={
+                                                    server.kind === 'managed'
+                                                        ? 'Managed API (IAM / kubectl)'
+                                                        : 'Kubernetes API (kubectl)'
+                                                }
                                             />
                                         </ListRow>
-                                    </>
-                                ) : (
-                                    <ListRow>
-                                        <TwoLine
-                                            title="Access mode"
-                                            detail={
-                                                server.kind === 'managed'
-                                                    ? 'Managed API (IAM / kubectl)'
-                                                    : 'Kubernetes API (kubectl)'
-                                            }
-                                        />
-                                    </ListRow>
-                                )}
-                            </Card>
-                        )}
-                    </div>
+                                    )}
+                                </Card>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
-            {activeTab === 'infrastructure' && (
+            {activeTab === 'storage' && (
                 <div className="flex max-w-4xl flex-col gap-4.5">
-                    <Card label="Domain & SSL">
-                        <Deferred
-                            data="dns"
-                            fallback={<CheckingRow title="Connect a domain" />}
-                        >
-                            <DomainRow
-                                server={server}
-                                groups={dnsGroups}
-                                disabled={!ready}
-                                onSetUp={() => setDialog('domain')}
-                            />
-                        </Deferred>
-                        <Deferred
-                            data="tls"
-                            fallback={
-                                <CheckingRow title="Automatic SSL certificates" />
-                            }
-                        >
-                            <SslRow
-                                server={server}
-                                report={tlsReport}
-                                disabled={!ready}
-                                onEnable={() => setDialog('ssl')}
-                            />
-                        </Deferred>
-                    </Card>
-
                     <Deferred
                         data="plex"
                         fallback={
@@ -866,50 +905,56 @@ export default function ShowServer({
             )}
 
             {activeTab === 'settings' && (
-                <div className="flex max-w-3xl flex-col gap-4.5">
-                    <Deferred
-                        data="clusterUsers"
-                        fallback={
-                            <Card label="Team Access & RBAC">
-                                <CheckingRow title="Checking team access…" />
-                            </Card>
-                        }
-                    >
-                        <TeamAccessCard
-                            users={clusterUsers}
-                            disabled={!ready}
-                            onGrant={() => setDialog('grantAccess')}
-                            onRevoke={(user) => setRevokingUser(user)}
-                        />
-                    </Deferred>
-
-                    {(hasLocalTofuState || hasRemoteTofuState) && (
-                        <TofuR2StateCard
-                            serverName={server.name}
-                            hasLocalTofuState={hasLocalTofuState}
-                            hasRemoteTofuState={hasRemoteTofuState}
-                            r2StateConfigured={r2StateConfigured}
-                            r2Bucket={r2Bucket}
-                            r2DashboardUrl={r2DashboardUrl}
-                        />
-                    )}
-
-                    <Card label="Danger zone" tone="danger">
-                        <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
-                            {ready
-                                ? 'Destroying deletes the server, its firewall rules and everything on it. Billing stops.'
-                                : 'Removes whatever the unfinished setup created so you stop being billed.'}
-                        </p>
-                        <Button
-                            variant="danger"
-                            onClick={() => setDialog('destroy')}
+                <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4.5">
+                    <div className="flex flex-col gap-4.5">
+                        <Deferred
+                            data="clusterUsers"
+                            fallback={
+                                <Card label="Team Access & RBAC">
+                                    <CheckingRow title="Checking team access…" />
+                                </Card>
+                            }
                         >
-                            <Trash2 className="size-4" />
-                            <span>
-                                {ready ? 'Destroy server' : 'Destroy leftovers'}
-                            </span>
-                        </Button>
-                    </Card>
+                            <TeamAccessCard
+                                users={clusterUsers}
+                                disabled={!ready}
+                                onGrant={() => setDialog('grantAccess')}
+                                onRevoke={(user) => setRevokingUser(user)}
+                            />
+                        </Deferred>
+
+                        {(hasLocalTofuState || hasRemoteTofuState) && (
+                            <TofuR2StateCard
+                                serverName={server.name}
+                                hasLocalTofuState={hasLocalTofuState}
+                                hasRemoteTofuState={hasRemoteTofuState}
+                                r2StateConfigured={r2StateConfigured}
+                                r2Bucket={r2Bucket}
+                                r2DashboardUrl={r2DashboardUrl}
+                            />
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-4.5">
+                        <Card label="Danger zone" tone="danger">
+                            <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
+                                {ready
+                                    ? 'Destroying deletes the server, its firewall rules and everything on it. Billing stops.'
+                                    : 'Removes whatever the unfinished setup created so you stop being billed.'}
+                            </p>
+                            <Button
+                                variant="danger"
+                                onClick={() => setDialog('destroy')}
+                            >
+                                <Trash2 className="size-4" />
+                                <span>
+                                    {ready
+                                        ? 'Destroy server'
+                                        : 'Destroy leftovers'}
+                                </span>
+                            </Button>
+                        </Card>
+                    </div>
                 </div>
             )}
 

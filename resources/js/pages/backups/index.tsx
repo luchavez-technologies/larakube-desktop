@@ -29,6 +29,9 @@ import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
 import { SCHEDULES, ago, describeSchedule, formatBytes } from '@/lib/backups';
+import { sendJson } from '@/lib/http';
+import { useRightDrawerOpen } from '@/lib/right-drawer-open';
+import { cn } from '@/lib/utils';
 import type { BackupEntry, BackupStatus, Server } from '@/types/larakube';
 import { useServerDataReload } from '@/lib/native-events';
 
@@ -1160,64 +1163,250 @@ function ScheduleDialog({
     );
 }
 
+type PrunePreviewItem = {
+    stamp: string;
+    takenAt: string;
+    bytes: number;
+    size: string;
+    complete: boolean;
+    action: 'keep' | 'delete';
+};
+
+type PrunePreviewResponse = {
+    success: boolean;
+    bucket?: string;
+    keepCount?: number;
+    deleteCount?: number;
+    freedHuman?: string;
+    retention?: string;
+    items?: PrunePreviewItem[];
+    error?: string;
+};
+
 function PruneDialog({ base, onClose }: { base: string; onClose: () => void }) {
+    useRightDrawerOpen(true);
+
+    const [slidIn, setSlidIn] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [preview, setPreview] = useState<PrunePreviewResponse | null>(null);
     const [understood, setUnderstood] = useState(false);
 
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setSlidIn(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
+    const loadPreview = async () => {
+        setLoading(true);
+        try {
+            const res = await sendJson<PrunePreviewResponse>(
+                `${base}/prune-preview`,
+                'POST',
+                {},
+            );
+            setPreview(res.data);
+        } catch {
+            setPreview({
+                success: false,
+                error: 'Could not load backup retention preview.',
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadPreview();
+    }, [base]);
+
+    const handleClose = () => {
+        setSlidIn(false);
+        setTimeout(onClose, 220);
+    };
+
+    const items = preview?.items ?? [];
+    const deleteCount = preview?.deleteCount ?? 0;
+    const keepCount = preview?.keepCount ?? 0;
+
     return (
-        <Modal
-            title="Clean up old backups"
-            intro="Keeps every backup from the last 7 days, then the newest of each of the last 4 weeks and 6 months, and removes the rest, along with unfinished ones. Preview first: it shows what would be removed and deletes nothing."
+        <div
+            className={cn(
+                'fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-200',
+                slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={handleClose}
         >
-            <div className="mt-5 space-y-4">
-                <Form
-                    action={`${base}/prune`}
-                    method="post"
-                    onSuccess={onClose}
-                >
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Clean up old backups"
+                className={cn(
+                    'flex h-full w-full max-w-xl flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-200 ease-out',
+                    slidIn ? 'translate-x-0' : 'translate-x-full',
+                )}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
+                    <div>
+                        <h3 className="text-base font-semibold text-ink">
+                            Clean up old backups
+                        </h3>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Keeps last 7 days, 4 weekly, and 6 monthly backups.
+                            Deletes older &amp; incomplete runs.
+                        </p>
+                    </div>
                     <Button
-                        type="submit"
-                        variant="secondary"
-                        className="w-full"
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClose}
                     >
-                        <CheckCircle2 className="size-3.5" />
-                        <span>Preview what would be removed</span>
-                    </Button>
-                </Form>
-                <label className="flex cursor-pointer items-start gap-2 text-xs text-ink">
-                    <input
-                        type="checkbox"
-                        className="mt-0.5"
-                        checked={understood}
-                        onChange={(event) =>
-                            setUnderstood(event.target.checked)
-                        }
-                    />
-                    I looked at the preview and understand removed backups
-                    cannot be recovered.
-                </label>
-                <Form
-                    action={`${base}/prune`}
-                    method="post"
-                    onSuccess={onClose}
-                >
-                    <input type="hidden" name="apply" value="1" />
-                    <Button
-                        type="submit"
-                        disabled={!understood}
-                        className="w-full"
-                    >
-                        <Trash2 className="size-3.5" />
-                        <span>Remove old backups</span>
-                    </Button>
-                </Form>
-                <div className="flex justify-end">
-                    <Button type="button" variant="ghost" onClick={onClose}>
-                        <XCircle className="size-3.5" />
-                        <span>Cancel</span>
+                        <XCircle className="size-4" />
+                        <span>Close</span>
                     </Button>
                 </div>
+
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line/60 bg-paper/60 px-6 py-3">
+                    {loading ? (
+                        <div className="flex items-center gap-2 text-xs text-soft">
+                            <RotateCw className="size-3.5 animate-spin text-brand" />
+                            <span>Scanning backup snapshots…</span>
+                        </div>
+                    ) : preview?.success ? (
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <StatusPill tone="ok">Keep {keepCount}</StatusPill>
+                            <StatusPill
+                                tone={deleteCount > 0 ? 'bad' : 'muted'}
+                            >
+                                Delete {deleteCount}
+                            </StatusPill>
+                            {deleteCount > 0 && preview.freedHuman && (
+                                <span className="font-medium text-soft">
+                                    ({preview.freedHuman} freed)
+                                </span>
+                            )}
+                        </div>
+                    ) : (
+                        <span className="text-xs text-accent">
+                            {preview?.error ?? 'Could not inspect destination.'}
+                        </span>
+                    )}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={loading}
+                        onClick={() => void loadPreview()}
+                    >
+                        <RotateCw
+                            className={cn(
+                                'size-3.5',
+                                loading && 'animate-spin',
+                            )}
+                        />
+                        <span>Refresh</span>
+                    </Button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                    {!loading && preview?.success && items.length === 0 && (
+                        <p className="py-8 text-center text-xs text-soft">
+                            No snapshots found at this backup destination.
+                        </p>
+                    )}
+
+                    {items.length > 0 && (
+                        <div className="divide-y divide-line/60 rounded-xl border border-line bg-paper/50">
+                            {items.map((item) => (
+                                <div
+                                    key={item.stamp}
+                                    className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate font-mono font-medium text-ink">
+                                                {item.stamp}
+                                            </span>
+                                            {!item.complete && (
+                                                <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                                    incomplete
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="mt-0.5 text-[11px] text-faint">
+                                            {item.takenAt} · {item.size}
+                                        </p>
+                                    </div>
+                                    <StatusPill
+                                        tone={
+                                            item.action === 'delete'
+                                                ? 'bad'
+                                                : 'ok'
+                                        }
+                                    >
+                                        {item.action === 'delete'
+                                            ? 'Delete'
+                                            : 'Keep'}
+                                    </StatusPill>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="shrink-0 space-y-3 border-t border-line bg-surface px-6 py-4">
+                    {deleteCount > 0 && (
+                        <label className="flex cursor-pointer items-start gap-2 text-xs text-ink">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={understood}
+                                onChange={(event) =>
+                                    setUnderstood(event.target.checked)
+                                }
+                            />
+                            <span>
+                                I reviewed the list and understand{' '}
+                                <strong>{deleteCount}</strong> removed backup(s)
+                                cannot be recovered.
+                            </span>
+                        </label>
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={handleClose}
+                        >
+                            <XCircle className="size-3.5" />
+                            <span>Cancel</span>
+                        </Button>
+                        <Form
+                            action={`${base}/prune`}
+                            method="post"
+                            onSuccess={handleClose}
+                        >
+                            <input type="hidden" name="apply" value="1" />
+                            <Button
+                                type="submit"
+                                variant="danger"
+                                disabled={
+                                    loading || deleteCount === 0 || !understood
+                                }
+                            >
+                                <Trash2 className="size-3.5" />
+                                <span>
+                                    {deleteCount > 0
+                                        ? `Remove ${deleteCount} old backups`
+                                        : 'Nothing to remove'}
+                                </span>
+                            </Button>
+                        </Form>
+                    </div>
+                </div>
             </div>
-        </Modal>
+        </div>
     );
 }
 

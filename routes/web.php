@@ -121,6 +121,7 @@ Route::post('/servers/{server}/backups/run', [BackupController::class, 'run'])->
 Route::post('/servers/{server}/backups/check', [BackupController::class, 'check'])->name('servers.backups.check');
 Route::post('/servers/{server}/backups/restore', [BackupController::class, 'restore'])->name('servers.backups.restore');
 Route::post('/servers/{server}/backups/prune', [BackupController::class, 'prune'])->name('servers.backups.prune');
+Route::post('/servers/{server}/backups/prune-preview', [BackupController::class, 'prunePreview'])->name('servers.backups.prune_preview');
 Route::post('/servers/{server}/backups/recovery-card', [BackupController::class, 'recoveryCard'])->name('servers.backups.recovery-card');
 Route::post('/servers/{server}/access/grant', [ClusterAccessController::class, 'grant'])->name('servers.access.grant');
 Route::post('/servers/{server}/access/revoke', [ClusterAccessController::class, 'revoke'])->name('servers.access.revoke');
