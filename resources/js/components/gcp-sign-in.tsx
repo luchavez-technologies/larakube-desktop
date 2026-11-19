@@ -100,6 +100,7 @@ export function GcpSignInDrawer({
     const [error, setError] = useState<string | null>(null);
     const [code, setCode] = useState('');
     const [projects, setProjects] = useState<Project[] | null>(null);
+    const [saving, setSaving] = useState(false);
     const [project, setProject] = useState('');
     const [attempt, setAttempt] = useState(0);
     const [detectedFromClipboard, setDetectedFromClipboard] = useState(false);
@@ -250,6 +251,8 @@ export function GcpSignInDrawer({
     };
 
     const finish = async () => {
+        setSaving(true);
+
         if (project !== '') {
             await sendJson('/setup/cloud/gcp/project', 'POST', {
                 project_id: project,
@@ -258,11 +261,13 @@ export function GcpSignInDrawer({
 
         forgetToolStatus();
         router.reload({
+            only: ['providers'],
             onFinish: () => {
+                setSaving(false);
                 onComplete?.();
+                handleClose();
             },
         });
-        handleClose();
     };
 
     const openBrowser = () => {
@@ -518,13 +523,23 @@ export function GcpSignInDrawer({
                                     variant="primary"
                                     size="sm"
                                     disabled={
-                                        projects === null || project === ''
+                                        saving ||
+                                        projects === null ||
+                                        project === ''
                                     }
                                     onClick={() => void finish()}
                                     className="gap-1.5"
                                 >
-                                    <Check className="size-3.5" />
-                                    <span>Use this project</span>
+                                    {saving ? (
+                                        <RefreshCw className="size-3.5 animate-spin" />
+                                    ) : (
+                                        <Check className="size-3.5" />
+                                    )}
+                                    <span>
+                                        {saving
+                                            ? 'Saving project…'
+                                            : 'Use this project'}
+                                    </span>
                                 </Button>
                             </div>
                         )}

@@ -885,12 +885,9 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             <GcpSignIn
                                                 label="Sign in with Google Account"
                                                 inline
-                                                onComplete={() => {
-                                                    setActiveTab('accounts');
-                                                    router.reload({
-                                                        only: ['providers'],
-                                                    });
-                                                }}
+                                                onComplete={() =>
+                                                    setActiveTab('accounts')
+                                                }
                                             />
                                         </div>
                                     </div>
