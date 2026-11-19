@@ -127,6 +127,9 @@ function ServerForm({
 }) {
     const { untested } = usePage<{ untested: Untested }>().props;
     const [providerList, setProviderList] = useState<Provider[]>(providers);
+    useEffect(() => {
+        setProviderList(providers);
+    }, [providers]);
     const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
 
     async function refreshCatalog(slug: string) {
