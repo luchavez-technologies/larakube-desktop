@@ -38,7 +38,10 @@ import CommonsCapabilityPills from '@/components/commons-capability-pills';
 import StatusPill from '@/components/status-pill';
 import QrCodePopover from '@/components/qr-code-popover';
 import ExperimentalBadge from '@/components/experimental-badge';
+import LiveRunSteps from '@/components/live-run-steps';
+import { useAddressReadiness } from '@/lib/address-readiness';
 import { sendJson } from '@/lib/http';
+import { elapsedSince } from '@/lib/run-steps';
 import { formatMemoryBytes, type CapacityAssessment } from '@/lib/capacity';
 import { useCelebrateOnSuccess } from '@/lib/use-celebrate';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
@@ -152,6 +155,9 @@ type LaunchedRun = {
     id: number;
     label: string;
     status: string;
+    /** The run's log so far; its `▸` lines are the live step list. */
+    output?: string;
+    startedAt?: string | null;
 };
 
 type LaunchedTool = {
@@ -437,12 +443,19 @@ export default function QuickLaunchModal({
             const res = await sendJson<{
                 id: number;
                 status: string;
+                output: string;
+                startedAt: string | null;
             }>(`/runs/${launchedRun.id}/stream`, 'GET');
 
             if (isMounted && res.ok) {
                 setLaunchedRun((prev) =>
                     prev && prev.id === res.data.id
-                        ? { ...prev, status: res.data.status }
+                        ? {
+                              ...prev,
+                              status: res.data.status,
+                              output: res.data.output,
+                              startedAt: res.data.startedAt,
+                          }
                         : prev,
                 );
             }
@@ -2027,6 +2040,40 @@ export default function QuickLaunchModal({
     );
 }
 
+/** One live address check on the ready panel: green when it passes, amber while it is still pending. */
+function AddressCheckPill({
+    label,
+    check,
+    pending,
+}: {
+    label: string;
+    check: { ready: boolean; detail: string } | null;
+    pending: string;
+}) {
+    const ready = check?.ready ?? false;
+
+    return (
+        <span
+            title={check?.detail ?? pending}
+            className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset',
+                ready
+                    ? 'bg-ok/10 text-ok ring-ok/25'
+                    : 'bg-warn/10 text-warn ring-warn/25',
+            )}
+        >
+            {ready ? (
+                <CheckCircle2 className="size-3" />
+            ) : (
+                <RefreshCw className="size-3 animate-spin" />
+            )}
+            <span>
+                {label}: {ready ? 'ready' : pending.toLowerCase()}
+            </span>
+        </span>
+    );
+}
+
 /**
  * Replaces the stepper body once a Quick Launch is submitted: live log,
  * then (on success) the admin URL and any bootstrap credentials, in place —
@@ -2061,6 +2108,18 @@ function LaunchedRunPanel({
     ] ?? ['Unknown', 'muted'];
     const hasCredentials =
         credentials !== null && Object.keys(credentials).length > 0;
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!isRunning) return;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [isRunning]);
+    const elapsed = elapsedSince(run.startedAt ?? null, now);
+    const address = useAddressReadiness(
+        isSucceeded && tool ? tool.domain : null,
+    );
+    const addressReady =
+        (address.dns?.ready ?? false) && (address.https?.ready ?? false);
 
     return (
         <div className="flex h-full flex-col overflow-hidden">
@@ -2083,14 +2142,30 @@ function LaunchedRunPanel({
                     <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
                 </div>
 
-                {isRunning && (
-                    <p className="mt-3 flex items-center gap-1.5 text-xs text-soft">
-                        <RefreshCw className="size-3 shrink-0 animate-spin" />
-                        <span>
-                            Watch live progress in the Activity panel at the
-                            bottom right — this stays open until it finishes.
-                        </span>
-                    </p>
+                {(isRunning || isFailed) && (
+                    <div className="mt-4 rounded-xl border border-line bg-surface p-4">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold tracking-wide text-soft uppercase">
+                                Progress
+                            </span>
+                            {isRunning && elapsed && (
+                                <span className="font-mono text-[11px] text-faint">
+                                    {elapsed}
+                                </span>
+                            )}
+                        </div>
+                        <LiveRunSteps
+                            output={run.output ?? ''}
+                            status={run.status}
+                        />
+                        {isRunning && (
+                            <p className="mt-3 text-[11px] text-faint">
+                                You can close this panel: the install keeps
+                                going, and its pill at the bottom of the window
+                                shows where it is.
+                            </p>
+                        )}
+                    </div>
                 )}
 
                 {isSucceeded && tool && (
@@ -2098,7 +2173,9 @@ function LaunchedRunPanel({
                         <div className="flex items-center gap-2 text-ok">
                             <CheckCircle2 className="size-4.5 shrink-0" />
                             <span className="text-sm font-semibold text-ink">
-                                {appName} is ready
+                                {addressReady
+                                    ? `${appName} is ready`
+                                    : `${appName} is installed`}
                             </span>
                         </div>
 
@@ -2116,16 +2193,28 @@ function LaunchedRunPanel({
                                         </span>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1.5">
+                                        {/* Opening before DNS resolves and the certificate is issued only shows a
+                                            browser error, so Open waits for both. */}
                                         <ExternalLinkButton
                                             url={adminUrl}
-                                            title="Open in default browser"
+                                            title={
+                                                addressReady
+                                                    ? 'Open in default browser'
+                                                    : 'Waiting for DNS and HTTPS. Open anyway'
+                                            }
                                             className={buttonClass(
-                                                'secondary',
+                                                addressReady
+                                                    ? 'secondary'
+                                                    : 'ghost',
                                                 'sm',
                                             )}
                                         >
                                             <ExternalLink className="size-3.5" />
-                                            <span>Open</span>
+                                            <span>
+                                                {addressReady
+                                                    ? 'Open'
+                                                    : 'Open anyway'}
+                                            </span>
                                         </ExternalLinkButton>
                                         <QrCodePopover
                                             url={adminUrl}
@@ -2136,6 +2225,19 @@ function LaunchedRunPanel({
                                 </div>
                             );
                         })()}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <AddressCheckPill
+                                label="DNS"
+                                check={address.dns}
+                                pending="Waiting for the DNS record"
+                            />
+                            <AddressCheckPill
+                                label="HTTPS"
+                                check={address.https}
+                                pending="Waiting for the certificate"
+                            />
+                        </div>
 
                         {credentialsLoading && (
                             <p className="flex items-center gap-1.5 text-xs text-soft">

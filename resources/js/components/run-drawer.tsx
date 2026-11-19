@@ -17,6 +17,7 @@ import { buttonClass } from '@/components/button';
 import LogPanel from '@/components/log-panel';
 import StatusPill from '@/components/status-pill';
 import { sendJson } from '@/lib/http';
+import { currentRunStep, elapsedSince } from '@/lib/run-steps';
 import { useIsAnyRightDrawerOpen } from '@/lib/right-drawer-open';
 import { celebratesOnSuccess } from '@/lib/run-kinds';
 import { runStatus } from '@/lib/servers';
@@ -155,6 +156,16 @@ function TrackedRun({
     useCelebrateOnSuccess(
         stream.status === 'succeeded' && celebratesOnSuccess(stream.kind),
     );
+
+    // The step the CLI last announced (its `▸` lines) and how long the run has taken, for the pill.
+    const currentStep = currentRunStep(stream.output);
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (stream.status !== 'running') return;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [stream.status]);
+    const elapsed = elapsedSince(stream.startedAt, now);
 
     // Pop this card's log panel open the moment it finishes, even if it was
     // minimized while running — but only if nothing else currently has the
@@ -372,8 +383,21 @@ function TrackedRun({
                 )}
                 {isSucceeded && <CheckCircle2 className="size-3.5 text-ok" />}
                 {isFailed && <AlertCircle className="size-3.5 text-accent" />}
-                <span className="max-w-[240px] truncate text-xs font-medium text-ink">
-                    {stream.label}
+                <span className="flex max-w-[260px] min-w-0 flex-col">
+                    <span className="truncate text-xs font-medium text-ink">
+                        {stream.label}
+                    </span>
+                    {isRunning && (currentStep || elapsed) && (
+                        <span className="truncate text-[11px] text-soft">
+                            {currentStep ?? 'Starting…'}
+                            {elapsed && (
+                                <span className="font-mono text-faint">
+                                    {' · '}
+                                    {elapsed}
+                                </span>
+                            )}
+                        </span>
+                    )}
                 </span>
                 <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
             </div>
