@@ -633,15 +633,16 @@ class GlobalSettings
     /**
      * Non-secret summary of the configured Cloudflare R2 integration for UI pre-fill.
      *
-     * @return array{configured: bool, endpoint: ?string, accountId: ?string, bucket: ?string}
+     * @return array{configured: bool, hasApiToken: bool, endpoint: ?string, accountId: ?string, bucket: ?string}
      */
     public function r2Summary(): array
     {
         $raw = $this->readHostConfig();
-        $configured = $this->r2BackupCredentials() !== null;
+        $creds = $this->r2BackupCredentials();
 
         return [
-            'configured' => $configured,
+            'configured' => $creds !== null,
+            'hasApiToken' => $creds !== null && $creds['cloudflare_token'] !== null,
             'endpoint' => is_string($raw['tofuStateEndpoint'] ?? null) && $raw['tofuStateEndpoint'] !== ''
                 ? $raw['tofuStateEndpoint']
                 : null,
@@ -674,18 +675,14 @@ class GlobalSettings
             return null;
         }
 
-        $cfToken = is_string($raw['cloudflareToken'] ?? null) ? trim($raw['cloudflareToken']) : '';
-        if ($cfToken === '' && is_array($raw['accounts']['cloudflare'] ?? null)) {
-            foreach ($raw['accounts']['cloudflare'] as $acct) {
-                if (is_array($acct) && ! empty($acct['default']) && is_string($acct['token'] ?? null) && trim($acct['token']) !== '') {
-                    $cfToken = trim($acct['token']);
+        // Prefer the dedicated R2 API token when saved; otherwise only reuse a
+        // Cloudflare DNS token if its SHA-256 matches the derived R2 secret key.
+        $r2ApiToken = is_string($raw['tofuStateApiToken'] ?? null) ? trim($raw['tofuStateApiToken']) : '';
+        if ($r2ApiToken === '') {
+            foreach ($this->candidateCloudflareTokens($raw) as $candidate) {
+                if (hash('sha256', $candidate) === $secretKey) {
+                    $r2ApiToken = $candidate;
                     break;
-                }
-            }
-            if ($cfToken === '') {
-                $first = reset($raw['accounts']['cloudflare']);
-                if (is_array($first) && is_string($first['token'] ?? null)) {
-                    $cfToken = trim($first['token']);
                 }
             }
         }
@@ -694,8 +691,31 @@ class GlobalSettings
             'endpoint' => $endpoint,
             'access_key' => $accessKey,
             'secret_key' => $secretKey,
-            'cloudflare_token' => $cfToken !== '' ? $cfToken : null,
+            'cloudflare_token' => $r2ApiToken !== '' ? $r2ApiToken : null,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $raw
+     * @return list<string>
+     */
+    private function candidateCloudflareTokens(array $raw): array
+    {
+        $tokens = [];
+
+        if (is_string($raw['cloudflareToken'] ?? null) && trim($raw['cloudflareToken']) !== '') {
+            $tokens[] = trim($raw['cloudflareToken']);
+        }
+
+        if (is_array($raw['accounts']['cloudflare'] ?? null)) {
+            foreach ($raw['accounts']['cloudflare'] as $acct) {
+                if (is_array($acct) && is_string($acct['token'] ?? null) && trim($acct['token']) !== '') {
+                    $tokens[] = trim($acct['token']);
+                }
+            }
+        }
+
+        return array_values(array_unique($tokens));
     }
 
     /**

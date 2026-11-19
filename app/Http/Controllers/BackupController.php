@@ -156,6 +156,7 @@ class BackupController extends Controller
             $validated = $request->validate([
                 'bucket' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9][a-z0-9.-]*$/'],
                 'create_bucket' => ['nullable', 'boolean'],
+                'cloudflare_token' => ['nullable', 'string', 'max:255'],
             ]);
 
             $creds = $settings->r2BackupCredentials();
@@ -171,7 +172,8 @@ class BackupController extends Controller
             $secretKey = $creds['secret_key'];
             $region = 'auto';
             $createBucket = (bool) ($validated['create_bucket'] ?? true);
-            $cloudflareToken = $creds['cloudflare_token'];
+            $providedToken = trim((string) ($validated['cloudflare_token'] ?? ''));
+            $cloudflareToken = $providedToken !== '' ? $providedToken : $creds['cloudflare_token'];
         } else {
             $validated = $request->validate([
                 'endpoint' => ['required', 'url:https', 'max:255'],

@@ -81,6 +81,7 @@ type FleetServerBackup = {
 
 type R2Summary = {
     configured: boolean;
+    hasApiToken: boolean;
     endpoint: string | null;
     accountId: string | null;
     bucket: string | null;
@@ -1270,6 +1271,25 @@ function SetupDialog({
                                                 Create bucket automatically if
                                                 it doesn&apos;t exist
                                             </label>
+
+                                            {r2CreateBucket &&
+                                                !r2.hasApiToken && (
+                                                    <Labeled
+                                                        label="Cloudflare R2 API token (Account → Workers R2 Storage → Edit)"
+                                                        error={
+                                                            errors.cloudflare_token
+                                                        }
+                                                    >
+                                                        <input
+                                                            name="cloudflare_token"
+                                                            type="password"
+                                                            required
+                                                            autoComplete="off"
+                                                            placeholder="Paste R2 token (or uncheck above if bucket already exists)"
+                                                            className={field}
+                                                        />
+                                                    </Labeled>
+                                                )}
                                         </>
                                     ) : (
                                         <>
