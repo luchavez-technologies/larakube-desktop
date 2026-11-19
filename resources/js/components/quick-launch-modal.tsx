@@ -2146,6 +2146,12 @@ function LaunchedRunPanel({
 
                         {!credentialsLoading && hasCredentials && (
                             <div className="space-y-2">
+                                {credentials?.admin_username && (
+                                    <CredentialRow
+                                        label="Admin Username"
+                                        value={credentials.admin_username}
+                                    />
+                                )}
                                 {credentials?.admin_email && (
                                     <CredentialRow
                                         label="Admin Email"
