@@ -1896,8 +1896,12 @@ export default function QuickLaunchModal({
                             </div>
 
                             <div className="flex items-center gap-2">
+                                {/* Distinct keys: one reused <button> would turn type="submit" while its own
+                                    "Next: Review" click is still being handled, and the browser then submits
+                                    the form, so the click skipped Review and started the launch. */}
                                 {currentStep < 4 ? (
                                     <Button
+                                        key="next"
                                         type="button"
                                         variant="primary"
                                         disabled={
@@ -1918,6 +1922,7 @@ export default function QuickLaunchModal({
                                     </Button>
                                 ) : (
                                     <Button
+                                        key="launch"
                                         type="submit"
                                         variant="primary"
                                         disabled={
