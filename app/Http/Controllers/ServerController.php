@@ -259,7 +259,7 @@ class ServerController extends Controller
                 serverName: $stackName,
             );
 
-            Server::updateOrCreate(
+            Server::withMissing()->updateOrCreate(
                 ['name' => $stackName],
                 [
                     'provider' => 'custom',
@@ -349,7 +349,7 @@ class ServerController extends Controller
             serverName: $stackName,
         );
 
-        Server::updateOrCreate(
+        Server::withMissing()->updateOrCreate(
             ['name' => $stackName],
             [
                 'provider' => $provider,

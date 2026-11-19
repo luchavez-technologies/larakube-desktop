@@ -6,6 +6,7 @@ use App\Models\Run;
 use App\Models\Server;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Native\Desktop\Facades\ChildProcess;
 
 function createServerFakeCli(): string
@@ -423,4 +424,36 @@ test('inspect key endpoint validates existence and detects passphrase', function
         ]);
 
     File::deleteDirectory($tempDir);
+});
+
+test('re-creating a server name that previously existed as destroyed revives the row without unique constraint error', function () {
+    Server::create([
+        'name' => 'hello-larakube',
+        'provider' => 'gcp',
+        'kind' => 'vps',
+        'status' => 'destroyed',
+    ]);
+
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    ChildProcess::fake();
+    Http::fake(['*' => Http::response([], 200)]);
+    Process::fake(['*' => Process::result(output: '{}')]);
+
+    $this->post(route('servers.store'), [
+        'provider' => 'existing',
+        'stack_name' => 'hello-larakube',
+        'ip' => '203.0.113.10',
+        'ssh_key' => '/tmp/id_ed25519',
+    ])->assertRedirect();
+
+    $revived = Server::where('name', 'hello-larakube')->first();
+    expect($revived)->not->toBeNull()
+        ->and($revived->status)->toBe('provisioning');
+
+    File::deleteDirectory($bin);
 });

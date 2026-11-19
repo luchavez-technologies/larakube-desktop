@@ -137,7 +137,7 @@ class CreateServerTool extends Tool implements Completable
                 serverName: $stackName,
             );
 
-            Server::updateOrCreate(
+            Server::withMissing()->updateOrCreate(
                 ['name' => $stackName],
                 [
                     'provider' => 'custom',
@@ -220,7 +220,7 @@ class CreateServerTool extends Tool implements Completable
             serverName: $stackName,
         );
 
-        Server::updateOrCreate(
+        Server::withMissing()->updateOrCreate(
             ['name' => $stackName],
             [
                 'provider' => $provider,
