@@ -9,6 +9,7 @@ import {
     HardDrive,
     LayoutGrid,
     Plus,
+    Maximize2,
     RotateCw,
     ShieldCheck,
     SquareTerminal,
@@ -33,6 +34,7 @@ import {
     DestroyServerDialog,
     RepairServerDialog,
     ResizeServerDialog,
+    RestartServerDialog,
 } from '@/components/server-dialogs';
 import DiagnoseCard from '@/components/diagnose-card';
 import DomainStatusPills from '@/components/domain-status-pills';
@@ -96,6 +98,7 @@ type Dialog =
     | 'grantAccess'
     | 'repair'
     | 'resize'
+    | 'restart'
     | null;
 
 const SERVER_TABS = [
@@ -191,14 +194,18 @@ export default function ShowServer({
     };
 
     const [dialog, setDialog] = useState<Dialog>(() => {
-        // "?step=domain|ssl" opens that dialog, e.g. from a finished create run.
+        // "?step=domain|ssl" opens that dialog, e.g. from a finished create run; "?step=resize" comes
+        // from Quick Launch's "won't fit" panel.
         const step = new URLSearchParams(
             typeof url === 'string' ? (url.split('?')[1] ?? '') : '',
         ).get('step');
-        return server.status === 'ready' &&
-            (step === 'domain' || step === 'ssl')
-            ? step
-            : null;
+        if (server.status !== 'ready') {
+            return null;
+        }
+        if (step === 'domain' || step === 'ssl') {
+            return step;
+        }
+        return step === 'resize' && server.kind === 'vps' ? 'resize' : null;
     });
     const [revokingUser, setRevokingUser] = useState<ClusterUser | null>(null);
     const ready = server.status === 'ready';
@@ -247,6 +254,29 @@ export default function ShowServer({
             <PageHeader
                 title={server.name}
                 badge={<StatusPill tone={tone}>{label}</StatusPill>}
+                actions={
+                    // A server LaraKube made and can reach over SSH: resize it through the provider, or reboot it.
+                    server.kind === 'vps' && ready ? (
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setDialog('resize')}
+                            >
+                                <Maximize2 className="size-3.5" />
+                                <span>Resize</span>
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setDialog('restart')}
+                            >
+                                <RotateCw className="size-3.5" />
+                                <span>Restart</span>
+                            </Button>
+                        </div>
+                    ) : undefined
+                }
                 meta={[
                     <span
                         key="provider"
@@ -969,6 +999,12 @@ export default function ShowServer({
             )}
             {dialog === 'repair' && (
                 <RepairServerDialog
+                    server={server}
+                    onClose={() => setDialog(null)}
+                />
+            )}
+            {dialog === 'restart' && (
+                <RestartServerDialog
                     server={server}
                     onClose={() => setDialog(null)}
                 />
