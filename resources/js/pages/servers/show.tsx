@@ -112,7 +112,9 @@ export default function ShowServer({
     providers,
     k9sInstalled,
     hasLocalTofuState = false,
+    hasRemoteTofuState = false,
     r2StateConfigured = false,
+    r2Bucket = null,
 }: {
     server: Server;
     projects?: Project[];
@@ -131,7 +133,9 @@ export default function ShowServer({
     providers?: Provider[] | null;
     k9sInstalled: boolean;
     hasLocalTofuState?: boolean;
+    hasRemoteTofuState?: boolean;
     r2StateConfigured?: boolean;
+    r2Bucket?: string | null;
 }) {
     const { url, errors, hideProjects } = usePage<{
         hideProjects?: boolean;
@@ -802,10 +806,13 @@ export default function ShowServer({
                         />
                     </Deferred>
 
-                    {hasLocalTofuState && (
+                    {(hasLocalTofuState || hasRemoteTofuState) && (
                         <TofuR2StateCard
                             serverName={server.name}
+                            hasLocalTofuState={hasLocalTofuState}
+                            hasRemoteTofuState={hasRemoteTofuState}
                             r2StateConfigured={r2StateConfigured}
+                            r2Bucket={r2Bucket}
                         />
                     )}
 
@@ -2254,10 +2261,16 @@ function GrantAccessDialog({
 
 function TofuR2StateCard({
     serverName,
+    hasLocalTofuState,
+    hasRemoteTofuState,
     r2StateConfigured,
+    r2Bucket,
 }: {
     serverName: string;
+    hasLocalTofuState: boolean;
+    hasRemoteTofuState: boolean;
     r2StateConfigured: boolean;
+    r2Bucket: string | null;
 }) {
     const [token, setToken] = useState('');
     const [connecting, setConnecting] = useState(false);
@@ -2296,70 +2309,101 @@ function TofuR2StateCard({
 
     return (
         <Card label="OpenTofu Remote State (Cloudflare R2)">
-            <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
-                This cluster currently stores its encrypted OpenTofu state
-                locally on this machine. Migrate it to Cloudflare R2 so you can
-                recover or manage the server from another computer.
-            </p>
-            {r2StateConfigured ? (
-                <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() =>
-                        router.post(`/servers/${serverName}/migrate-state`)
-                    }
-                >
-                    <UploadCloud className="size-4" />
-                    <span>Migrate State to R2</span>
-                </Button>
-            ) : (
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs text-soft">
-                        <span>
-                            Requires a Cloudflare token with{' '}
-                            <strong>Account → Workers R2 Storage → Edit</strong>
-                            .
-                        </span>
-                        <ExternalLinkButton
-                            url="https://dash.cloudflare.com/profile/api-tokens"
-                            showIcon
-                            className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
-                        >
-                            Cloudflare API Tokens
-                        </ExternalLinkButton>
+            {hasRemoteTofuState && !hasLocalTofuState ? (
+                <div className="mt-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                        <StatusPill tone="ok">Connected · R2</StatusPill>
+                        {r2Bucket && (
+                            <span className="font-mono text-xs text-soft">
+                                {r2Bucket}
+                            </span>
+                        )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <input
-                            type="password"
-                            value={token}
-                            onChange={(e) => {
-                                setToken(e.target.value);
-                                setError(null);
-                            }}
-                            placeholder="Paste Cloudflare API token"
-                            autoComplete="off"
-                            className="min-w-[240px] flex-1 rounded-lg border-0 bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
-                        />
+                    <p className="text-[12px] leading-relaxed text-soft">
+                        Encrypted state is stored in Cloudflare R2 (
+                        <code className="text-[11px]">
+                            tofu-state/{serverName}/terraform.tfstate
+                        </code>
+                        ).
+                    </p>
+                </div>
+            ) : (
+                <>
+                    <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
+                        This cluster currently stores its encrypted OpenTofu
+                        state locally on this machine. Migrate it to Cloudflare
+                        R2 so you can recover or manage the server from another
+                        computer.
+                    </p>
+                    {r2StateConfigured ? (
                         <Button
                             type="button"
                             variant="secondary"
-                            disabled={connecting || token.trim() === ''}
-                            onClick={() => void handleConnectAndMigrate()}
+                            onClick={() =>
+                                router.post(
+                                    `/servers/${serverName}/migrate-state`,
+                                )
+                            }
                         >
-                            {connecting ? (
-                                <RotateCw className="size-4 animate-spin" />
-                            ) : (
-                                <UploadCloud className="size-4" />
-                            )}
-                            <span>
-                                {connecting
-                                    ? 'Connecting R2…'
-                                    : 'Connect R2 & Migrate State'}
-                            </span>
+                            <UploadCloud className="size-4" />
+                            <span>Migrate State to R2</span>
                         </Button>
-                    </div>
-                    {error && <p className="text-xs text-accent">{error}</p>}
-                </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between text-xs text-soft">
+                                <span>
+                                    Requires a Cloudflare token with{' '}
+                                    <strong>
+                                        Account → Workers R2 Storage → Edit
+                                    </strong>
+                                    .
+                                </span>
+                                <ExternalLinkButton
+                                    url="https://dash.cloudflare.com/profile/api-tokens"
+                                    showIcon
+                                    className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
+                                >
+                                    Cloudflare API Tokens
+                                </ExternalLinkButton>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                    type="password"
+                                    value={token}
+                                    onChange={(e) => {
+                                        setToken(e.target.value);
+                                        setError(null);
+                                    }}
+                                    placeholder="Paste Cloudflare API token"
+                                    autoComplete="off"
+                                    className="min-w-[240px] flex-1 rounded-lg border-0 bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={connecting || token.trim() === ''}
+                                    onClick={() =>
+                                        void handleConnectAndMigrate()
+                                    }
+                                >
+                                    {connecting ? (
+                                        <RotateCw className="size-4 animate-spin" />
+                                    ) : (
+                                        <UploadCloud className="size-4" />
+                                    )}
+                                    <span>
+                                        {connecting
+                                            ? 'Connecting R2…'
+                                            : 'Connect R2 & Migrate State'}
+                                    </span>
+                                </Button>
+                            </div>
+                            {error && (
+                                <p className="text-xs text-accent">{error}</p>
+                            )}
+                        </div>
+                    )}
+                </>
             )}
         </Card>
     );

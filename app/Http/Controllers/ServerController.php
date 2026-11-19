@@ -485,7 +485,9 @@ class ServerController extends Controller
                 : null,
             'k9sInstalled' => $readiness->status('k9s')['installed'],
             'hasLocalTofuState' => $settings->hasLocalTofuState($server),
+            'hasRemoteTofuState' => $settings->hasRemoteTofuState($server),
             'r2StateConfigured' => $settings->r2StateConfigured(),
+            'r2Bucket' => $settings->r2BucketName(),
         ]);
     }
 

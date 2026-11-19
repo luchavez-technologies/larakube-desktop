@@ -569,7 +569,37 @@ class GlobalSettings
     {
         $tofuDir = dirname($this->hostConfigPath())."/tofu/{$server}";
 
-        return is_file("{$tofuDir}/terraform.tfstate") && ! is_file("{$tofuDir}/backend.tf");
+        return (is_file("{$tofuDir}/terraform.tfstate") && ! is_file("{$tofuDir}/backend.tf"))
+            || ($this->hasRemoteTofuState($server) && ! is_file("{$tofuDir}/backend.tf"));
+    }
+
+    public function hasRemoteTofuState(string $server): bool
+    {
+        $tofuDir = dirname($this->hostConfigPath())."/tofu/{$server}";
+        if (is_file("{$tofuDir}/backend.tf")) {
+            return true;
+        }
+
+        $dotState = "{$tofuDir}/.terraform/terraform.tfstate";
+        if (! is_file($dotState)) {
+            return false;
+        }
+
+        $decoded = json_decode((string) file_get_contents($dotState), true);
+
+        return is_array($decoded) && (($decoded['backend']['type'] ?? null) === 's3');
+    }
+
+    public function r2BucketName(): ?string
+    {
+        $path = $this->hostConfigPath();
+        $raw = is_file($path)
+            ? json_decode((string) file_get_contents($path), true)
+            : null;
+
+        return is_array($raw) && is_string($raw['tofuStateBucket'] ?? null)
+            ? $raw['tofuStateBucket']
+            : null;
     }
 
     public function r2StateConfigured(): bool
