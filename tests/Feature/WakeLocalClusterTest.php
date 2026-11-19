@@ -238,3 +238,16 @@ test('dashboard defers use cached DB columns without waking a stopped LaraKube L
 
     File::deleteDirectory($bin);
 });
+
+test('a list of projects asks wsl.exe whether LaraKube Linux is running once, not once per project', function () {
+    app()->instance(ToolLocator::class, new ToolLocator([], windows: true, wslFeatureEnabled: true));
+    app()->instance(Wsl::class, new Wsl(windows: true, featureEnabled: true));
+    app()->forgetScopedInstances();
+    Process::fake(['*wsl.exe*' => Process::result(output: WAKE_LISTING)]);
+
+    $projects = collect(['app-one', 'app-two', 'app-three'])
+        ->map(fn (string $name): Project => new Project(['path' => "/home/larakube/code/{$name}"]));
+
+    expect($projects->every(fn (Project $p): bool => $p->existsOnHost()))->toBeTrue();
+    Process::assertRanTimes(fn ($process): bool => str_contains(implode(' ', (array) $process->command), '--list'), 1);
+});

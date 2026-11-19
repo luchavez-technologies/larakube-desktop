@@ -502,6 +502,9 @@ class Wsl
             : ['ok' => false, 'message' => trim($this->text($removed->errorOutput().$removed->output())) ?: 'Windows could not remove LaraKube Linux.'];
     }
 
+    /** Container key for distroIsRunning(), answered once per request or job (AppServiceProvider). */
+    public const AWAKE_THIS_REQUEST = 'wsl.awake-this-request';
+
     /** The ChildProcess alias of the process that holds larakube-ubuntu awake. */
     public const KEEP_AWAKE_ALIAS = 'wsl-keep-awake';
 

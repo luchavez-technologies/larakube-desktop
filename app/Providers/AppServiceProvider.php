@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AppUpdates;
+use App\Services\Wsl;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Whether LaraKube Linux is running, asked once per request or queued job (scoped bindings reset
+        // between both): a list of projects otherwise asks wsl.exe once per project.
+        $this->app->scoped(Wsl::AWAKE_THIS_REQUEST, fn ($app): bool => rescue(
+            fn (): bool => $app->make(Wsl::class)->distroIsRunning(),
+            false,
+            report: false,
+        ));
     }
 
     /**

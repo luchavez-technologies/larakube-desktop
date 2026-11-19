@@ -106,7 +106,7 @@ class Project extends Model
         }
 
         if (rescue(fn () => app(ToolLocator::class)->isWindows(), false)) {
-            $awake = $distroRunning ?? rescue(fn (): bool => app(Wsl::class)->distroIsRunning(), false, report: false);
+            $awake = $distroRunning ?? (bool) app(Wsl::AWAKE_THIS_REQUEST);
             if (! $awake) {
                 return true;
             }
