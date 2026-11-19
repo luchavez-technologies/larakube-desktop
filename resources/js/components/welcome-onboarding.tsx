@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { motion, useReducedMotion } from 'motion/react';
 import {
@@ -188,6 +188,22 @@ export default function WelcomeOnboarding({
     }>().props;
     const [mode, setMode] = useState<'tools' | 'projects'>('tools');
     const [flippedToPocketBase, setFlippedToPocketBase] = useState(false);
+    // After a flip, focus goes to the control on the side now showing: the
+    // side it left is inert, so focus would otherwise drop to the page.
+    const flipToBackRef = useRef<HTMLButtonElement>(null);
+    const flipToFrontRef = useRef<HTMLButtonElement>(null);
+    const flipRequested = useRef(false);
+    useEffect(() => {
+        if (!flipRequested.current) {
+            return;
+        }
+        flipRequested.current = false;
+        (flippedToPocketBase ? flipToFrontRef : flipToBackRef).current?.focus();
+    }, [flippedToPocketBase]);
+    const flipTo = (pocketBase: boolean) => {
+        flipRequested.current = true;
+        setFlippedToPocketBase(pocketBase);
+    };
     const shouldReduceMotion = useReducedMotion();
 
     const [dismissed, setDismissed] = useState(
@@ -491,10 +507,9 @@ export default function WelcomeOnboarding({
                                           ?.fit === 'wont_fit';
                                   const flipHintFront = (
                                       <button
+                                          ref={flipToBackRef}
                                           type="button"
-                                          onClick={() =>
-                                              setFlippedToPocketBase(true)
-                                          }
+                                          onClick={() => flipTo(true)}
                                           className="inline-flex w-full items-center justify-between rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-amber-600 transition hover:bg-amber-500/10 dark:text-amber-400"
                                       >
                                           <span>
@@ -508,10 +523,9 @@ export default function WelcomeOnboarding({
 
                                   const flipHintBack = (
                                       <button
+                                          ref={flipToFrontRef}
                                           type="button"
-                                          onClick={() =>
-                                              setFlippedToPocketBase(false)
-                                          }
+                                          onClick={() => flipTo(false)}
                                           className="hover:bg-surface-muted inline-flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-soft transition hover:text-ink"
                                       >
                                           <ArrowLeft className="size-3 shrink-0" />
