@@ -46,6 +46,7 @@ import ToolLogo from '@/components/tool-logo';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import { getServerStatusBadge } from '@/lib/servers';
 import { ExternalLinkButton } from '@/lib/open-external';
+import { sendJson } from '@/lib/http';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import {
@@ -802,35 +803,10 @@ export default function ShowServer({
                     </Deferred>
 
                     {hasLocalTofuState && (
-                        <Card label="OpenTofu Remote State (Cloudflare R2)">
-                            <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
-                                This cluster currently stores its encrypted
-                                OpenTofu state locally on this machine. Migrate
-                                it to Cloudflare R2 so you can recover or manage
-                                the server from another computer.
-                            </p>
-                            {r2StateConfigured ? (
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    onClick={() =>
-                                        router.post(
-                                            `/servers/${server.name}/migrate-state`,
-                                        )
-                                    }
-                                >
-                                    <UploadCloud className="size-4" />
-                                    <span>Migrate State to R2</span>
-                                </Button>
-                            ) : (
-                                <p className="text-xs text-faint">
-                                    Configure Cloudflare R2 state first (via{' '}
-                                    <code>larakube cloud:state:r2</code> or
-                                    creating a cluster with an R2-enabled
-                                    Cloudflare token).
-                                </p>
-                            )}
-                        </Card>
+                        <TofuR2StateCard
+                            serverName={server.name}
+                            r2StateConfigured={r2StateConfigured}
+                        />
                     )}
 
                     <Card label="Danger zone" tone="danger">
@@ -2273,5 +2249,118 @@ function GrantAccessDialog({
                 </Form>
             </div>
         </div>
+    );
+}
+
+function TofuR2StateCard({
+    serverName,
+    r2StateConfigured,
+}: {
+    serverName: string;
+    r2StateConfigured: boolean;
+}) {
+    const [token, setToken] = useState('');
+    const [connecting, setConnecting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleConnectAndMigrate = async () => {
+        const trimmed = token.trim();
+        if (!trimmed) {
+            setError('Paste a Cloudflare API token first.');
+            return;
+        }
+
+        setConnecting(true);
+        setError(null);
+        try {
+            const res = await sendJson<{
+                configured: boolean;
+                reason?: string;
+            }>('/cloudflare/configure-r2', 'POST', { token: trimmed });
+
+            if (!res.ok || !res.data.configured) {
+                setError(
+                    res.data.reason ||
+                        'Could not configure Cloudflare R2 remote state.',
+                );
+                return;
+            }
+
+            router.post(`/servers/${serverName}/migrate-state`);
+        } catch {
+            setError('Failed to connect Cloudflare R2.');
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    return (
+        <Card label="OpenTofu Remote State (Cloudflare R2)">
+            <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
+                This cluster currently stores its encrypted OpenTofu state
+                locally on this machine. Migrate it to Cloudflare R2 so you can
+                recover or manage the server from another computer.
+            </p>
+            {r2StateConfigured ? (
+                <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                        router.post(`/servers/${serverName}/migrate-state`)
+                    }
+                >
+                    <UploadCloud className="size-4" />
+                    <span>Migrate State to R2</span>
+                </Button>
+            ) : (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs text-soft">
+                        <span>
+                            Requires a Cloudflare token with{' '}
+                            <strong>Account → Workers R2 Storage → Edit</strong>
+                            .
+                        </span>
+                        <ExternalLinkButton
+                            url="https://dash.cloudflare.com/profile/api-tokens"
+                            showIcon
+                            className="inline-flex cursor-pointer items-center gap-1 font-medium text-servers hover:underline"
+                        >
+                            Cloudflare API Tokens
+                        </ExternalLinkButton>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input
+                            type="password"
+                            value={token}
+                            onChange={(e) => {
+                                setToken(e.target.value);
+                                setError(null);
+                            }}
+                            placeholder="Paste Cloudflare API token"
+                            autoComplete="off"
+                            className="min-w-[240px] flex-1 rounded-lg border-0 bg-paper px-3 py-2 font-mono text-xs ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                        />
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={connecting || token.trim() === ''}
+                            onClick={() => void handleConnectAndMigrate()}
+                        >
+                            {connecting ? (
+                                <RotateCw className="size-4 animate-spin" />
+                            ) : (
+                                <UploadCloud className="size-4" />
+                            )}
+                            <span>
+                                {connecting
+                                    ? 'Connecting R2…'
+                                    : 'Connect R2 & Migrate State'}
+                            </span>
+                        </Button>
+                    </div>
+                    {error && <p className="text-xs text-accent">{error}</p>}
+                </div>
+            )}
+        </Card>
     );
 }
