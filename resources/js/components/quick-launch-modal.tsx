@@ -1793,7 +1793,7 @@ export default function QuickLaunchModal({
 
                                             <div className="mt-3 flex flex-wrap items-center gap-2">
                                                 <Link
-                                                    href={`/servers/${encodeURIComponent(selectedServerName)}?step=resize`}
+                                                    href={`/servers/${encodeURIComponent(selectedServerName)}?tab=settings&step=resize`}
                                                     className={buttonClass(
                                                         'secondary',
                                                         'sm',

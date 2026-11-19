@@ -1,5 +1,6 @@
 import { Deferred, Form, Head, Link, router, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
     Activity,
     ArrowRight,
@@ -254,29 +255,6 @@ export default function ShowServer({
             <PageHeader
                 title={server.name}
                 badge={<StatusPill tone={tone}>{label}</StatusPill>}
-                actions={
-                    // A server LaraKube made and can reach over SSH: resize it through the provider, or reboot it.
-                    server.kind === 'vps' && ready ? (
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setDialog('resize')}
-                            >
-                                <Maximize2 className="size-3.5" />
-                                <span>Resize</span>
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setDialog('restart')}
-                            >
-                                <RotateCw className="size-3.5" />
-                                <span>Restart</span>
-                            </Button>
-                        </div>
-                    ) : undefined
-                }
                 meta={[
                     <span
                         key="provider"
@@ -969,6 +947,33 @@ export default function ShowServer({
                     </div>
 
                     <div className="flex flex-col gap-4.5">
+                        {server.kind === 'vps' &&
+                            ready && (
+                                // Rare maintenance that takes everything on the server offline: here, each with
+                                // its cost spelled out, rather than next to the title where it reads as routine.
+                                <Card label="Operations">
+                                    <div className="divide-y divide-line">
+                                        <OperationRow
+                                            title="Restart server"
+                                            detail="Reboots the server. Every app and project on it is offline for 1–2 minutes, then comes back on its own."
+                                            icon={
+                                                <RotateCw className="size-3.5" />
+                                            }
+                                            action="Restart"
+                                            onClick={() => setDialog('restart')}
+                                        />
+                                        <OperationRow
+                                            title="Resize server"
+                                            detail={`Changes CPU and RAM through ${providerLabels[server.provider] ?? server.provider}. The provider usually reboots the server to apply it, and your bill changes with the size.`}
+                                            icon={
+                                                <Maximize2 className="size-3.5" />
+                                            }
+                                            action="Resize"
+                                            onClick={() => setDialog('resize')}
+                                        />
+                                    </div>
+                                </Card>
+                            )}
                         <Card label="Danger zone" tone="danger">
                             <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
                                 {ready
@@ -1039,6 +1044,40 @@ export default function ShowServer({
                 />
             )}
         </>
+    );
+}
+
+function OperationRow({
+    title,
+    detail,
+    icon,
+    action,
+    onClick,
+}: {
+    title: string;
+    detail: string;
+    icon: ReactNode;
+    action: string;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex items-start justify-between gap-4 py-3 first:pt-1 last:pb-1">
+            <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink">{title}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                    {detail}
+                </p>
+            </div>
+            <Button
+                variant="secondary"
+                size="sm"
+                onClick={onClick}
+                className="shrink-0 text-warn ring-warn/40 hover:bg-warn-tint"
+            >
+                {icon}
+                <span>{action}</span>
+            </Button>
+        </div>
     );
 }
 
