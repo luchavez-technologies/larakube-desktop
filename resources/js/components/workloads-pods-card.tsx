@@ -7,10 +7,10 @@ import {
     X,
     Terminal,
     SquareTerminal,
-    Clock,
     Pause,
     Play,
 } from 'lucide-react';
+import AutoRefreshToggle from '@/components/auto-refresh-toggle';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -316,40 +316,11 @@ export default function WorkloadsPodsCard({
                             </Button>
                         )}
 
-                        {/* Auto-refresh interval toggle */}
-                        <div
-                            className="flex items-center rounded-lg border border-line bg-surface/80 p-0.5 shadow-2xs"
+                        <AutoRefreshToggle
+                            value={autoRefreshInterval}
+                            onChange={setAutoRefreshInterval}
                             title="Auto-refresh pods interval"
-                        >
-                            <div className="flex items-center gap-1 px-1.5 text-[10px] font-semibold tracking-wider text-soft uppercase">
-                                <Clock className="size-3 text-soft" />
-                                <span className="hidden sm:inline-block">
-                                    Auto
-                                </span>
-                            </div>
-                            {[
-                                { label: 'Off', value: 0 },
-                                { label: '5s', value: 5 },
-                                { label: '10s', value: 10 },
-                                { label: '30s', value: 30 },
-                            ].map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() =>
-                                        setAutoRefreshInterval(opt.value)
-                                    }
-                                    className={cn(
-                                        'rounded-md px-2 py-0.5 text-[11px] font-medium transition',
-                                        autoRefreshInterval === opt.value
-                                            ? 'bg-brand/15 font-semibold text-brand shadow-2xs'
-                                            : 'text-soft hover:text-ink',
-                                    )}
-                                >
-                                    {opt.label}
-                                </button>
-                            ))}
-                        </div>
+                        />
 
                         {/* Manual Refresh button */}
                         <Button

@@ -10,6 +10,9 @@ class ClusterMetrics
 {
     public const TTL_SECONDS = 45;
 
+    /** Short enough that the server page's 5s auto-refresh shows new numbers (metrics-server itself samples every ~15s). */
+    public const NODE_TTL_SECONDS = 5;
+
     public function __construct(private ToolLocator $locator) {}
 
     /**
@@ -26,7 +29,7 @@ class ClusterMetrics
 
         $key = "cluster-metrics:node:{$context}";
 
-        return Cache::remember($key, self::TTL_SECONDS, function () use ($cli, $context): array {
+        return Cache::remember($key, self::NODE_TTL_SECONDS, function () use ($cli, $context): array {
             $isolated = $this->locator->isolate([$cli, "--context={$context}", 'top', 'nodes', '--no-headers']);
 
             try {

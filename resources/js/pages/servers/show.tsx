@@ -1,5 +1,5 @@
 import { Deferred, Form, Head, Link, router, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Activity,
     ArrowRight,
@@ -71,6 +71,9 @@ import type {
     Server,
 } from '@/types/larakube';
 import { useServerDataReload } from '@/lib/native-events';
+import AutoRefreshToggle, {
+    useAutoRefresh,
+} from '@/components/auto-refresh-toggle';
 import { formatMemoryBytes, type CapacityAssessment } from '@/lib/capacity';
 
 type DnsGroup = {
@@ -1010,6 +1013,15 @@ function NodeMetricsCard({
     metrics?: NodeMetrics | null;
     capacity?: CapacityAssessment | null;
 }) {
+    const [autoRefresh, setAutoRefresh] = useState<number>(10);
+    // `kubectl top` only: cheap, cached server-side for 5s. The memory breakdown below comes from the
+    // capacity check, which its own job refreshes every 5 minutes.
+    const reloadMetrics = useCallback(
+        () => router.reload({ only: ['nodeMetrics'] }),
+        [],
+    );
+    useAutoRefresh(autoRefresh, reloadMetrics);
+
     if (!metrics) {
         return null;
     }
@@ -1038,13 +1050,21 @@ function NodeMetricsCard({
         <Card
             label="Cluster Hardware & Capacity"
             action={
-                <span className="font-mono text-[10px] text-faint">
-                    Updated{' '}
-                    {new Date(metrics.updatedAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                    })}
-                </span>
+                <div className="flex items-center gap-2.5">
+                    <span className="font-mono text-[10px] text-faint">
+                        Updated{' '}
+                        {new Date(metrics.updatedAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                        })}
+                    </span>
+                    <AutoRefreshToggle
+                        value={autoRefresh}
+                        onChange={setAutoRefresh}
+                        title="Auto-refresh CPU and RAM"
+                    />
+                </div>
             }
         >
             <div className="grid grid-cols-1 divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
