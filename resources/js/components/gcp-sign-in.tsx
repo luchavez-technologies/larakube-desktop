@@ -36,17 +36,25 @@ export default function GcpSignIn({
     variant = 'secondary',
     className = '',
     inline = false,
+    onComplete,
 }: {
     label?: string;
     size?: 'sm' | 'md' | 'lg';
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     className?: string;
     inline?: boolean;
+    onComplete?: () => void;
 }) {
     const [open, setOpen] = useState(false);
 
     if (inline && open) {
-        return <GcpSignInDrawer inline onClose={() => setOpen(false)} />;
+        return (
+            <GcpSignInDrawer
+                inline
+                onClose={() => setOpen(false)}
+                onComplete={onComplete}
+            />
+        );
     }
 
     return (
@@ -61,7 +69,12 @@ export default function GcpSignIn({
                 <ExternalLink className="size-3.5" />
                 <span>{label}</span>
             </Button>
-            {open && <GcpSignInDrawer onClose={() => setOpen(false)} />}
+            {open && (
+                <GcpSignInDrawer
+                    onClose={() => setOpen(false)}
+                    onComplete={onComplete}
+                />
+            )}
         </>
     );
 }
@@ -69,9 +82,11 @@ export default function GcpSignIn({
 export function GcpSignInDrawer({
     onClose,
     inline = false,
+    onComplete,
 }: {
     onClose: () => void;
     inline?: boolean;
+    onComplete?: () => void;
 }) {
     useRightDrawerOpen(!inline);
 
@@ -242,7 +257,11 @@ export function GcpSignInDrawer({
         }
 
         forgetToolStatus();
-        router.reload();
+        router.reload({
+            onFinish: () => {
+                onComplete?.();
+            },
+        });
         handleClose();
     };
 
