@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { ArrowRight, LayoutGrid, Rocket, Sparkles, X, Zap } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import {
+    ArrowLeft,
+    ArrowRight,
+    LayoutGrid,
+    Rocket,
+    Sparkles,
+    X,
+    Zap,
+} from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Button from '@/components/button';
 import FrameworkLogo from '@/components/framework-logo';
@@ -28,22 +37,40 @@ interface QuickActionApp {
     name: string;
     tagline: string;
     description: string;
+    ramHint?: string;
     capabilities: ToolCommonsCapabilities;
 }
 
+const POCKETBASE_FLIP_APP: QuickActionApp = {
+    id: 'pocketbase',
+    name: 'PocketBase',
+    tagline: 'Embedded Backend & Auth',
+    description:
+        'Lightweight single-binary backend with embedded SQLite, realtime, auth, and S3 storage.',
+    ramHint: 'Needs ~150 MB RAM',
+    capabilities: {
+        databases: ['sqlite'],
+        cache: [],
+        storage: ['s3'],
+        auth: [],
+        mail: [],
+    },
+};
+
 const FEATURED_APPS: QuickActionApp[] = [
     {
-        id: 'pocketbase',
-        name: 'PocketBase',
-        tagline: 'Embedded Backend & Auth',
+        id: 'supabase',
+        name: 'Supabase',
+        tagline: 'Postgres, Auth, Storage & Realtime',
         description:
-            'Instant REST & Realtime backend with embedded SQLite, auth, and S3 file storage.',
+            'Self-hosted Postgres with pgvector, GoTrue Auth, PostgREST, Storage, and Studio.',
+        ramHint: 'Needs ~2.4 GB RAM',
         capabilities: {
-            databases: ['sqlite'],
+            databases: ['postgresql'],
             cache: [],
             storage: ['s3'],
             auth: [],
-            mail: [],
+            mail: ['smtp'],
         },
     },
     {
@@ -105,6 +132,8 @@ export default function WelcomeOnboarding({
         untested: Untested;
     }>().props;
     const [mode, setMode] = useState<'tools' | 'projects'>('tools');
+    const [flippedToPocketBase, setFlippedToPocketBase] = useState(false);
+    const shouldReduceMotion = useReducedMotion();
 
     const [dismissed, setDismissed] = useState(
         () => serversCount > 0 || projectsCount > 0,
@@ -112,7 +141,7 @@ export default function WelcomeOnboarding({
 
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] =
-        useState<QuickLaunchAppId>('pocketbase');
+        useState<QuickLaunchAppId>('supabase');
 
     const handleLaunch = (appId: QuickLaunchAppId) => {
         setSelectedApp(appId);
@@ -190,6 +219,82 @@ export default function WelcomeOnboarding({
             </div>
         );
     }
+
+    const renderAppCardContent = (
+        app: QuickActionApp,
+        footerExtra?: React.ReactNode,
+    ) => (
+        <>
+            <div className="space-y-2">
+                <div className="flex items-center gap-2.5">
+                    <ToolLogo
+                        tool={{
+                            tool: app.id,
+                            icon: '*',
+                            label: app.name,
+                            brand: app.name,
+                            installed: false,
+                            instance: '',
+                            namespace: '',
+                            host: null,
+                            url: null,
+                            installedAt: null,
+                            sso: '—',
+                            mail: 'N/A',
+                            vpn: 'N/A',
+                            sync: 'N/A',
+                            rotation: 'N/A',
+                        }}
+                        size="md"
+                    />
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <h3 className="truncate text-xs font-semibold text-ink">
+                                {app.name}
+                            </h3>
+                            {untested.tools.includes(app.id) && (
+                                <ExperimentalBadge />
+                            )}
+                        </div>
+                        <p className="truncate text-[10px] text-faint">
+                            {app.tagline}
+                        </p>
+                    </div>
+                </div>
+
+                <p className="line-clamp-2 min-h-[30px] text-[11px] text-soft">
+                    {app.description}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <CommonsCapabilityPills
+                        capabilities={app.capabilities}
+                        activeCommonsServices={activeCommonsServices}
+                        compact
+                    />
+                    {app.ramHint && (
+                        <span className="bg-surface-muted rounded px-1.5 py-0.5 text-[10px] font-medium text-faint">
+                            {app.ramHint}
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            <div className="mt-3.5 space-y-2 border-t border-line/60 pt-2.5">
+                {footerExtra}
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => handleLaunch(app.id)}
+                >
+                    <Zap className="size-3.5" />
+                    <span>Quick Launch</span>
+                </Button>
+            </div>
+        </>
+    );
 
     return (
         <div className="relative mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
@@ -321,75 +426,168 @@ export default function WelcomeOnboarding({
                 </div>
                 <div className="mt-2.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                     {mode === 'tools'
-                        ? FEATURED_APPS.map((app) => (
-                              <div
-                                  key={app.id}
-                                  className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
-                              >
-                                  <div className="space-y-2">
-                                      <div className="flex items-center gap-2.5">
-                                          <ToolLogo
-                                              tool={{
-                                                  tool: app.id,
-                                                  icon: '*',
-                                                  label: app.name,
-                                                  brand: app.name,
-                                                  installed: false,
-                                                  instance: '',
-                                                  namespace: '',
-                                                  host: null,
-                                                  url: null,
-                                                  installedAt: null,
-                                                  sso: '—',
-                                                  mail: 'N/A',
-                                                  vpn: 'N/A',
-                                                  sync: 'N/A',
-                                                  rotation: 'N/A',
-                                              }}
-                                              size="md"
-                                          />
-                                          <div className="min-w-0">
-                                              <div className="flex flex-wrap items-center gap-1.5">
-                                                  <h3 className="truncate text-xs font-semibold text-ink">
-                                                      {app.name}
-                                                  </h3>
-                                                  {untested.tools.includes(
-                                                      app.id,
-                                                  ) && <ExperimentalBadge />}
-                                              </div>
-                                              <p className="truncate text-[10px] text-faint">
-                                                  {app.tagline}
-                                              </p>
-                                          </div>
-                                      </div>
-
-                                      <p className="line-clamp-2 min-h-[30px] text-[11px] text-soft">
-                                          {app.description}
-                                      </p>
-
-                                      <CommonsCapabilityPills
-                                          capabilities={app.capabilities}
-                                          activeCommonsServices={
-                                              activeCommonsServices
-                                          }
-                                          compact
-                                      />
-                                  </div>
-
-                                  <div className="mt-3.5 border-t border-line/60 pt-2.5">
-                                      <Button
+                        ? FEATURED_APPS.map((app) => {
+                              if (app.id === 'supabase') {
+                                  const flipHintFront = (
+                                      <button
                                           type="button"
-                                          variant="secondary"
-                                          size="sm"
-                                          className="w-full justify-center"
-                                          onClick={() => handleLaunch(app.id)}
+                                          onClick={() =>
+                                              setFlippedToPocketBase(true)
+                                          }
+                                          className="inline-flex w-full items-center justify-between rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-amber-600 transition hover:bg-amber-500/10 dark:text-amber-400"
                                       >
-                                          <Zap className="size-3.5" />
-                                          <span>Quick Launch</span>
-                                      </Button>
+                                          <span>
+                                              Running on a small server?
+                                          </span>
+                                          <ArrowRight className="size-3 shrink-0" />
+                                      </button>
+                                  );
+
+                                  const flipHintBack = (
+                                      <button
+                                          type="button"
+                                          onClick={() =>
+                                              setFlippedToPocketBase(false)
+                                          }
+                                          className="hover:bg-surface-muted inline-flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-soft transition hover:text-ink"
+                                      >
+                                          <ArrowLeft className="size-3 shrink-0" />
+                                          <span>Back to Supabase</span>
+                                      </button>
+                                  );
+
+                                  if (shouldReduceMotion) {
+                                      return (
+                                          <div
+                                              key="supabase-flip"
+                                              className="grid"
+                                          >
+                                              <motion.div
+                                                  animate={{
+                                                      opacity:
+                                                          flippedToPocketBase
+                                                              ? 0
+                                                              : 1,
+                                                  }}
+                                                  transition={{ duration: 0.2 }}
+                                                  aria-hidden={
+                                                      flippedToPocketBase
+                                                  }
+                                                  inert={
+                                                      flippedToPocketBase
+                                                          ? true
+                                                          : undefined
+                                                  }
+                                                  className="col-start-1 row-start-1 flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                                              >
+                                                  {renderAppCardContent(
+                                                      app,
+                                                      flipHintFront,
+                                                  )}
+                                              </motion.div>
+                                              <motion.div
+                                                  animate={{
+                                                      opacity:
+                                                          flippedToPocketBase
+                                                              ? 1
+                                                              : 0,
+                                                  }}
+                                                  transition={{ duration: 0.2 }}
+                                                  aria-hidden={
+                                                      !flippedToPocketBase
+                                                  }
+                                                  inert={
+                                                      !flippedToPocketBase
+                                                          ? true
+                                                          : undefined
+                                                  }
+                                                  className="col-start-1 row-start-1 flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                                              >
+                                                  {renderAppCardContent(
+                                                      POCKETBASE_FLIP_APP,
+                                                      flipHintBack,
+                                                  )}
+                                              </motion.div>
+                                          </div>
+                                      );
+                                  }
+
+                                  return (
+                                      <div
+                                          key="supabase-flip"
+                                          className="[perspective:1000px]"
+                                      >
+                                          <motion.div
+                                              animate={{
+                                                  rotateY: flippedToPocketBase
+                                                      ? 180
+                                                      : 0,
+                                              }}
+                                              transition={{
+                                                  duration: 0.45,
+                                                  ease: [0.22, 1, 0.36, 1],
+                                              }}
+                                              style={{
+                                                  transformStyle: 'preserve-3d',
+                                              }}
+                                              className="grid h-full"
+                                          >
+                                              <div
+                                                  aria-hidden={
+                                                      flippedToPocketBase
+                                                  }
+                                                  inert={
+                                                      flippedToPocketBase
+                                                          ? true
+                                                          : undefined
+                                                  }
+                                                  style={{
+                                                      backfaceVisibility:
+                                                          'hidden',
+                                                  }}
+                                                  className="col-start-1 row-start-1 flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                                              >
+                                                  {renderAppCardContent(
+                                                      app,
+                                                      flipHintFront,
+                                                  )}
+                                              </div>
+                                              <div
+                                                  aria-hidden={
+                                                      !flippedToPocketBase
+                                                  }
+                                                  inert={
+                                                      !flippedToPocketBase
+                                                          ? true
+                                                          : undefined
+                                                  }
+                                                  style={{
+                                                      backfaceVisibility:
+                                                          'hidden',
+                                                      transform:
+                                                          'rotateY(180deg)',
+                                                  }}
+                                                  className="col-start-1 row-start-1 flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                                              >
+                                                  {renderAppCardContent(
+                                                      POCKETBASE_FLIP_APP,
+                                                      flipHintBack,
+                                                  )}
+                                              </div>
+                                          </motion.div>
+                                      </div>
+                                  );
+                              }
+
+                              return (
+                                  <div
+                                      key={app.id}
+                                      className="flex flex-col justify-between rounded-xl border border-line bg-paper/60 p-4 transition duration-150 hover:border-brand/40 hover:bg-surface hover:shadow-xs"
+                                  >
+                                      {renderAppCardContent(app)}
                                   </div>
-                              </div>
-                          ))
+                              );
+                          })
                         : quickLaunchFrameworks.length === 0
                           ? projectCatalog === null
                               ? null

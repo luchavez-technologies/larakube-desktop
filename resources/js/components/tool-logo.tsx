@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { HardDrive, MemoryStick, Search } from 'lucide-react';
 import {
     SiMeilisearch,
+    SiSupabase,
     SiPocketbase,
     SiMatrix,
     SiOpenbao,
@@ -113,7 +114,15 @@ function getBrandVisual(
     px: number,
     sizeClass: string,
 ): BrandVisual | null {
-    // 1. PocketBase / Data / Headless CMS
+    // 1. Supabase / PocketBase / Data / Headless CMS
+    if (id === 'supabase') {
+        return {
+            containerClass:
+                'bg-emerald-500/10 ring-1 ring-emerald-500/25 text-[#3ECF8E]',
+            icon: <SiSupabase size={px} color="#3ECF8E" />,
+        };
+    }
+
     if (id === 'pocketbase') {
         return {
             containerClass:

@@ -1992,6 +1992,7 @@ function defaultSubdomainForTool(
     existingTools: ClusterTool[],
 ): string {
     const servicePrefixes: Record<string, string> = {
+        supabase: 'supabase',
         pocketbase: 'pocket',
         directus: 'directus',
         data: 'data',

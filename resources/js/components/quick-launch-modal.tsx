@@ -59,7 +59,7 @@ import type {
     Untested,
 } from '@/types/larakube';
 
-export type QuickLaunchAppId = 'pocketbase' | 'n8n' | 'wordpress';
+export type QuickLaunchAppId = 'supabase' | 'pocketbase' | 'n8n' | 'wordpress';
 
 interface AppOption {
     id: QuickLaunchAppId;
@@ -73,6 +73,21 @@ interface AppOption {
 }
 
 const APPS: AppOption[] = [
+    {
+        id: 'supabase',
+        name: 'Supabase',
+        tagline: 'Postgres, Auth, Storage & Realtime',
+        description:
+            'Self-hosted Postgres with pgvector, GoTrue Auth, PostgREST, Storage, and Studio.',
+        defaultSubdomain: 'supabase',
+        capabilities: {
+            databases: ['postgresql'],
+            cache: [],
+            storage: ['s3'],
+            auth: [],
+            mail: ['smtp'],
+        },
+    },
     {
         id: 'pocketbase',
         name: 'PocketBase',
