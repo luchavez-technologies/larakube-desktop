@@ -12,7 +12,14 @@ import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
-import { ExternalLink, Plug, RotateCw, Unlink } from 'lucide-react';
+import {
+    ExternalLink,
+    Plug,
+    RotateCw,
+    Trash2,
+    Unlink,
+    XCircle,
+} from 'lucide-react';
 import { useServerDataReload } from '@/lib/native-events';
 import { ExternalLinkButton } from '@/lib/open-external';
 import { cn } from '@/lib/utils';
@@ -553,6 +560,7 @@ function RemoveForm({
         <Form
             action={destroy({ server: server.name, tool: tool.tool })}
             className="mt-4"
+            onSuccess={onCancel}
         >
             {({ errors, processing }) => (
                 <>
@@ -597,19 +605,27 @@ function RemoveForm({
                         </span>
                     </label>
                     <div className="mt-5 flex justify-end gap-2.5">
-                        <Button variant="secondary" onClick={onCancel}>
-                            Cancel
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={onCancel}
+                        >
+                            <XCircle className="size-3.5" />
+                            <span>Cancel</span>
                         </Button>
                         <Button
                             type="submit"
                             variant="dangerFill"
                             disabled={typed !== tool.tool || processing}
                         >
-                            {processing
-                                ? 'Starting…'
-                                : purge
-                                  ? `Remove ${toolName(tool)} & Purge Data`
-                                  : `Remove ${toolName(tool)}`}
+                            <Trash2 className="size-3.5" />
+                            <span>
+                                {processing
+                                    ? 'Starting…'
+                                    : purge
+                                      ? `Remove ${toolName(tool)} & Purge Data`
+                                      : `Remove ${toolName(tool)}`}
+                            </span>
                         </Button>
                     </div>
                 </>
