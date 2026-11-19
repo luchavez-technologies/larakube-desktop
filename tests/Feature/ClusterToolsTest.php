@@ -3,6 +3,7 @@
 use App\Enums\ActivityType;
 use App\Enums\RunKind;
 use App\Enums\RunStatus;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncServerDomainsJob;
 use App\Models\Activity;
@@ -1222,6 +1223,36 @@ test('unwire triggers capability unwire command for the app', function () {
     $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === [
         "{$bin}/larakube", 'mail:unwire', 'production', '--context=larakube-203.0.113.21', '--tool=forgejo', '--force', '--domain=git.example.com', '--no-interaction',
     ]);
+
+    File::deleteDirectory($bin);
+});
+
+test('an app page whose app is gone sends you to the server\'s apps, as after removing it from that page', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    clusterToolsSeed('larakube-203.0.113.21', clusterToolsRows(), now()->getTimestamp());
+
+    $this->get(route('servers.apps.show', ['workshop-demo', 'supabase']))
+        ->assertRedirect(route('servers.apps.index', 'workshop-demo'));
+
+    // The page's own Inertia reload after the removal follows the same redirect.
+    $this->withHeaders(['X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request())])
+        ->get(route('servers.apps.show', ['workshop-demo', 'supabase']))
+        ->assertRedirect(route('servers.apps.index', 'workshop-demo'));
+
+    File::deleteDirectory($bin);
+});
+
+test('an Inertia visit that hits a 404 gets the error page as an Inertia page, not HTML for a modal frame', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+
+    $this->withHeaders(['X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request())])
+        ->get('/servers/no-such-server/apps')
+        ->assertNotFound()
+        ->assertHeader('X-Inertia', 'true')
+        ->assertJsonPath('component', 'error')
+        ->assertJsonPath('props.status', 404);
 
     File::deleteDirectory($bin);
 });

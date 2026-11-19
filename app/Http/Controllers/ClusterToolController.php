@@ -204,13 +204,17 @@ class ClusterToolController extends Controller
         return array_values(array_unique($active));
     }
 
-    public function show(Request $request, string $server, string $tool): Response
+    public function show(Request $request, string $server, string $tool): Response|RedirectResponse
     {
         $stack = $this->readyServer($server);
         $domain = $request->string('domain')->toString() ?: $request->string('host')->toString() ?: $request->string('instance')->toString();
         $row = $this->tools->find((string) $stack['context'], $tool, $domain);
 
-        abort_if($row === null, 404);
+        // Gone, usually because it was just removed from this page: back to the server's apps, where the
+        // page's own reload after the removal lands, instead of an error page.
+        if ($row === null) {
+            return redirect()->route('servers.apps.index', $server);
+        }
 
         $context = (string) $stack['context'];
 
