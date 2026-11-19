@@ -882,7 +882,10 @@ export default function CloudAccountsModal({ provider, onClose }: Props) {
                                             credentials locally.
                                         </p>
                                         <div className="mt-4">
-                                            <GcpSignIn label="Sign in with Google Account" />
+                                            <GcpSignIn
+                                                label="Sign in with Google Account"
+                                                inline
+                                            />
                                         </div>
                                     </div>
                                 </div>

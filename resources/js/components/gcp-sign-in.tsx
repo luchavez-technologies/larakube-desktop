@@ -29,19 +29,25 @@ type SignInState = {
 
 type Project = { id: string; name: string };
 
-/** A button that opens the Google Cloud slide-over drawer to sign in and pick a project. */
+/** A button that opens the Google Cloud sign-in flow (as a slide-over drawer, or inline inside an existing drawer). */
 export default function GcpSignIn({
     label = 'Sign in with Google',
     size = 'sm',
     variant = 'secondary',
     className = '',
+    inline = false,
 }: {
     label?: string;
     size?: 'sm' | 'md' | 'lg';
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     className?: string;
+    inline?: boolean;
 }) {
     const [open, setOpen] = useState(false);
+
+    if (inline && open) {
+        return <GcpSignInDrawer inline onClose={() => setOpen(false)} />;
+    }
 
     return (
         <>
@@ -60,8 +66,14 @@ export default function GcpSignIn({
     );
 }
 
-export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
-    useRightDrawerOpen(true);
+export function GcpSignInDrawer({
+    onClose,
+    inline = false,
+}: {
+    onClose: () => void;
+    inline?: boolean;
+}) {
+    useRightDrawerOpen(!inline);
 
     const [slidIn, setSlidIn] = useState(false);
     const [run, setRun] = useState<number | null>(null);
@@ -247,6 +259,327 @@ export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
         });
     };
 
+    const body = (
+        <div className="space-y-4">
+            {error && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-accent/20 bg-accent/10 p-3.5 text-xs text-accent">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    <p className="leading-relaxed">{error}</p>
+                </div>
+            )}
+
+            {/* State: Starting */}
+            {status.state === 'starting' && !error && (
+                <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface/50 p-8 text-center">
+                    <RefreshCw className="size-6 animate-spin text-brand" />
+                    <div>
+                        <span className="text-sm font-medium text-ink">
+                            Preparing Google authorization…
+                        </span>
+                        <p className="mt-1 text-xs text-soft">
+                            Connecting to Google Cloud CLI to generate your
+                            single-use sign-in link.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* State: Waiting for Code (3-step visual cards) */}
+            {status.state === 'waiting-code' && status.url && (
+                <div className="space-y-4">
+                    {/* Step 1 Card */}
+                    <div className="rounded-xl border border-line bg-surface/60 p-4">
+                        <div className="flex items-start gap-3">
+                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
+                                1
+                            </span>
+                            <div className="min-w-0 flex-1 space-y-2.5">
+                                <div>
+                                    <h3 className="text-xs font-semibold text-ink">
+                                        Approve access in your browser
+                                    </h3>
+                                    <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                                        Open Google&apos;s authorization page
+                                        and sign in with the Google account you
+                                        wish to use for your infrastructure.
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={openBrowser}
+                                        className="gap-1.5"
+                                    >
+                                        <ExternalLink className="size-3.5" />
+                                        <span>Open Google sign-in</span>
+                                    </Button>
+                                    <CopyButton
+                                        value={status.url ?? ''}
+                                        label="Copy link address"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Step 2 Card */}
+                    <div className="rounded-xl border border-line bg-surface/60 p-4">
+                        <div className="flex items-start gap-3">
+                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
+                                2
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-xs font-semibold text-ink">
+                                    Copy the authorization code
+                                </h3>
+                                <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                                    After clicking &quot;Allow&quot;, Google
+                                    will present you with an authorization code.
+                                    Copy that entire code string.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Step 3 Card */}
+                    <div className="rounded-xl border border-line bg-surface/60 p-4">
+                        <div className="flex items-start gap-3">
+                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
+                                3
+                            </span>
+                            <div className="min-w-0 flex-1 space-y-3">
+                                <div>
+                                    <h3 className="text-xs font-semibold text-ink">
+                                        Paste code to complete sign-in
+                                    </h3>
+                                    <p className="mt-0.5 text-xs leading-relaxed text-soft">
+                                        Paste the verification code from Google
+                                        below to finish local authentication:
+                                    </p>
+                                </div>
+                                <div className="space-y-2.5">
+                                    <div className="relative">
+                                        <input
+                                            value={code}
+                                            onChange={(e) => {
+                                                setCode(e.target.value);
+                                                setDetectedFromClipboard(false);
+                                            }}
+                                            placeholder="Paste authorization code here (e.g. 4/0A...)"
+                                            spellCheck={false}
+                                            className="w-full rounded-xl border-0 bg-surface px-3.5 py-2.5 pr-20 font-mono text-xs ring-1 ring-line outline-none placeholder:font-sans placeholder:text-faint focus:ring-2 focus:ring-brand"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                void pasteFromClipboard()
+                                            }
+                                            className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 cursor-pointer items-center gap-1 rounded-lg bg-badge px-2 py-1 text-[11px] font-medium text-soft transition hover:bg-line/70 hover:text-ink"
+                                            title="Paste from clipboard"
+                                        >
+                                            <ClipboardPaste className="size-3.5" />
+                                            <span>Paste</span>
+                                        </button>
+                                    </div>
+                                    {detectedFromClipboard && (
+                                        <div className="flex items-center gap-1.5 rounded-lg border border-ok/20 bg-ok/10 px-2.5 py-1.5 text-[11px] font-medium text-ok dark:text-emerald-400">
+                                            <CheckCircle2 className="size-3.5 shrink-0" />
+                                            <span>
+                                                Google verification code
+                                                detected from clipboard!
+                                            </span>
+                                        </div>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="primary"
+                                        size="sm"
+                                        disabled={code.trim().length < 8}
+                                        onClick={() => void submitCode()}
+                                        className="gap-1.5"
+                                    >
+                                        <ArrowRight className="size-3.5" />
+                                        <span>Continue</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* State: Signing In */}
+            {status.state === 'signing-in' && (
+                <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface/50 p-8 text-center">
+                    <RefreshCw className="size-6 animate-spin text-brand" />
+                    <div>
+                        <span className="text-sm font-medium text-ink">
+                            Verifying with Google Cloud…
+                        </span>
+                        <p className="mt-1 text-xs text-soft">
+                            Saving and validating your credentials locally via
+                            the Google Cloud CLI.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* State: Done / Select Project */}
+            {status.state === 'done' && (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2.5 rounded-xl border border-ok/25 bg-ok/10 p-3.5 text-xs font-medium text-ok dark:text-emerald-400">
+                        <CheckCircle2 className="size-4 shrink-0" />
+                        <span>
+                            Successfully authenticated with Google Cloud!
+                        </span>
+                    </div>
+
+                    <div className="space-y-3 rounded-xl border border-line bg-surface/60 p-4">
+                        <div>
+                            <h3 className="text-xs font-semibold text-ink">
+                                Select Google Cloud Project
+                            </h3>
+                            <p className="mt-0.5 text-xs text-soft">
+                                Choose the Google Cloud project to use for
+                                provisioning and managing your servers:
+                            </p>
+                        </div>
+
+                        {projects === null ? (
+                            <div className="flex items-center gap-2 py-3 text-xs text-soft">
+                                <RefreshCw className="size-3.5 animate-spin" />
+                                <span>Loading your Google Cloud projects…</span>
+                            </div>
+                        ) : projects.length === 0 ? (
+                            <div className="space-y-2 rounded-lg bg-surface/80 p-3 text-xs text-soft">
+                                <p>
+                                    No projects found on this Google account.
+                                    Please create one in the Google Cloud
+                                    Console, then try again.
+                                </p>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setAttempt((c) => c + 1)}
+                                    className="gap-1.5"
+                                >
+                                    <RotateCw className="size-3.5" />
+                                    <span>Retry project search</span>
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <SelectMenu
+                                    value={project}
+                                    onChange={setProject}
+                                    options={projects.map((candidate) => ({
+                                        value: candidate.id,
+                                        label: (
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="font-medium text-ink">
+                                                    {candidate.name}
+                                                </span>
+                                                <span className="font-mono text-[11px] text-faint">
+                                                    (
+                                                    <Redactable
+                                                        value={candidate.id}
+                                                        kind="account"
+                                                    />
+                                                    )
+                                                </span>
+                                            </span>
+                                        ),
+                                    }))}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={
+                                        projects === null || project === ''
+                                    }
+                                    onClick={() => void finish()}
+                                    className="gap-1.5"
+                                >
+                                    <Check className="size-3.5" />
+                                    <span>Use this project</span>
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* State: Failed */}
+            {status.state === 'failed' && (
+                <div className="space-y-4 rounded-xl border border-accent/20 bg-accent/10 p-4">
+                    <div className="flex items-start gap-2.5 text-xs text-accent">
+                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                        <div>
+                            <span className="font-semibold">
+                                Sign-in did not complete
+                            </span>
+                            <p className="mt-0.5 text-soft">
+                                Google Cloud CLI encountered an issue verifying
+                                credentials.
+                            </p>
+                        </div>
+                    </div>
+                    {status.message && (
+                        <pre className="max-h-48 overflow-x-auto rounded-lg bg-term p-3 font-mono text-xs whitespace-pre-wrap text-term-bright">
+                            {status.message}
+                        </pre>
+                    )}
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setAttempt((count) => count + 1)}
+                        className="gap-1.5"
+                    >
+                        <RotateCw className="size-3.5" />
+                        <span>Try again</span>
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+
+    if (inline) {
+        return (
+            <div className="space-y-4">
+                {body}
+                <div className="flex items-center justify-between pt-1">
+                    {status.state === 'waiting-code' ? (
+                        <button
+                            type="button"
+                            onClick={() => setAttempt((c) => c + 1)}
+                            className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-soft hover:text-ink"
+                        >
+                            <RotateCw className="size-3" />
+                            <span>Restart authorization</span>
+                        </button>
+                    ) : (
+                        <div />
+                    )}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={onClose}
+                        className="gap-1.5"
+                    >
+                        <X className="size-3.5" />
+                        <span>Cancel</span>
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className={cn(
@@ -291,311 +624,7 @@ export function GcpSignInDrawer({ onClose }: { onClose: () => void }) {
 
                 {/* Drawer Body */}
                 <div className="flex-1 [scrollbar-width:thin] space-y-5 overflow-y-auto p-6">
-                    {error && (
-                        <div className="flex items-start gap-2.5 rounded-xl border border-accent/20 bg-accent/10 p-3.5 text-xs text-accent">
-                            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                            <p className="leading-relaxed">{error}</p>
-                        </div>
-                    )}
-
-                    {/* State: Starting */}
-                    {status.state === 'starting' && !error && (
-                        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface/50 p-8 text-center">
-                            <RefreshCw className="size-6 animate-spin text-brand" />
-                            <div>
-                                <span className="text-sm font-medium text-ink">
-                                    Preparing Google authorization…
-                                </span>
-                                <p className="mt-1 text-xs text-soft">
-                                    Connecting to Google Cloud CLI to generate
-                                    your single-use sign-in link.
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* State: Waiting for Code (3-step visual cards) */}
-                    {status.state === 'waiting-code' && status.url && (
-                        <div className="space-y-4">
-                            {/* Step 1 Card */}
-                            <div className="rounded-xl border border-line bg-surface/60 p-4">
-                                <div className="flex items-start gap-3">
-                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
-                                        1
-                                    </span>
-                                    <div className="min-w-0 flex-1 space-y-2.5">
-                                        <div>
-                                            <h3 className="text-xs font-semibold text-ink">
-                                                Approve access in your browser
-                                            </h3>
-                                            <p className="mt-0.5 text-xs leading-relaxed text-soft">
-                                                Open Google&apos;s authorization
-                                                page and sign in with the Google
-                                                account you wish to use for your
-                                                infrastructure.
-                                            </p>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <Button
-                                                type="button"
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={openBrowser}
-                                                className="gap-1.5"
-                                            >
-                                                <ExternalLink className="size-3.5" />
-                                                <span>Open Google sign-in</span>
-                                            </Button>
-                                            <CopyButton
-                                                value={status.url ?? ''}
-                                                label="Copy link address"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Step 2 Card */}
-                            <div className="rounded-xl border border-line bg-surface/60 p-4">
-                                <div className="flex items-start gap-3">
-                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
-                                        2
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className="text-xs font-semibold text-ink">
-                                            Copy the authorization code
-                                        </h3>
-                                        <p className="mt-0.5 text-xs leading-relaxed text-soft">
-                                            After clicking &quot;Allow&quot;,
-                                            Google will present you with an
-                                            authorization code. Copy that entire
-                                            code string.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Step 3 Card */}
-                            <div className="rounded-xl border border-line bg-surface/60 p-4">
-                                <div className="flex items-start gap-3">
-                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
-                                        3
-                                    </span>
-                                    <div className="min-w-0 flex-1 space-y-3">
-                                        <div>
-                                            <h3 className="text-xs font-semibold text-ink">
-                                                Paste code to complete sign-in
-                                            </h3>
-                                            <p className="mt-0.5 text-xs leading-relaxed text-soft">
-                                                Paste the verification code from
-                                                Google below to finish local
-                                                authentication:
-                                            </p>
-                                        </div>
-                                        <div className="space-y-2.5">
-                                            <div className="relative">
-                                                <input
-                                                    value={code}
-                                                    onChange={(e) => {
-                                                        setCode(e.target.value);
-                                                        setDetectedFromClipboard(
-                                                            false,
-                                                        );
-                                                    }}
-                                                    placeholder="Paste authorization code here (e.g. 4/0A...)"
-                                                    spellCheck={false}
-                                                    className="w-full rounded-xl border-0 bg-surface px-3.5 py-2.5 pr-20 font-mono text-xs ring-1 ring-line outline-none placeholder:font-sans placeholder:text-faint focus:ring-2 focus:ring-brand"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        void pasteFromClipboard()
-                                                    }
-                                                    className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 cursor-pointer items-center gap-1 rounded-lg bg-badge px-2 py-1 text-[11px] font-medium text-soft transition hover:bg-line/70 hover:text-ink"
-                                                    title="Paste from clipboard"
-                                                >
-                                                    <ClipboardPaste className="size-3.5" />
-                                                    <span>Paste</span>
-                                                </button>
-                                            </div>
-                                            {detectedFromClipboard && (
-                                                <div className="flex items-center gap-1.5 rounded-lg border border-ok/20 bg-ok/10 px-2.5 py-1.5 text-[11px] font-medium text-ok dark:text-emerald-400">
-                                                    <CheckCircle2 className="size-3.5 shrink-0" />
-                                                    <span>
-                                                        Google verification code
-                                                        detected from clipboard!
-                                                    </span>
-                                                </div>
-                                            )}
-                                            <Button
-                                                type="button"
-                                                variant="primary"
-                                                size="sm"
-                                                disabled={
-                                                    code.trim().length < 8
-                                                }
-                                                onClick={() =>
-                                                    void submitCode()
-                                                }
-                                                className="gap-1.5"
-                                            >
-                                                <ArrowRight className="size-3.5" />
-                                                <span>Continue</span>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* State: Signing In */}
-                    {status.state === 'signing-in' && (
-                        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface/50 p-8 text-center">
-                            <RefreshCw className="size-6 animate-spin text-brand" />
-                            <div>
-                                <span className="text-sm font-medium text-ink">
-                                    Verifying with Google Cloud…
-                                </span>
-                                <p className="mt-1 text-xs text-soft">
-                                    Saving and validating your credentials
-                                    locally via the Google Cloud CLI.
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* State: Done / Select Project */}
-                    {status.state === 'done' && (
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2.5 rounded-xl border border-ok/25 bg-ok/10 p-3.5 text-xs font-medium text-ok dark:text-emerald-400">
-                                <CheckCircle2 className="size-4 shrink-0" />
-                                <span>
-                                    Successfully authenticated with Google
-                                    Cloud!
-                                </span>
-                            </div>
-
-                            <div className="space-y-3 rounded-xl border border-line bg-surface/60 p-4">
-                                <div>
-                                    <h3 className="text-xs font-semibold text-ink">
-                                        Select Google Cloud Project
-                                    </h3>
-                                    <p className="mt-0.5 text-xs text-soft">
-                                        Choose the Google Cloud project to use
-                                        for provisioning and managing your
-                                        servers:
-                                    </p>
-                                </div>
-
-                                {projects === null ? (
-                                    <div className="flex items-center gap-2 py-3 text-xs text-soft">
-                                        <RefreshCw className="size-3.5 animate-spin" />
-                                        <span>
-                                            Loading your Google Cloud projects…
-                                        </span>
-                                    </div>
-                                ) : projects.length === 0 ? (
-                                    <div className="space-y-2 rounded-lg bg-surface/80 p-3 text-xs text-soft">
-                                        <p>
-                                            No projects found on this Google
-                                            account. Please create one in the
-                                            Google Cloud Console, then try
-                                            again.
-                                        </p>
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() =>
-                                                setAttempt((c) => c + 1)
-                                            }
-                                            className="gap-1.5"
-                                        >
-                                            <RotateCw className="size-3.5" />
-                                            <span>Retry project search</span>
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <SelectMenu
-                                            value={project}
-                                            onChange={setProject}
-                                            options={projects.map(
-                                                (candidate) => ({
-                                                    value: candidate.id,
-                                                    label: (
-                                                        <span className="flex items-center gap-1.5">
-                                                            <span className="font-medium text-ink">
-                                                                {candidate.name}
-                                                            </span>
-                                                            <span className="font-mono text-[11px] text-faint">
-                                                                (
-                                                                <Redactable
-                                                                    value={
-                                                                        candidate.id
-                                                                    }
-                                                                    kind="account"
-                                                                />
-                                                                )
-                                                            </span>
-                                                        </span>
-                                                    ),
-                                                }),
-                                            )}
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="primary"
-                                            size="sm"
-                                            disabled={
-                                                projects === null ||
-                                                project === ''
-                                            }
-                                            onClick={() => void finish()}
-                                            className="gap-1.5"
-                                        >
-                                            <Check className="size-3.5" />
-                                            <span>Use this project</span>
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* State: Failed */}
-                    {status.state === 'failed' && (
-                        <div className="space-y-4 rounded-xl border border-accent/20 bg-accent/10 p-4">
-                            <div className="flex items-start gap-2.5 text-xs text-accent">
-                                <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                                <div>
-                                    <span className="font-semibold">
-                                        Sign-in did not complete
-                                    </span>
-                                    <p className="mt-0.5 text-soft">
-                                        Google Cloud CLI encountered an issue
-                                        verifying credentials.
-                                    </p>
-                                </div>
-                            </div>
-                            {status.message && (
-                                <pre className="max-h-48 overflow-x-auto rounded-lg bg-term p-3 font-mono text-xs whitespace-pre-wrap text-term-bright">
-                                    {status.message}
-                                </pre>
-                            )}
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setAttempt((count) => count + 1)}
-                                className="gap-1.5"
-                            >
-                                <RotateCw className="size-3.5" />
-                                <span>Try again</span>
-                            </Button>
-                        </div>
-                    )}
+                    {body}
                 </div>
 
                 {/* Sticky Drawer Footer */}
