@@ -488,6 +488,7 @@ class ServerController extends Controller
             'hasRemoteTofuState' => $settings->hasRemoteTofuState($server),
             'r2StateConfigured' => $settings->r2StateConfigured(),
             'r2Bucket' => $settings->r2BucketName(),
+            'r2DashboardUrl' => $settings->r2DashboardUrl(),
         ]);
     }
 

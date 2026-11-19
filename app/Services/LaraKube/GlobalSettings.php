@@ -602,6 +602,27 @@ class GlobalSettings
             : null;
     }
 
+    public function r2DashboardUrl(): ?string
+    {
+        $path = $this->hostConfigPath();
+        $raw = is_file($path)
+            ? json_decode((string) file_get_contents($path), true)
+            : null;
+
+        if (! is_array($raw) || ! (bool) ($raw['tofuStateEnabled'] ?? false)) {
+            return null;
+        }
+
+        $accountId = is_string($raw['tofuStateAccountId'] ?? null) ? $raw['tofuStateAccountId'] : '';
+        $bucket = is_string($raw['tofuStateBucket'] ?? null) ? $raw['tofuStateBucket'] : '';
+
+        if ($accountId !== '' && $bucket !== '') {
+            return "https://dash.cloudflare.com/{$accountId}/r2/default/buckets/{$bucket}";
+        }
+
+        return 'https://dash.cloudflare.com/?to=/:account/r2';
+    }
+
     public function r2StateConfigured(): bool
     {
         $path = $this->hostConfigPath();
