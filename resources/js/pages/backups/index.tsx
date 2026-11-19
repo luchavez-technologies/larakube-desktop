@@ -4,6 +4,7 @@ import {
     AlertCircle,
     CalendarClock,
     CheckCircle2,
+    Cloud,
     DatabaseBackup,
     FolderOpen,
     HardDrive,
@@ -78,6 +79,13 @@ type FleetServerBackup = {
     lastSyncedAt: string | null;
 };
 
+type R2Summary = {
+    configured: boolean;
+    endpoint: string | null;
+    accountId: string | null;
+    bucket: string | null;
+};
+
 type Props = {
     server: Server;
     servers: Server[];
@@ -93,6 +101,7 @@ type Props = {
         protected: number;
         servers: FleetServerBackup[];
     };
+    r2: R2Summary;
 };
 
 type Dialog = 'setup' | 'schedule' | 'prune' | { restore: BackupEntry } | null;
@@ -107,6 +116,7 @@ export default function BackupsIndex({
     backup,
     backupSync,
     fleet,
+    r2,
 }: Props) {
     const [activeTab, setActiveTabState] = useState<TabType>(readInitialTab);
     const [dialog, setDialog] = useState<Dialog>(null);
@@ -886,6 +896,7 @@ export default function BackupsIndex({
                 <SetupDialog
                     base={base}
                     server={server}
+                    r2={r2}
                     onClose={() => setDialog(null)}
                 />
             )}
@@ -957,123 +968,429 @@ function Labeled({
     );
 }
 
+function defaultBackupBucket(serverName: string): string {
+    const slug = serverName
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    return slug ? `${slug}-backups` : 'larakube-backups';
+}
+
 function SetupDialog({
     base,
     server,
+    r2,
     onClose,
 }: {
     base: string;
     server: Server;
+    r2: R2Summary;
     onClose: () => void;
 }) {
+    useRightDrawerOpen(true);
+
+    const [slidIn, setSlidIn] = useState(false);
+    const [mode, setMode] = useState<'r2' | 'custom'>('r2');
+    const [r2Bucket, setR2Bucket] = useState(() =>
+        defaultBackupBucket(server.name),
+    );
+    const [r2CreateBucket, setR2CreateBucket] = useState(true);
     const [createBucket, setCreateBucket] = useState(false);
 
+    // Inline Cloudflare R2 connection state (when R2 is not connected yet)
+    const [cfToken, setCfToken] = useState('');
+    const [connectingR2, setConnectingR2] = useState(false);
+    const [r2Error, setR2Error] = useState<string | null>(null);
+
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setSlidIn(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
+    const handleClose = () => {
+        setSlidIn(false);
+        setTimeout(onClose, 220);
+    };
+
+    const handleConnectR2 = async () => {
+        const trimmed = cfToken.trim();
+        if (!trimmed) {
+            setR2Error('Paste a Cloudflare API token first.');
+            return;
+        }
+
+        setConnectingR2(true);
+        setR2Error(null);
+        try {
+            const res = await sendJson<{
+                configured: boolean;
+                reason?: string;
+            }>('/cloudflare/configure-r2', 'POST', { token: trimmed });
+
+            if (!res.ok || !res.data.configured) {
+                setR2Error(
+                    res.data.reason ||
+                        'Could not connect Cloudflare R2 with that token.',
+                );
+                return;
+            }
+
+            setCfToken('');
+            router.reload({ only: ['r2'] });
+        } catch {
+            setR2Error('Failed to connect Cloudflare R2.');
+        } finally {
+            setConnectingR2(false);
+        }
+    };
+
+    const showSubmitFooter = mode === 'custom' || r2.configured;
+
     return (
-        <Modal
-            title="Set up backups"
-            intro={`Choose where backups of ${server.name} are kept. It must be a bucket outside this server. Cloudflare R2 has a free tier and no download fees.`}
+        <div
+            className={cn(
+                'fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity duration-200',
+                slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={handleClose}
         >
-            <Form
-                action={`${base}/setup`}
-                method="post"
-                className="mt-5 space-y-4"
-                onSuccess={onClose}
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Set up backups"
+                className={cn(
+                    'flex h-full w-full max-w-lg flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-200 ease-out',
+                    slidIn ? 'translate-x-0' : 'translate-x-full',
+                )}
+                onClick={(e) => e.stopPropagation()}
             >
-                {({ processing, errors }) => (
-                    <>
-                        <Labeled label="Endpoint" error={errors.endpoint}>
-                            <input
-                                name="endpoint"
-                                required
-                                placeholder="https://<account-id>.r2.cloudflarestorage.com"
-                                className={`${field} font-mono`}
-                            />
-                        </Labeled>
-                        <Labeled label="Bucket" error={errors.bucket}>
-                            <input
-                                name="bucket"
-                                required
-                                placeholder="my-server-backups"
-                                className={`${field} font-mono`}
-                            />
-                        </Labeled>
-                        <div className="grid grid-cols-2 gap-3">
-                            <Labeled
-                                label="Access key"
-                                error={errors.access_key}
-                            >
-                                <input
-                                    name="access_key"
-                                    required
-                                    autoComplete="off"
-                                    className={`${field} font-mono`}
-                                />
-                            </Labeled>
-                            <Labeled
-                                label="Secret key"
-                                error={errors.secret_key}
-                            >
-                                <input
-                                    name="secret_key"
-                                    type="password"
-                                    required
-                                    autoComplete="off"
-                                    className={field}
-                                />
-                            </Labeled>
-                        </div>
-                        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-ink">
-                            <input
-                                type="checkbox"
-                                name="create_bucket"
-                                value="1"
-                                checked={createBucket}
-                                onChange={(event) =>
-                                    setCreateBucket(event.target.checked)
-                                }
-                            />
-                            Create the bucket for me (Cloudflare R2)
-                        </label>
-                        {createBucket && (
-                            <Labeled
-                                label="Cloudflare API token (used once, never saved)"
-                                error={errors.cloudflare_token}
-                            >
-                                <input
-                                    name="cloudflare_token"
-                                    type="password"
-                                    autoComplete="off"
-                                    className={field}
-                                />
-                            </Labeled>
-                        )}
-                        <p className="text-[11px] leading-relaxed text-soft">
-                            The keys are given to the CLI directly and are not
-                            kept in the activity log. Next, a recovery card with
-                            your backup passphrase is saved on this computer.
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
+                    <div>
+                        <h3 className="text-base font-semibold text-ink">
+                            Set up backups
+                        </h3>
+                        <p className="mt-0.5 text-xs text-soft">
+                            Store encrypted backups of{' '}
+                            <span className="font-mono text-ink">
+                                {server.name}
+                            </span>{' '}
+                            off-cluster.
                         </p>
-                        <div className="flex justify-end gap-2.5 pt-2">
+                    </div>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClose}
+                    >
+                        <XCircle className="size-4" />
+                        <span>Close</span>
+                    </Button>
+                </div>
+
+                <div className="shrink-0 border-b border-line/60 bg-paper/60 px-6 py-3">
+                    <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-surface p-1 ring-1 ring-line">
+                        <button
+                            type="button"
+                            onClick={() => setMode('r2')}
+                            className={cn(
+                                'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition',
+                                mode === 'r2'
+                                    ? 'bg-ink text-paper shadow-xs'
+                                    : 'text-soft hover:text-ink',
+                            )}
+                        >
+                            <Cloud className="size-3.5" />
+                            <span>Cloudflare R2</span>
+                            {r2.configured && (
+                                <span className="size-1.5 rounded-full bg-emerald-400" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMode('custom')}
+                            className={cn(
+                                'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition',
+                                mode === 'custom'
+                                    ? 'bg-ink text-paper shadow-xs'
+                                    : 'text-soft hover:text-ink',
+                            )}
+                        >
+                            <HardDrive className="size-3.5" />
+                            <span>Custom S3</span>
+                        </button>
+                    </div>
+                </div>
+
+                {mode === 'r2' && !r2.configured ? (
+                    <>
+                        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+                            <div className="rounded-xl border border-line bg-paper/60 p-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+                                        <Cloud className="size-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] font-semibold text-ink">
+                                            Connect Cloudflare R2 once
+                                        </p>
+                                        <p className="mt-1 text-xs leading-relaxed text-soft">
+                                            Cloudflare R2 includes 10 GB free
+                                            storage and zero egress fees.
+                                            Connecting it also enables remote
+                                            OpenTofu state across your servers.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Labeled
+                                label="Cloudflare API token (Account → Workers R2 Storage → Edit)"
+                                error={r2Error ?? undefined}
+                            >
+                                <input
+                                    type="password"
+                                    value={cfToken}
+                                    onChange={(e) => setCfToken(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            void handleConnectR2();
+                                        }
+                                    }}
+                                    placeholder="Paste Cloudflare API token…"
+                                    autoComplete="off"
+                                    className={field}
+                                />
+                            </Labeled>
+
+                            <div>
+                                <Button
+                                    type="button"
+                                    disabled={connectingR2}
+                                    onClick={() => void handleConnectR2()}
+                                >
+                                    {connectingR2 ? (
+                                        <RotateCw className="size-3.5 animate-spin" />
+                                    ) : (
+                                        <KeyRound className="size-3.5" />
+                                    )}
+                                    <span>
+                                        {connectingR2
+                                            ? 'Connecting R2…'
+                                            : 'Connect Cloudflare R2'}
+                                    </span>
+                                </Button>
+                            </div>
+
+                            <p className="text-[11px] leading-relaxed text-soft">
+                                LaraKube creates scoped R2 S3 credentials from
+                                your token and saves them locally in{' '}
+                                <code className="font-mono text-ink">
+                                    ~/.larakube/config.json
+                                </code>
+                                .
+                            </p>
+                        </div>
+
+                        <div className="flex shrink-0 justify-end gap-2.5 border-t border-line bg-paper/60 px-6 py-4">
                             <Button
                                 type="button"
                                 variant="secondary"
-                                onClick={onClose}
+                                onClick={handleClose}
                             >
                                 <XCircle className="size-3.5" />
                                 <span>Cancel</span>
                             </Button>
-                            <Button type="submit" disabled={processing}>
-                                <DatabaseBackup className="size-3.5" />
-                                <span>
-                                    {processing
-                                        ? 'Starting…'
-                                        : 'Set up backups'}
-                                </span>
-                            </Button>
                         </div>
                     </>
+                ) : (
+                    <Form
+                        action={`${base}/setup`}
+                        method="post"
+                        className="flex min-h-0 flex-1 flex-col"
+                        onSuccess={handleClose}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="mode" value={mode} />
+
+                                <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+                                    {mode === 'r2' ? (
+                                        <>
+                                            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3.5">
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <StatusPill tone="ok">
+                                                        Connected · Cloudflare
+                                                        R2
+                                                    </StatusPill>
+                                                    <span className="text-[11px] text-soft">
+                                                        Keys reused from
+                                                        OpenTofu R2 config
+                                                    </span>
+                                                </div>
+                                                {r2.endpoint && (
+                                                    <p className="mt-2 truncate font-mono text-[11px] text-ink">
+                                                        {r2.endpoint}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <Labeled
+                                                label="Backup bucket"
+                                                error={errors.bucket}
+                                            >
+                                                <input
+                                                    name="bucket"
+                                                    required
+                                                    value={r2Bucket}
+                                                    onChange={(e) =>
+                                                        setR2Bucket(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="my-server-backups"
+                                                    className={`${field} font-mono`}
+                                                />
+                                            </Labeled>
+
+                                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-ink">
+                                                <input
+                                                    type="checkbox"
+                                                    name="create_bucket"
+                                                    value="1"
+                                                    checked={r2CreateBucket}
+                                                    onChange={(e) =>
+                                                        setR2CreateBucket(
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                />
+                                                Create bucket automatically if
+                                                it doesn&apos;t exist
+                                            </label>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Labeled
+                                                label="Endpoint"
+                                                error={errors.endpoint}
+                                            >
+                                                <input
+                                                    name="endpoint"
+                                                    required
+                                                    placeholder="https://<account-id>.r2.cloudflarestorage.com"
+                                                    className={`${field} font-mono`}
+                                                />
+                                            </Labeled>
+                                            <Labeled
+                                                label="Bucket"
+                                                error={errors.bucket}
+                                            >
+                                                <input
+                                                    name="bucket"
+                                                    required
+                                                    placeholder="my-server-backups"
+                                                    className={`${field} font-mono`}
+                                                />
+                                            </Labeled>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <Labeled
+                                                    label="Access key"
+                                                    error={errors.access_key}
+                                                >
+                                                    <input
+                                                        name="access_key"
+                                                        required
+                                                        autoComplete="off"
+                                                        className={`${field} font-mono`}
+                                                    />
+                                                </Labeled>
+                                                <Labeled
+                                                    label="Secret key"
+                                                    error={errors.secret_key}
+                                                >
+                                                    <input
+                                                        name="secret_key"
+                                                        type="password"
+                                                        required
+                                                        autoComplete="off"
+                                                        className={field}
+                                                    />
+                                                </Labeled>
+                                            </div>
+                                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-ink">
+                                                <input
+                                                    type="checkbox"
+                                                    name="create_bucket"
+                                                    value="1"
+                                                    checked={createBucket}
+                                                    onChange={(event) =>
+                                                        setCreateBucket(
+                                                            event.target
+                                                                .checked,
+                                                        )
+                                                    }
+                                                />
+                                                Create the bucket for me
+                                                (Cloudflare R2)
+                                            </label>
+                                            {createBucket && (
+                                                <Labeled
+                                                    label="Cloudflare API token (used once, never saved)"
+                                                    error={
+                                                        errors.cloudflare_token
+                                                    }
+                                                >
+                                                    <input
+                                                        name="cloudflare_token"
+                                                        type="password"
+                                                        autoComplete="off"
+                                                        className={field}
+                                                    />
+                                                </Labeled>
+                                            )}
+                                        </>
+                                    )}
+
+                                    <p className="text-[11px] leading-relaxed text-soft">
+                                        The keys are given to the CLI directly
+                                        and are not kept in the activity log.
+                                        Next, a recovery card with your backup
+                                        passphrase is saved on this computer.
+                                    </p>
+                                </div>
+
+                                {showSubmitFooter && (
+                                    <div className="flex shrink-0 justify-end gap-2.5 border-t border-line bg-paper/60 px-6 py-4">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={handleClose}
+                                        >
+                                            <XCircle className="size-3.5" />
+                                            <span>Cancel</span>
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            <DatabaseBackup className="size-3.5" />
+                                            <span>
+                                                {processing
+                                                    ? 'Starting…'
+                                                    : 'Set up backups'}
+                                            </span>
+                                        </Button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </Form>
                 )}
-            </Form>
-        </Modal>
+            </div>
+        </div>
     );
 }
 

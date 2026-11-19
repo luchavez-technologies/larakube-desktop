@@ -5,6 +5,7 @@ use App\Jobs\Sync\SyncServerBackupJob;
 use App\Models\Run;
 use App\Models\Server;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Cache;
@@ -245,5 +246,60 @@ test('refreshing backups marks the server stale and dispatches SyncServerBackupJ
 
     Queue::assertPushed(SyncServerBackupJob::class, fn (SyncServerBackupJob $job) => $job->serverId === $server->id);
 
+    File::deleteDirectory(dirname($bin));
+});
+
+test('setting up backups in r2 mode reuses saved Cloudflare R2 credentials on the backend', function () {
+    $bin = backupServer();
+    $fake = ChildProcess::fake();
+
+    $settings = mock(GlobalSettings::class);
+    $settings->shouldReceive('r2BackupCredentials')->andReturn([
+        'endpoint' => 'https://acct123.r2.cloudflarestorage.com',
+        'access_key' => 'R2-AKEY-999',
+        'secret_key' => 'R2-SKEY-888',
+        'cloudflare_token' => 'CF-TOK-777',
+    ]);
+    app()->instance(GlobalSettings::class, $settings);
+
+    $this->post(route('servers.backups.setup', 'prod-vps'), [
+        'mode' => 'r2',
+        'bucket' => 'prod-vps-backups',
+        'create_bucket' => true,
+    ])->assertRedirect();
+
+    $fake->assertStarted(function (array|string $cmd, string $alias, ?string $cwd, ?array $env, bool $persistent, mixed ...$rest) use ($bin): bool {
+        $command = implode(' ', (array) $cmd);
+
+        return array_slice($cmd, 4) === [
+            $bin, 'backup:init', 'production', '--context=larakube-do-ams3',
+            '--endpoint=https://acct123.r2.cloudflarestorage.com', '--bucket=prod-vps-backups', '--region=auto', '--json',
+            '--create-bucket', '--no-interaction',
+        ]
+            && ! str_contains($command, 'R2-AKEY-999')
+            && ! str_contains($command, 'R2-SKEY-888')
+            && ! str_contains($command, 'CF-TOK-777')
+            && ($env['LARAKUBE_BACKUP_ACCESS_KEY'] ?? null) === 'R2-AKEY-999'
+            && ($env['LARAKUBE_BACKUP_SECRET_KEY'] ?? null) === 'R2-SKEY-888'
+            && ($env['LARAKUBE_CLOUDFLARE_TOKEN'] ?? null) === 'CF-TOK-777';
+    });
+
+    File::deleteDirectory(dirname($bin));
+});
+
+test('setting up backups in r2 mode errors cleanly when R2 is not connected yet', function () {
+    $bin = backupServer();
+    ChildProcess::fake();
+
+    $settings = mock(GlobalSettings::class);
+    $settings->shouldReceive('r2BackupCredentials')->andReturn(null);
+    app()->instance(GlobalSettings::class, $settings);
+
+    $this->post(route('servers.backups.setup', 'prod-vps'), [
+        'mode' => 'r2',
+        'bucket' => 'prod-vps-backups',
+    ])->assertSessionHasErrors('bucket');
+
+    expect(Run::count())->toBe(0);
     File::deleteDirectory(dirname($bin));
 });

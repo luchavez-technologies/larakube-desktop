@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterStatus;
+use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\JsonResponse;
@@ -54,7 +55,7 @@ class BackupController extends Controller
     }
 
     /** Backups & Disaster Recovery overview for the selected server (ADR 0018). */
-    public function index(string $server, StackCatalog $stacks, CurrentServer $current): Response
+    public function index(string $server, StackCatalog $stacks, CurrentServer $current, GlobalSettings $settings): Response
     {
         $stack = $this->stack($server, $stacks);
         $current->remember($server);
@@ -125,6 +126,7 @@ class BackupController extends Controller
                 'protected' => $protectedCount,
                 'servers' => $cloudServers,
             ],
+            'r2' => $settings->r2Summary(),
         ]);
     }
 
@@ -146,36 +148,66 @@ class BackupController extends Controller
         return back();
     }
 
-    public function setup(Request $request, string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
+    public function setup(Request $request, string $server, StackCatalog $stacks, CliRunner $runner, GlobalSettings $settings): RedirectResponse
     {
         $stack = $this->stack($server, $stacks);
 
-        $validated = $request->validate([
-            'endpoint' => ['required', 'url:https', 'max:255'],
-            'bucket' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9][a-z0-9.-]*$/'],
-            'access_key' => ['required', 'string', 'max:255'],
-            'secret_key' => ['required', 'string', 'max:255'],
-            'region' => ['nullable', 'string', 'max:50', 'regex:/^[a-z0-9-]+$/'],
-            'create_bucket' => ['nullable', 'boolean'],
-            'cloudflare_token' => ['nullable', 'string', 'max:255'],
-        ]);
+        if ($request->input('mode') === 'r2') {
+            $validated = $request->validate([
+                'bucket' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9][a-z0-9.-]*$/'],
+                'create_bucket' => ['nullable', 'boolean'],
+            ]);
+
+            $creds = $settings->r2BackupCredentials();
+            if ($creds === null) {
+                return back()->withErrors([
+                    'bucket' => 'Cloudflare R2 is not connected yet. Connect R2 first or switch to Custom S3.',
+                ]);
+            }
+
+            $endpoint = $creds['endpoint'];
+            $bucket = $validated['bucket'];
+            $accessKey = $creds['access_key'];
+            $secretKey = $creds['secret_key'];
+            $region = 'auto';
+            $createBucket = (bool) ($validated['create_bucket'] ?? true);
+            $cloudflareToken = $creds['cloudflare_token'];
+        } else {
+            $validated = $request->validate([
+                'endpoint' => ['required', 'url:https', 'max:255'],
+                'bucket' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9][a-z0-9.-]*$/'],
+                'access_key' => ['required', 'string', 'max:255'],
+                'secret_key' => ['required', 'string', 'max:255'],
+                'region' => ['nullable', 'string', 'max:50', 'regex:/^[a-z0-9-]+$/'],
+                'create_bucket' => ['nullable', 'boolean'],
+                'cloudflare_token' => ['nullable', 'string', 'max:255'],
+            ]);
+
+            $endpoint = $validated['endpoint'];
+            $bucket = $validated['bucket'];
+            $accessKey = $validated['access_key'];
+            $secretKey = $validated['secret_key'];
+            $region = $validated['region'] ?? 'auto';
+            $createBucket = (bool) ($validated['create_bucket'] ?? false);
+            $cloudflareToken = $validated['cloudflare_token'] ?? null;
+        }
 
         $arguments = [
             'backup:init', 'production', "--context={$stack['context']}",
-            "--endpoint={$validated['endpoint']}",
-            "--bucket={$validated['bucket']}",
-            '--region='.($validated['region'] ?? 'auto'),
+            "--endpoint={$endpoint}",
+            "--bucket={$bucket}",
+            "--region={$region}",
             '--json',
         ];
 
         $environment = [
-            'LARAKUBE_BACKUP_ACCESS_KEY' => $validated['access_key'],
-            'LARAKUBE_BACKUP_SECRET_KEY' => $validated['secret_key'],
+            'LARAKUBE_BACKUP_ACCESS_KEY' => $accessKey,
+            'LARAKUBE_BACKUP_SECRET_KEY' => $secretKey,
         ];
 
-        if (($validated['create_bucket'] ?? false) && ! empty($validated['cloudflare_token'])) {
+        if ($createBucket && ! empty($cloudflareToken)) {
             $arguments[] = '--create-bucket';
-            $environment['LARAKUBE_CLOUDFLARE_TOKEN'] = $validated['cloudflare_token'];
+            $environment['LARAKUBE_CLOUDFLARE_TOKEN'] = $cloudflareToken;
         }
 
         return $this->start($runner, $stack, $server, "Set up backups on {$server}", RunKind::BackupInit, $arguments, $environment);

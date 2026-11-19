@@ -625,12 +625,90 @@ class GlobalSettings
 
     public function r2StateConfigured(): bool
     {
+        $raw = $this->readHostConfig();
+
+        return (bool) ($raw['tofuStateEnabled'] ?? false) && ! empty($raw['tofuStateBucket']) && ! empty($raw['tofuStateEndpoint']);
+    }
+
+    /**
+     * Non-secret summary of the configured Cloudflare R2 integration for UI pre-fill.
+     *
+     * @return array{configured: bool, endpoint: ?string, accountId: ?string, bucket: ?string}
+     */
+    public function r2Summary(): array
+    {
+        $raw = $this->readHostConfig();
+        $configured = $this->r2BackupCredentials() !== null;
+
+        return [
+            'configured' => $configured,
+            'endpoint' => is_string($raw['tofuStateEndpoint'] ?? null) && $raw['tofuStateEndpoint'] !== ''
+                ? $raw['tofuStateEndpoint']
+                : null,
+            'accountId' => is_string($raw['tofuStateAccountId'] ?? null) && $raw['tofuStateAccountId'] !== ''
+                ? $raw['tofuStateAccountId']
+                : null,
+            'bucket' => is_string($raw['tofuStateBucket'] ?? null) && $raw['tofuStateBucket'] !== ''
+                ? $raw['tofuStateBucket']
+                : null,
+        ];
+    }
+
+    /**
+     * Saved Cloudflare R2 S3 credentials and API token for server-side `backup:init`.
+     *
+     * @return array{endpoint: string, access_key: string, secret_key: string, cloudflare_token: ?string}|null
+     */
+    public function r2BackupCredentials(): ?array
+    {
+        $raw = $this->readHostConfig();
+        if (! (bool) ($raw['tofuStateEnabled'] ?? false)) {
+            return null;
+        }
+
+        $endpoint = is_string($raw['tofuStateEndpoint'] ?? null) ? trim($raw['tofuStateEndpoint']) : '';
+        $accessKey = is_string($raw['tofuStateAccessKeyId'] ?? null) ? trim($raw['tofuStateAccessKeyId']) : '';
+        $secretKey = is_string($raw['tofuStateSecretAccessKey'] ?? null) ? trim($raw['tofuStateSecretAccessKey']) : '';
+
+        if ($endpoint === '' || $accessKey === '' || $secretKey === '') {
+            return null;
+        }
+
+        $cfToken = is_string($raw['cloudflareToken'] ?? null) ? trim($raw['cloudflareToken']) : '';
+        if ($cfToken === '' && is_array($raw['accounts']['cloudflare'] ?? null)) {
+            foreach ($raw['accounts']['cloudflare'] as $acct) {
+                if (is_array($acct) && ! empty($acct['default']) && is_string($acct['token'] ?? null) && trim($acct['token']) !== '') {
+                    $cfToken = trim($acct['token']);
+                    break;
+                }
+            }
+            if ($cfToken === '') {
+                $first = reset($raw['accounts']['cloudflare']);
+                if (is_array($first) && is_string($first['token'] ?? null)) {
+                    $cfToken = trim($first['token']);
+                }
+            }
+        }
+
+        return [
+            'endpoint' => $endpoint,
+            'access_key' => $accessKey,
+            'secret_key' => $secretKey,
+            'cloudflare_token' => $cfToken !== '' ? $cfToken : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readHostConfig(): array
+    {
         $path = $this->hostConfigPath();
         $raw = is_file($path)
             ? json_decode((string) file_get_contents($path), true)
             : null;
 
-        return is_array($raw) && (bool) ($raw['tofuStateEnabled'] ?? false) && ! empty($raw['tofuStateBucket']) && ! empty($raw['tofuStateEndpoint']);
+        return is_array($raw) ? $raw : [];
     }
 
     private function hostConfigPath(): string
