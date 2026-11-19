@@ -267,6 +267,19 @@ function ServerForm({
             (candidate) => candidate.slug === form.data.provider,
         ) ?? initial;
 
+    useEffect(() => {
+        const accounts = provider.accounts ?? [];
+        const stillExists =
+            form.data.account !== '' &&
+            accounts.some((acc) => acc.id === form.data.account);
+        if (!stillExists) {
+            form.setData(
+                'account',
+                provider.activeAccount ?? accounts[0]?.id ?? '',
+            );
+        }
+    }, [provider.slug, provider.activeAccount, provider.accounts]);
+
     const isExisting = form.data.provider === 'existing';
 
     const needsToken =
