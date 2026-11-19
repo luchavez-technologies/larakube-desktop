@@ -70,6 +70,8 @@ interface AppOption {
     capabilities: ToolCommonsCapabilities;
     /** Where this app's admin/dashboard UI actually lives, if not the bare domain (e.g. PocketBase's own admin is `/_/`, not `/`). */
     adminPath?: string;
+    /** A database the app always runs for itself, whatever its storage options (never a Commons tenant). */
+    ownDatabase?: string;
 }
 
 const APPS: AppOption[] = [
@@ -80,8 +82,9 @@ const APPS: AppOption[] = [
         description:
             'Self-hosted Postgres with pgvector, GoTrue Auth, PostgREST, Storage, and Studio.',
         defaultSubdomain: 'supabase',
+        ownDatabase: 'Dedicated Postgres (its own, per install)',
         capabilities: {
-            databases: ['postgresql'],
+            databases: [],
             cache: [],
             storage: ['s3'],
             auth: [],
@@ -612,14 +615,19 @@ export default function QuickLaunchModal({
     // derived from the resolved option (a 'db' select, or a 'noPlex'-style
     // confirm) rather than assumed from the app's identity — n8n with
     // Postgres selected is not standalone, even though n8n *can* be.
-    const usesSqliteStorage = fields.some((field) => field.key === 'db')
-        ? options.db === 'sqlite'
-        : fields.some((field) => field.key === 'noPlex')
-          ? options.noPlex === true
-          : currentApp.capabilities.databases?.length === 1 &&
-            currentApp.capabilities.databases[0] === 'sqlite';
+    const usesSqliteStorage = currentApp.ownDatabase
+        ? false
+        : fields.some((field) => field.key === 'db')
+          ? options.db === 'sqlite'
+          : fields.some((field) => field.key === 'noPlex')
+            ? options.noPlex === true
+            : currentApp.capabilities.databases?.length === 1 &&
+              currentApp.capabilities.databases[0] === 'sqlite';
 
     const databaseEngineLabel = (() => {
+        if (currentApp.ownDatabase) {
+            return currentApp.ownDatabase;
+        }
         const dbField = fields.find((field) => field.key === 'db');
         if (dbField) {
             return (

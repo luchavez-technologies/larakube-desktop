@@ -167,3 +167,32 @@ test('dispatches full catalog refresh when manual server tools refresh is reques
 
     Queue::assertPushed(SyncCatalogToolsJob::class, fn (SyncCatalogToolsJob $job): bool => $job->fullRefresh === true);
 });
+
+test('keeps the footprint the CLI measured for each tool', function (): void {
+    $bin = syncCatalogFakeCli();
+    $footprint = ['cpu_millicores' => 1200, 'memory_bytes' => 2576980378, 'components' => []];
+
+    Process::fake(fn () => Process::result(output: json_encode([
+        'data' => [['tool' => 'supabase', 'brand' => 'Supabase', 'footprint' => $footprint]],
+        'meta' => ['last_page' => 1],
+    ])));
+
+    (new SyncCatalogToolsJob)->handle(app(ToolLocator::class));
+
+    expect(CatalogTool::where('slug', 'supabase')->value('footprint'))->toBe($footprint);
+
+    File::deleteDirectory($bin);
+});
+
+test('a row still missing its footprint makes the next sync fetch everything, not just recent changes', function (): void {
+    $bin = syncCatalogFakeCli();
+    CatalogTool::upsertFromPayload(['tool' => 'n8n', 'brand' => 'n8n', 'remoteUpdatedAt' => '2026-11-01T00:00:00Z']);
+
+    Process::fake(fn () => Process::result(output: json_encode(['data' => [], 'meta' => ['last_page' => 1]])));
+
+    (new SyncCatalogToolsJob)->handle(app(ToolLocator::class));
+
+    Process::assertDidntRun(fn ($process): bool => str_contains(implode(' ', $process->command), '--updated-since'));
+
+    File::deleteDirectory($bin);
+});

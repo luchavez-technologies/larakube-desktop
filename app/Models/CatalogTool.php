@@ -34,6 +34,7 @@ use Illuminate\Support\Carbon;
  * @property bool $supports_no_plex
  * @property bool $multi_instance
  * @property bool $requires_admin_email
+ * @property array{cpu_millicores: int, memory_bytes: int, components?: list<array<string, mixed>>}|null $footprint what the tool requests, measured by the CLI from its rendered manifests
  * @property int $position
  * @property Carbon|null $remote_updated_at
  * @property Carbon|null $synced_at
@@ -57,6 +58,7 @@ class CatalogTool extends Model
         'supports_no_plex',
         'multi_instance',
         'requires_admin_email',
+        'footprint',
         'position',
         'remote_updated_at',
         'synced_at',
@@ -77,6 +79,7 @@ class CatalogTool extends Model
             'supports_no_plex' => 'boolean',
             'multi_instance' => 'boolean',
             'requires_admin_email' => 'boolean',
+            'footprint' => 'array',
             'position' => 'integer',
             'remote_updated_at' => 'datetime',
             'synced_at' => 'datetime',
@@ -245,6 +248,7 @@ class CatalogTool extends Model
                 'supports_no_plex' => $supportsNoPlex,
                 'multi_instance' => (bool) ($row['multiInstance'] ?? true),
                 'requires_admin_email' => (bool) ($row['requiresAdminEmail'] ?? false),
+                'footprint' => is_array($row['footprint'] ?? null) ? $row['footprint'] : null,
                 'position' => $position,
                 'remote_updated_at' => $remoteUpdatedAt,
                 'synced_at' => now(),

@@ -40,7 +40,9 @@ class SyncCatalogToolsJob extends SyncJob
         }
 
         $since = null;
-        if (! $this->fullRefresh && CatalogTool::exists()) {
+        // A row without a footprint predates it being synced, and an incremental sync only returns tools
+        // that changed upstream, so it would never fill in; fetch everything until every row has one.
+        if (! $this->fullRefresh && CatalogTool::exists() && ! CatalogTool::whereNull('footprint')->exists()) {
             $since = CatalogTool::max('remote_updated_at');
         }
 

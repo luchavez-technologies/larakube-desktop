@@ -305,6 +305,8 @@ export type Server = {
     hasExternalDns?: boolean;
     backupConfigured?: boolean | null;
     domains?: ServerDomain[];
+    /** The last capacity assessment (SyncServerCapacityJob); absent until the first sync. */
+    capacity?: import('@/lib/capacity').CapacityAssessment | null;
 };
 
 export type DiagnoseIssue = { title: string; description: string; fix: string };

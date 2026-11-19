@@ -24,6 +24,11 @@ import QuickLaunchProjectsModal, {
 } from '@/components/quick-launch-projects-modal';
 import ExperimentalBadge from '@/components/experimental-badge';
 import { tools as toolsRoute } from '@/routes';
+import {
+    estimateToolFit,
+    formatMemoryBytes,
+    type ToolFootprint,
+} from '@/lib/capacity';
 import { cn } from '@/lib/utils';
 import type {
     FrameworkCatalog,
@@ -37,7 +42,6 @@ interface QuickActionApp {
     name: string;
     tagline: string;
     description: string;
-    ramHint?: string;
     capabilities: ToolCommonsCapabilities;
 }
 
@@ -47,7 +51,6 @@ const POCKETBASE_FLIP_APP: QuickActionApp = {
     tagline: 'Embedded Backend & Auth',
     description:
         'Lightweight single-binary backend with embedded SQLite, realtime, auth, and S3 storage.',
-    ramHint: 'Needs ~150 MB RAM',
     capabilities: {
         databases: ['sqlite'],
         cache: [],
@@ -64,9 +67,9 @@ const FEATURED_APPS: QuickActionApp[] = [
         tagline: 'Postgres, Auth, Storage & Realtime',
         description:
             'Self-hosted Postgres with pgvector, GoTrue Auth, PostgREST, Storage, and Studio.',
-        ramHint: 'Needs ~2.4 GB RAM',
+        // Its Postgres is its own (one per install), not a Commons tenant, so no database pill.
         capabilities: {
-            databases: ['postgresql'],
+            databases: [],
             cache: [],
             storage: ['s3'],
             auth: [],
@@ -105,6 +108,8 @@ const FEATURED_APPS: QuickActionApp[] = [
 
 type Props = {
     servers?: Server[];
+    /** What each app requests, measured by the CLI (tool:catalog), keyed by slug. */
+    footprints?: Record<string, ToolFootprint>;
     serversCount: number;
     projectsCount: number;
     activeCommonsServices?: string[];
@@ -114,8 +119,58 @@ type Props = {
     defaultProjectParent?: string;
 };
 
+/** The best fit among the user's ready servers, or null before any capacity is known. */
+function bestFit(
+    footprint: ToolFootprint | undefined,
+    servers: Server[],
+): { server: string; fit: 'fits' | 'tight' | 'wont_fit' } | null {
+    const assessed = servers
+        .filter((server) => server.status === 'ready' && server.role !== 'dev')
+        .map((server) => ({
+            server: server.name,
+            fit: estimateToolFit(footprint, server.capacity),
+        }))
+        .filter(
+            (
+                entry,
+            ): entry is {
+                server: string;
+                fit: 'fits' | 'tight' | 'wont_fit';
+            } => entry.fit !== null,
+        );
+
+    return (
+        assessed.find((entry) => entry.fit === 'fits') ??
+        assessed.find((entry) => entry.fit === 'tight') ??
+        assessed[0] ??
+        null
+    );
+}
+
+function FitBadge({ fit }: { fit: ReturnType<typeof bestFit> }) {
+    if (fit === null || fit.fit === 'wont_fit') {
+        return null;
+    }
+
+    return (
+        <span
+            className={cn(
+                'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                fit.fit === 'fits'
+                    ? 'bg-ok/10 text-ok'
+                    : 'bg-warn/10 text-warn',
+            )}
+        >
+            {fit.fit === 'fits'
+                ? `Fits on ${fit.server}`
+                : `Tight on ${fit.server}`}
+        </span>
+    );
+}
+
 export default function WelcomeOnboarding({
     servers = [],
+    footprints = {},
     serversCount,
     projectsCount,
     activeCommonsServices = [],
@@ -272,11 +327,14 @@ export default function WelcomeOnboarding({
                         activeCommonsServices={activeCommonsServices}
                         compact
                     />
-                    {app.ramHint && (
+                    {footprints[app.id] && (
                         <span className="bg-surface-muted rounded px-1.5 py-0.5 text-[10px] font-medium text-faint">
-                            {app.ramHint}
+                            Needs ~
+                            {formatMemoryBytes(footprints[app.id].memory_bytes)}{' '}
+                            RAM
                         </span>
                     )}
+                    <FitBadge fit={bestFit(footprints[app.id], servers)} />
                 </div>
             </div>
 
@@ -428,6 +486,9 @@ export default function WelcomeOnboarding({
                     {mode === 'tools'
                         ? FEATURED_APPS.map((app) => {
                               if (app.id === 'supabase') {
+                                  const noServerFits =
+                                      bestFit(footprints[app.id], servers)
+                                          ?.fit === 'wont_fit';
                                   const flipHintFront = (
                                       <button
                                           type="button"
@@ -437,7 +498,9 @@ export default function WelcomeOnboarding({
                                           className="inline-flex w-full items-center justify-between rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-amber-600 transition hover:bg-amber-500/10 dark:text-amber-400"
                                       >
                                           <span>
-                                              Running on a small server?
+                                              {noServerFits
+                                                  ? 'Your servers are short on memory. See the lighter option'
+                                                  : 'Running on a small server?'}
                                           </span>
                                           <ArrowRight className="size-3 shrink-0" />
                                       </button>

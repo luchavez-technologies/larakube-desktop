@@ -34,6 +34,7 @@ import StatusPill from '@/components/status-pill';
 import WakeUpButton from '@/components/wake-up-button';
 import WelcomeOnboarding from '@/components/welcome-onboarding';
 import { NativeEvents, useNativeEventReload } from '@/lib/native-events';
+import type { ToolFootprint } from '@/lib/capacity';
 import { cn } from '@/lib/utils';
 import {
     isLocalServer,
@@ -87,6 +88,7 @@ type DashboardProps = {
     servers?: Server[];
     runs: RecentRun[];
     backups?: BackupStats;
+    footprints?: Record<string, ToolFootprint>;
     localCluster?: {
         engine: string;
         context?: string | null;
@@ -159,6 +161,7 @@ export default function DashboardIndex({
     stats,
     projects,
     servers,
+    footprints,
     runs,
     backups,
     localCluster,
@@ -299,6 +302,7 @@ export default function DashboardIndex({
             {/* Quickstart Onboarding & 1-Click Companions Banner */}
             <WelcomeOnboarding
                 servers={servers ?? []}
+                footprints={footprints}
                 serversCount={stats?.serversCount ?? 0}
                 projectsCount={stats?.projectsCount ?? 0}
                 projectCatalog={projectCatalog}

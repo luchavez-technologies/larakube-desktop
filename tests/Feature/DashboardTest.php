@@ -11,6 +11,7 @@ use App\Jobs\Sync\SyncServerBackupJob;
 use App\Jobs\Sync\SyncServerClusterUsersJob;
 use App\Jobs\Sync\SyncServerExternalDnsJob;
 use App\Jobs\Sync\SyncServerTlsJob;
+use App\Models\CatalogTool;
 use App\Models\ClusterTool;
 use App\Models\LocalClusterState;
 use App\Models\Project;
@@ -698,6 +699,37 @@ test('dashboard includes installedToolsCount in stats', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
                 ->where('stats.installedToolsCount', 1)
+            )
+        );
+
+    File::deleteDirectory($bin);
+});
+
+test('the welcome cards get each app\'s measured footprint and every server\'s capacity', function () {
+    onboarded();
+    $bin = storage_path('framework/testing/bin-'.bin2hex(random_bytes(6)));
+    File::ensureDirectoryExists($bin);
+    File::put("{$bin}/larakube", "#!/bin/sh\n");
+    chmod("{$bin}/larakube", 0755);
+    app()->instance(ToolLocator::class, new ToolLocator([$bin]));
+
+    $readiness = mock(ReadinessCheck::class);
+    $readiness->shouldReceive('tools')->andReturn([]);
+    app()->instance(ReadinessCheck::class, $readiness);
+
+    CatalogTool::upsertFromPayload(['tool' => 'supabase', 'brand' => 'Supabase', 'footprint' => ['cpu_millicores' => 1200, 'memory_bytes' => 2576980378]]);
+    CatalogTool::upsertFromPayload(['tool' => 'n8n', 'brand' => 'n8n']);
+    $capacity = ['node' => ['free_memory_bytes' => 1073741824]];
+    Server::create(['name' => 'small', 'provider' => 'do', 'kind' => 'vps', 'context' => 'larakube-small', 'status' => 'ready', 'capacity_data' => $capacity]);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('footprints')
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('footprints.supabase.memory_bytes', 2576980378)
+                ->missing('footprints.n8n')
+                ->where('servers.0.capacity.node.free_memory_bytes', 1073741824)
             )
         );
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\Sync\SyncLocalClusterJob;
+use App\Models\CatalogTool;
 use App\Models\ClusterTool;
 use App\Models\LocalClusterState;
 use App\Models\Project;
@@ -109,6 +110,12 @@ class DashboardController extends Controller
                 return [...$result, 'asleep' => $result['status'] === LocalCluster::ASLEEP_STATUS];
             }),
 
+            // What each app requests, measured by the CLI, so the welcome cards show real sizes and fit.
+            'footprints' => Inertia::defer(fn (): array => CatalogTool::query()
+                ->whereNotNull('footprint')
+                ->pluck('footprint', 'slug')
+                ->all(), 'footprints'),
+
             'projects' => Inertia::defer(function () use ($inspector, $distroRunning): array {
                 return Project::query()
                     ->with('server:id,name,provider,ip')
@@ -187,6 +194,7 @@ class DashboardController extends Controller
                             'backupConfigured' => $s->backup_configured,
                             'hasExternalDns' => $hasExternalDns,
                             'domains' => $serverDomains,
+                            'capacity' => $s->capacity_data,
                         ];
                     })->all();
                 }
