@@ -49,6 +49,7 @@ import {
 } from '@/lib/servers';
 import { create as createServer } from '@/routes/servers';
 import { show as showRunRoute } from '@/routes/runs';
+import { NativeEvents, onNativeEvent } from '@/lib/native-events';
 import { cn } from '@/lib/utils';
 import type {
     FrameworkField,
@@ -307,17 +308,24 @@ export default function QuickLaunchModal({
             options: JSON.stringify(options),
         });
 
-        fetch(`/quick-actions/fit?${params.toString()}`, {
-            headers: { Accept: 'application/json' },
-            signal: controller.signal,
-        })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                setFitAssessment(data?.assessment ?? null);
+        // Each check runs the LaraKube CLI against the cluster, so wait for
+        // typing to settle instead of starting one per keystroke.
+        const timer = window.setTimeout(() => {
+            fetch(`/quick-actions/fit?${params.toString()}`, {
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
             })
-            .catch(() => {});
+                .then((res) => (res.ok ? res.json() : null))
+                .then((data) => {
+                    setFitAssessment(data?.assessment ?? null);
+                })
+                .catch(() => {});
+        }, 600);
 
-        return () => controller.abort();
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
     }, [
         isOpen,
         selectedAppId,
@@ -326,6 +334,22 @@ export default function QuickLaunchModal({
         currentStep,
         fitCheckTick,
     ]);
+
+    // A verdict belongs to one app on one server.
+    useEffect(() => {
+        setFitAssessment(null);
+    }, [selectedAppId, selectedServerName]);
+
+    // Pausing is a run; the freed room only shows once it has finished.
+    useEffect(() => {
+        if (!isOpen || currentStep !== 4) {
+            return;
+        }
+
+        return onNativeEvent(NativeEvents.runFinished, () =>
+            setFitCheckTick((t) => t + 1),
+        );
+    }, [isOpen, currentStep]);
 
     const handlePauseCandidate = async (
         toolSlug: string,
