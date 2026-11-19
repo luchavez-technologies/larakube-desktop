@@ -484,7 +484,29 @@ class ServerController extends Controller
                 ? $readiness->databaseProviders()
                 : null,
             'k9sInstalled' => $readiness->status('k9s')['installed'],
+            'hasLocalTofuState' => $settings->hasLocalTofuState($server),
+            'r2StateConfigured' => $settings->r2StateConfigured(),
         ]);
+    }
+
+    public function migrateState(string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        $stack = $catalog->find($server);
+        abort_if($stack === null, 404);
+
+        $run = $runner->start(
+            label: "Migrate OpenTofu state for {$server} to R2",
+            arguments: ['cloud:state:migrate', $server, '--force', '--no-interaction'],
+            kind: RunKind::MigrateTofuState,
+            subject: $server,
+            meta: ['server' => $server, 'context' => $stack['context'] ?? null],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $stack['context'] ?? null,
+        );
+
+        return to_route('runs.show', $run);
     }
 
     public function connectDomain(CloudflareStepRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse

@@ -565,6 +565,23 @@ class GlobalSettings
      * ~/.larakube/config.json to this file (the CLI's WslBridge::linkToHost()),
      * so there is no WSL copy to read or mirror.
      */
+    public function hasLocalTofuState(string $server): bool
+    {
+        $tofuDir = dirname($this->hostConfigPath())."/tofu/{$server}";
+
+        return is_file("{$tofuDir}/terraform.tfstate") && ! is_file("{$tofuDir}/backend.tf");
+    }
+
+    public function r2StateConfigured(): bool
+    {
+        $path = $this->hostConfigPath();
+        $raw = is_file($path)
+            ? json_decode((string) file_get_contents($path), true)
+            : null;
+
+        return is_array($raw) && (bool) ($raw['tofuStateEnabled'] ?? false) && ! empty($raw['tofuStateBucket']) && ! empty($raw['tofuStateEndpoint']);
+    }
+
     private function hostConfigPath(): string
     {
         $profile = ToolLocator::hostProfile($this->locator->isWindows());

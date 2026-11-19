@@ -105,4 +105,66 @@ class CloudflareController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Probes the pasted Cloudflare API token for `Account -> Workers R2 Storage -> Edit`,
+     * auto-creates `larakube-tofu-state`, and persists R2 remote state config via CLI.
+     */
+    public function configureR2(Request $request, ToolLocator $locator): JsonResponse
+    {
+        $token = trim((string) $request->input('token'));
+
+        if ($token === '') {
+            return response()->json([
+                'configured' => false,
+                'hasR2Permission' => false,
+                'reason' => 'Please provide a Cloudflare API token.',
+            ], 422);
+        }
+
+        $cli = $locator->find('larakube');
+        if ($cli === null) {
+            return response()->json([
+                'configured' => false,
+                'hasR2Permission' => false,
+                'reason' => 'LaraKube CLI binary not found.',
+            ], 500);
+        }
+
+        $isolated = $locator->isolate(
+            [$cli, 'cloud:state:r2', '--json', '--no-interaction'],
+            ['LARAKUBE_EXECUTION_CONTEXT' => 'host', 'LARAKUBE_CLOUDFLARE_TOKEN' => $token],
+        );
+
+        try {
+            $result = Process::env($isolated['environment'])->timeout(20)->run($isolated['command']);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'configured' => false,
+                'hasR2Permission' => false,
+                'reason' => 'Could not execute LaraKube CLI: '.$e->getMessage(),
+            ], 500);
+        }
+
+        $cleanOutput = trim(str_replace("\0", '', $result->output()));
+        $lines = $cleanOutput !== '' ? (preg_split('/\R/', $cleanOutput) ?: []) : [];
+        $data = $lines !== [] ? json_decode((string) end($lines), true) : null;
+
+        if (! is_array($data)) {
+            return response()->json([
+                'configured' => false,
+                'hasR2Permission' => false,
+                'reason' => 'Update the LaraKube CLI in Setup to enable R2 remote state detection.',
+            ], 422);
+        }
+
+        return response()->json([
+            'configured' => (bool) ($data['configured'] ?? false),
+            'hasR2Permission' => (bool) ($data['hasR2Permission'] ?? false),
+            'bucket' => $data['bucket'] ?? null,
+            'endpoint' => $data['endpoint'] ?? null,
+            'accountId' => $data['accountId'] ?? null,
+            'reason' => $data['reason'] ?? null,
+        ]);
+    }
 }

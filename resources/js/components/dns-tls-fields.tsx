@@ -159,11 +159,18 @@ export default function DnsTlsFields({
         (values.cloudflare_token ? 'cloudflare' : '');
 
     const [verifying, setVerifying] = useState(false);
+    const [enableR2State, setEnableR2State] = useState(true);
     const [verificationStatus, setVerificationStatus] = useState<{
         valid: boolean;
         error?: string;
         warning?: string;
         zones?: string[];
+    } | null>(null);
+    const [r2Status, setR2Status] = useState<{
+        configured: boolean;
+        hasR2Permission: boolean;
+        bucket?: string;
+        reason?: string;
     } | null>(null);
 
     const handleVerify = useCallback(
@@ -171,11 +178,13 @@ export default function DnsTlsFields({
             const token = (tokenToVerify ?? values.cloudflare_token).trim();
             if (!token) {
                 setVerificationStatus(null);
+                setR2Status(null);
                 onCloudflareVerified?.(null);
                 return;
             }
 
             setVerifying(true);
+            setR2Status(null);
             try {
                 const { ok, data } = await sendJson<{
                     valid: boolean;
@@ -191,6 +200,18 @@ export default function DnsTlsFields({
                         zones: data.zones ?? [],
                     });
                     onCloudflareVerified?.(true);
+
+                    if (enableR2State) {
+                        const r2Res = await sendJson<{
+                            configured: boolean;
+                            hasR2Permission: boolean;
+                            bucket?: string;
+                            reason?: string;
+                        }>('/cloudflare/configure-r2', 'POST', { token });
+                        if (r2Res.ok) {
+                            setR2Status(r2Res.data);
+                        }
+                    }
                 } else {
                     setVerificationStatus({
                         valid: false,
@@ -212,7 +233,7 @@ export default function DnsTlsFields({
                 setVerifying(false);
             }
         },
-        [values.cloudflare_token, onCloudflareVerified],
+        [values.cloudflare_token, enableR2State, onCloudflareVerified],
     );
 
     // Auto-verify on paste/typing when token looks complete (Cloudflare tokens are 40 chars)
@@ -418,6 +439,28 @@ export default function DnsTlsFields({
                                     </div>
                                 </div>
 
+                                <div className="flex items-start gap-2 rounded-lg bg-paper/75 p-2.5 ring-1 ring-line/50">
+                                    <Key className="mt-0.5 size-4 shrink-0 text-servers" />
+                                    <div>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className="font-semibold text-ink">
+                                                3. Account → Workers R2 Storage
+                                                → Edit
+                                            </span>
+                                            <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-faint ring-1 ring-line/60">
+                                                Optional · Remote Tofu State
+                                            </span>
+                                        </div>
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-soft">
+                                            Enables encrypted OpenTofu remote
+                                            state in Cloudflare R2 (
+                                            <code>larakube-tofu-state</code>)
+                                            for cross-machine recovery and stack
+                                            migration.
+                                        </p>
+                                    </div>
+                                </div>
+
                                 <div className="rounded-lg bg-paper/60 px-3 py-1.5 text-[11px] text-soft ring-1 ring-line/40">
                                     <span className="font-semibold text-ink">
                                         Zone Resources:
@@ -470,6 +513,7 @@ export default function DnsTlsFields({
                                             e.target.value,
                                         );
                                         setVerificationStatus(null);
+                                        setR2Status(null);
                                     }}
                                     autoComplete="off"
                                     placeholder="Paste your Cloudflare API token"
@@ -482,6 +526,28 @@ export default function DnsTlsFields({
                                     )}
                                 />
                             </Field>
+
+                            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-paper/70 px-3 py-2 text-xs ring-1 ring-line/50">
+                                <input
+                                    type="checkbox"
+                                    checked={enableR2State}
+                                    onChange={(e) =>
+                                        setEnableR2State(e.target.checked)
+                                    }
+                                    className="mt-0.5 size-3.5 rounded border-line text-servers focus:ring-servers"
+                                />
+                                <div>
+                                    <span className="font-medium text-ink">
+                                        Store OpenTofu state in Cloudflare R2
+                                    </span>
+                                    <p className="text-[11px] text-soft">
+                                        Auto-detects R2 permission on verify and
+                                        creates <code>larakube-tofu-state</code>{' '}
+                                        for new clusters (existing local
+                                        clusters stay safe).
+                                    </p>
+                                </div>
+                            </label>
 
                             {verifying && (
                                 <div className="flex items-center gap-2 rounded-lg bg-paper p-2.5 text-xs text-soft ring-1 ring-line">
@@ -532,6 +598,30 @@ export default function DnsTlsFields({
                                         <p className="mt-1 text-[11px] font-medium text-amber-500">
                                             ⚠️ {verificationStatus.warning}
                                         </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {r2Status && (
+                                <div
+                                    className={cn(
+                                        'rounded-lg border p-2.5 text-[11px]',
+                                        r2Status.configured
+                                            ? 'border-ok/30 bg-ok-tint/15 text-ok'
+                                            : 'border-line bg-paper text-soft',
+                                    )}
+                                >
+                                    {r2Status.configured ? (
+                                        <span>
+                                            Cloudflare R2 remote state active (
+                                            <strong>{r2Status.bucket}</strong>).
+                                        </span>
+                                    ) : (
+                                        <span>
+                                            {r2Status.reason ||
+                                                'R2 permission not present on this token.'}{' '}
+                                            DNS &amp; SSL still work normally.
+                                        </span>
                                     )}
                                 </div>
                             )}

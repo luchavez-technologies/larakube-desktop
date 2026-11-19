@@ -27,6 +27,8 @@ enum RunKind: string
     case RepairServer = 'repair-server';
     /** A server's VM resized (CPU/RAM/disk) live via OpenTofu. */
     case ResizeServer = 'resize-server';
+    /** Migrating a stack's local OpenTofu state file to remote Cloudflare R2 storage. */
+    case MigrateTofuState = 'migrate-tofu-state';
     /** A local command-line tool (kubectl, OpenTofu, …) installed from Setup. */
     case InstallTool = 'install-tool';
     /** The CLI's local setup (container runtime and a local k3s cluster), run with temporary passwordless sudo. */

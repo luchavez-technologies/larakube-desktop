@@ -85,6 +85,8 @@ Route::get('/servers/pick-key', [ServerController::class, 'pickKey'])->name('ser
 Route::post('/servers/inspect-key', [ServerController::class, 'inspectKey'])->name('servers.inspect_key');
 Route::get('/servers/provider-catalog/{provider}', [ServerController::class, 'providerCatalog'])->name('servers.provider_catalog');
 Route::post('/cloudflare/verify-token', [CloudflareController::class, 'verifyToken'])->name('cloudflare.verify_token');
+Route::post('/cloudflare/configure-r2', [CloudflareController::class, 'configureR2'])->name('cloudflare.configure_r2');
+Route::post('/servers/{server}/migrate-state', [ServerController::class, 'migrateState'])->name('servers.migrate_state');
 
 Route::pattern('server', '[a-z0-9][a-z0-9-]*');
 Route::pattern('tool', '[a-z][a-z0-9-]*');

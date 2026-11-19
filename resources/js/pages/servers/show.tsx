@@ -13,6 +13,7 @@ import {
     ShieldCheck,
     SquareTerminal,
     Trash2,
+    UploadCloud,
     UserPlus,
     Users,
     Wrench,
@@ -109,6 +110,8 @@ export default function ShowServer({
     diagnosis,
     providers,
     k9sInstalled,
+    hasLocalTofuState = false,
+    r2StateConfigured = false,
 }: {
     server: Server;
     projects?: Project[];
@@ -126,6 +129,8 @@ export default function ShowServer({
     diagnosis?: DiagnoseReport | null;
     providers?: Provider[] | null;
     k9sInstalled: boolean;
+    hasLocalTofuState?: boolean;
+    r2StateConfigured?: boolean;
 }) {
     const { url, errors, hideProjects } = usePage<{
         hideProjects?: boolean;
@@ -795,6 +800,38 @@ export default function ShowServer({
                             onRevoke={(user) => setRevokingUser(user)}
                         />
                     </Deferred>
+
+                    {hasLocalTofuState && (
+                        <Card label="OpenTofu Remote State (Cloudflare R2)">
+                            <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
+                                This cluster currently stores its encrypted
+                                OpenTofu state locally on this machine. Migrate
+                                it to Cloudflare R2 so you can recover or manage
+                                the server from another computer.
+                            </p>
+                            {r2StateConfigured ? (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() =>
+                                        router.post(
+                                            `/servers/${server.name}/migrate-state`,
+                                        )
+                                    }
+                                >
+                                    <UploadCloud className="size-4" />
+                                    <span>Migrate State to R2</span>
+                                </Button>
+                            ) : (
+                                <p className="text-xs text-faint">
+                                    Configure Cloudflare R2 state first (via{' '}
+                                    <code>larakube cloud:state:r2</code> or
+                                    creating a cluster with an R2-enabled
+                                    Cloudflare token).
+                                </p>
+                            )}
+                        </Card>
+                    )}
 
                     <Card label="Danger zone" tone="danger">
                         <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
