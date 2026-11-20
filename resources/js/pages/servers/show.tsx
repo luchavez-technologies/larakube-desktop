@@ -76,6 +76,7 @@ import type {
 import { useServerDataReload } from '@/lib/native-events';
 import AutoRefreshToggle, {
     useAutoRefresh,
+    useAutoRefreshSetting,
 } from '@/components/auto-refresh-toggle';
 import { formatMemoryBytes, type CapacityAssessment } from '@/lib/capacity';
 
@@ -1088,7 +1089,10 @@ function NodeMetricsCard({
     metrics?: NodeMetrics | null;
     capacity?: CapacityAssessment | null;
 }) {
-    const [autoRefresh, setAutoRefresh] = useState<number>(10);
+    const [autoRefresh, setAutoRefresh] = useAutoRefreshSetting(
+        'node-metrics',
+        10,
+    );
     // `kubectl top` only: cheap, cached server-side for 5s. The memory breakdown below comes from the
     // capacity check, which its own job refreshes every 5 minutes.
     const reloadMetrics = useCallback(

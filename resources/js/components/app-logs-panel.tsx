@@ -2,6 +2,7 @@ import { RotateCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AutoRefreshToggle, {
     useAutoRefresh,
+    useAutoRefreshSetting,
 } from '@/components/auto-refresh-toggle';
 import Button from '@/components/button';
 import Card from '@/components/card';
@@ -45,7 +46,10 @@ export default function AppLogsPanel({
     const [components, setComponents] = useState<string[]>([]);
     const [component, setComponent] = useState<string | null>(null);
     // Seconds between polls; 0 pauses. Shares the Off / 5s / 10s / 30s picker the other live cards use.
-    const [refreshSeconds, setRefreshSeconds] = useState<number>(5);
+    const [refreshSeconds, setRefreshSeconds] = useAutoRefreshSetting(
+        'app-logs',
+        5,
+    );
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const lastTime = useRef<string | null>(null);

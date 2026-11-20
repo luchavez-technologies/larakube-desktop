@@ -8,6 +8,10 @@ import {
     X,
     XCircle,
 } from 'lucide-react';
+import AutoRefreshToggle, {
+    useAutoRefresh,
+    useAutoRefreshSetting,
+} from '@/components/auto-refresh-toggle';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import { sendJson } from '@/lib/http';
@@ -73,12 +77,14 @@ export default function WorkersQueuesCard() {
         }
 
         void refresh();
-        const timer = window.setInterval(() => {
-            void refresh();
-        }, 3000);
-
-        return () => window.clearInterval(timer);
     }, [open, refresh]);
+
+    const [refreshSeconds, setRefreshSeconds] = useAutoRefreshSetting(
+        'workers-queues',
+        5,
+    );
+    const poll = useCallback(() => void refresh(), [refresh]);
+    useAutoRefresh(open ? refreshSeconds : 0, poll);
 
     const runAction = async (key: string, url: string) => {
         setBusyAction(key);
@@ -97,6 +103,11 @@ export default function WorkersQueuesCard() {
             action={
                 open ? (
                     <div className="flex items-center gap-1">
+                        <AutoRefreshToggle
+                            value={refreshSeconds}
+                            onChange={setRefreshSeconds}
+                            title="Auto-refresh workers and queues interval"
+                        />
                         <Button
                             type="button"
                             variant="ghost"

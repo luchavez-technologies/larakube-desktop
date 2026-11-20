@@ -10,7 +10,10 @@ import {
     Pause,
     Play,
 } from 'lucide-react';
-import AutoRefreshToggle from '@/components/auto-refresh-toggle';
+import AutoRefreshToggle, {
+    useAutoRefresh,
+    useAutoRefreshSetting,
+} from '@/components/auto-refresh-toggle';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -51,7 +54,10 @@ export default function WorkloadsPodsCard({
     const [launchingTerminal, setLaunchingTerminal] = useState<string | null>(
         null,
     );
-    const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(10);
+    const [autoRefreshInterval, setAutoRefreshInterval] = useAutoRefreshSetting(
+        'pods',
+        10,
+    );
     const [liveLogs, setLiveLogs] = useState<boolean>(true);
     const [pausing, setPausing] = useState(false);
     const [resuming, setResuming] = useState(false);
@@ -175,24 +181,12 @@ export default function WorkloadsPodsCard({
         });
     }, [activeEnv, selectedPodForLogs, refreshing]);
 
-    useEffect(() => {
-        if (autoRefreshInterval <= 0) return;
-
-        const timer = setInterval(() => {
-            if (
-                typeof document !== 'undefined' &&
-                (document.hidden || selectedPodForLogs || refreshing)
-            ) {
-                return;
-            }
-
-            router.reload({
-                only: ['pods'],
-            });
-        }, autoRefreshInterval * 1000);
-
-        return () => clearInterval(timer);
-    }, [autoRefreshInterval, selectedPodForLogs, refreshing]);
+    const reloadPods = useCallback(() => router.reload({ only: ['pods'] }), []);
+    useAutoRefresh(
+        autoRefreshInterval,
+        reloadPods,
+        Boolean(selectedPodForLogs) || refreshing,
+    );
 
     const fetchPodLogs = useCallback(
         async (pod: PodInfo, container: string, isInitial = false) => {
