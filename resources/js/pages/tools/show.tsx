@@ -65,7 +65,12 @@ const TABS = [
     { key: 'configuration', label: 'Configuration' },
     { key: 'logs', label: 'Logs' },
     { key: 'images', label: 'Images' },
+    // Only for a tool the CLI sends developer panels for (Edge Functions, MCP).
+    { key: 'developer', label: 'Developer' },
 ] as const;
+
+/** The panels the Developer tab shows, when the CLI sends them for this tool. */
+const DEVELOPER_PANELS = ['edge-functions', 'mcp'];
 
 type Tab = (typeof TABS)[number]['key'];
 
@@ -92,7 +97,20 @@ export default function ShowTool({
 }) {
     const { url: pageUrl } = usePage();
     const [removing, setRemoving] = useState(false);
-    const [tab, setTab] = useState<Tab>(() => initialTab(pageUrl));
+    const hasDeveloperTab =
+        tool.host !== null &&
+        tool.host !== undefined &&
+        DEVELOPER_PANELS.some((panel) => tool.panels?.includes(panel));
+    const tabs = TABS.filter(
+        (item) => item.key !== 'developer' || hasDeveloperTab,
+    );
+    const [tab, setTab] = useState<Tab>(() => {
+        const requested = initialTab(pageUrl);
+
+        return requested === 'developer' && !hasDeveloperTab
+            ? 'overview'
+            : requested;
+    });
 
     useServerDataReload(server.name, { tools: ['tool'] });
 
@@ -211,7 +229,7 @@ export default function ShowTool({
                     aria-label={`${name} sections`}
                     className="mb-5 flex gap-1 border-b border-line"
                 >
-                    {TABS.map((item) => (
+                    {tabs.map((item) => (
                         <button
                             key={item.key}
                             type="button"
@@ -237,6 +255,23 @@ export default function ShowTool({
 
             {tool.installed && tab === 'logs' && (
                 <AppLogsPanel server={server} tool={tool} />
+            )}
+
+            {tool.installed && tab === 'developer' && tool.host && (
+                <div className="space-y-5">
+                    {tool.panels?.includes('edge-functions') && (
+                        <SupabaseFunctionsCard
+                            server={server.name}
+                            host={tool.host}
+                        />
+                    )}
+                    {tool.panels?.includes('mcp') && (
+                        <SupabaseMcpCard
+                            server={server.name}
+                            host={tool.host}
+                        />
+                    )}
+                </div>
             )}
 
             {tool.installed && tab === 'images' && (
@@ -483,19 +518,6 @@ export default function ShowTool({
                                     </ListRow>
                                 ))}
                             </Card>
-                        )}
-                        {tool.panels?.includes('edge-functions') &&
-                            tool.host && (
-                                <SupabaseFunctionsCard
-                                    server={server.name}
-                                    host={tool.host}
-                                />
-                            )}
-                        {tool.panels?.includes('mcp') && tool.host && (
-                            <SupabaseMcpCard
-                                server={server.name}
-                                host={tool.host}
-                            />
                         )}
                         <Card label="Danger zone" tone="danger">
                             <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
