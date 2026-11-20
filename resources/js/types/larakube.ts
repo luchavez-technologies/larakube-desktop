@@ -427,6 +427,8 @@ export type ClusterTool = {
     multiInstance?: boolean;
     /** What the CLI asks when installing this tool, in the same shape as a framework's fields. */
     initFields?: FrameworkField[];
+    /** Extra panels the CLI says this tool's page shows, by id (e.g. `edge-functions`). */
+    panels?: string[];
     /** Standardized Plex Commons integration capabilities. */
     commonsCapabilities?: ToolCommonsCapabilities;
     /** The names THIS instance actually holds on the shared Commons — empty for an instance that bypassed it (--no-plex), even when the tool itself can join one. */

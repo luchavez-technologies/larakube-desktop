@@ -48,6 +48,7 @@ enum RunKind: string
     case PauseClusterTool = 'pause-cluster-tool';
     case ResumeClusterTool = 'resume-cluster-tool';
     case UpdateClusterTool = 'update-cluster-tool';
+    case DeploySupabaseFunctions = 'deploy-supabase-functions';
     case UpdateAllClusterTools = 'update-all-cluster-tools';
     case QuickLaunchApp = 'quick-launch-app';
     case ConnectDomain = 'connect-domain';

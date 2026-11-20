@@ -40,6 +40,16 @@ class ToolInspector
     }
 
     /**
+     * A Supabase instance's deployed Edge Functions (`supabase:functions:list --json`).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function supabaseFunctions(string $context, string $domain): ?array
+    {
+        return $this->runJson(['supabase:functions:list', 'production'], $context, $domain, 45);
+    }
+
+    /**
      * @param  list<string>  $args
      * @return array<string, mixed>|null
      */

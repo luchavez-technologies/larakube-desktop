@@ -35,6 +35,7 @@ use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SimulatorController;
 use App\Http\Controllers\SsoController;
+use App\Http\Controllers\SupabaseFunctionsController;
 use App\Http\Controllers\ToolInstallController;
 use App\Http\Controllers\TrayController;
 use App\Http\Controllers\TunnelController;
@@ -283,6 +284,8 @@ Route::post('/servers/{server}/apps/{tool}/rebind', [ClusterToolController::clas
 Route::post('/servers/{server}/apps/{tool}/wire', [ClusterToolController::class, 'wire'])->name('servers.apps.wire');
 Route::post('/servers/{server}/apps/{tool}/unwire', [ClusterToolController::class, 'unwire'])->name('servers.apps.unwire');
 Route::delete('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.apps.destroy');
+Route::get('/servers/{server}/apps/supabase/functions', [SupabaseFunctionsController::class, 'index'])->name('servers.apps.supabase.functions');
+Route::post('/servers/{server}/apps/supabase/functions/deploy', [SupabaseFunctionsController::class, 'deploy'])->name('servers.apps.supabase.functions.deploy');
 Route::get('/servers/{server}/apps/{tool}/resources', [ClusterToolInspectController::class, 'resources'])->name('servers.apps.resources');
 Route::post('/servers/{server}/apps/{tool}/resources/reveal', [ClusterToolInspectController::class, 'reveal'])->name('servers.apps.resources.reveal');
 Route::get('/servers/{server}/apps/{tool}/logs', [ClusterToolInspectController::class, 'logs'])->name('servers.apps.logs');
