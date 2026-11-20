@@ -37,3 +37,4 @@ One decision per file, `NNNN-kebab-title.md`, with **Status / Context / Decision
 | [0023](0023-sqlite-immediate-transactions.md)                                | SQLite transactions are IMMEDIATE, so concurrent writers wait instead of failing                        | Accepted |
 | [0024](0024-app-configuration-transparency.md)                               | An app's configuration is fully visible; Secret values are revealed one at a time                       | Accepted |
 | [0025](0025-no-native-browser-dialogs.md)                                    | No native browser dialogs (`window.confirm`, `alert`, or `prompt`); use `<ConfirmModal>`                | Accepted |
+| [0026](0026-published-electron-project-upgrades.md)                          | The published Electron project is upgraded by three-way merge, against a written list of our changes    | Accepted |
