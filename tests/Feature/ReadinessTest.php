@@ -716,12 +716,12 @@ test('the Setup page reads what the distro image bundles from its manifest', fun
     Cache::flush();
     Process::fake([
         '*--list*--verbose*' => Process::result(output: "  NAME            STATE           VERSION\n* larakube-ubuntu Running         2\n"),
-        '*/etc/larakube-rootfs.json*' => Process::result(output: '{"larakube":"0.40.0","kubectl":"v1.34.1","gh":"2.80.0","tea":"0.16.0","git":"2.43.0","podman":"4.9.3","base":"24.04"}'),
+        '*/etc/larakube-rootfs.json*' => Process::result(output: '{"larakube":"0.40.0","kubectl":"v1.34.1","gh":"2.80.0","tea":"0.16.0","git":"2.43.0","podman":"4.9.3","base":"26.04"}'),
     ]);
 
     $tools = (new Wsl(windows: true, featureEnabled: true))->bundledTools();
 
-    expect($tools)->toMatchArray(['gh' => '2.80.0', 'tea' => '0.16.0', 'git' => '2.43.0', 'base' => '24.04'])
+    expect($tools)->toMatchArray(['gh' => '2.80.0', 'tea' => '0.16.0', 'git' => '2.43.0', 'base' => '26.04'])
         ->and((new Wsl(windows: false))->bundledTools())->toBeNull();
 });
 
