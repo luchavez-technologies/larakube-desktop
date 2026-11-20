@@ -31,9 +31,12 @@ const COMMON_PRESETS = [
 export default function PhpExtensionsCard({
     project,
     activeEnv = 'local',
+    phpVersions,
 }: {
     project: Project;
     activeEnv?: string;
+    /** The PHP versions the project's framework can run, as the CLI lists them. */
+    phpVersions?: { value: string; label: string }[];
 }) {
     const [customExt, setCustomExt] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -166,11 +169,24 @@ export default function PhpExtensionsCard({
                                 onChange={(e) => setSelectedPhp(e.target.value)}
                                 className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-xs text-ink focus:border-brand focus:outline-hidden"
                             >
-                                <option value="8.5">PHP 8.5 (Latest)</option>
-                                <option value="8.4">PHP 8.4</option>
-                                <option value="8.3">PHP 8.3</option>
-                                <option value="8.2">PHP 8.2</option>
-                                <option value="8.1">PHP 8.1</option>
+                                {/* From the CLI, so a new PHP release appears without a Desktop change. Until
+                                    they arrive, the project's own version is the only choice. */}
+                                {(phpVersions && phpVersions.length > 0
+                                    ? phpVersions
+                                    : [
+                                          {
+                                              value: phpVersion,
+                                              label: `PHP ${phpVersion}`,
+                                          },
+                                      ]
+                                ).map((option) => (
+                                    <option
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <div>

@@ -569,6 +569,33 @@ class ProjectController extends Controller
         return to_route('runs.show', $run);
     }
 
+    /**
+     * The `php` field's options for a framework in the CLI's new:frameworks catalog.
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    private function phpVersionOptions(FrameworkCatalog $frameworks, string $framework): array
+    {
+        $fields = $frameworks->framework($framework)['fields'] ?? null;
+
+        foreach (is_array($fields) ? $fields : [] as $field) {
+            if (! is_array($field) || ($field['key'] ?? null) !== 'php' || ! is_array($field['options'] ?? null)) {
+                continue;
+            }
+
+            $options = [];
+            foreach ($field['options'] as $option) {
+                if (is_array($option) && is_string($option['value'] ?? null) && is_string($option['label'] ?? null)) {
+                    $options[] = ['value' => $option['value'], 'label' => $option['label']];
+                }
+            }
+
+            return $options;
+        }
+
+        return [];
+    }
+
     public function show(
         Project $project,
         StackCatalog $stacks,
@@ -632,6 +659,9 @@ class ProjectController extends Controller
             'project' => ['id' => $project->id, 'group' => $project->group, 'localStatus' => $this->resolveLocalStatus($project, $inspection, $latestRun, $this->localWorkloadStatuses($locator))] + $inspection,
             'server' => $server,
             'frameworks' => $this->inspector->deployableFrameworks(),
+            // The PHP versions this project's framework can run, from the CLI (its PhpVersion enum), so a new
+            // release shows up here without a Desktop change.
+            'phpVersions' => Inertia::defer(fn (): array => $this->phpVersionOptions($frameworks, (string) ($inspection['framework'] ?? ''))),
             'runs' => Run::query()
                 ->where(fn ($q) => $q->where('project_id', $project->id)->orWhere('subject', "project:{$project->id}"))
                 ->latest('id')

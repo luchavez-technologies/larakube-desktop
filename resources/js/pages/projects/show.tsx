@@ -190,6 +190,7 @@ export default function ShowProject({
     project,
     server,
     frameworks,
+    phpVersions,
     runs,
     latestRun,
     scaffold,
@@ -212,6 +213,7 @@ export default function ShowProject({
     project: Project;
     server: Server | null;
     frameworks: Record<string, string>;
+    phpVersions?: { value: string; label: string }[];
     runs: RecentRun[];
     latestRun: ProjectRun | null;
     scaffold: { id: number; status: RunStatus; canRetry: boolean } | null;
@@ -763,6 +765,7 @@ export default function ShowProject({
                                             <PhpExtensionsCard
                                                 project={project}
                                                 activeEnv={activeEnv}
+                                                phpVersions={phpVersions}
                                             />
                                         </div>
                                     </div>
