@@ -11,6 +11,7 @@ import { ListRow, TwoLine } from '@/components/list-row';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
 import SupabaseFunctionsCard from '@/components/supabase-functions-card';
+import SupabaseMcpCard from '@/components/supabase-mcp-card';
 import type { Tone } from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
 import {
@@ -490,6 +491,12 @@ export default function ShowTool({
                                     host={tool.host}
                                 />
                             )}
+                        {tool.panels?.includes('mcp') && tool.host && (
+                            <SupabaseMcpCard
+                                server={server.name}
+                                host={tool.host}
+                            />
+                        )}
                         <Card label="Danger zone" tone="danger">
                             <p className="mt-1 mb-3 text-[13px] leading-relaxed text-soft">
                                 Removes {name} and its data from {server.name}.
