@@ -9,6 +9,10 @@ fixPath();
 
 app.name = 'LaraKube';
 
+// Runs inherit this environment, and Desktop asks the CLI for NO_COLOR. In development `concurrently`
+// adds FORCE_COLOR, and Node prints a warning at the top of every run when both are set.
+delete process.env.FORCE_COLOR;
+
 // A packaged app has no visible console, and this is where NativePHP reports a process that would not start or exited.
 // Mirror it into <user data>/logs/main.log (kept to about 1 MB, one older copy) so a problem can be read afterwards.
 (function mirrorConsoleToFile() {
