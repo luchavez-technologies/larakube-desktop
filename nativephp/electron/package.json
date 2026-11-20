@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "description": "Provision cloud servers and install Cluster Tools with the LaraKube CLI",
     "main": "./out/main/index.js",
-    "author": "LaraKube",
+    "author": "LuchTech Web Development Services",
     "homepage": "https://docs.larakube.app",
     "type": "module",
     "engines": {

@@ -22,7 +22,7 @@ All desktop application metadata, versioning, and lifecycle parameters MUST be d
 - **App Metadata & Deep Links**: Configured in `config/nativephp.php`:
     - `app_id`: `app.larakube.desktop`
     - `version`: SemVer string matching application releases.
-    - `author`: `LaraKube` (the product; LuchTech, the company behind it, appears only in the copyright and the About panel's credits)
+    - `author`: `LuchTech Web Development Services` (the company; the app itself is named LaraKube Desktop), https://www.luchtech.dev
     - `copyright`: `Copyright © 2026 LuchTech`
     - `website`: `https://docs.larakube.app`
     - `deeplink_scheme`: `larakube` (enabling `larakube://` protocol handlers).
