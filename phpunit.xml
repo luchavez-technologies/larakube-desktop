@@ -30,6 +30,8 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
+        <!-- Never the running dev app's Electron API (localhost:4000): an unfaked NativePHP call is refused at once instead. -->
+        <env name="NATIVEPHP_API_URL" value="http://127.0.0.1:9/api/" force="true"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>
