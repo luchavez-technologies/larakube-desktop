@@ -56,6 +56,8 @@ type NavItem = {
     icon: ComponentType<{ className?: string }>;
     /** Only listed when Experimental features are switched on in Settings. */
     experimental?: boolean;
+    /** Shows how many runs are in progress, so a long install is visible from anywhere. */
+    showsActiveRuns?: boolean;
 };
 
 const navigation: NavItem[] = [
@@ -182,6 +184,7 @@ const navigation: NavItem[] = [
         active: (url) => url.startsWith('/runs'),
         accent: 'bg-zinc-600',
         icon: Activity,
+        showsActiveRuns: true,
     },
     {
         label: 'Setup',
@@ -220,6 +223,7 @@ export default function AppLayout({
     children: ReactNode;
 }) {
     const { url, props } = usePage<{
+        activeRuns?: unknown[];
         hideProjects?: boolean;
         experimental?: boolean;
         demoMode?: boolean;
@@ -465,16 +469,28 @@ export default function AppLayout({
                     {visibleNavigation.map((item) => {
                         const active = item.active(url);
                         const Icon = item.icon;
-                        const tooltipText = `${item.label}${item.description ? ` · ${item.description}` : ''}${item.experimental ? ' · Experimental' : ''}`;
+                        const running = item.showsActiveRuns
+                            ? (props.activeRuns?.length ?? 0)
+                            : 0;
+                        const description =
+                            running > 0
+                                ? `${running} running`
+                                : item.description;
+                        const tooltipText = `${item.label}${description ? ` · ${description}` : ''}${item.experimental ? ' · Experimental' : ''}`;
 
                         const iconContent = (
                             <span
                                 className={cn(
-                                    'flex size-7.5 shrink-0 items-center justify-center rounded-lg text-white shadow-xs',
+                                    'relative flex size-7.5 shrink-0 items-center justify-center rounded-lg text-white shadow-xs',
                                     item.accent,
                                 )}
                             >
                                 <Icon className="size-4" />
+                                {running > 0 && (
+                                    <span className="absolute -top-1 -right-1 flex min-w-4 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] leading-4 font-semibold text-white ring-2 ring-surface">
+                                        {running}
+                                    </span>
+                                )}
                             </span>
                         );
 
@@ -518,8 +534,15 @@ export default function AppLayout({
                                             />
                                         )}
                                     </span>
-                                    <span className="block text-xs text-soft">
-                                        {item.description}
+                                    <span
+                                        className={cn(
+                                            'block text-xs',
+                                            running > 0
+                                                ? 'font-medium text-amber-600 dark:text-amber-400'
+                                                : 'text-soft',
+                                        )}
+                                    >
+                                        {description}
                                     </span>
                                 </span>
                             </>
