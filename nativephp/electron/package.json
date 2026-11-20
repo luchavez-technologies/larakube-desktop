@@ -2,10 +2,10 @@
     "name": "larakube",
     "productName": "LaraKube Desktop",
     "version": "1.0.0",
-    "description": "LaraKube Desktop",
+    "description": "Provision cloud servers and install Cluster Tools with the LaraKube CLI",
     "main": "./out/main/index.js",
-    "author": "LuchTech",
-    "homepage": "https://www.larakube.app",
+    "author": "LaraKube",
+    "homepage": "https://docs.larakube.app",
     "type": "module",
     "engines": {
         "node": ">=22.0.0"

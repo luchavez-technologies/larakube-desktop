@@ -66,7 +66,7 @@ app.whenReady().then(() => {
             applicationVersion: '1.0.0',
             version: '1.0.0',
             copyright: 'Copyright © 2026 LuchTech. All rights reserved.',
-            credits: 'Developed by LuchTech (https://www.luchtech.dev).\nWebsite: https://www.larakube.app',
+            credits: 'Developed by LuchTech (https://www.luchtech.dev).\nWebsite: https://docs.larakube.app',
             iconPath: resolvedIcon,
         });
     }

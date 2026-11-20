@@ -19,14 +19,14 @@ When moving to NativePHP 2.5.0 the copy was still on Electron 40, while 2.5.0 sh
 
 2. **Every file that differs from stock is listed below, with why.** After an upgrade, comparing the folder against stock must show only these files. Anything else that differs is a missed upstream change; anything here that no longer differs is a lost change of ours.
 
-| File                                                  | Our change                                                                              | Why                                                                             |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `build/icon.png`, `build/icon.icns`, `build/icon.ico` | LaraKube icons                                                                          | Branding                                                                        |
-| `build/installer.nsh`                                 | Ours only                                                                               | Silent NSIS auto-updates must not wipe `~/.larakube`                            |
-| `electron-builder.mjs`                                | `LARAKUBE_UPDATE_URL` generic update feed; installer file names from `fileName`         | Updates come from the GitHub release assets; stable installer names             |
-| `electron-plugin/src/server/php.ts`                   | `PHP_CLI_SERVER_WORKERS=4` (not on Windows)                                             | Page checks run in parallel instead of queueing behind PHP's one-request server |
-| `src/main/index.js`                                   | `app.name = 'LaraKube'`; console mirrored to `<userData>/logs/main.log`; `shell` import | Packaged apps have no console; the sponsor link opens externally                |
-| `package.json`, `package-lock.json`                   | Name `larakube`, author, homepage, description                                          | Branding                                                                        |
+| File                                                  | Our change                                                                                                                 | Why                                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `build/icon.png`, `build/icon.icns`, `build/icon.ico` | LaraKube icons                                                                                                             | Branding                                                                        |
+| `build/installer.nsh`                                 | Ours only                                                                                                                  | Silent NSIS auto-updates must not wipe `~/.larakube`                            |
+| `electron-builder.mjs`                                | `LARAKUBE_UPDATE_URL` generic update feed; installer file names from `fileName`                                            | Updates come from the GitHub release assets; stable installer names             |
+| `electron-plugin/src/server/php.ts`                   | `PHP_CLI_SERVER_WORKERS=4` (not on Windows)                                                                                | Page checks run in parallel instead of queueing behind PHP's one-request server |
+| `src/main/index.js`                                   | `app.name = 'LaraKube'`; console mirrored to `<userData>/logs/main.log`; `shell` import                                    | Packaged apps have no console; the sponsor link opens externally                |
+| `package.json`, `package-lock.json`                   | Name `larakube`, author `LaraKube`, homepage `https://docs.larakube.app`, description, all matching `config/nativephp.php` | Branding; `native:dev` regenerates the same values                              |
 
 3. **Check after merging:**
     - `npx tsc --noEmit -p .` and `npx vitest run` in `nativephp/electron/electron-plugin`;

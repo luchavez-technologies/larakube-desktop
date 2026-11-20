@@ -31,7 +31,7 @@ return [
     /**
      * The author of your application.
      */
-    'author' => env('NATIVEPHP_APP_AUTHOR', 'LuchTech'),
+    'author' => env('NATIVEPHP_APP_AUTHOR', 'LaraKube'),
 
     /**
      * The copyright notice for your application.
