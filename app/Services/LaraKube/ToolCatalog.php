@@ -73,7 +73,28 @@ class ToolCatalog
      */
     public function isFresh(array $last): bool
     {
-        return $last['checkedAt'] !== null && now()->getTimestamp() - $last['checkedAt'] < self::FRESH_SECONDS;
+        if ($last['checkedAt'] === null || now()->getTimestamp() - $last['checkedAt'] >= self::FRESH_SECONDS) {
+            return false;
+        }
+
+        // A list checked before the CLI was rebuilt can miss what the new build reports (a tool's
+        // panels, say), so a new build re-checks it rather than waiting out the half hour.
+        $cliBuiltAt = $this->cliBuiltAt();
+
+        return $cliBuiltAt === null || $last['checkedAt'] >= $cliBuiltAt;
+    }
+
+    /** When the larakube binary Desktop runs was last written, or null when it can't be read. */
+    private function cliBuiltAt(): ?int
+    {
+        $path = $this->locator->find('larakube');
+        if ($path === null) {
+            return null;
+        }
+
+        $modified = @filemtime(@realpath($path) ?: $path);
+
+        return $modified === false ? null : $modified;
     }
 
     /**

@@ -168,6 +168,8 @@ test('contextIsSyncing reports false once the sync has finished', function () {
 
 test('a fresh verified list renders at once, with no live check', function () {
     $bin = clusterToolsFakeCli();
+    // Built before the list was checked.
+    touch("{$bin}/larakube", now()->subHour()->getTimestamp());
     clusterToolsFakes();
     clusterToolsSeed('larakube-203.0.113.21', clusterToolsRows(), now()->subMinutes(5)->getTimestamp());
 
@@ -179,6 +181,21 @@ test('a fresh verified list renders at once, with no live check', function () {
             ->whereNot('checkedAt', null));
 
     Process::assertNotRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), 'tool:list'));
+
+    File::deleteDirectory($bin);
+});
+
+test('a list checked before the CLI was rebuilt is checked again, so new panels show at once', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    clusterToolsSeed('larakube-203.0.113.21', [clusterToolsRows()[0]], now()->subMinutes(5)->getTimestamp());
+    // The CLI was rebuilt a minute ago, after that check.
+    touch("{$bin}/larakube", now()->subMinute()->getTimestamp());
+
+    $this->get(route('servers.tools.index', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->missing('tools')
+            ->loadDeferredProps('tools', fn (AssertableInertia $reload) => $reload->has('tools', 2)));
 
     File::deleteDirectory($bin);
 });
