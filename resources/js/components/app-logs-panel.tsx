@@ -1,5 +1,8 @@
-import { Pause, Play, RotateCw } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import AutoRefreshToggle, {
+    useAutoRefresh,
+} from '@/components/auto-refresh-toggle';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import LogPanel from '@/components/log-panel';
@@ -23,7 +26,6 @@ type LogsResponse = {
 
 /** Lines kept in view; older ones scroll away. */
 const MAX_LINES = 2000;
-const POLL_MS = 2000;
 
 /**
  * One merged, live stream of every component's logs for an installed app,
@@ -42,7 +44,8 @@ export default function AppLogsPanel({
     const [lines, setLines] = useState<LogLine[]>([]);
     const [components, setComponents] = useState<string[]>([]);
     const [component, setComponent] = useState<string | null>(null);
-    const [live, setLive] = useState(true);
+    // Seconds between polls; 0 pauses. Shares the Off / 5s / 10s / 30s picker the other live cards use.
+    const [refreshSeconds, setRefreshSeconds] = useState<number>(5);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const lastTime = useRef<string | null>(null);
@@ -110,19 +113,11 @@ export default function AppLogsPanel({
         void fetchLines(true);
     }, [fetchLines]);
 
-    useEffect(() => {
-        if (!live) {
-            return;
-        }
-
-        const timer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                void fetchLines(false);
-            }
-        }, POLL_MS);
-
-        return () => window.clearInterval(timer);
-    }, [live, fetchLines]);
+    const pollNewLines = useCallback(
+        () => void fetchLines(false),
+        [fetchLines],
+    );
+    useAutoRefresh(refreshSeconds, pollNewLines);
 
     const output = lines
         .map((l) => `[${l.component || l.container}] ${l.line}`)
@@ -133,19 +128,11 @@ export default function AppLogsPanel({
             label="Logs"
             action={
                 <div className="flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setLive((value) => !value)}
-                        title={live ? 'Pause live logs' : 'Resume live logs'}
-                    >
-                        {live ? (
-                            <Pause className="size-3" />
-                        ) : (
-                            <Play className="size-3" />
-                        )}
-                        <span>{live ? 'Pause' : 'Resume'}</span>
-                    </Button>
+                    <AutoRefreshToggle
+                        value={refreshSeconds}
+                        onChange={setRefreshSeconds}
+                        title="Auto-refresh logs interval"
+                    />
                     <Button
                         variant="ghost"
                         size="xs"
@@ -178,7 +165,10 @@ export default function AppLogsPanel({
                     </button>
                 ))}
                 <span className="ml-auto text-[11px] text-faint">
-                    {live ? 'Live' : 'Paused'} · last 15 minutes
+                    {refreshSeconds > 0
+                        ? `Live · every ${refreshSeconds}s`
+                        : 'Paused'}{' '}
+                    · last 15 minutes
                 </span>
             </div>
             {error && <p className="mb-2 text-xs text-accent">{error}</p>}
