@@ -159,6 +159,7 @@ class RecordRunOutput
             if ($status === RunStatus::Succeeded) {
                 $this->updateClusterToolWiring($run, $server);
                 $this->recordActivity($run, $server);
+                $this->forgetRemovedTool($run, $server);
             }
         }
 
@@ -382,6 +383,27 @@ class RecordRunOutput
             'title' => $run->label,
             'occurred_at' => now(),
         ]);
+    }
+
+    /**
+     * Drops a removed app's row the moment its removal succeeds, so its page leaves for the Apps list
+     * on the drawer's own reload instead of waiting for the background tool sync to confirm it.
+     */
+    private function forgetRemovedTool(Run $run, Server $server): void
+    {
+        $tool = $run->meta['tool'] ?? $run->tool;
+
+        if ($run->kind !== RunKind::RemoveClusterTool || ! is_string($tool) || $tool === '') {
+            return;
+        }
+
+        $host = is_string($run->meta['host'] ?? null) && $run->meta['host'] !== '' ? $run->meta['host'] : null;
+        $rows = ClusterTool::where('server_id', $server->id)->where('tool', $tool);
+
+        // A single-instance app's row is also its catalog entry, so it stays listed as not installed.
+        $host !== null
+            ? $rows->where('host', $host)->delete()
+            : $rows->whereNull('host')->update(['installed' => false]);
     }
 
     private function updateClusterToolWiring(Run $run, Server $server): void

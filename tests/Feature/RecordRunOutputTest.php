@@ -239,6 +239,55 @@ test('successful wire and unwire runs update cluster tool wiring data optimistic
     [RunKind::OpenBaoUnwire, 'rotation', 'unwired'],
 ]);
 
+function removeToolRun(string $host, int $exitCode = 0): Run
+{
+    $run = Run::create([
+        'label' => 'Remove Supabase from cloud-prod',
+        'kind' => RunKind::RemoveClusterTool,
+        'subject' => 'supabase',
+        'meta' => ['server' => 'cloud-prod', 'context' => 'ctx-cloud-prod', 'tool' => 'supabase', 'host' => $host],
+        'context' => 'ctx-cloud-prod',
+        'command' => ['larakube', 'supabase:remove'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), $exitCode));
+
+    return $run;
+}
+
+test('a successful removal drops that instance at once, without waiting for the tool sync', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'cloud-prod', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-cloud-prod', 'status' => 'ready']);
+    ClusterTool::create(['server_id' => $server->id, 'tool' => 'supabase', 'host' => null, 'installed' => false, 'position' => 0, 'data' => []]);
+    ClusterTool::create(['server_id' => $server->id, 'tool' => 'supabase', 'host' => 'supabase.example.com', 'installed' => true, 'position' => 1, 'data' => []]);
+    ClusterTool::create(['server_id' => $server->id, 'tool' => 'supabase', 'host' => 'other.example.com', 'installed' => true, 'position' => 2, 'data' => []]);
+
+    removeToolRun('supabase.example.com');
+
+    expect(ClusterTool::where('tool', 'supabase')->pluck('host')->all())->toEqualCanonicalizing([null, 'other.example.com']);
+    Queue::assertPushed(SyncClusterToolsJob::class);
+});
+
+test('a single-instance removal keeps its catalog row, marked not installed', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'cloud-prod', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-cloud-prod', 'status' => 'ready']);
+    $row = ClusterTool::create(['server_id' => $server->id, 'tool' => 'supabase', 'host' => null, 'installed' => true, 'position' => 0, 'data' => []]);
+
+    removeToolRun('');
+
+    expect($row->refresh()->installed)->toBeFalse();
+});
+
+test('a failed removal leaves the instance in place', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'cloud-prod', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-cloud-prod', 'status' => 'ready']);
+    ClusterTool::create(['server_id' => $server->id, 'tool' => 'supabase', 'host' => 'supabase.example.com', 'installed' => true, 'position' => 0, 'data' => []]);
+
+    removeToolRun('supabase.example.com', exitCode: 1);
+
+    expect(ClusterTool::where('host', 'supabase.example.com')->exists())->toBeTrue();
+});
+
 test('successful create-server run updates server status to ready and dispatches SyncServersJob', function () {
     Queue::fake();
 
