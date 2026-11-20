@@ -286,6 +286,7 @@ Route::post('/servers/{server}/apps/{tool}/unwire', [ClusterToolController::clas
 Route::delete('/servers/{server}/apps/{tool}', [ClusterToolController::class, 'destroy'])->name('servers.apps.destroy');
 Route::get('/servers/{server}/apps/supabase/functions', [SupabaseFunctionsController::class, 'index'])->name('servers.apps.supabase.functions');
 Route::post('/servers/{server}/apps/supabase/functions/deploy', [SupabaseFunctionsController::class, 'deploy'])->name('servers.apps.supabase.functions.deploy');
+Route::post('/servers/{server}/apps/supabase/functions/delete', [SupabaseFunctionsController::class, 'destroy'])->name('servers.apps.supabase.functions.delete');
 Route::get('/servers/{server}/apps/{tool}/resources', [ClusterToolInspectController::class, 'resources'])->name('servers.apps.resources');
 Route::post('/servers/{server}/apps/{tool}/resources/reveal', [ClusterToolInspectController::class, 'reveal'])->name('servers.apps.resources.reveal');
 Route::get('/servers/{server}/apps/{tool}/logs', [ClusterToolInspectController::class, 'logs'])->name('servers.apps.logs');

@@ -104,3 +104,33 @@ test('deploying again from a folder that is gone says so instead of starting a r
     expect(Run::count())->toBe(0);
     File::deleteDirectory($bin);
 });
+
+test('deleting a function runs supabase:functions:delete with --force, since the card already asked', function () {
+    $bin = supabaseFunctionsCli();
+    $fake = ChildProcess::fake();
+
+    $this->postJson(route('servers.apps.supabase.functions.delete', ['server' => 'workshop-demo']), ['domain' => 'db.example.com', 'function' => 'functions'])
+        ->assertOk()
+        ->assertJsonPath('started', true);
+
+    expect(Run::sole()->kind)->toBe(RunKind::DeleteSupabaseFunction)
+        ->and(Run::sole()->meta['function'])->toBe('functions');
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => in_array('supabase:functions:delete', (array) $cmd, true)
+        && in_array('--function=functions', (array) $cmd, true)
+        && in_array('--force', (array) $cmd, true)
+        && in_array('--domain=db.example.com', (array) $cmd, true)
+        && in_array('--context=larakube-203.0.113.21', (array) $cmd, true));
+
+    File::deleteDirectory($bin);
+});
+
+test('deleting refuses main and anything that is not a plain function name', function (string $name) {
+    $bin = supabaseFunctionsCli();
+    ChildProcess::fake();
+
+    $this->postJson(route('servers.apps.supabase.functions.delete', ['server' => 'workshop-demo']), ['domain' => 'db.example.com', 'function' => $name])
+        ->assertStatus(422);
+
+    expect(Run::count())->toBe(0);
+    File::deleteDirectory($bin);
+})->with(['main', '../etc', 'a b', '']);

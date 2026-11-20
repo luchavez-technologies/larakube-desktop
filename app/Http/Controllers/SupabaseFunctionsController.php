@@ -12,8 +12,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The Edge Functions card on a Supabase app page: what is deployed (`supabase:functions:list`), and
- * deploying a local folder (`supabase:functions:deploy`) as an ordinary run. The folder of the last
+ * The Edge Functions card on a Supabase app page: what is deployed (`supabase:functions:list`),
+ * deploying a local folder (`supabase:functions:deploy`) and deleting one (`supabase:functions:delete`),
+ * each as an ordinary run. The folder of the last
  * deploy is read back from that run, so redeploying is one click.
  */
 class SupabaseFunctionsController extends Controller
@@ -56,6 +57,33 @@ class SupabaseFunctionsController extends Controller
             kind: RunKind::DeploySupabaseFunctions,
             subject: 'supabase',
             meta: ['server' => $server, 'context' => $context, 'tool' => 'supabase', 'host' => $domain, 'path' => $path],
+            targetType: 'tool',
+            targetName: 'Supabase',
+            serverName: $server,
+            context: $context,
+            tool: 'supabase',
+        );
+
+        return response()->json(['started' => true, 'run' => $run->id]);
+    }
+
+    /** Deletes one function. The card asks first, so the CLI runs with --force. */
+    public function destroy(Request $request, string $server): JsonResponse
+    {
+        $validated = $request->validate([
+            'domain' => ['required', 'string', 'max:253'],
+            'function' => ['required', 'string', 'max:128', 'regex:/^[A-Za-z0-9_-]+$/', 'not_in:main'],
+        ]);
+        $context = $this->context($server);
+        $domain = $validated['domain'];
+        $function = $validated['function'];
+
+        $run = app(CliRunner::class)->start(
+            label: "Delete Edge Function {$function} from {$domain}",
+            arguments: ['supabase:functions:delete', 'production', "--context={$context}", "--domain={$domain}", "--function={$function}", '--force'],
+            kind: RunKind::DeleteSupabaseFunction,
+            subject: 'supabase',
+            meta: ['server' => $server, 'context' => $context, 'tool' => 'supabase', 'host' => $domain, 'function' => $function],
             targetType: 'tool',
             targetName: 'Supabase',
             serverName: $server,

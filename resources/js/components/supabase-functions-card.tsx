@@ -1,7 +1,8 @@
-import { FolderUp, RotateCw } from 'lucide-react';
+import { FolderUp, RotateCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import Button from '@/components/button';
 import Card from '@/components/card';
+import ConfirmModal from '@/components/confirm-modal';
 import CopyButton from '@/components/copy-button';
 import { ListRow, TwoLine } from '@/components/list-row';
 import { sendJson } from '@/lib/http';
@@ -30,7 +31,8 @@ type FunctionsResponse = {
     } | null;
 };
 
-const RUN_KIND = 'deploy-supabase-functions';
+// Runs that change what's deployed; the list reloads when either finishes.
+const RUN_KINDS = ['deploy-supabase-functions', 'delete-supabase-function'];
 
 function since(iso: string | null): string {
     if (!iso) return '';
@@ -57,6 +59,7 @@ export default function SupabaseFunctionsCard({
     const [data, setData] = useState<FunctionsResponse | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         const res = await sendJson<FunctionsResponse>(
@@ -70,13 +73,14 @@ export default function SupabaseFunctionsCard({
         void load();
     }, [load]);
 
-    // A deploy runs in the drawer like any other run; reload the list the moment it ends.
+    // A deploy or delete runs in the drawer like any other run; reload the list the moment it ends.
     useEffect(
         () =>
             onNativeEvent<RunEventPayload>(
                 NativeEvents.runFinished,
                 (payload) => {
-                    if (payload.kind === RUN_KIND) void load();
+                    if (payload.kind && RUN_KINDS.includes(payload.kind))
+                        void load();
                 },
             ),
         [load],
@@ -96,6 +100,25 @@ export default function SupabaseFunctionsCard({
                 res.data.error ??
                     res.data.message ??
                     'Could not start the deploy.',
+            );
+        }
+    };
+
+    const remove = async (name: string) => {
+        setBusy(true);
+        setError(null);
+        const res = await sendJson<{ started: boolean; error?: string }>(
+            `${base}/delete`,
+            'POST',
+            { domain: host, function: name },
+        );
+        setBusy(false);
+        setDeleting(null);
+        if (!res.data.started) {
+            setError(
+                res.data.error ??
+                    res.data.message ??
+                    `Could not delete ${name}.`,
             );
         }
     };
@@ -160,7 +183,19 @@ export default function SupabaseFunctionsCard({
                     <ListRow
                         key={fn.name}
                         action={
-                            fn.url ? <CopyButton value={fn.url} /> : undefined
+                            <div className="flex items-center gap-1">
+                                {fn.url && <CopyButton value={fn.url} />}
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={busy}
+                                    onClick={() => setDeleting(fn.name)}
+                                    title={`Delete ${fn.name}`}
+                                    aria-label={`Delete ${fn.name}`}
+                                >
+                                    <Trash2 className="size-3" />
+                                </Button>
+                            </div>
                         }
                     >
                         <TwoLine
@@ -174,6 +209,21 @@ export default function SupabaseFunctionsCard({
                 ))
             )}
             {error && <p className="mt-2 text-xs text-accent">{error}</p>}
+            <ConfirmModal
+                isOpen={deleting !== null}
+                onClose={() => setDeleting(null)}
+                onConfirm={() => deleting && void remove(deleting)}
+                title={`Delete ${deleting ?? ''}?`}
+                description={
+                    deleting?.startsWith('_')
+                        ? 'This shared folder is removed from the server. Functions that import from it stop working until you deploy it again.'
+                        : 'This function is removed from the server and its link stops working. Your local folder is not touched.'
+                }
+                confirmLabel="Delete"
+                confirmIcon={<Trash2 className="size-4" />}
+                tone="danger"
+                processing={busy}
+            />
             {last && enabled && (
                 <p className="mt-3 text-[11px] text-faint">
                     Last deployed from{' '}
