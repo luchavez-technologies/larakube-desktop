@@ -23,14 +23,14 @@ All three are the _same_ `index.html` template with only the brand-mark image, e
     - Headline: Sora 800, 64px, line-height 1.04, one phrase in `--accent-cyan` for the key noun (tool name or benefit).
     - Subline: DM Sans 500, 24px, muted (`--text-lo`), one plain sentence of what the viewer gets.
 - **Callout pill** (over the mockup, left:100px top:585px): small dark pill with a glowing green dot + a short status line ("Server ready in 3m 02s", "Live in under a minute", "Live and ready to log in").
-- **Mockup** (right column, top:116px left:648px, 672×560): the episode's actual UI screenshot, tilted in 3D (`perspective(1400px) rotateY(-7deg) rotateX(3deg) scale(1.02)`), heavy drop shadow, 18px radius border.
+- **Mockup** (right column, top:130px left:624px, 600×502, so it ends inside the 1280 frame; Ep.1–4 used 672×560 at left:648px, which bleeds 40px off the right edge): the episode's actual UI screenshot, tilted in 3D (`perspective(1400px) rotateY(-7deg) rotateX(3deg) scale(1.02)`), heavy drop shadow, 18px radius border.
 - Publish via `publish_files` (not inline base64) so the logo and screenshot stay as real files — keeps the artifact readable/editable later instead of one giant base64 blob line.
 
 ### To make a new episode's thumbnail
 
 1. Pick the next `EP. 0X`.
 2. Write one badge (orange pill hook), one headline with one cyan-accented word/phrase, one subline, one callout status line — in the voice of the existing three (plain, benefit-first, no hype).
-3. Grab a real screenshot of the tool's installed/running state in Desktop for the mockup.
+3. Grab a real screenshot of the tool's installed/running state in Desktop for the mockup. Take it at full resolution, never from an OpenScreen preview frame (those are 1280px wide and look soft once scaled up): `swift media/frame.swift <recording.mp4> <seconds> <out.png>` grabs the exact frame from the 2880px take, then crop with `sips`. Crop to the panel itself so the mockup box (600×502 at left 624, top 130) shows it whole, inside the frame.
 4. Copy the Ep.3 artifact's `index.html` as the base, swap only: ep-tag, badge, headline, subline, callout text, and `card.png`. Reuse `logo.png` (`desktop/public/icon.png`) unchanged.
 5. Publish with `publish_files`, `mode: "replace"`, as a _new_ artifact (title `LaraKube Desktop Ep.N Thumbnail`) — don't overwrite a prior episode's artifact.
 
@@ -80,3 +80,15 @@ Keep each 📌 line to one real, specific, checkable claim — no invented price
 ### Tags — fixed core + per-episode
 
 Comma-separated, lowercase, no spaces after commas. Fixed core set every episode: `laravel,kubernetes,opentofu,docker,deploy,selfhosted,devtools`. Add 1-3 episode-specific tags (the tool's own name/category, e.g. `n8n,automation` or `pocketbase,backend,sqlite`).
+
+### Exporting the thumbnail PNG
+
+Render it at 2× (2560×1440), never 1×: a 1280×720 render looks soft on Retina screens and in YouTube Studio's preview, and the mockup's 3D tilt resamples the screenshot. Wrap the artifact's `index.html` in `<!doctype html><html><head><meta charset="utf-8">…</html>`, keep `logo.png` and `card.png` beside it, then:
+
+```sh
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars \
+  --force-device-scale-factor=2 --window-size=1280,720 --virtual-time-budget=5000 \
+  --screenshot="$HOME/Downloads/larakube-desktop-epNN-<tool>-thumbnail.png" "file://<dir>/render.html"
+```
+
+YouTube's limit is 2 MB; the Ep.5 PNG at 2× was 1.4 MB. If one comes out larger, convert it to JPEG at quality 92 with `sips -s format jpeg -s formatOptions 92`.
