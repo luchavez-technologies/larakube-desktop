@@ -63,20 +63,20 @@ function PlexPageHeader({
 }) {
     return (
         <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-            <div className="min-w-0">
+            <div className="shrink-0">
                 <div className="flex items-center gap-2.5">
-                    <h1 className="truncate text-[28px] leading-tight font-semibold tracking-[-0.03em] text-ink">
+                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em] whitespace-nowrap text-ink">
                         Plex Commons
                     </h1>
                     {badge}
                 </div>
-                <p className="mt-1 text-sm leading-relaxed text-soft">
+                <p className="mt-1 max-w-md text-sm leading-relaxed text-soft">
                     Shared backing infrastructure backbone — powering tenant
                     apps, cluster tools, and devboxes.
                 </p>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
                 <ServerSwitcher
                     servers={servers}
                     value={server.name}

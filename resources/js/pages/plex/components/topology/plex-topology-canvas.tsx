@@ -103,6 +103,15 @@ function TopologyFlow({
     );
 }
 
+/** An engine's standard port, for when its details don't list one. */
+function defaultEnginePort(driver: string): string | undefined {
+    const d = driver.toLowerCase();
+    if (d.includes('maria') || d.includes('mysql')) return '3306';
+    if (d.includes('postgres')) return '5432';
+    if (d.includes('redis') || d.includes('valkey')) return '6379';
+    return undefined;
+}
+
 export default function PlexTopologyCanvas({
     server,
     projects,
@@ -213,7 +222,8 @@ export default function PlexTopologyCanvas({
                         label: opt.label,
                         categoryKey: cat.key,
                         categoryLabel: cat.label,
-                        port: portDetail?.value ?? undefined,
+                        port:
+                            portDetail?.value ?? defaultEnginePort(opt.driver),
                         ready: opt.ready,
                         tenants: engineTenants,
                     });

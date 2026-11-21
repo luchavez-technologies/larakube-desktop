@@ -403,11 +403,11 @@ export default function AppLayout({
         const iconContent = (
             <span
                 className={cn(
-                    'relative flex size-7.5 shrink-0 items-center justify-center rounded-lg text-white shadow-xs',
+                    'relative flex size-6.5 shrink-0 items-center justify-center rounded-md text-white shadow-xs',
                     item.accent,
                 )}
             >
-                <Icon className="size-4" />
+                <Icon className="size-3.5" />
                 {running > 0 && (
                     <span className="absolute -top-1 -right-1 flex min-w-4 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] leading-4 font-semibold text-white ring-2 ring-surface">
                         {running}
@@ -469,7 +469,7 @@ export default function AppLayout({
                 prefetch
                 cacheFor={['30s', '1m']}
                 className={cn(
-                    'flex items-center gap-3 rounded-[10px] px-2.5 py-1.5 transition',
+                    'flex items-center gap-2.5 rounded-[10px] px-2.5 py-1 transition',
                     active ? 'bg-badge' : 'hover:bg-paper',
                 )}
                 title={tooltipText}
@@ -479,7 +479,7 @@ export default function AppLayout({
         ) : (
             <div
                 key={item.label}
-                className="flex cursor-not-allowed items-center gap-3 rounded-[10px] px-2.5 py-1.5 opacity-45"
+                className="flex cursor-not-allowed items-center gap-2.5 rounded-[10px] px-2.5 py-1 opacity-45"
             >
                 {body}
             </div>
@@ -597,7 +597,7 @@ export default function AppLayout({
                         </div>
                     </div>
                 )}
-                <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+                <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
                     {mainNavigation.map((item, index) => {
                         const header =
                             item.group &&
@@ -612,7 +612,7 @@ export default function AppLayout({
                                     (collapsed ? (
                                         <div className="mx-auto my-1.5 h-px w-6 shrink-0 bg-line" />
                                     ) : (
-                                        <div className="px-2.5 pt-3 pb-1 text-[10px] font-semibold tracking-wider text-faint uppercase">
+                                        <div className="px-2.5 pt-2.5 pb-0.5 text-[10px] font-semibold tracking-wider text-faint uppercase">
                                             {groupLabels[header]}
                                         </div>
                                     ))}
