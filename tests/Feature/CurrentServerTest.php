@@ -83,14 +83,3 @@ test('every page gets the ready servers and the one being worked on, for the sid
             ->count('workspace.servers', 2));
 
 });
-
-test('picking a server in the sidebar remembers it, and only a ready one', function () {
-    sidebarPickerSeed();
-
-    $this->post(route('current-server.update'), ['server' => 'bravo'])->assertRedirect();
-    expect(session('current_server'))->toBe('bravo');
-
-    $this->post(route('current-server.update'), ['server' => 'half-built'])->assertSessionHasErrors('server');
-    expect(session('current_server'))->toBe('bravo');
-
-});

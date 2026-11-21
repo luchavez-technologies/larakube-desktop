@@ -10,7 +10,6 @@ use App\Http\Controllers\ClusterToolEnvController;
 use App\Http\Controllers\ClusterToolInspectController;
 use App\Http\Controllers\CompanionController;
 use App\Http\Controllers\ContextController;
-use App\Http\Controllers\CurrentServerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevBoxController;
 use App\Http\Controllers\DiagnosticsController;
@@ -363,7 +362,6 @@ Route::get('/settings', [SettingsController::class, 'show'])->name('settings.sho
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::post('/settings/theme', [SettingsController::class, 'setTheme'])->name('settings.theme');
 Route::post('/settings/demo-mode', [SettingsController::class, 'toggleDemoMode'])->name('settings.demo-mode');
-Route::post('/current-server', [CurrentServerController::class, 'update'])->name('current-server.update');
 Route::post('/settings/sync-cli', [SettingsController::class, 'syncCli'])->name('settings.sync-cli');
 Route::post('/settings/bridge/{agent}', [SettingsController::class, 'bridge'])->name('settings.bridge');
 Route::post('/settings/mcp-http', [SettingsController::class, 'updateMcpHttp'])->name('settings.mcp-http');

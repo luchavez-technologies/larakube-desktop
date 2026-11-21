@@ -3,7 +3,6 @@ import ProviderLogo from '@/components/provider-logo';
 import SelectMenu from '@/components/select-menu';
 import { serverOptions } from '@/components/server-switcher';
 import { NativeEvents, useNativeEventReload } from '@/lib/native-events';
-import { update as rememberServer } from '@/routes/current-server';
 import type { Server } from '@/types/larakube';
 
 type WorkspaceServer = Pick<
@@ -16,14 +15,14 @@ export type Workspace = {
     current: string | null;
 };
 
-/** The per-server sections whose address carries the server: /servers/{name}/{section}. */
+/** The per-server pages, whose address carries the server: /servers/{name}/{section}. */
 const SECTION =
-    /^\/servers\/[^/]+\/(apps|tools|plex|mail|drive|sso|openbao|backups)(?=[/?]|$)/;
+    /^\/servers\/([^/]+)\/(apps|tools|plex|mail|drive|sso|openbao|backups)(?=[/?]|$)/;
 
 /**
- * The one place to choose the server you're working with. On a per-server page
- * it reopens that page for the new server; anywhere else it is remembered, so
- * the next per-server page opens on it.
+ * The one place to choose the server you're working with. It shows only on the
+ * per-server pages, and switching reopens the same page for the new server;
+ * fleet-wide pages (Dashboard, Servers, Activity...) span every server.
  */
 export default function SidebarServerPicker({
     workspace,
@@ -37,23 +36,17 @@ export default function SidebarServerPicker({
     const { url } = usePage();
     useNativeEventReload(NativeEvents.serversSynced, ['workspace']);
 
-    const current = workspace.servers.find((s) => s.name === workspace.current);
-    if (!current) return null;
+    const match = SECTION.exec(url);
+    const current = match
+        ? workspace.servers.find((s) => s.name === decodeURIComponent(match[1]))
+        : undefined;
+    if (!match || !current) return null;
 
+    const section = match[2];
     const choose = (name: string) => {
-        if (name === current.name) return;
-
-        const section = SECTION.exec(url)?.[1];
-        if (section) {
+        if (name !== current.name) {
             router.visit(`/servers/${encodeURIComponent(name)}/${section}`);
-            return;
         }
-
-        router.post(
-            rememberServer().url,
-            { server: name },
-            { preserveScroll: true, preserveState: true },
-        );
     };
 
     if (collapsed) {
@@ -81,6 +74,7 @@ export default function SidebarServerPicker({
                 aria-label="Server"
                 className="w-full"
                 triggerClassName="h-9 w-full rounded-lg px-2"
+                triggerBadge={false}
                 options={serverOptions(workspace.servers)}
                 onChange={choose}
             />

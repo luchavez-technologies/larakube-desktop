@@ -52,6 +52,8 @@ type Props = {
     panelClassName?: string;
     align?: 'left' | 'right';
     'aria-label'?: string;
+    /** Whether the closed trigger repeats the selected option's badge; the list always shows it. */
+    triggerBadge?: boolean;
     /** Shows a filter box at the top of the panel — turn on once a list is long enough that scanning it beats scrolling it. */
     searchable?: boolean;
 };
@@ -77,6 +79,7 @@ export default function SelectMenu({
     panelClassName,
     align = 'left',
     searchable = false,
+    triggerBadge = true,
     ...rest
 }: Props) {
     const [open, setOpen] = useState(false);
@@ -151,7 +154,7 @@ export default function SelectMenu({
                         <>
                             {selected.icon}
                             <span className="truncate">{selected.label}</span>
-                            {selected.badge}
+                            {triggerBadge && selected.badge}
                         </>
                     ) : (
                         <span className="text-faint">{placeholder}</span>
