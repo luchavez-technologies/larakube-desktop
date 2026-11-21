@@ -1,5 +1,11 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import {
+    Fragment,
+    useEffect,
+    useState,
+    type ComponentType,
+    type ReactNode,
+} from 'react';
 import {
     LayoutDashboard,
     Store,
@@ -47,8 +53,27 @@ import { index as devBoxesIndex } from '@/routes/devboxes';
 import RunDrawer from '@/components/run-drawer';
 import NotificationBell from '@/components/notification-bell';
 
+type NavGroup =
+    | 'build'
+    | 'apps'
+    | 'suites'
+    | 'security'
+    | 'operations'
+    | 'system';
+
+/** The sidebar's sections, in order. `system` sits in the footer as compact rows. */
+const groupLabels: Record<Exclude<NavGroup, 'system'>, string> = {
+    build: 'Build',
+    apps: 'Apps',
+    suites: 'Suites',
+    security: 'Security',
+    operations: 'Operations',
+};
+
 type NavItem = {
     label: string;
+    /** No group: listed first, above every section (Dashboard). */
+    group?: NavGroup;
     description: string;
     href: string | null;
     active: (url: string) => boolean;
@@ -71,6 +96,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Servers',
+        group: 'build',
         description: 'Create & manage',
         href: serversIndex().url,
         active: (url) =>
@@ -88,6 +114,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Projects',
+        group: 'build',
         description: 'Deploy your code',
         href: projectsIndex().url,
         active: (url) => url.startsWith('/projects'),
@@ -96,6 +123,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Dev Boxes',
+        group: 'build',
         description: 'Remote dev server',
         href: devBoxesIndex().url,
         active: (url) =>
@@ -106,6 +134,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Apps',
+        group: 'apps',
         description: 'App store & services',
         href: tools().url,
         active: (url) =>
@@ -118,6 +147,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Plex Commons',
+        group: 'apps',
         description: 'Shared infrastructure',
         href: plex().url,
         active: (url) =>
@@ -127,6 +157,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Mail',
+        group: 'suites',
         description: 'Email & mailboxes',
         href: mail().url,
         active: (url) =>
@@ -137,6 +168,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Drive',
+        group: 'suites',
         description: 'Files & office suite',
         href: drive().url,
         active: (url) =>
@@ -146,7 +178,19 @@ const navigation: NavItem[] = [
         experimental: true,
     },
     {
+        label: 'Identity',
+        group: 'security',
+        description: 'Users & access grants',
+        href: sso().url,
+        active: (url) =>
+            url.startsWith('/sso') || /^\/servers\/[^/]+\/sso/.test(url),
+        accent: 'bg-indigo-600',
+        icon: KeyRound,
+        experimental: true,
+    },
+    {
         label: 'Secrets',
+        group: 'security',
         description: 'Vault & key rotation',
         href: openbao().url,
         active: (url) =>
@@ -157,17 +201,18 @@ const navigation: NavItem[] = [
         experimental: true,
     },
     {
-        label: 'Identity',
-        description: 'Users & access grants',
-        href: sso().url,
-        active: (url) =>
-            url.startsWith('/sso') || /^\/servers\/[^/]+\/sso/.test(url),
-        accent: 'bg-indigo-600',
-        icon: KeyRound,
-        experimental: true,
+        label: 'Activity',
+        group: 'operations',
+        description: 'Recent runs',
+        href: runsIndex().url,
+        active: (url) => url.startsWith('/runs'),
+        accent: 'bg-zinc-600',
+        icon: Activity,
+        showsActiveRuns: true,
     },
     {
         label: 'Backups',
+        group: 'operations',
         description: 'Disaster recovery',
         href: '/backups',
         active: (url) =>
@@ -178,16 +223,8 @@ const navigation: NavItem[] = [
         experimental: true,
     },
     {
-        label: 'Activity',
-        description: 'Recent runs',
-        href: runsIndex().url,
-        active: (url) => url.startsWith('/runs'),
-        accent: 'bg-zinc-600',
-        icon: Activity,
-        showsActiveRuns: true,
-    },
-    {
         label: 'Setup',
+        group: 'system',
         description: 'Tools & logins',
         href: readiness().url,
         active: (url) => url.startsWith('/readiness'),
@@ -196,6 +233,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Settings',
+        group: 'system',
         description: 'Global & AI config',
         href: settingsShow().url,
         active: (url) => url.startsWith('/settings'),
@@ -204,6 +242,7 @@ const navigation: NavItem[] = [
     },
     {
         label: 'Help',
+        group: 'system',
         description: 'Community & support',
         href: helpShow().url,
         active: (url) =>
@@ -344,6 +383,108 @@ export default function AppLayout({
             ) &&
             (!item.experimental || Boolean(props.experimental)),
     );
+    const mainNavigation = visibleNavigation.filter(
+        (item) => item.group !== 'system',
+    );
+    const systemNavigation = visibleNavigation.filter(
+        (item) => item.group === 'system',
+    );
+
+    const renderNavItem = (item: NavItem) => {
+        const active = item.active(url);
+        const Icon = item.icon;
+        const running = item.showsActiveRuns
+            ? (props.activeRuns?.length ?? 0)
+            : 0;
+        const description =
+            running > 0 ? `${running} running` : item.description;
+        const tooltipText = `${item.label}${description ? ` · ${description}` : ''}${item.experimental ? ' · Experimental' : ''}`;
+
+        const iconContent = (
+            <span
+                className={cn(
+                    'relative flex size-7.5 shrink-0 items-center justify-center rounded-lg text-white shadow-xs',
+                    item.accent,
+                )}
+            >
+                <Icon className="size-4" />
+                {running > 0 && (
+                    <span className="absolute -top-1 -right-1 flex min-w-4 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] leading-4 font-semibold text-white ring-2 ring-surface">
+                        {running}
+                    </span>
+                )}
+            </span>
+        );
+
+        if (collapsed) {
+            return item.href ? (
+                <Link
+                    key={item.label}
+                    href={item.href}
+                    prefetch
+                    cacheFor={['30s', '1m']}
+                    className={cn(
+                        'mx-auto flex size-10 items-center justify-center rounded-[10px] transition',
+                        active ? 'bg-badge' : 'hover:bg-paper',
+                    )}
+                    title={tooltipText}
+                    aria-label={item.label}
+                >
+                    {iconContent}
+                </Link>
+            ) : (
+                <div
+                    key={item.label}
+                    className="mx-auto flex size-10 cursor-not-allowed items-center justify-center rounded-[10px] opacity-45"
+                    title={`${item.label} (disabled)`}
+                >
+                    {iconContent}
+                </div>
+            );
+        }
+
+        const body = (
+            <>
+                {iconContent}
+                <span className="min-w-0 leading-tight">
+                    <span className="flex flex-wrap items-center gap-1 text-sm font-medium">
+                        {item.label}
+                        {item.experimental && (
+                            <ExperimentalBadge compact side="right" />
+                        )}
+                    </span>
+                    {running > 0 && (
+                        <span className="block text-xs font-medium text-amber-600 dark:text-amber-400">
+                            {description}
+                        </span>
+                    )}
+                </span>
+            </>
+        );
+
+        return item.href ? (
+            <Link
+                key={item.label}
+                href={item.href}
+                prefetch
+                cacheFor={['30s', '1m']}
+                className={cn(
+                    'flex items-center gap-3 rounded-[10px] px-2.5 py-1.5 transition',
+                    active ? 'bg-badge' : 'hover:bg-paper',
+                )}
+                title={tooltipText}
+            >
+                {body}
+            </Link>
+        ) : (
+            <div
+                key={item.label}
+                className="flex cursor-not-allowed items-center gap-3 rounded-[10px] px-2.5 py-1.5 opacity-45"
+            >
+                {body}
+            </div>
+        );
+    };
 
     return (
         <div className="flex h-screen overflow-hidden">
@@ -453,125 +594,73 @@ export default function AppLayout({
                         </div>
                         <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
                             <NotificationBell />
-                            <button
-                                type="button"
-                                onClick={toggleSidebar}
-                                className="cursor-pointer rounded-lg p-1.5 text-soft transition hover:bg-paper hover:text-ink"
-                                title="Collapse sidebar (⌘B)"
-                                aria-label="Collapse sidebar"
-                            >
-                                <PanelLeftClose className="size-4" />
-                            </button>
                         </div>
                     </div>
                 )}
                 <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-                    {visibleNavigation.map((item) => {
-                        const active = item.active(url);
-                        const Icon = item.icon;
-                        const running = item.showsActiveRuns
-                            ? (props.activeRuns?.length ?? 0)
-                            : 0;
-                        const description =
-                            running > 0
-                                ? `${running} running`
-                                : item.description;
-                        const tooltipText = `${item.label}${description ? ` · ${description}` : ''}${item.experimental ? ' · Experimental' : ''}`;
+                    {mainNavigation.map((item, index) => {
+                        const header =
+                            item.group &&
+                            item.group !== 'system' &&
+                            item.group !== mainNavigation[index - 1]?.group
+                                ? item.group
+                                : null;
 
-                        const iconContent = (
-                            <span
-                                className={cn(
-                                    'relative flex size-7.5 shrink-0 items-center justify-center rounded-lg text-white shadow-xs',
-                                    item.accent,
-                                )}
-                            >
-                                <Icon className="size-4" />
-                                {running > 0 && (
-                                    <span className="absolute -top-1 -right-1 flex min-w-4 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] leading-4 font-semibold text-white ring-2 ring-surface">
-                                        {running}
-                                    </span>
-                                )}
-                            </span>
-                        );
-
-                        if (collapsed) {
-                            return item.href ? (
-                                <Link
-                                    key={item.label}
-                                    href={item.href}
-                                    prefetch
-                                    cacheFor={['30s', '1m']}
-                                    className={cn(
-                                        'mx-auto flex size-10 items-center justify-center rounded-[10px] transition',
-                                        active ? 'bg-badge' : 'hover:bg-paper',
-                                    )}
-                                    title={tooltipText}
-                                    aria-label={item.label}
-                                >
-                                    {iconContent}
-                                </Link>
-                            ) : (
-                                <div
-                                    key={item.label}
-                                    className="mx-auto flex size-10 cursor-not-allowed items-center justify-center rounded-[10px] opacity-45"
-                                    title={`${item.label} (disabled)`}
-                                >
-                                    {iconContent}
-                                </div>
-                            );
-                        }
-
-                        const body = (
-                            <>
-                                {iconContent}
-                                <span className="min-w-0 leading-tight">
-                                    <span className="flex flex-wrap items-center gap-1 text-sm font-medium">
-                                        {item.label}
-                                        {item.experimental && (
-                                            <ExperimentalBadge
-                                                compact
-                                                side="right"
-                                            />
-                                        )}
-                                    </span>
-                                    <span
-                                        className={cn(
-                                            'block text-xs',
-                                            running > 0
-                                                ? 'font-medium text-amber-600 dark:text-amber-400'
-                                                : 'text-soft',
-                                        )}
-                                    >
-                                        {description}
-                                    </span>
-                                </span>
-                            </>
-                        );
-
-                        return item.href ? (
-                            <Link
-                                key={item.label}
-                                href={item.href}
-                                prefetch
-                                cacheFor={['30s', '1m']}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-[10px] px-2.5 py-2 transition',
-                                    active ? 'bg-badge' : 'hover:bg-paper',
-                                )}
-                            >
-                                {body}
-                            </Link>
-                        ) : (
-                            <div
-                                key={item.label}
-                                className="flex cursor-not-allowed items-center gap-3 rounded-[10px] px-2.5 py-2 opacity-45"
-                            >
-                                {body}
-                            </div>
+                        return (
+                            <Fragment key={item.label}>
+                                {header &&
+                                    (collapsed ? (
+                                        <div className="mx-auto my-1.5 h-px w-6 shrink-0 bg-line" />
+                                    ) : (
+                                        <div className="px-2.5 pt-3 pb-1 text-[10px] font-semibold tracking-wider text-faint uppercase">
+                                            {groupLabels[header]}
+                                        </div>
+                                    ))}
+                                {renderNavItem(item)}
+                            </Fragment>
                         );
                     })}
                 </nav>
                 <div className="mt-auto space-y-1 border-t border-line/60 pt-3">
+                    {systemNavigation.map((item) => {
+                        const Icon = item.icon;
+                        const active = item.active(url);
+                        const tooltip = `${item.label} · ${item.description}`;
+
+                        return collapsed ? (
+                            <Link
+                                key={item.label}
+                                href={item.href ?? '#'}
+                                prefetch
+                                className={cn(
+                                    'mx-auto flex size-10 items-center justify-center rounded-lg transition',
+                                    active
+                                        ? 'bg-badge text-ink'
+                                        : 'text-soft hover:bg-paper hover:text-ink',
+                                )}
+                                title={tooltip}
+                                aria-label={item.label}
+                            >
+                                <Icon className="size-4" />
+                            </Link>
+                        ) : (
+                            <Link
+                                key={item.label}
+                                href={item.href ?? '#'}
+                                prefetch
+                                className={cn(
+                                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
+                                    active
+                                        ? 'bg-badge text-ink'
+                                        : 'text-soft hover:bg-paper hover:text-ink',
+                                )}
+                                title={tooltip}
+                            >
+                                <Icon className="size-3.5" />
+                                <span>{item.label}</span>
+                            </Link>
+                        );
+                    })}
                     {collapsed ? (
                         <>
                             <button
