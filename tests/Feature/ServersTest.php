@@ -163,6 +163,31 @@ test('a server page flags itself unreachable when the live kubectl check fails, 
     File::deleteDirectory($bin);
 });
 
+test('an unreachable server answers its live checks at once instead of asking the cluster each time', function () {
+    $bin = serversFakeCli();
+    File::put("{$bin}/kubectl", "#!/bin/sh\n");
+    chmod("{$bin}/kubectl", 0755);
+    Cache::flush();
+    Process::fake([
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => serversStacks()])),
+        '*--raw=/readyz*' => Process::result(exitCode: 1),
+        '*' => Process::result(output: '{}'),
+    ]);
+
+    $this->get(route('servers.show', 'workshop-demo'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->loadDeferredProps(fn (AssertableInertia $reload) => $reload
+                ->where('reachable', false)
+                ->where('capacity', null)
+                ->where('nodeMetrics', null)
+                ->where('diagnosis', null)));
+
+    // Only the one /readyz check reached for the cluster; no capacity, metrics or diagnose call did.
+    Process::assertNotRan(fn ($process): bool => (bool) preg_match('/cluster:capacity|cloud:diagnose|backup:status|dns:list|plex:show|tls:show|tool:list|\btop\b/', implode(' ', (array) $process->command)));
+
+    File::deleteDirectory($bin);
+});
+
 test('a server page lists projects bound to that server', function () {
     $bin = serversFakeCli();
     serversFakeStacks();

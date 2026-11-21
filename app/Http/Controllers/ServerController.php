@@ -441,6 +441,13 @@ class ServerController extends Controller
 
         $lastTools = $context !== null ? $toolCatalog->lastVerified($context) : null;
 
+        // Every live check below asks the cluster. When it stopped answering, each would hang until the
+        // network gives up, and enough of them at once fill every PHP worker so no other page loads. One
+        // quick, cached /readyz first (ContextHealth: 4s, kept a minute) lets them all return at once instead.
+        $live = fn (callable $call): mixed => $context !== null && ($health->check([$context])[$context] ?? true)
+            ? $call($context)
+            : null;
+
         return Inertia::render('servers/show', [
             'server' => $stack,
             'projects' => $projects,
@@ -448,7 +455,7 @@ class ServerController extends Controller
             'tools' => $context !== null
                 ? ($lastTools !== null && $toolCatalog->isFresh($lastTools)
                     ? $lastTools['tools']
-                    : Inertia::defer(fn (): ?array => $toolCatalog->forContext($context), 'tools'))
+                    : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $toolCatalog->forContext($c)), 'tools'))
                 : null,
             // *_data are kept fresh in the background (their matching Sync*Job, on a
             // recurring schedule plus an immediate dispatch on app boot) — same
@@ -457,28 +464,28 @@ class ServerController extends Controller
             // back to the live call, same as before.
             'dns' => $this->isColumnFresh($serverModel?->externaldns_last_synced_at, SyncServerExternalDnsJob::FRESH_SECONDS)
                 ? $serverModel->externaldns_data
-                : Inertia::defer(fn (): ?array => $context !== null ? $status->dns($context) : null, 'dns'),
+                : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->dns($c)), 'dns'),
             'tls' => $this->isColumnFresh($serverModel?->tls_last_synced_at, SyncServerTlsJob::FRESH_SECONDS)
                 ? $serverModel->tls_data
-                : Inertia::defer(fn (): ?array => $context !== null ? $status->tls($context) : null, 'tls'),
+                : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->tls($c)), 'tls'),
             'plex' => $this->isColumnFresh($serverModel?->plex_last_synced_at, SyncPlexJob::FRESH_SECONDS)
                 ? $serverModel->plex_data
-                : Inertia::defer(fn (): ?array => $context !== null ? $status->plex($context) : null, 'plex'),
+                : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->plex($c)), 'plex'),
             'backup' => $this->isColumnFresh($serverModel?->backup_last_synced_at, SyncServerBackupJob::FRESH_SECONDS)
                 ? $serverModel->backup_data
-                : Inertia::defer(fn (): ?array => $context !== null ? $status->backup($context) : null, 'backup'),
+                : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->backup($c)), 'backup'),
             'clusterUsers' => $this->isColumnFresh($serverModel?->cluster_users_last_synced_at, SyncServerClusterUsersJob::FRESH_SECONDS)
                 ? $serverModel->cluster_users_data
-                : Inertia::defer(fn (): ?array => $context !== null ? $status->clusterUsers($context) : null, 'clusterUsers'),
+                : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->clusterUsers($c)), 'clusterUsers'),
             'capacity' => $this->isColumnFresh($serverModel?->capacity_last_synced_at, SyncServerCapacityJob::FRESH_SECONDS)
                 ? $serverModel->capacity_data
-                : Inertia::defer(fn (): ?array => $context !== null ? $status->capacity($context) : null, 'capacity'),
-            'nodeMetrics' => Inertia::defer(fn (): ?array => $context !== null ? $clusterMetrics->nodeMetrics($context) : null, 'nodeMetrics'),
+                : Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->capacity($c)), 'capacity'),
+            'nodeMetrics' => Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $clusterMetrics->nodeMetrics($c)), 'nodeMetrics'),
             // "Ready" only ever meant "provisioning finished" — this is the live
             // signal that overrides the badge when the cluster stopped answering since.
             'reachable' => Inertia::defer(fn (): bool => $context === null || ($health->check([$context])[$context] ?? false), 'reachable'),
             'diagnosis' => $stack['kind'] === 'vps'
-                ? Inertia::defer(fn (): ?array => $context !== null ? $status->diagnose($context) : null, 'diagnosis')
+                ? Inertia::defer(fn (): ?array => $live(fn (string $c): ?array => $status->diagnose($c)), 'diagnosis')
                 : null,
             'providers' => $stack['kind'] === 'vps'
                 ? $readiness->databaseProviders()
