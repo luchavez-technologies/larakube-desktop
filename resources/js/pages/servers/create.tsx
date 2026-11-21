@@ -590,7 +590,7 @@ function ServerForm({
                                             </span>
                                             {candidate.slug === 'existing' && (
                                                 <span className="block text-xs text-soft">
-                                                    Any fresh Ubuntu 26.04
+                                                    Any fresh Ubuntu 24.04
                                                     server with SSH root access
                                                 </span>
                                             )}
