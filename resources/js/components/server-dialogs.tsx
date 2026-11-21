@@ -459,8 +459,13 @@ export function ServerActions({
     const canRestart =
         made && server.kind === 'vps' && server.status === 'ready';
     const stale = !made && reachable === false;
-    // A server LaraKube made that stopped answering can be let go of without deleting it at the provider.
-    const forgettable = made && reachable === false;
+    // A server LaraKube made that stopped answering, or whose create never finished, can be let go of
+    // without deleting anything at the provider: the way out when Destroy can't read its state.
+    const forgettable =
+        made &&
+        (reachable === false ||
+            server.status === 'failed' ||
+            server.status === 'incomplete');
     // A discovered cluster LaraKube found but never provisioned — typically
     // an existing OrbStack/Docker Desktop install with no Traefik on it yet.
     // KubeconfigDiscovery reports this as 'incomplete', the same status a
@@ -520,7 +525,7 @@ export function ServerActions({
                     <button
                         type="button"
                         onClick={() => setDialog('forget')}
-                        title="Forget: stop tracking this server without deleting it at the provider"
+                        title="Forget: stop tracking this server without deleting anything at the provider"
                         className={`${small} text-soft ring-line hover:bg-paper hover:text-ink`}
                     >
                         <Unplug className="size-3.5" />

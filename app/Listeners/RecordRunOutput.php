@@ -498,15 +498,23 @@ class RecordRunOutput
             return null;
         }
 
-        // Node.js child_process crashes start with the internal file:line header
-        // (`node:internal/child_process:441` -> `throw err;` -> `^` -> `Error: ...`),
-        // so surface the actual `Error:` line rather than stopping at line 0.
-        if (str_starts_with($lines[0], 'node:')) {
-            foreach ($lines as $line) {
-                if (preg_match('/^(?:[A-Z]\w*)?Error:/', $line) === 1) {
-                    return ['success' => false, 'error' => $line];
-                }
+        // The first `Error:` line says what went wrong: a Node child_process crash puts it after its
+        // `node:internal/...` header, and OpenTofu frames its errors in `│` box borders.
+        foreach ($lines as $line) {
+            $line = trim(ltrim($line, '│| '));
+            if (preg_match('/^(?:[A-Z]\w*)?Error:/', $line) === 1) {
+                return ['success' => false, 'error' => $line];
             }
+        }
+
+        // Otherwise the first line with words in it: the CLI's banner and OpenTofu's borders are drawn in
+        // block and box characters, and the banner's tagline is all capitals.
+        foreach ($lines as $line) {
+            if (preg_match('/^[\s\x{2500}-\x{259F}│|]*$/u', $line) === 1 || preg_match('/^[A-Z\s]+$/', $line) === 1) {
+                continue;
+            }
+
+            return ['success' => false, 'error' => $line];
         }
 
         return ['success' => false, 'error' => $lines[0]];

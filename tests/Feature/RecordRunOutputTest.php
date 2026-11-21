@@ -401,6 +401,44 @@ test('a successful forget run ends the server row the same way destroying it doe
     Queue::assertPushed(SyncServersJob::class);
 });
 
+test('a failed run is summed up by its error, not the banner drawn in block characters', function () {
+    $run = Run::create([
+        'label' => 'Destroy server half-made',
+        'kind' => RunKind::DestroyServer,
+        'output' => implode("\n", [
+            '   ██╗      █████╗ ██████╗  █████╗ ██╗  ██╗',
+            '   ███████╗██║  ██║██║  ██║╚██████╔╝',
+            '         THE PROFESSIONAL KUBERNETES ORCHESTRATOR FOR LARAVEL         ',
+            '   LARAKUBE  Running tofu destroy...',
+            '╷',
+            '│ Error: error loading state: decryption failed for all provided methods',
+            '╵',
+        ]),
+        'command' => ['larakube', 'cloud:destroy'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 1));
+
+    expect($run->refresh()->result['error'])->toBe('Error: error loading state: decryption failed for all provided methods');
+});
+
+test('without an Error line, the summary skips the banner to the first line with words', function () {
+    $run = Run::create([
+        'label' => 'Something',
+        'kind' => RunKind::DestroyServer,
+        'output' => implode("\n", [
+            '   ██╗      █████╗ ██████╗',
+            '         THE PROFESSIONAL KUBERNETES ORCHESTRATOR FOR LARAVEL         ',
+            '   LARAKUBE  tofu destroy failed — leaving the registry entry so you can retry.',
+        ]),
+        'command' => ['larakube', 'cloud:destroy'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 1));
+
+    expect($run->refresh()->result['error'])->toBe('LARAKUBE  tofu destroy failed — leaving the registry entry so you can retry.');
+});
+
 test('Node child_process stack traces extract the Error line instead of the node:internal frame header', function () {
     $run = Run::create([
         'label' => 'Google Cloud sign-in',
