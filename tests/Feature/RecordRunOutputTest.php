@@ -383,6 +383,24 @@ test('successful destroy-server run updates server status to destroyed and dispa
     Queue::assertPushed(SyncServersJob::class);
 });
 
+test('a successful forget run ends the server row the same way destroying it does', function () {
+    Queue::fake();
+    $server = Server::create(['name' => 'gone-vps', 'provider' => 'gcp', 'kind' => 'vps', 'context' => 'ctx-gone', 'status' => 'ready']);
+
+    $run = Run::create([
+        'label' => 'Forget server gone-vps',
+        'kind' => RunKind::ForgetServer,
+        'server_name' => 'gone-vps',
+        'target_name' => 'gone-vps',
+        'command' => ['larakube', 'cloud:forget'],
+    ]);
+
+    (new RecordRunOutput)->handleExit(new ProcessExited($run->alias(), 0));
+
+    expect($server->refresh()->status)->toBe('destroyed');
+    Queue::assertPushed(SyncServersJob::class);
+});
+
 test('Node child_process stack traces extract the Error line instead of the node:internal frame header', function () {
     $run = Run::create([
         'label' => 'Google Cloud sign-in',

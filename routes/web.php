@@ -97,6 +97,7 @@ Route::get('/servers/health', [ServerController::class, 'health'])->name('server
 Route::post('/servers/refresh', [ServerController::class, 'refresh'])->name('servers.refresh');
 Route::get('/servers/{server}', [ServerController::class, 'show'])->name('servers.show');
 Route::delete('/servers/{server}', [ServerController::class, 'destroy'])->name('servers.destroy');
+Route::post('/servers/{server}/forget', [ServerController::class, 'forget'])->name('servers.forget');
 Route::post('/servers/{server}/restart', [ServerController::class, 'restart'])->name('servers.restart');
 Route::post('/servers/{server}/repair', [ServerController::class, 'repair'])->name('servers.repair');
 Route::post('/servers/{server}/resize', [ServerController::class, 'resize'])->name('servers.resize');

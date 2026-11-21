@@ -2,6 +2,7 @@ import { Form, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+    AlertTriangle,
     ArrowUpCircle,
     RotateCw,
     Trash2,
@@ -14,7 +15,7 @@ import ConfirmModal from '@/components/confirm-modal';
 import Redactable from '@/components/redactable';
 import SelectMenu from '@/components/select-menu';
 import { remove as removeContext } from '@/routes/context';
-import { destroy, repair, resize, restart } from '@/routes/servers';
+import { destroy, forget, repair, resize, restart } from '@/routes/servers';
 import { isLocalServer } from '@/lib/servers';
 import { providerLabels } from '@/types/larakube';
 import type { Provider, Server } from '@/types/larakube';
@@ -126,6 +127,109 @@ export function DestroyServerDialog({
                                         : server.status === 'ready'
                                           ? 'Destroy server'
                                           : 'Destroy leftovers'}
+                                </span>
+                            </Button>
+                        </div>
+                    </>
+                )}
+            </Form>
+        </Shell>
+    );
+}
+
+/**
+ * Forget a server LaraKube made without deleting it at the provider: for one that is gone or can't be
+ * reached. It says where the server lives, so it can be deleted there by hand.
+ */
+export function ForgetServerDialog({
+    server,
+    onClose,
+}: {
+    server: Server;
+    onClose: () => void;
+}) {
+    const [typed, setTyped] = useState('');
+    const provider = providerLabels[server.provider] ?? server.provider;
+    const whereItLives = [
+        { label: 'Provider', value: provider },
+        { label: 'Account', value: server.account, kind: 'account' as const },
+        { label: 'Project', value: server.projectId },
+        { label: 'Region', value: server.region },
+        { label: 'Address', value: server.ip, kind: 'ip' as const },
+    ].filter((row) => row.value);
+
+    return (
+        <Shell onClose={onClose}>
+            <h2 className="text-xl font-semibold tracking-[-0.02em] text-ink">
+                Forget {server.name}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-soft">
+                LaraKube stops tracking this server and removes its saved state,
+                SSH key and kubectl context from this computer.
+            </p>
+            <div className="mt-3 flex gap-2.5 rounded-lg bg-amber-500/10 p-3 text-[13px] leading-relaxed text-ink ring-1 ring-amber-500/25">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                    <p>
+                        Nothing is deleted at {provider}. If the server still
+                        exists, it keeps running and billing until you delete it
+                        there.
+                    </p>
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                        {whereItLives.map((row) => (
+                            <div key={row.label} className="contents">
+                                <dt className="text-soft">{row.label}</dt>
+                                <dd className="min-w-0 truncate font-mono">
+                                    {row.kind ? (
+                                        <Redactable
+                                            value={row.value as string}
+                                            kind={row.kind}
+                                        />
+                                    ) : (
+                                        row.value
+                                    )}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </div>
+            </div>
+            <Form action={forget(server.name)} className="mt-4">
+                {({ errors, processing }) => (
+                    <>
+                        <label className="block">
+                            <span className="mb-1.5 block text-xs font-medium text-soft">
+                                Type {server.name} to confirm
+                            </span>
+                            <input
+                                name="confirm"
+                                value={typed}
+                                onChange={(event) =>
+                                    setTyped(event.target.value)
+                                }
+                                autoFocus
+                                autoComplete="off"
+                                spellCheck={false}
+                                className="w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
+                            />
+                            {errors.confirm && (
+                                <span className="mt-1 block text-xs text-accent">
+                                    {errors.confirm}
+                                </span>
+                            )}
+                        </label>
+                        <div className="mt-5 flex justify-end gap-2.5">
+                            <Button variant="secondary" onClick={onClose}>
+                                <XCircle className="size-4" />
+                                <span>Cancel</span>
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={typed !== server.name || processing}
+                            >
+                                <Unplug className="size-4" />
+                                <span>
+                                    {processing ? 'Starting…' : 'Forget server'}
                                 </span>
                             </Button>
                         </div>
@@ -338,8 +442,8 @@ export function RemoveContextDialog({
 
 /**
  * What can be done to a server from the list. Only a server LaraKube made
- * can be restarted or destroyed; a discovered one can only be forgotten, and
- * only once it no longer answers.
+ * can be restarted or destroyed, and forgotten once it no longer answers; a
+ * discovered one can only be removed, and only once it no longer answers.
  */
 export function ServerActions({
     server,
@@ -349,12 +453,14 @@ export function ServerActions({
     reachable?: boolean;
 }) {
     const [dialog, setDialog] = useState<
-        'restart' | 'destroy' | 'remove' | 'setup' | null
+        'restart' | 'destroy' | 'forget' | 'remove' | 'setup' | null
     >(null);
     const made = server.kind !== 'discovered';
     const canRestart =
         made && server.kind === 'vps' && server.status === 'ready';
     const stale = !made && reachable === false;
+    // A server LaraKube made that stopped answering can be let go of without deleting it at the provider.
+    const forgettable = made && reachable === false;
     // A discovered cluster LaraKube found but never provisioned — typically
     // an existing OrbStack/Docker Desktop install with no Traefik on it yet.
     // KubeconfigDiscovery reports this as 'incomplete', the same status a
@@ -410,6 +516,17 @@ export function ServerActions({
                         <span>Restart</span>
                     </button>
                 )}
+                {forgettable && (
+                    <button
+                        type="button"
+                        onClick={() => setDialog('forget')}
+                        title="Forget: stop tracking this server without deleting it at the provider"
+                        className={`${small} text-soft ring-line hover:bg-paper hover:text-ink`}
+                    >
+                        <Unplug className="size-3.5" />
+                        <span>Forget</span>
+                    </button>
+                )}
                 {made && (
                     <button
                         type="button"
@@ -449,6 +566,12 @@ export function ServerActions({
             )}
             {dialog === 'destroy' && (
                 <DestroyServerDialog
+                    server={server}
+                    onClose={() => setDialog(null)}
+                />
+            )}
+            {dialog === 'forget' && (
+                <ForgetServerDialog
                     server={server}
                     onClose={() => setDialog(null)}
                 />

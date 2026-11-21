@@ -243,6 +243,34 @@ test('destroying needs the exact name typed and then runs cloud:destroy --force'
     File::deleteDirectory($bin);
 });
 
+test('forgetting needs the exact name typed and then runs cloud:forget --force, deleting nothing at the provider', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.forget', 'cancel-test'), ['confirm' => 'cancel-tes'])->assertSessionHasErrors('confirm');
+    expect(Run::count())->toBe(0);
+
+    $this->post(route('servers.forget', 'cancel-test'), ['confirm' => 'cancel-test'])
+        ->assertRedirect(route('runs.show', Run::sole()));
+
+    expect(Run::sole()->kind)->toBe(RunKind::ForgetServer);
+    $fake->assertStarted(fn (array|string $cmd, mixed ...$rest): bool => array_slice($cmd, 4) === ["{$bin}/larakube", 'cloud:forget', 'cancel-test', '--force', '--no-interaction']);
+
+    File::deleteDirectory($bin);
+});
+
+test('forgetting a server the CLI does not know is a 404 and runs nothing', function () {
+    $bin = serversFakeCli();
+    serversFakeStacks();
+    ChildProcess::fake();
+
+    $this->post(route('servers.forget', 'nope'), ['confirm' => 'nope'])->assertNotFound();
+    expect(Run::count())->toBe(0);
+
+    File::deleteDirectory($bin);
+});
+
 test('destroying a server the CLI does not know is a 404 and runs nothing', function () {
     $bin = serversFakeCli();
     serversFakeStacks();

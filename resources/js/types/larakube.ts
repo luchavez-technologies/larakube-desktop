@@ -123,6 +123,7 @@ export type NotificationPayload = {
 export type RunKind =
     | 'create-server'
     | 'destroy-server'
+    | 'forget-server'
     | 'create-dev-box'
     | 'new-dev-box-project'
     | 'operate-dev-box-project'

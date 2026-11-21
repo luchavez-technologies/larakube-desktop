@@ -780,4 +780,25 @@ class ServerController extends Controller
 
         return to_route('runs.show', $run);
     }
+
+    /**
+     * Removes a server LaraKube made from this machine without deleting it at the provider: for one
+     * that is gone or can't be reached. Typing its name is the confirmation, as for Destroy.
+     */
+    public function forget(DestroyServerRequest $request, string $server, StackCatalog $catalog, CliRunner $runner): RedirectResponse
+    {
+        abort_if($catalog->find($server) === null, 404);
+
+        $run = $runner->start(
+            label: "Forget server {$server}",
+            arguments: ['cloud:forget', $server, '--force'],
+            kind: RunKind::ForgetServer,
+            subject: $server,
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+        );
+
+        return to_route('runs.show', $run);
+    }
 }

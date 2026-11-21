@@ -272,7 +272,8 @@ class RecordRunOutput
             ServersSynced::dispatch();
         }
 
-        if ($run->kind === RunKind::DestroyServer) {
+        // Forgetting a server ends its row the same way destroying it does.
+        if ($run->kind === RunKind::DestroyServer || $run->kind === RunKind::ForgetServer) {
             $destroyedServer = $server ?? ($run->server_name ? Server::where('name', $run->server_name)->first() : null);
             if ($destroyedServer !== null && $status === RunStatus::Succeeded) {
                 $destroyedServer->update(['status' => 'destroyed']);

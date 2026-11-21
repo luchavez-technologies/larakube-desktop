@@ -6,6 +6,8 @@ enum RunKind: string
 {
     case CreateServer = 'create-server';
     case DestroyServer = 'destroy-server';
+    /** Remove a server from LaraKube without deleting it at the provider (cloud:forget). */
+    case ForgetServer = 'forget-server';
     /** A server made as a development machine with devbox:create. */
     case CreateDevBox = 'create-dev-box';
     /** A new app scaffolded on a dev box over SSH. */
