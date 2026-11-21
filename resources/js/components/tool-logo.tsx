@@ -507,6 +507,22 @@ function getBrandVisual(
         };
     }
 
+    // 23b. ERPNext (Accounting & ERP)
+    if (id === 'erpnext') {
+        return {
+            containerClass:
+                'bg-sky-500/10 ring-1 ring-sky-500/25 text-[#0089FF]',
+            icon: (
+                <svg
+                    viewBox="0 0 24 24"
+                    className={`${sizeClass} shrink-0 fill-current`}
+                >
+                    <path d="M5 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4zm3.5 3.25v2.25h7V7.25h-7zm0 4.25v2.25h5.5V11.5h-5.5zm0 4.25V18h7v-2.25h-7z" />
+                </svg>
+            ),
+        };
+    }
+
     // 24. Documenso / Sign
     if (id === 'documenso') {
         return {
