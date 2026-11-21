@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react';
 import ProviderLogo from '@/components/provider-logo';
 import Redactable from '@/components/redactable';
-import SelectMenu from '@/components/select-menu';
+import SelectMenu, { type SelectMenuOption } from '@/components/select-menu';
 import { NativeEvents, useNativeEventReload } from '@/lib/native-events';
 import { serverKindLabel, type ServerKind } from '@/lib/servers';
 import { cn } from '@/lib/utils';
@@ -46,31 +46,36 @@ export default function ServerSwitcher({
                 accent={accent}
                 triggerClassName="h-9 rounded-lg bg-transparent px-2 ring-0 hover:ring-0"
                 onChange={(candidate) => router.visit(buildHref(candidate))}
-                options={servers.map((candidate) => {
-                    const kind = serverKindLabel(candidate);
-
-                    return {
-                        value: candidate.name,
-                        label: candidate.name,
-                        icon: (
-                            <ProviderLogo slug={candidate.provider} size="xs" />
-                        ),
-                        badge: (
-                            <span
-                                className={cn(
-                                    'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium',
-                                    kindBadgeClasses[kind],
-                                )}
-                            >
-                                {kind}
-                            </span>
-                        ),
-                        description: candidate.ip ? (
-                            <Redactable value={candidate.ip} kind="ip" />
-                        ) : undefined,
-                    };
-                })}
+                options={serverOptions(servers)}
             />
         </div>
     );
+}
+
+/** The picker's rows: each server with its provider logo, kind badge and address. */
+export function serverOptions(
+    servers: Pick<Server, 'name' | 'provider' | 'region' | 'ip' | 'kind'>[],
+): SelectMenuOption[] {
+    return servers.map((candidate) => {
+        const kind = serverKindLabel(candidate);
+
+        return {
+            value: candidate.name,
+            label: candidate.name,
+            icon: <ProviderLogo slug={candidate.provider} size="xs" />,
+            badge: (
+                <span
+                    className={cn(
+                        'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium',
+                        kindBadgeClasses[kind],
+                    )}
+                >
+                    {kind}
+                </span>
+            ),
+            description: candidate.ip ? (
+                <Redactable value={candidate.ip} kind="ip" />
+            ) : undefined,
+        };
+    });
 }

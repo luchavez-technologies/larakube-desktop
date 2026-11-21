@@ -379,6 +379,17 @@ class Server extends Model
         return $query->where('role', '!=', 'dev')->whereNotIn('status', ['missing', 'destroyed']);
     }
 
+    /**
+     * Ready, visible servers a user can work in: what the sidebar's server picker lists.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopePickable(Builder $query): Builder
+    {
+        return $this->scopeActive($query)->where('status', 'ready')->whereNotNull('context');
+    }
+
     public function isLocal(): bool
     {
         return self::isStackLocal([

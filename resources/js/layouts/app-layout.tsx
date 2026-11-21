@@ -52,6 +52,9 @@ import { show as settingsShow } from '@/routes/settings';
 import { index as devBoxesIndex } from '@/routes/devboxes';
 import RunDrawer from '@/components/run-drawer';
 import NotificationBell from '@/components/notification-bell';
+import SidebarServerPicker, {
+    type Workspace,
+} from '@/components/sidebar-server-picker';
 
 type NavGroup =
     | 'build'
@@ -266,6 +269,7 @@ export default function AppLayout({
         hideProjects?: boolean;
         experimental?: boolean;
         demoMode?: boolean;
+        workspace?: Workspace;
         theme?: string;
         untested?: Untested;
         versions?: {
@@ -492,7 +496,7 @@ export default function AppLayout({
             <aside
                 className={cn(
                     'z-30 flex h-full shrink-0 flex-col border-r border-line bg-surface py-5 transition-[width,padding] duration-200 ease-in-out',
-                    collapsed ? 'w-16 px-2' : 'w-64 px-3',
+                    collapsed ? 'w-16 px-2' : 'w-60 px-3',
                 )}
             >
                 {collapsed ? (
@@ -596,6 +600,13 @@ export default function AppLayout({
                             <NotificationBell />
                         </div>
                     </div>
+                )}
+                {props.workspace && (
+                    <SidebarServerPicker
+                        workspace={props.workspace}
+                        collapsed={collapsed}
+                        onExpand={toggleSidebar}
+                    />
                 )}
                 <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
                     {mainNavigation.map((item, index) => {

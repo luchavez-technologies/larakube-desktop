@@ -19,8 +19,8 @@ import {
     Clock,
     CheckCircle2,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import Button, { buttonClass } from '@/components/button';
-import ServerSwitcher from '@/components/server-switcher';
 import StatusPill from '@/components/status-pill';
 import {
     ToolLaunchProgress,
@@ -213,7 +213,6 @@ const isMultiInstance = (tool: ClusterTool): boolean =>
 
 export default function ToolsIndex({
     server,
-    servers,
     registered,
     lastVerified,
     checkedAt,
@@ -586,76 +585,65 @@ export default function ToolsIndex({
     return (
         <>
             <Head title="Apps" />
-            <header className="mb-6 flex items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em]">
-                        Apps
-                    </h1>
-                    <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-soft">
-                        Turnkey server applications ready to install with one
-                        click. Automatic HTTPS, custom domains, and single
-                        sign-on.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2.5">
-                    <ViewToggle
-                        mode={viewMode}
-                        onChange={handleViewModeChange}
-                    />
-                    <ServerSwitcher
-                        servers={servers}
-                        value={server.name}
-                        accent="tools"
-                        buildHref={(name) => toolsIndex(name).url}
-                    />
-                    <Link
-                        href={showServer(server.name).url}
-                        className={buttonClass('secondary')}
-                        title={`Open ${server.name} in Servers`}
-                    >
-                        <ExternalLink className="size-3.5" />
-                        <span>Open server</span>
-                    </Link>
-                    {(updatesAvailable > 0 || toolActivity.all !== null) && (
+            <PageHeader
+                title="Apps"
+                subtitle="Ready-to-run apps for your server, installed in one click with HTTPS."
+                actions={
+                    <>
+                        <ViewToggle
+                            mode={viewMode}
+                            onChange={handleViewModeChange}
+                        />
+                        <Link
+                            href={showServer(server.name).url}
+                            className={buttonClass('secondary')}
+                            title={`Open ${server.name} in Servers`}
+                        >
+                            <ExternalLink className="size-3.5" />
+                            <span>Open server</span>
+                        </Link>
+                        {(updatesAvailable > 0 ||
+                            toolActivity.all !== null) && (
+                            <button
+                                type="button"
+                                onClick={handleUpdateAll}
+                                disabled={
+                                    updatingAll ||
+                                    toolActivity.all !== null ||
+                                    isSyncing
+                                }
+                                className={buttonClass('primary')}
+                                title={`Re-apply ${updatesAvailable} app${updatesAvailable === 1 ? '' : 's'} with this CLI build, one after another. Data and settings are kept.`}
+                            >
+                                <ArrowUpCircle className="size-3.5" />
+                                <span>
+                                    {updatingAll
+                                        ? 'Starting…'
+                                        : toolActivity.all !== null
+                                          ? `Updating ${batchDone} of ${batchTotal}…`
+                                          : `Update all (${updatesAvailable})`}
+                                </span>
+                            </button>
+                        )}
                         <button
                             type="button"
-                            onClick={handleUpdateAll}
-                            disabled={
-                                updatingAll ||
-                                toolActivity.all !== null ||
+                            onClick={handleRefresh}
+                            disabled={isSyncing}
+                            className={buttonClass('secondary')}
+                            title={
                                 isSyncing
+                                    ? 'Checking the cluster for changes…'
+                                    : 'Check the cluster for changes'
                             }
-                            className={buttonClass('primary')}
-                            title={`Re-apply ${updatesAvailable} app${updatesAvailable === 1 ? '' : 's'} with this CLI build, one after another. Data and settings are kept.`}
                         >
-                            <ArrowUpCircle className="size-3.5" />
-                            <span>
-                                {updatingAll
-                                    ? 'Starting…'
-                                    : toolActivity.all !== null
-                                      ? `Updating ${batchDone} of ${batchTotal}…`
-                                      : `Update all (${updatesAvailable})`}
-                            </span>
+                            <RotateCw
+                                className={`size-3.5 ${isSyncing ? 'animate-spin' : ''}`}
+                            />
+                            <span>{isSyncing ? 'Syncing…' : 'Refresh'}</span>
                         </button>
-                    )}
-                    <button
-                        type="button"
-                        onClick={handleRefresh}
-                        disabled={isSyncing}
-                        className={buttonClass('secondary')}
-                        title={
-                            isSyncing
-                                ? 'Checking the cluster for changes…'
-                                : 'Check the cluster for changes'
-                        }
-                    >
-                        <RotateCw
-                            className={`size-3.5 ${isSyncing ? 'animate-spin' : ''}`}
-                        />
-                        <span>{isSyncing ? 'Syncing…' : 'Refresh'}</span>
-                    </button>
-                </div>
-            </header>
+                    </>
+                }
+            />
 
             {tools === undefined ? (
                 <Loading server={server.name} />

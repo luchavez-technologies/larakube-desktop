@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Inertia\Testing\AssertableInertia;
 
 function currentServerFakeCli(): string
 {
@@ -59,4 +61,36 @@ test('CurrentServer falls back to the last remembered name, then the first ready
     // Explicitly requesting a ready server updates what's remembered.
     expect($resolver->resolve(['alpha', 'beta'], 'alpha'))->toBe('alpha');
     expect($resolver->resolve(['alpha', 'beta']))->toBe('alpha');
+});
+
+/** Two ready servers and an unfinished one, as the server sync leaves them in the database. */
+function sidebarPickerSeed(): void
+{
+    Server::create(['name' => 'alpha', 'provider' => 'gcp', 'kind' => 'vps', 'region' => 'asia-east1', 'ip' => '203.0.113.21', 'context' => 'larakube-203.0.113.21', 'status' => 'ready']);
+    Server::create(['name' => 'bravo', 'provider' => 'do', 'kind' => 'vps', 'region' => 'sgp1', 'ip' => '203.0.113.22', 'context' => 'larakube-203.0.113.22', 'status' => 'ready']);
+    Server::create(['name' => 'half-built', 'provider' => 'gcp', 'kind' => 'vps', 'status' => 'unfinished']);
+}
+
+test('every page gets the ready servers and the one being worked on, for the sidebar picker', function () {
+    sidebarPickerSeed();
+
+    $this->withSession(['current_server' => 'bravo'])
+        ->get(route('settings.show'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('workspace.current', 'bravo')
+            ->where('workspace.servers.0.name', 'alpha')
+            ->where('workspace.servers.1.name', 'bravo')
+            ->count('workspace.servers', 2));
+
+});
+
+test('picking a server in the sidebar remembers it, and only a ready one', function () {
+    sidebarPickerSeed();
+
+    $this->post(route('current-server.update'), ['server' => 'bravo'])->assertRedirect();
+    expect(session('current_server'))->toBe('bravo');
+
+    $this->post(route('current-server.update'), ['server' => 'half-built'])->assertSessionHasErrors('server');
+    expect(session('current_server'))->toBe('bravo');
+
 });

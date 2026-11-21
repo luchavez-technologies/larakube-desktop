@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import {
     Code2,
     ExternalLink,
-    KeyRound,
     LayoutGrid,
     Network,
     Plus,
@@ -12,16 +11,16 @@ import {
     Server as ServerIcon,
     Shield,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
-import ServerSwitcher from '@/components/server-switcher';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
 import { isLocalServer } from '@/lib/servers';
 import { cn } from '@/lib/utils';
 import { show as showServer } from '@/routes/servers';
-import { index as plexIndex, refresh } from '@/routes/servers/plex';
+import { refresh } from '@/routes/servers/plex';
 import type {
     CompanionApp,
     CompatibilityToolItem,
@@ -48,104 +47,58 @@ import { useServerDataReload } from '@/lib/native-events';
 
 function PlexPageHeader({
     server,
-    servers,
     badge,
-    onOpenProvision,
     onOpenQuickConnect,
-    onOpenAddEngine,
 }: {
     server: Server;
-    servers: Server[];
     badge?: ReactNode;
-    onOpenProvision?: () => void;
     onOpenQuickConnect?: () => void;
-    onOpenAddEngine?: () => void;
 }) {
+    // Adding an engine and provisioning a tenant live with their own sections below.
     return (
-        <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-            <div className="shrink-0">
-                <div className="flex items-center gap-2.5">
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em] whitespace-nowrap text-ink">
-                        Plex Commons
-                    </h1>
-                    {badge}
-                </div>
-                <p className="mt-1 max-w-md text-sm leading-relaxed text-soft">
-                    Shared backing infrastructure backbone — powering tenant
-                    apps, cluster tools, and devboxes.
-                </p>
-            </div>
-
-            <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
-                <ServerSwitcher
-                    servers={servers}
-                    value={server.name}
-                    buildHref={(name) => plexIndex(name).url}
-                />
-
-                {onOpenQuickConnect && (
-                    <Button
-                        variant="secondary"
-                        size="md"
-                        onClick={onOpenQuickConnect}
-                        title="View cluster connection snippets and .env blocks"
+        <PageHeader
+            title="Plex Commons"
+            badge={badge}
+            subtitle="Shared databases, caches and storage your apps and tools plug into."
+            actions={
+                <>
+                    {onOpenQuickConnect && (
+                        <Button
+                            variant="secondary"
+                            size="md"
+                            onClick={onOpenQuickConnect}
+                            title="View cluster connection snippets and .env blocks"
+                        >
+                            <Code2 className="size-3.5" />
+                            <span>Quick Connect</span>
+                        </Button>
+                    )}
+                    <Link
+                        href={refresh(server.name).url}
+                        method="post"
+                        as="button"
+                        className={buttonClass('secondary', 'md', 'px-2.5')}
+                        title="Refresh status from cluster"
                     >
-                        <Code2 className="size-3.5" />
-                        <span>Quick Connect</span>
-                    </Button>
-                )}
-
-                {onOpenAddEngine && (
-                    <Button
-                        variant="secondary"
-                        size="md"
-                        onClick={onOpenAddEngine}
-                        title="Add companion engines like Meilisearch, MySQL, or MinIO"
+                        <RotateCw className="size-3.5" />
+                        <span className="sr-only">Refresh</span>
+                    </Link>
+                    <Link
+                        href={showServer(server.name).url}
+                        className={buttonClass('secondary', 'md', 'px-2.5')}
+                        title={`Open ${server.name} in Servers`}
                     >
-                        <Plus className="size-3.5" />
-                        <span>Add Engine</span>
-                    </Button>
-                )}
-
-                {onOpenProvision && (
-                    <Button
-                        variant="secondary"
-                        size="md"
-                        onClick={onOpenProvision}
-                        title="Provision custom credentials for an external workload"
-                    >
-                        <KeyRound className="size-3.5" />
-                        <span>Provision Tenant</span>
-                    </Button>
-                )}
-
-                <Link
-                    href={refresh(server.name).url}
-                    method="post"
-                    as="button"
-                    className={buttonClass('secondary', 'md', 'px-2.5')}
-                    title="Refresh status from cluster"
-                >
-                    <RotateCw className="size-3.5" />
-                    <span className="sr-only">Refresh</span>
-                </Link>
-
-                <Link
-                    href={showServer(server.name).url}
-                    className={buttonClass('secondary', 'md', 'px-2.5')}
-                    title={`Open ${server.name} in Servers`}
-                >
-                    <ExternalLink className="size-3.5" />
-                    <span className="sr-only">Open server</span>
-                </Link>
-            </div>
-        </header>
+                        <ExternalLink className="size-3.5" />
+                        <span className="sr-only">Open server</span>
+                    </Link>
+                </>
+            }
+        />
     );
 }
 
 export default function PlexIndex({
     server,
-    servers,
     projects = [],
     plex,
     plexSync,
@@ -229,7 +182,7 @@ export default function PlexIndex({
         return (
             <>
                 <Head title="Plex Commons" />
-                <PlexPageHeader server={server} servers={servers} />
+                <PlexPageHeader server={server} />
                 {/* Responsive skeleton shaped like the new Command Center */}
                 <div className="space-y-6">
                     {/* Top KPI skeleton */}
@@ -285,7 +238,7 @@ export default function PlexIndex({
         return (
             <>
                 <Head title="Plex Commons" />
-                <PlexPageHeader server={server} servers={servers} />
+                <PlexPageHeader server={server} />
                 <Card label="Plex Commons" tone="error">
                     <div className="flex items-center gap-3 py-2 text-accent">
                         <Shield className="size-5 shrink-0 text-accent" />
@@ -327,7 +280,6 @@ export default function PlexIndex({
             <Head title="Plex Commons" />
             <PlexPageHeader
                 server={server}
-                servers={servers}
                 badge={
                     initialized && (
                         <SyncStatusBadge
@@ -338,16 +290,10 @@ export default function PlexIndex({
                         />
                     )
                 }
-                onOpenProvision={
-                    initialized ? () => setIsProvisionOpen(true) : undefined
-                }
                 onOpenQuickConnect={
                     initialized
                         ? () => handleOpenQuickConnectForDriver('')
                         : undefined
-                }
-                onOpenAddEngine={
-                    initialized ? () => setIsAddEngineOpen(true) : undefined
                 }
             />
 

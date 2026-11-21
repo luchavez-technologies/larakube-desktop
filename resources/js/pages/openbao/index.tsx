@@ -18,16 +18,16 @@ import {
     UserPlus,
     XCircle,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
-import ServerSwitcher from '@/components/server-switcher';
 import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import ExperimentalBadge from '@/components/experimental-badge';
 import ToolLogo from '@/components/tool-logo';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
-import openbao, { index as openBaoIndex } from '@/routes/servers/openbao';
+import openbao from '@/routes/servers/openbao';
 import type { Server } from '@/types/larakube';
 import { useServerDataReload } from '@/lib/native-events';
 
@@ -140,7 +140,6 @@ function OpenBaoEmptyState({ server }: { server: Server }) {
 
 export default function OpenBaoIndex({
     server,
-    servers,
     isInstalled,
     status,
     openBaoSync,
@@ -269,14 +268,16 @@ export default function OpenBaoIndex({
             <Head title={`OpenBao · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
-                {/* Header with Server Switcher */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2.5">
+                <PageHeader
+                    title="Secrets"
+                    subtitle="One vault for every password and key, with automatic rotation."
+                    icon={
+                        <>
                             <ToolLogo slug="openbao" size="sm" />
-                            <h1 className="text-xl font-bold tracking-tight text-ink">
-                                Secrets Management
-                            </h1>
+                        </>
+                    }
+                    badge={
+                        <>
                             <ExperimentalBadge side="bottom" />
                             {isInstalled && resolved.bootstrapped && (
                                 <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
@@ -307,67 +308,63 @@ export default function OpenBaoIndex({
                                     subject="OpenBao"
                                 />
                             )}
-                        </div>
-                        <p className="mt-1 text-xs text-soft">
-                            Secrets backend: database credential rotation,
-                            backup copies, and scoped access grants.
-                        </p>
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
-                        {isInstalled && (
-                            <Form
-                                action={openbao.refresh(server.name).url}
-                                method="post"
-                            >
-                                <button
-                                    type="submit"
-                                    className={buttonClass('secondary', 'sm')}
-                                    title="Force an immediate re-sync, bypassing the cached data's freshness window"
+                        </>
+                    }
+                    actions={
+                        <>
+                            {isInstalled && (
+                                <Form
+                                    action={openbao.refresh(server.name).url}
+                                    method="post"
                                 >
-                                    <RotateCw
-                                        className={`h-3.5 w-3.5 ${shouldPoll ? 'animate-spin' : ''}`}
-                                    />
-                                    <span>Refresh</span>
-                                </button>
-                            </Form>
-                        )}
+                                    <button
+                                        type="submit"
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                        )}
+                                        title="Force an immediate re-sync, bypassing the cached data's freshness window"
+                                    >
+                                        <RotateCw
+                                            className={`h-3.5 w-3.5 ${shouldPoll ? 'animate-spin' : ''}`}
+                                        />
+                                        <span>Refresh</span>
+                                    </button>
+                                </Form>
+                            )}
 
-                        {isInstalled && resolved.bootstrapped && sealed && (
-                            <Form
-                                action={openbao.unseal(server.name).url}
-                                method="post"
-                            >
-                                <button
-                                    type="submit"
-                                    className={buttonClass('primary', 'sm')}
-                                    title="Unseal OpenBao using its stored unseal key"
+                            {isInstalled && resolved.bootstrapped && sealed && (
+                                <Form
+                                    action={openbao.unseal(server.name).url}
+                                    method="post"
                                 >
-                                    <Lock className="h-3.5 w-3.5" />
-                                    <span>Unseal</span>
-                                </button>
-                            </Form>
-                        )}
+                                    <button
+                                        type="submit"
+                                        className={buttonClass('primary', 'sm')}
+                                        title="Unseal OpenBao using its stored unseal key"
+                                    >
+                                        <Lock className="h-3.5 w-3.5" />
+                                        <span>Unseal</span>
+                                    </button>
+                                </Form>
+                            )}
 
-                        {isInstalled && resolved.bootstrapped && !sealed && (
-                            <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => setSealing(true)}
-                                title="Seal OpenBao — blocks all secret access cluster-wide until unsealed"
-                            >
-                                <ShieldOff className="h-3.5 w-3.5" />
-                                <span>Seal</span>
-                            </Button>
-                        )}
-
-                        <ServerSwitcher
-                            servers={servers}
-                            value={server.name}
-                            buildHref={(name) => openBaoIndex(name).url}
-                        />
-                    </div>
-                </div>
+                            {isInstalled &&
+                                resolved.bootstrapped &&
+                                !sealed && (
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => setSealing(true)}
+                                        title="Seal OpenBao — blocks all secret access cluster-wide until unsealed"
+                                    >
+                                        <ShieldOff className="h-3.5 w-3.5" />
+                                        <span>Seal</span>
+                                    </Button>
+                                )}
+                        </>
+                    }
+                />
 
                 {sealing && (
                     <div className="space-y-3 rounded-xl bg-accent-tint p-4 ring-1 ring-accent-line">

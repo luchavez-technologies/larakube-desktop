@@ -4,8 +4,10 @@ namespace App\Http\Middleware;
 
 use App\Enums\RunStatus;
 use App\Models\Run;
+use App\Models\Server;
 use App\Models\User;
 use App\Notifications\RunFinishedNotification;
+use App\Services\CurrentServer;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\ReadinessCheck;
 use App\Services\LaraKube\ToolMaturity;
@@ -84,6 +86,7 @@ class HandleInertiaRequests extends Middleware
             'hideProjects' => fn () => app(GlobalSettings::class)->hideProjects(),
             'experimental' => fn () => app(GlobalSettings::class)->experimental(),
             'demoMode' => fn () => app(GlobalSettings::class)->demoMode(),
+            'workspace' => fn () => rescue(fn (): array => $this->workspace(), ['servers' => [], 'current' => null], report: false),
             'versions' => fn () => rescue(function () {
                 $channel = app(GlobalSettings::class)->releaseChannel();
                 $cliStatus = app(ReadinessCheck::class)->status('larakube');
@@ -156,6 +159,28 @@ class HandleInertiaRequests extends Middleware
         return [
             'name' => fn () => config('app.name'),
             'untested' => fn () => app(ToolMaturity::class)->untested(),
+        ];
+    }
+
+    /**
+     * The ready servers and the one the user is working with, for the sidebar's
+     * server picker. Every per-server page follows this choice.
+     *
+     * @return array{servers: list<array<string, mixed>>, current: ?string}
+     */
+    private function workspace(): array
+    {
+        $ready = Server::query()->pickable()->orderBy('id')->get(['name', 'provider', 'region', 'ip', 'kind']);
+
+        return [
+            'servers' => array_values($ready->map(fn (Server $server): array => [
+                'name' => $server->name,
+                'provider' => $server->provider,
+                'region' => $server->region,
+                'ip' => $server->ip,
+                'kind' => $server->kind,
+            ])->all()),
+            'current' => app(CurrentServer::class)->resolve(array_values($ready->map(fn (Server $server): string => $server->name)->all())),
         ];
     }
 

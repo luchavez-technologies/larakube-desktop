@@ -19,11 +19,11 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
 import ExperimentalBadge from '@/components/experimental-badge';
 import ProviderLogo from '@/components/provider-logo';
-import ServerSwitcher from '@/components/server-switcher';
 import StatusPill from '@/components/status-pill';
 import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import SyncStatusBadge, {
@@ -112,7 +112,6 @@ const field =
 
 export default function BackupsIndex({
     server,
-    servers,
     isLocal,
     backup,
     backupSync,
@@ -214,16 +213,18 @@ export default function BackupsIndex({
             <Head title={`Backups · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
-                {/* Header with Server Switcher */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2.5">
+                <PageHeader
+                    title="Backups"
+                    subtitle="Encrypted snapshots on a schedule, and restores when you need them."
+                    icon={
+                        <>
                             <div className="flex size-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-500 ring-1 ring-teal-500/20">
                                 <DatabaseBackup className="size-4.5" />
                             </div>
-                            <h1 className="text-xl font-bold tracking-tight text-ink">
-                                Backups &amp; Disaster Recovery
-                            </h1>
+                        </>
+                    }
+                    badge={
+                        <>
                             <ExperimentalBadge side="bottom" />
                             {isLocal ? (
                                 <StatusPill tone="muted">
@@ -250,67 +251,56 @@ export default function BackupsIndex({
                                     subject="backups"
                                 />
                             )}
-                        </div>
-                        <p className="mt-1 text-xs text-soft">
-                            Encrypted Restic cluster snapshots, automated cron
-                            schedules, and point-in-time disaster recovery.
-                        </p>
-                    </div>
+                        </>
+                    }
+                    actions={
+                        <>
+                            {!isLocal && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="md"
+                                    disabled={refreshing || isSyncing}
+                                    onClick={handleRefresh}
+                                    title="Re-sync backup status and snapshot list from cluster"
+                                >
+                                    <RotateCw
+                                        className={`h-4 w-4 ${refreshing || isSyncing ? 'animate-spin' : ''}`}
+                                    />
+                                    <span>
+                                        {refreshing || isSyncing
+                                            ? 'Syncing…'
+                                            : 'Refresh'}
+                                    </span>
+                                </Button>
+                            )}
 
-                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
-                        <ServerSwitcher
-                            servers={servers}
-                            value={server.name}
-                            buildHref={(name) =>
-                                `/servers/${encodeURIComponent(name)}/backups`
-                            }
-                        />
+                            {!isLocal && configured && (
+                                <Link
+                                    href={`${base}/run`}
+                                    method="post"
+                                    as="button"
+                                    className={buttonClass('primary', 'md')}
+                                >
+                                    <Play className="h-4 w-4" />
+                                    <span>Back up now</span>
+                                </Link>
+                            )}
 
-                        {!isLocal && (
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="md"
-                                disabled={refreshing || isSyncing}
-                                onClick={handleRefresh}
-                                title="Re-sync backup status and snapshot list from cluster"
-                            >
-                                <RotateCw
-                                    className={`h-4 w-4 ${refreshing || isSyncing ? 'animate-spin' : ''}`}
-                                />
-                                <span>
-                                    {refreshing || isSyncing
-                                        ? 'Syncing…'
-                                        : 'Refresh'}
-                                </span>
-                            </Button>
-                        )}
-
-                        {!isLocal && configured && (
-                            <Link
-                                href={`${base}/run`}
-                                method="post"
-                                as="button"
-                                className={buttonClass('primary', 'md')}
-                            >
-                                <Play className="h-4 w-4" />
-                                <span>Back up now</span>
-                            </Link>
-                        )}
-
-                        {!isLocal && !configured && (
-                            <Button
-                                type="button"
-                                variant="primary"
-                                size="md"
-                                onClick={() => setDialog('setup')}
-                            >
-                                <Plus className="h-4 w-4" />
-                                <span>Set up Backups</span>
-                            </Button>
-                        )}
-                    </div>
-                </div>
+                            {!isLocal && !configured && (
+                                <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="md"
+                                    onClick={() => setDialog('setup')}
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    <span>Set up Backups</span>
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
 
                 {/* Fleet Disaster Recovery Posture Strip */}
                 {fleet.total > 0 && (

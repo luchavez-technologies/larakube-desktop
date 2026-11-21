@@ -8,8 +8,8 @@ import {
     ExternalLink,
     RotateCw,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import { buttonClass } from '@/components/button';
-import ServerSwitcher from '@/components/server-switcher';
 import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import { ExternalLinkButton } from '@/lib/open-external';
 import SyncStatusBadge, {
@@ -173,14 +173,16 @@ export default function DriveIndex({
             <Head title={`Drive · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
-                {/* Header with Server Switcher */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2.5">
+                <PageHeader
+                    title="Drive"
+                    subtitle="Files, sharing and online documents on your server."
+                    icon={
+                        <>
                             <ToolLogo slug="drive" size="sm" />
-                            <h1 className="text-xl font-bold tracking-tight text-ink">
-                                Drive Management
-                            </h1>
+                        </>
+                    }
+                    badge={
+                        <>
                             <ExperimentalBadge side="bottom" />
                             {isInstalled && (
                                 <span className="inline-flex items-center rounded-md bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-600 ring-1 ring-sky-500/20 dark:text-sky-400">
@@ -195,54 +197,45 @@ export default function DriveIndex({
                                     subject="drive"
                                 />
                             )}
-                        </div>
-                        <p className="mt-1 text-xs text-soft">
-                            High-performance Next-Gen Cloud Storage &
-                            LibreOffice Document Collaboration.
-                        </p>
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
-                        <ServerSwitcher
-                            servers={servers}
-                            value={server.name}
-                            buildHref={(name) => `/servers/${name}/drive`}
-                        />
-
-                        <Link
-                            href={`/servers/${server.name}/drive/refresh`}
-                            method="post"
-                            as="button"
-                            className={buttonClass('secondary', 'sm')}
-                            title="Refresh status from cluster"
-                        >
-                            <RotateCw
-                                className={`size-3.5 ${driveSync.status === 'syncing' ? 'animate-spin' : ''}`}
-                            />
-                            <span>Refresh</span>
-                        </Link>
-
-                        {isInstalled && (
-                            <ExternalLinkButton
-                                url={driveUrl}
-                                className={buttonClass('primary', 'sm')}
-                            >
-                                <ExternalLink className="h-4 w-4" />
-                                Open Drive
-                            </ExternalLinkButton>
-                        )}
-
-                        {isInstalled && isOfficeReady && officeUrl && (
-                            <ExternalLinkButton
-                                url={officeUrl}
+                        </>
+                    }
+                    actions={
+                        <>
+                            <Link
+                                href={`/servers/${server.name}/drive/refresh`}
+                                method="post"
+                                as="button"
                                 className={buttonClass('secondary', 'sm')}
+                                title="Refresh status from cluster"
                             >
-                                <ExternalLink className="h-4 w-4" />
-                                Open Collabora
-                            </ExternalLinkButton>
-                        )}
-                    </div>
-                </div>
+                                <RotateCw
+                                    className={`size-3.5 ${driveSync.status === 'syncing' ? 'animate-spin' : ''}`}
+                                />
+                                <span>Refresh</span>
+                            </Link>
+
+                            {isInstalled && (
+                                <ExternalLinkButton
+                                    url={driveUrl}
+                                    className={buttonClass('primary', 'sm')}
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open Drive
+                                </ExternalLinkButton>
+                            )}
+
+                            {isInstalled && isOfficeReady && officeUrl && (
+                                <ExternalLinkButton
+                                    url={officeUrl}
+                                    className={buttonClass('secondary', 'sm')}
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open Collabora
+                                </ExternalLinkButton>
+                            )}
+                        </>
+                    }
+                />
 
                 {!isInstalled ? (
                     <DriveEmptyState

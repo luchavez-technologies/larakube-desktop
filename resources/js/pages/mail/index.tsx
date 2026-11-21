@@ -8,11 +8,10 @@ import {
     Inbox,
     RotateCw,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import Button, { buttonClass } from '@/components/button';
-import ServerSwitcher from '@/components/server-switcher';
 import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import { ExternalLinkButton } from '@/lib/open-external';
-import { index as mailIndex } from '@/routes/servers/mail';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
@@ -299,13 +298,11 @@ export default function MailIndex({
             <Head title={`Mail · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
-                {/* Header with Server Switcher */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h1 className="text-xl font-bold tracking-tight text-ink">
-                                Mail Management
-                            </h1>
+                <PageHeader
+                    title="Mail"
+                    subtitle="Mailboxes, domains and email delivery on your server."
+                    badge={
+                        <>
                             <ExperimentalBadge side="bottom" />
                             {isInstalled && (
                                 <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
@@ -320,63 +317,54 @@ export default function MailIndex({
                                     subject="mail"
                                 />
                             )}
-                        </div>
-                        <p className="mt-1 text-xs text-soft">
-                            High-performance JMAP/IMAP mailboxes and delivery
-                            infrastructure.
-                        </p>
-                    </div>
+                        </>
+                    }
+                    actions={
+                        <>
+                            {isInstalled && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="md"
+                                    disabled={refreshing || isSyncing}
+                                    onClick={handleRefresh}
+                                    title="Re-sync domains, mailboxes, and relay configuration from Stalwart"
+                                >
+                                    <RotateCw
+                                        className={`h-4 w-4 ${refreshing || isSyncing ? 'animate-spin' : ''}`}
+                                    />
+                                    <span>
+                                        {refreshing || isSyncing
+                                            ? 'Syncing…'
+                                            : 'Refresh'}
+                                    </span>
+                                </Button>
+                            )}
 
-                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
-                        <ServerSwitcher
-                            servers={servers}
-                            value={server.name}
-                            buildHref={(name) => mailIndex(name).url}
-                        />
+                            {isInstalled && serverInfo?.webmailUrl && (
+                                <ExternalLinkButton
+                                    url={serverInfo.webmailUrl}
+                                    className={buttonClass('secondary', 'md')}
+                                    title="Open Bulwark Webmail in default browser"
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    <span>Webmail</span>
+                                </ExternalLinkButton>
+                            )}
 
-                        {isInstalled && (
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="md"
-                                disabled={refreshing || isSyncing}
-                                onClick={handleRefresh}
-                                title="Re-sync domains, mailboxes, and relay configuration from Stalwart"
-                            >
-                                <RotateCw
-                                    className={`h-4 w-4 ${refreshing || isSyncing ? 'animate-spin' : ''}`}
-                                />
-                                <span>
-                                    {refreshing || isSyncing
-                                        ? 'Syncing…'
-                                        : 'Refresh'}
-                                </span>
-                            </Button>
-                        )}
-
-                        {isInstalled && serverInfo?.webmailUrl && (
-                            <ExternalLinkButton
-                                url={serverInfo.webmailUrl}
-                                className={buttonClass('secondary', 'md')}
-                                title="Open Bulwark Webmail in default browser"
-                            >
-                                <ExternalLink className="h-4 w-4" />
-                                <span>Webmail</span>
-                            </ExternalLinkButton>
-                        )}
-
-                        {isInstalled && serverInfo?.adminUrl && (
-                            <ExternalLinkButton
-                                url={serverInfo.adminUrl}
-                                className={buttonClass('secondary', 'md')}
-                                title="Open Stalwart Admin Console in default browser"
-                            >
-                                <ExternalLink className="h-4 w-4" />
-                                <span>Admin Console</span>
-                            </ExternalLinkButton>
-                        )}
-                    </div>
-                </div>
+                            {isInstalled && serverInfo?.adminUrl && (
+                                <ExternalLinkButton
+                                    url={serverInfo.adminUrl}
+                                    className={buttonClass('secondary', 'md')}
+                                    title="Open Stalwart Admin Console in default browser"
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    <span>Admin Console</span>
+                                </ExternalLinkButton>
+                            )}
+                        </>
+                    }
+                />
 
                 {!isInstalled ? (
                     <MailEmptyState

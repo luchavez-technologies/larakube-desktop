@@ -16,16 +16,16 @@ import {
     Users,
     XCircle,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import Button, { buttonClass } from '@/components/button';
 import Card from '@/components/card';
-import ServerSwitcher from '@/components/server-switcher';
 import StickyTabs, { type StickyTabItem } from '@/components/sticky-tabs';
 import ExperimentalBadge from '@/components/experimental-badge';
 import ToolLogo from '@/components/tool-logo';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
-import sso, { index as ssoIndex } from '@/routes/servers/sso';
+import sso from '@/routes/servers/sso';
 import type { Server } from '@/types/larakube';
 import { useServerDataReload } from '@/lib/native-events';
 
@@ -118,7 +118,6 @@ function SsoEmptyState({ server }: { server: Server }) {
 
 export default function SsoIndex({
     server,
-    servers,
     isInstalled,
     status,
     grants: grantsProp,
@@ -283,14 +282,16 @@ export default function SsoIndex({
             <Head title={`Zitadel SSO · ${server.name}`} />
 
             <div className="mx-auto max-w-7xl space-y-6">
-                {/* Header with Server Switcher */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2.5">
+                <PageHeader
+                    title="Identity"
+                    subtitle="Who can sign in, and to which apps."
+                    icon={
+                        <>
                             <ToolLogo slug="zitadel" size="sm" />
-                            <h1 className="text-xl font-bold tracking-tight text-ink">
-                                Identity Management
-                            </h1>
+                        </>
+                    }
+                    badge={
+                        <>
                             <ExperimentalBadge side="bottom" />
                             {isInstalled && (
                                 <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
@@ -305,39 +306,33 @@ export default function SsoIndex({
                                     subject="Zitadel SSO"
                                 />
                             )}
-                        </div>
-                        <p className="mt-1 text-xs text-soft">
-                            Identity provider: user accounts, authentication
-                            wiring, and scoped access grants.
-                        </p>
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:justify-end">
-                        {isInstalled && (
-                            <Form
-                                action={sso.refresh(server.name).url}
-                                method="post"
-                            >
-                                <button
-                                    type="submit"
-                                    className={buttonClass('secondary', 'sm')}
-                                    title="Force an immediate re-sync, bypassing the cached data's freshness window"
+                        </>
+                    }
+                    actions={
+                        <>
+                            {isInstalled && (
+                                <Form
+                                    action={sso.refresh(server.name).url}
+                                    method="post"
                                 >
-                                    <RotateCw
-                                        className={`h-3.5 w-3.5 ${shouldPoll ? 'animate-spin' : ''}`}
-                                    />
-                                    <span>Refresh</span>
-                                </button>
-                            </Form>
-                        )}
-
-                        <ServerSwitcher
-                            servers={servers}
-                            value={server.name}
-                            buildHref={(name) => ssoIndex(name).url}
-                        />
-                    </div>
-                </div>
+                                    <button
+                                        type="submit"
+                                        className={buttonClass(
+                                            'secondary',
+                                            'sm',
+                                        )}
+                                        title="Force an immediate re-sync, bypassing the cached data's freshness window"
+                                    >
+                                        <RotateCw
+                                            className={`h-3.5 w-3.5 ${shouldPoll ? 'animate-spin' : ''}`}
+                                        />
+                                        <span>Refresh</span>
+                                    </button>
+                                </Form>
+                            )}
+                        </>
+                    }
+                />
 
                 {unwiring && (
                     <div className="space-y-3 rounded-xl bg-accent-tint p-4 ring-1 ring-accent-line">
