@@ -465,7 +465,8 @@ export function ServerActions({
         made &&
         (reachable === false ||
             server.status === 'failed' ||
-            server.status === 'incomplete');
+            server.status === 'incomplete' ||
+            server.status === 'unfinished');
     // A discovered cluster LaraKube found but never provisioned — typically
     // an existing OrbStack/Docker Desktop install with no Traefik on it yet.
     // KubeconfigDiscovery reports this as 'incomplete', the same status a

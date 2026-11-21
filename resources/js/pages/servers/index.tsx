@@ -461,9 +461,10 @@ export default function ServersIndex({
                                 {leftovers
                                     .map((server) => server.name)
                                     .join(', ')}{' '}
-                                stopped partway through. Anything the provider
-                                already created is still tracked, so open it to
-                                destroy the leftovers.
+                                stopped partway through. Destroy leftovers
+                                deletes whatever the provider already created.
+                                If that fails, Forget removes it from LaraKube
+                                without touching the provider.
                             </p>
                         )}
                     </>
