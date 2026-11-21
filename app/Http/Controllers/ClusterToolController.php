@@ -293,7 +293,17 @@ class ClusterToolController extends Controller
             tool: $tool,
         );
 
-        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+        if (! $request->header('X-Inertia')) {
+            return to_route('runs.show', $run);
+        }
+
+        // The install drawer follows this run in place, the way Quick Launch does.
+        Inertia::flash('launched', [
+            'run' => ['id' => $run->id, 'label' => $run->label, 'status' => $run->status->value],
+            'tool' => ['slug' => $tool, 'displayName' => $displayName, 'domain' => $domain],
+        ]);
+
+        return back();
     }
 
     public function destroy(RemoveClusterToolRequest $request, string $server, string $tool): RedirectResponse

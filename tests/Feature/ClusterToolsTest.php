@@ -265,6 +265,22 @@ test('installing validates the domain and runs tool:add against the server conte
     File::deleteDirectory($bin);
 });
 
+test('installing from the app store hands the run back so the drawer can follow it', function () {
+    $bin = clusterToolsFakeCli();
+    clusterToolsFakes();
+    ChildProcess::fake();
+
+    $this->withHeader('X-Inertia', 'true')
+        ->post(route('servers.tools.store', ['server' => 'workshop-demo', 'tool' => 'crm']), ['domain' => 'crm.example.com'])
+        ->assertRedirect()
+        ->assertInertiaFlash('launched', [
+            'run' => ['id' => Run::sole()->id, 'label' => 'Install CRM on workshop-demo', 'status' => 'running'],
+            'tool' => ['slug' => 'crm', 'displayName' => 'CRM', 'domain' => 'crm.example.com'],
+        ]);
+
+    File::deleteDirectory($bin);
+});
+
 test('installing with a specific domain host targets that host', function () {
     $bin = clusterToolsFakeCli();
     clusterToolsFakes();

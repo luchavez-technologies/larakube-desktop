@@ -22,6 +22,12 @@ import {
 import Button, { buttonClass } from '@/components/button';
 import ServerSwitcher from '@/components/server-switcher';
 import StatusPill from '@/components/status-pill';
+import {
+    ToolLaunchProgress,
+    useToolLaunch,
+    type LaunchedRun,
+    type LaunchedTool,
+} from '@/components/tool-launch-progress';
 import ExperimentalBadge from '@/components/experimental-badge';
 import FrameworkFields, { defaultAnswers } from '@/components/framework-fields';
 import CustomEnvFields, {
@@ -2103,6 +2109,15 @@ function InstallDialog({
     const tagline = toolTagline(tool);
     const name = toolName(tool);
 
+    // After Install, this drawer follows the run in place, as Quick Launch does.
+    const launch = useToolLaunch(server.name);
+    const closeDrawer = () => {
+        if (launch.run?.status === 'succeeded') {
+            router.reload();
+        }
+        onClose();
+    };
+
     // The CLI names the fields a tool's install asks; an older CLI only sends the flag.
     const needsAdminEmail = tool.initFields
         ? tool.initFields.some((field) => field.key === 'adminEmail')
@@ -2301,7 +2316,7 @@ function InstallDialog({
     return (
         <div
             className="fixed inset-0 z-50 flex justify-end bg-ink/45 backdrop-blur-xs"
-            onClick={onClose}
+            onClick={closeDrawer}
         >
             <div
                 role="dialog"
@@ -2329,196 +2344,231 @@ function InstallDialog({
                             : `On ${server.name}. It gets its own address under your domain.`}
                     </p>
                 </div>
-                <Form
-                    action={store({ server: server.name, tool: tool.tool })}
-                    validationTimeout={250}
-                    // The run HUD takes over from here; the card shows "Installing…".
-                    onSuccess={onClose}
-                    className="flex h-full flex-col overflow-hidden"
-                >
-                    {({ errors, invalid, validate, processing }) => (
-                        <>
-                            <div className="flex-1 space-y-4 overflow-y-auto px-7 pt-5 pb-7">
-                                {activeMatches.length > 0 && (
-                                    <div className="flex items-start gap-3 rounded-xl bg-ok-tint p-3 text-xs text-ok ring-1 ring-ok/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
-                                        <Sparkles className="mt-0.5 size-4 shrink-0 text-ok dark:text-emerald-400" />
-                                        <div className="space-y-0.5">
-                                            <p className="font-semibold text-emerald-950 dark:text-emerald-200">
-                                                Active Commons detected:{' '}
-                                                {activeMatches.join(', ')}
-                                            </p>
-                                            <p className="leading-relaxed text-emerald-800/90 dark:text-emerald-300/80">
-                                                This server runs shared Plex
-                                                infrastructure. LaraKube will
-                                                connect using shared tenant
-                                                resources with zero extra
-                                                containers.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {options.noPlex === true &&
-                                    plexDatabases.length > 0 && (
-                                        <div className="flex items-start gap-3 rounded-xl bg-sky-500/10 p-3 text-xs text-sky-900 ring-1 ring-sky-500/30 dark:text-sky-200">
-                                            <Sparkles className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                {launch.run ? (
+                    <ToolLaunchProgress
+                        run={launch.run}
+                        tool={launch.tool}
+                        appName={name}
+                        credentials={launch.credentials}
+                        credentialsLoading={launch.credentialsLoading}
+                        onClose={closeDrawer}
+                        onRetry={launch.reset}
+                        retryLabel="Back to settings"
+                    />
+                ) : (
+                    <Form
+                        action={store({ server: server.name, tool: tool.tool })}
+                        validationTimeout={250}
+                        onSuccess={(page) => {
+                            const launched = (
+                                page.flash as {
+                                    launched?: {
+                                        run: LaunchedRun;
+                                        tool: LaunchedTool;
+                                    };
+                                }
+                            ).launched;
+                            if (launched) {
+                                launch.start(launched.run, launched.tool);
+                            } else {
+                                onClose();
+                            }
+                        }}
+                        className="flex h-full flex-col overflow-hidden"
+                    >
+                        {({ errors, invalid, validate, processing }) => (
+                            <>
+                                <div className="flex-1 space-y-4 overflow-y-auto px-7 pt-5 pb-7">
+                                    {activeMatches.length > 0 && (
+                                        <div className="flex items-start gap-3 rounded-xl bg-ok-tint p-3 text-xs text-ok ring-1 ring-ok/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
+                                            <Sparkles className="mt-0.5 size-4 shrink-0 text-ok dark:text-emerald-400" />
                                             <div className="space-y-0.5">
-                                                <p className="font-semibold">
-                                                    Standalone mode selected
-                                                    (--no-plex)
+                                                <p className="font-semibold text-emerald-950 dark:text-emerald-200">
+                                                    Active Commons detected:{' '}
+                                                    {activeMatches.join(', ')}
                                                 </p>
-                                                <p className="leading-relaxed text-sky-800/90 dark:text-sky-300/80">
-                                                    {hasCompatiblePlexDb
-                                                        ? `Using local storage instead of the server's active ${plexDatabases.join('/')} Plex Commons.`
-                                                        : `No compatible Plex database (${plexDatabases.join('/')}) detected on this server — using isolated local SQLite storage. Uncheck below to provision Plex Commons instead.`}
+                                                <p className="leading-relaxed text-emerald-800/90 dark:text-emerald-300/80">
+                                                    This server runs shared Plex
+                                                    infrastructure. LaraKube
+                                                    will connect using shared
+                                                    tenant resources with zero
+                                                    extra containers.
                                                 </p>
                                             </div>
                                         </div>
                                     )}
 
-                                <div>
-                                    <HostPicker
-                                        name="domain"
-                                        value={domain}
-                                        onChange={setDomain}
-                                        domains={knownDomains}
-                                        serverName={server.name}
-                                        serverIp={server.ip ?? null}
-                                        defaultSubdomain={defaultSubdomainForTool(
-                                            tool,
-                                            Boolean(isMulti),
-                                            tools,
+                                    {options.noPlex === true &&
+                                        plexDatabases.length > 0 && (
+                                            <div className="flex items-start gap-3 rounded-xl bg-sky-500/10 p-3 text-xs text-sky-900 ring-1 ring-sky-500/30 dark:text-sky-200">
+                                                <Sparkles className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                                                <div className="space-y-0.5">
+                                                    <p className="font-semibold">
+                                                        Standalone mode selected
+                                                        (--no-plex)
+                                                    </p>
+                                                    <p className="leading-relaxed text-sky-800/90 dark:text-sky-300/80">
+                                                        {hasCompatiblePlexDb
+                                                            ? `Using local storage instead of the server's active ${plexDatabases.join('/')} Plex Commons.`
+                                                            : `No compatible Plex database (${plexDatabases.join('/')}) detected on this server — using isolated local SQLite storage. Uncheck below to provision Plex Commons instead.`}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         )}
-                                        isLocal={isLocalServer}
-                                        checkDns
-                                        label="Domain / Host Address"
-                                    />
-                                    {errors.domain && (
-                                        <span className="mt-1 block text-xs text-accent">
-                                            {errors.domain}
-                                        </span>
-                                    )}
-                                </div>
-                                {needsAdminEmail && (
-                                    <label className="block">
-                                        <span className="mb-1.5 block text-xs font-medium text-soft">
-                                            Admin Email
-                                        </span>
-                                        <input
-                                            type="email"
-                                            name="admin_email"
-                                            value={adminEmail}
-                                            onChange={(event) => {
-                                                setTouchedAdminEmail(true);
-                                                setAdminEmail(
-                                                    event.target.value.trim(),
-                                                );
-                                            }}
-                                            onBlur={() =>
-                                                validate('admin_email')
-                                            }
-                                            placeholder={`e.g. admin@${domain || 'example.com'}`}
-                                            spellCheck={false}
-                                            required
-                                            className={`w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 outline-none placeholder:text-faint focus:ring-2 ${
-                                                invalid('admin_email')
-                                                    ? 'ring-accent focus:ring-accent'
-                                                    : 'ring-line focus:ring-tools'
-                                            }`}
+
+                                    <div>
+                                        <HostPicker
+                                            name="domain"
+                                            value={domain}
+                                            onChange={setDomain}
+                                            domains={knownDomains}
+                                            serverName={server.name}
+                                            serverIp={server.ip ?? null}
+                                            defaultSubdomain={defaultSubdomainForTool(
+                                                tool,
+                                                Boolean(isMulti),
+                                                tools,
+                                            )}
+                                            isLocal={isLocalServer}
+                                            checkDns
+                                            label="Domain / Host Address"
                                         />
-                                        {errors.admin_email ? (
+                                        {errors.domain && (
                                             <span className="mt-1 block text-xs text-accent">
-                                                {errors.admin_email}
-                                            </span>
-                                        ) : (
-                                            <span className="mt-1 block text-xs text-soft">
-                                                Primary administrator account
-                                                for {name}.
+                                                {errors.domain}
                                             </span>
                                         )}
-                                    </label>
-                                )}
-                                <CustomEnvFields
-                                    fields={tool.initFields ?? []}
-                                    answers={options}
-                                    onChange={setOptions}
-                                />
-                                {optionFields.length > 0 && (
-                                    <div className="space-y-4">
-                                        <FrameworkFields
-                                            fields={optionFields}
-                                            answers={options}
-                                            errors={
-                                                errors as Record<string, string>
-                                            }
-                                            errorPrefix="options"
-                                            onChange={setOptions}
-                                        />
                                     </div>
-                                )}
-                                {Object.entries(options).flatMap(
-                                    ([key, value]) =>
-                                        (Array.isArray(value) ? value : [value])
-                                            .filter(
-                                                (item) =>
-                                                    item !== null &&
-                                                    item !== '' &&
-                                                    item !== false,
+                                    {needsAdminEmail && (
+                                        <label className="block">
+                                            <span className="mb-1.5 block text-xs font-medium text-soft">
+                                                Admin Email
+                                            </span>
+                                            <input
+                                                type="email"
+                                                name="admin_email"
+                                                value={adminEmail}
+                                                onChange={(event) => {
+                                                    setTouchedAdminEmail(true);
+                                                    setAdminEmail(
+                                                        event.target.value.trim(),
+                                                    );
+                                                }}
+                                                onBlur={() =>
+                                                    validate('admin_email')
+                                                }
+                                                placeholder={`e.g. admin@${domain || 'example.com'}`}
+                                                spellCheck={false}
+                                                required
+                                                className={`w-full rounded-lg border-0 px-3 py-2 font-mono text-[13px] ring-1 outline-none placeholder:text-faint focus:ring-2 ${
+                                                    invalid('admin_email')
+                                                        ? 'ring-accent focus:ring-accent'
+                                                        : 'ring-line focus:ring-tools'
+                                                }`}
+                                            />
+                                            {errors.admin_email ? (
+                                                <span className="mt-1 block text-xs text-accent">
+                                                    {errors.admin_email}
+                                                </span>
+                                            ) : (
+                                                <span className="mt-1 block text-xs text-soft">
+                                                    Primary administrator
+                                                    account for {name}.
+                                                </span>
+                                            )}
+                                        </label>
+                                    )}
+                                    <CustomEnvFields
+                                        fields={tool.initFields ?? []}
+                                        answers={options}
+                                        onChange={setOptions}
+                                    />
+                                    {optionFields.length > 0 && (
+                                        <div className="space-y-4">
+                                            <FrameworkFields
+                                                fields={optionFields}
+                                                answers={options}
+                                                errors={
+                                                    errors as Record<
+                                                        string,
+                                                        string
+                                                    >
+                                                }
+                                                errorPrefix="options"
+                                                onChange={setOptions}
+                                            />
+                                        </div>
+                                    )}
+                                    {Object.entries(options).flatMap(
+                                        ([key, value]) =>
+                                            (Array.isArray(value)
+                                                ? value
+                                                : [value]
                                             )
-                                            .map((item, index) => (
-                                                <input
-                                                    key={`${key}-${index}`}
-                                                    type="hidden"
-                                                    name={
-                                                        Array.isArray(value)
-                                                            ? `options[${key}][]`
-                                                            : `options[${key}]`
-                                                    }
-                                                    value={
-                                                        item === true
-                                                            ? '1'
-                                                            : String(item)
-                                                    }
-                                                />
-                                            )),
-                                )}
-                                {ssoInstalled && (
+                                                .filter(
+                                                    (item) =>
+                                                        item !== null &&
+                                                        item !== '' &&
+                                                        item !== false,
+                                                )
+                                                .map((item, index) => (
+                                                    <input
+                                                        key={`${key}-${index}`}
+                                                        type="hidden"
+                                                        name={
+                                                            Array.isArray(value)
+                                                                ? `options[${key}][]`
+                                                                : `options[${key}]`
+                                                        }
+                                                        value={
+                                                            item === true
+                                                                ? '1'
+                                                                : String(item)
+                                                        }
+                                                    />
+                                                )),
+                                    )}
+                                    {ssoInstalled && (
+                                        <Checkbox
+                                            name="wire_sso"
+                                            label="Sign in with SSO (it's installed on this server)"
+                                        />
+                                    )}
+                                    {mailInstalled && (
+                                        <Checkbox
+                                            name="wire_mail"
+                                            label="Send email through Mail (it's installed on this server)"
+                                        />
+                                    )}
                                     <Checkbox
-                                        name="wire_sso"
-                                        label="Sign in with SSO (it's installed on this server)"
+                                        name="confirm_commons_restart"
+                                        label="Allow shared Commons services (e.g. Redis) to restart if required"
                                     />
-                                )}
-                                {mailInstalled && (
-                                    <Checkbox
-                                        name="wire_mail"
-                                        label="Send email through Mail (it's installed on this server)"
-                                    />
-                                )}
-                                <Checkbox
-                                    name="confirm_commons_restart"
-                                    label="Allow shared Commons services (e.g. Redis) to restart if required"
-                                />
-                            </div>
-                            <div className="flex items-center justify-end gap-2.5 border-t border-line px-7 py-4">
-                                <Button variant="secondary" onClick={onClose}>
-                                    <XCircle className="size-4" />
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={processing || domain === ''}
-                                >
-                                    <Download className="size-4" />
-                                    {processing
-                                        ? 'Starting…'
-                                        : isMulti
-                                          ? `Deploy ${name}`
-                                          : `Install ${name}`}
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </Form>
+                                </div>
+                                <div className="flex items-center justify-end gap-2.5 border-t border-line px-7 py-4">
+                                    <Button
+                                        variant="secondary"
+                                        onClick={onClose}
+                                    >
+                                        <XCircle className="size-4" />
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={processing || domain === ''}
+                                    >
+                                        <Download className="size-4" />
+                                        {processing
+                                            ? 'Starting…'
+                                            : isMulti
+                                              ? `Deploy ${name}`
+                                              : `Install ${name}`}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                )}
             </div>
         </div>
     );
