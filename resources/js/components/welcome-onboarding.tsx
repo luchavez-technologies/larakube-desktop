@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import {
     ArrowLeft,
     ArrowRight,
-    LayoutGrid,
+    Store,
     Rocket,
     Sparkles,
     X,
@@ -459,7 +459,7 @@ export default function WelcomeOnboarding({
                             href={toolsRoute().url}
                             className={buttonClass('secondary', 'sm', 'gap-1')}
                         >
-                            <LayoutGrid className="size-3.5" />
+                            <Store className="size-3.5" />
                             <span>Apps Catalog</span>
                             <ArrowRight className="size-3" />
                         </Link>

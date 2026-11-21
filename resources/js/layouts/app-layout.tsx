@@ -2,7 +2,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import {
     LayoutDashboard,
-    LayoutGrid,
+    Store,
     FolderGit2,
     Server,
     Activity,
@@ -114,7 +114,7 @@ const navigation: NavItem[] = [
             url.startsWith('/tools') ||
             /^\/servers\/[^/]+\/tools/.test(url),
         accent: 'bg-tools',
-        icon: LayoutGrid,
+        icon: Store,
     },
     {
         label: 'Plex Commons',

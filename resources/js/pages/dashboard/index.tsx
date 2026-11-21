@@ -9,7 +9,7 @@ import {
     FolderTree,
     Globe,
     HardDrive,
-    LayoutGrid,
+    Store,
     Plus,
     RotateCw,
     ShieldAlert,
@@ -333,7 +333,7 @@ export default function DashboardIndex({
                                         </p>
                                     </div>
                                     <div className="flex size-7 items-center justify-center rounded-lg bg-tools/10 text-tools">
-                                        <LayoutGrid className="size-4" />
+                                        <Store className="size-4" />
                                     </div>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between text-[11px] text-soft">
