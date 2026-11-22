@@ -169,3 +169,20 @@ test('env routes 404 when the server is not ready', function (): void {
 
     $this->getJson('/servers/does-not-exist/apps/pocketbase/env')->assertNotFound();
 });
+
+test('status passes the app settings through, for the Settings card', function (): void {
+    $context = clusterToolEnvSandbox();
+    $setting = ['key' => 'N8N_RUNNERS_TASK_TIMEOUT', 'label' => 'Code node time limit', 'help' => 'How long…', 'type' => 'number', 'default' => '300', 'unit' => 'seconds', 'value' => '600', 'overridden' => true];
+
+    Process::fake([
+        ...clusterToolEnvStackFake($context),
+        '*tool:env*production*' => Process::result(output: json_encode([
+            'success' => true, 'exists' => true, 'instance' => 'flow-example-com', 'namespace' => 'larakube-shared',
+            'vaulted' => false, 'items' => [], 'settings' => [$setting],
+        ])),
+    ]);
+
+    $this->getJson('/servers/workshop-demo/apps/n8n/env?domain=flow.example.com')
+        ->assertOk()
+        ->assertJsonPath('status.settings', [$setting]);
+});

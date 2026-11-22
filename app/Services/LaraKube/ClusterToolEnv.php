@@ -16,7 +16,7 @@ class ClusterToolEnv
     public function __construct(private ToolLocator $locator) {}
 
     /**
-     * @return array{exists: bool, instance: ?string, namespace: ?string, vaulted: bool, items: list<array<string, mixed>>}|null
+     * @return array{exists: bool, instance: ?string, namespace: ?string, vaulted: bool, items: list<array<string, mixed>>, settings: list<array<string, mixed>>}|null
      */
     public function get(string $context, string $tool, string $domain, bool $reveal = false): ?array
     {
@@ -50,6 +50,8 @@ class ClusterToolEnv
             'namespace' => $decoded['namespace'] ?? null,
             'vaulted' => (bool) ($decoded['vaulted'] ?? false),
             'items' => array_values(array_filter((array) ($decoded['items'] ?? []), is_array(...))),
+            // Settings offered as a form; an older CLI sends none.
+            'settings' => array_values(array_filter((array) ($decoded['settings'] ?? []), is_array(...))),
         ];
     }
 

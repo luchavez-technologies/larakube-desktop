@@ -6,6 +6,7 @@ import CopyButton from '@/components/copy-button';
 import StatusPill from '@/components/status-pill';
 import type { Tone } from '@/components/status-pill';
 import ToolEnvCard from '@/components/tool-env-card';
+import ToolSettingsCard from '@/components/tool-settings-card';
 import { sendJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +86,8 @@ export default function AppConfigurationPanel({
 
     return (
         <div className="space-y-5">
+            <ToolSettingsCard server={server} tool={tool} />
+
             <div id="custom-variables" className="scroll-mt-6">
                 <ToolEnvCard server={server} tool={tool} />
             </div>
