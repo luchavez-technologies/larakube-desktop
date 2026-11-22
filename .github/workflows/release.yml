@@ -266,11 +266,14 @@ jobs:
             TITLE="LaraKube Desktop $TAG"
           fi
 
-          # publish <repo> <token>
+          # publish <repo> <token> [gh release create flags]
+          # The releases repo passes --target main: its tags point at its own README commit,
+          # and without it gh refuses because this checkout's local tag was never pushed there.
           publish() {
             export GH_REPO="$1" GH_TOKEN="$2"
+            shift 2
             if [ "$IS_CANARY" != "true" ]; then
-              gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md
+              gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md "$@"
               return
             fi
             if gh release view "$TAG" >/dev/null 2>&1; then
@@ -285,7 +288,7 @@ jobs:
                 [ -e "artifacts/$name" ] || gh release delete-asset "$TAG" "$name" --yes
               done
             else
-              gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md --prerelease
+              gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md --prerelease "$@"
             fi
           }
 
@@ -300,7 +303,7 @@ jobs:
 
           publish "$GITHUB_REPOSITORY" "$GITHUB_TOKEN_SELF"
           if [ -n "$RELEASES_TOKEN" ]; then
-            publish "$RELEASES_REPO" "$RELEASES_TOKEN"
+            publish "$RELEASES_REPO" "$RELEASES_TOKEN" --target main
           else
             echo "::notice::RELEASES_TOKEN is not set, so nothing was published to $RELEASES_REPO."
           fi
