@@ -74,7 +74,7 @@ export function serverOptions(
                 </span>
             ),
             description: candidate.ip ? (
-                <Redactable value={candidate.ip} kind="ip" />
+                <Redactable value={candidate.ip} kind="ip" copyable />
             ) : undefined,
         };
     });
