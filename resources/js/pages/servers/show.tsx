@@ -8,7 +8,7 @@ import {
     FolderGit2,
     Globe,
     HardDrive,
-    LayoutGrid,
+    Store,
     Plus,
     Maximize2,
     RotateCw,
@@ -573,7 +573,7 @@ export default function ShowServer({
                                                 'sm',
                                             )}
                                         >
-                                            <LayoutGrid className="size-3.5" />
+                                            <Store className="size-3.5" />
                                             <span>Browse apps</span>
                                         </Link>
                                     ) : null
@@ -1241,6 +1241,12 @@ function MemoryBreakdownBar({ capacity }: { capacity: CapacityAssessment }) {
     );
     const freeBytes = capacity.breakdown.free.memory_bytes;
     const reserveBytes = systemBytes + platformBytes;
+    // Free is counted after the safety margin, so the margin is its own slice; without it the bar stops short.
+    const marginBytes = Math.max(
+        0,
+        total - systemBytes - platformBytes - appsBytes - freeBytes,
+    );
+    const marginPercent = Math.round(capacity.node.margin_fraction * 100);
 
     const segments = [
         {
@@ -1277,8 +1283,19 @@ function MemoryBreakdownBar({ capacity }: { capacity: CapacityAssessment }) {
             label: 'Free',
             bytes: freeBytes,
             color: 'bg-emerald-500/70',
-            title: `Free (after ${Math.round(capacity.node.margin_fraction * 100)}% safety margin): ${formatMemoryBytes(freeBytes)}`,
+            title: `Free (after ${marginPercent}% safety margin): ${formatMemoryBytes(freeBytes)}`,
         },
+        ...(marginBytes > 0
+            ? [
+                  {
+                      key: 'margin',
+                      label: 'Margin',
+                      bytes: marginBytes,
+                      color: 'bg-amber-400/50',
+                      title: `Safety margin (${marginPercent}%), kept free so nothing is placed on a full node: ${formatMemoryBytes(marginBytes)}`,
+                  },
+              ]
+            : []),
     ];
 
     return (
