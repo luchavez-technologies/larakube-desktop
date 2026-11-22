@@ -1391,11 +1391,13 @@ export default function ToolsIndex({
                 </p>
             )}
 
-            {installingTool && tools && (
+            {/* Not gated on `tools`: it reloads after Install, and unmounting the
+                drawer then would drop the install it is following. */}
+            {installingTool && (
                 <InstallDialog
                     server={server}
                     tool={installingTool}
-                    tools={tools}
+                    tools={tools ?? []}
                     domains={domains}
                     activeCommonsServices={activeCommonsServices ?? []}
                     isNewInstance={isNewInstance}
@@ -2347,6 +2349,9 @@ function InstallDialog({
                     <Form
                         action={store({ server: server.name, tool: tool.tool })}
                         validationTimeout={250}
+                        // The redirect lands back on this page; without this the page
+                        // remounts and the drawer, and its progress, disappear.
+                        options={{ preserveState: true, preserveScroll: true }}
                         onSuccess={(page) => {
                             const launched = (
                                 page.flash as {
