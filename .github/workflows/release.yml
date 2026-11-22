@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # Installers and update feeds are published here, so the source repo can be private.
+  RELEASES_REPO: luchavez-technologies/larakube-desktop-releases
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
@@ -25,6 +29,7 @@ jobs:
       version: ${{ steps.target.outputs.version }}
       tag: ${{ steps.target.outputs.tag }}
       is_canary: ${{ steps.target.outputs.is_canary }}
+      update_repo: ${{ steps.target.outputs.update_repo }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,7 +55,16 @@ jobs:
       # a prerelease of the next patch so it never outranks a real release.
       - name: Release target
         id: target
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
+          # Installed apps update from the public releases repo once its token
+          # is set; until then, from this repo, as before.
+          if [ -n "$RELEASES_TOKEN" ]; then
+            echo "update_repo=${RELEASES_REPO}" >> "$GITHUB_OUTPUT"
+          else
+            echo "update_repo=${GITHUB_REPOSITORY}" >> "$GITHUB_OUTPUT"
+          fi
           if [ "${{ github.ref_type }}" = "tag" ]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
@@ -81,7 +95,7 @@ jobs:
       NATIVEPHP_UPDATER_PROVIDER: github
       GITHUB_OWNER: ${{ github.repository_owner }}
       GITHUB_REPO: ${{ github.event.repository.name }}
-      LARAKUBE_UPDATE_URL: ${{ needs.checks.outputs.is_canary == 'true' && format('https://github.com/{0}/releases/download/canary', github.repository) || format('https://github.com/{0}/releases/latest/download', github.repository) }}
+      LARAKUBE_UPDATE_URL: ${{ needs.checks.outputs.is_canary == 'true' && format('https://github.com/{0}/releases/download/canary', needs.checks.outputs.update_repo) || format('https://github.com/{0}/releases/latest/download', needs.checks.outputs.update_repo) }}
       # Apple Notarization (macOS only). Signing itself is NOT handed to
       # electron-builder via CSC_LINK/CSC_KEY_PASSWORD — see "Import Apple
       # signing certificate" below for why — so those two are deliberately
@@ -232,10 +246,14 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      # Canary re-points its moving tag and updates its one release in place; a v* release is created once and never moved.
+      # Canary updates its one release in place; a v* release is created once and never moved.
+      # Published to this repo and, once RELEASES_TOKEN is set, to the public releases repo too.
+      # Both, while installed apps still read their update feed here: a build made with the
+      # token points its updater at the releases repo, so they move over on their next update.
       - name: Publish release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN_SELF: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           TAG: ${{ needs.checks.outputs.tag }}
           VERSION: ${{ needs.checks.outputs.version }}
           IS_CANARY: ${{ needs.checks.outputs.is_canary }}
@@ -243,11 +261,18 @@ jobs:
           set -e
           printf 'LaraKube Desktop %s\n\nmacOS builds are signed and notarized with Apple Developer ID. On Windows, choose More info → Run anyway.\n' "$VERSION" > notes.md
           if [ "$IS_CANARY" = "true" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -f "$TAG" "$GITHUB_SHA"
-            git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
             TITLE="Canary $VERSION ($(git rev-parse --short "$GITHUB_SHA"))"
+          else
+            TITLE="LaraKube Desktop $TAG"
+          fi
+
+          # publish <repo> <token>
+          publish() {
+            export GH_REPO="$1" GH_TOKEN="$2"
+            if [ "$IS_CANARY" != "true" ]; then
+              gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md
+              return
+            fi
             if gh release view "$TAG" >/dev/null 2>&1; then
               # Replaced in place, never deleted: installed apps read latest.yml from this release, and a release that is
               # briefly missing makes their update check or download fail. The installers go up first and the feed files
@@ -262,6 +287,20 @@ jobs:
             else
               gh release create "$TAG" artifacts/* --title "$TITLE" --notes-file notes.md --prerelease
             fi
+          }
+
+          if [ "$IS_CANARY" = "true" ]; then
+            # The moving canary tag lives on this repo's commit; the releases repo's canary
+            # release is created on its own default branch and only its assets change.
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -f "$TAG" "$GITHUB_SHA"
+            git push --force "https://x-access-token:${GITHUB_TOKEN_SELF}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
+          fi
+
+          publish "$GITHUB_REPOSITORY" "$GITHUB_TOKEN_SELF"
+          if [ -n "$RELEASES_TOKEN" ]; then
+            publish "$RELEASES_REPO" "$RELEASES_TOKEN"
           else
-            gh release create "$TAG" artifacts/* --title "LaraKube Desktop $TAG" --notes-file notes.md
+            echo "::notice::RELEASES_TOKEN is not set, so nothing was published to $RELEASES_REPO."
           fi

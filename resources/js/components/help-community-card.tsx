@@ -55,9 +55,9 @@ const GET_HELP: HelpLink[] = [
 
 const SOURCE: HelpLink[] = [
     {
-        label: 'larakube-desktop',
-        detail: 'This app',
-        href: 'https://github.com/luchavez-technologies/larakube-desktop',
+        label: 'larakube-desktop-releases',
+        detail: 'Downloads, releases & issues',
+        href: 'https://github.com/luchavez-technologies/larakube-desktop-releases',
         icon: <SiGithub className="size-4 text-soft" />,
     },
     {

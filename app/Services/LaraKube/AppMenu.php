@@ -125,8 +125,8 @@ class AppMenu
 
         $helpMenu = Menu::make(
             Menu::link('https://docs.larakube.app', 'LaraKube Documentation')->openInBrowser(),
-            Menu::link('https://github.com/luchavez-technologies/larakube-desktop/discussions', 'Community & Discussions')->openInBrowser(),
-            Menu::link('https://github.com/luchavez-technologies/larakube-desktop/issues', 'Report an Issue…')->openInBrowser(),
+            Menu::link('https://github.com/luchavez-technologies/larakube-desktop-releases/discussions', 'Community & Discussions')->openInBrowser(),
+            Menu::link('https://github.com/luchavez-technologies/larakube-desktop-releases/issues', 'Report an Issue…')->openInBrowser(),
             Menu::separator(),
             Menu::link(url('/settings?action=updates'), 'Check for Updates…'),
             Menu::separator(),
