@@ -1337,6 +1337,27 @@ class ProjectController extends Controller
         return back();
     }
 
+    /** One merged stream of every service's logs for an environment. */
+    public function logs(Request $request, Project $project, ProjectPods $projectPods): JsonResponse
+    {
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'regex:/^[a-z0-9][a-z0-9-]*$/'],
+            'component' => ['nullable', 'string', 'regex:/^[a-z0-9][a-z0-9-]*$/'],
+            // Kubernetes timestamps carry nanoseconds, which PHP's date formats cannot parse.
+            'since_time' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/'],
+            'tail' => ['nullable', 'integer'],
+        ]);
+        abort_unless($this->inspector->inspect($project->path)['exists'], 404);
+
+        return response()->json($projectPods->mergedLogs(
+            $project->path,
+            $validated['environment'],
+            $validated['component'] ?? null,
+            $validated['since_time'] ?? null,
+            max(10, min(500, (int) ($validated['tail'] ?? 300))),
+        ));
+    }
+
     public function podLogs(
         Request $request,
         Project $project,

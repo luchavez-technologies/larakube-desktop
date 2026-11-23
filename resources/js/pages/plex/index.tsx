@@ -40,19 +40,37 @@ import PlexProvisionModal from './components/plex-provision-modal';
 import PlexQuickConnectModal from './components/plex-quick-connect-modal';
 import PlexServiceEngineCard from './components/plex-service-engine-card';
 import PlexTenantHub from './components/plex-tenant-hub';
+import PlexUpdateButton, {
+    type CommonsChange,
+    usePlexOutdated,
+} from './components/plex-update-button';
 import PlexTopologyCanvas from './components/topology/plex-topology-canvas';
 import type { TopologyProject } from './components/topology/types';
 import PlexEmptyState from './plex-empty-state';
 import { useServerDataReload } from '@/lib/native-events';
 
+/** The image a Commons engine runs, from the spec `plex:show` reports. */
+function serviceImage(
+    plex: PlexStatus | null | undefined,
+    service: string,
+): string | null {
+    const entry = plex?.services?.[service];
+
+    return typeof entry === 'object' && typeof entry.image === 'string'
+        ? entry.image
+        : null;
+}
+
 function PlexPageHeader({
     server,
     badge,
     onOpenQuickConnect,
+    changes = [],
 }: {
     server: Server;
     badge?: ReactNode;
     onOpenQuickConnect?: () => void;
+    changes?: CommonsChange[];
 }) {
     // Adding an engine and provisioning a tenant live with their own sections below.
     return (
@@ -62,6 +80,7 @@ function PlexPageHeader({
             subtitle="Shared databases, caches and storage your apps and tools plug into."
             actions={
                 <>
+                    <PlexUpdateButton server={server} changes={changes} />
                     {onOpenQuickConnect && (
                         <Button
                             variant="secondary"
@@ -127,6 +146,8 @@ export default function PlexIndex({
 }) {
     const awaitingFirstSync = plex === null && plexSync.status !== 'error';
     const isLocal = isLocalServer(server);
+
+    const outdatedChanges = usePlexOutdated(server.name);
 
     useServerDataReload(server.name, {
         plex: ['plex', 'services', 'plexSync'],
@@ -295,6 +316,7 @@ export default function PlexIndex({
                         ? () => handleOpenQuickConnectForDriver('')
                         : undefined
                 }
+                changes={initialized ? outdatedChanges : []}
             />
 
             {!initialized ? (
@@ -403,6 +425,15 @@ export default function PlexIndex({
                                                             ? companions
                                                             : null
                                                     }
+                                                    server={server}
+                                                    image={serviceImage(
+                                                        plex,
+                                                        option.driver,
+                                                    )}
+                                                    changes={outdatedChanges}
+                                                    paused={(
+                                                        plex?.paused ?? []
+                                                    ).includes(option.driver)}
                                                 />
                                             ),
                                         )}

@@ -15,3 +15,36 @@ test('reports no coverage when dnsmasq has not been configured for the TLD', fun
 
     expect((new LocalDnsCoverage)->covers('test'))->toBeFalse();
 });
+
+function hostsFileWith(string $content): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'hosts');
+    file_put_contents($path, $content);
+
+    return $path;
+}
+
+test('a leftover companions block for this project needs cleanup', function (): void {
+    $file = hostsFileWith("127.0.0.1 localhost\n# LaraKube: cloud-companions\n1.2.3.4 pgadmin.test\n");
+
+    expect((new LocalDnsCoverage)->hostsNeedCleanup('cloud', $file))->toBeTrue();
+    unlink($file);
+});
+
+test('a leftover shared-services block needs cleanup for any project', function (): void {
+    $file = hostsFileWith("# LaraKube: larakube-shared\n1.2.3.4 mailpit.test\n");
+
+    expect((new LocalDnsCoverage)->hostsNeedCleanup(null, $file))->toBeTrue();
+    unlink($file);
+});
+
+test('another project\'s companions block, or a similar name, needs no cleanup', function (): void {
+    $file = hostsFileWith("# LaraKube: blog-companions\n# LaraKube: cloud-companions-old\n# LaraKube: cloud\n");
+
+    expect((new LocalDnsCoverage)->hostsNeedCleanup('cloud', $file))->toBeFalse();
+    unlink($file);
+});
+
+test('an unreadable hosts file needs no cleanup', function (): void {
+    expect((new LocalDnsCoverage)->hostsNeedCleanup('cloud', '/nonexistent/hosts'))->toBeFalse();
+});

@@ -249,6 +249,8 @@ class FrameworkForm
      */
     private function implied(array $fields, array $answers): array
     {
+        $byKey = array_column($fields, null, 'key');
+
         foreach ($fields as $field) {
             foreach ((array) ($field['implies'] ?? []) as $value => $implied) {
                 if (($answers[$field['key']] ?? null) !== $value || ! is_array($implied)) {
@@ -256,6 +258,13 @@ class FrameworkForm
                 }
 
                 foreach ($implied as $key => $add) {
+                    // An implied option the server hides is one the CLI adds on its
+                    // own (FrankenPHP adds Octane), so there is nothing to pass.
+                    $target = $byKey[$key] ?? null;
+                    if (is_array($target) && isset($target['options']) && ! array_key_exists((string) $add, $this->available($target, $answers))) {
+                        continue;
+                    }
+
                     $current = $answers[$key] ?? [];
                     $answers[$key] = is_array($current) ? array_values(array_unique([...$current, $add])) : $add;
                 }
@@ -273,8 +282,10 @@ class FrameworkForm
     {
         foreach ($conditions as $key => $expected) {
             $actual = $answers[$key] ?? null;
+            // A list means any of these values (Teams shows for any starter kit).
+            $accepted = is_array($expected) ? $expected : [$expected];
 
-            if (! (is_array($actual) ? in_array($expected, $actual, true) : $actual === $expected)) {
+            if (! (is_array($actual) ? array_intersect($accepted, $actual) !== [] : in_array($actual, $accepted, true))) {
                 return false;
             }
         }

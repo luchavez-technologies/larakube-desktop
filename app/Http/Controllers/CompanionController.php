@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RunKind;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\GlobalSettings;
+use App\Services\LaraKube\ProjectCompanions;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,7 @@ class CompanionController extends Controller
     ];
 
     /**
-     * @return list<array{slug: string, name: string, description: string, icon: string, installed: bool, running: bool, paused: bool, url: ?string}>
+     * @return list<array{slug: string, name: string, description: string, icon: string, installed: bool, running: bool, paused: bool, url: ?string, image: ?string, available: ?string}>
      */
     public function all(ToolLocator $locator, GlobalSettings $settings): array
     {
@@ -69,10 +70,12 @@ class CompanionController extends Controller
                         $name = $item['metadata']['name'] ?? '';
                         $replicas = (int) ($item['spec']['replicas'] ?? 0);
                         $readyReplicas = (int) ($item['status']['readyReplicas'] ?? 0);
+                        $image = $item['spec']['template']['spec']['containers'][0]['image'] ?? null;
                         $deployments[$name] = [
                             'installed' => true,
                             'running' => $readyReplicas > 0,
                             'paused' => $replicas === 0,
+                            'image' => is_string($image) ? $image : null,
                         ];
                     }
                 }
@@ -80,6 +83,7 @@ class CompanionController extends Controller
         }
 
         $tld = $settings->getLocalTld();
+        $pins = app(ProjectCompanions::class)->pinnedImages();
         $list = [];
 
         foreach (self::COMPANIONS as $slug => $info) {
@@ -97,6 +101,9 @@ class CompanionController extends Controller
                 'running' => $running,
                 'paused' => $paused,
                 'url' => $installed ? "https://{$slug}.{$tld}" : null,
+                // What it runs, once installed; and what this CLI build installs.
+                'image' => $dep['image'] ?? null,
+                'available' => $pins[$slug] ?? null,
             ];
         }
 
@@ -212,6 +219,31 @@ class CompanionController extends Controller
         // the new run from the shared activeRuns prop) — only hop to the full
         // Activity page for a non-Inertia request, where there's no "current
         // page" to stay on. Same pattern as ProjectController's lifecycle actions.
+        return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
+    }
+
+    /** Re-apply an installed companion with the image this CLI build pins. */
+    public function update(Request $request, CliRunner $runner): RedirectResponse
+    {
+        $validated = $request->validate([
+            'companion' => ['required', Rule::in(array_keys(self::COMPANIONS))],
+        ]);
+
+        $slug = $validated['companion'];
+        $name = self::COMPANIONS[$slug]['name'];
+
+        $run = $runner->start(
+            label: "Update {$name} companion",
+            arguments: ['companion:update', $slug, '--json'],
+            kind: RunKind::CompanionUpdate,
+            subject: "companion:{$slug}",
+            meta: ['companion' => $slug],
+            targetType: 'companion',
+            targetName: $name,
+            tool: $slug,
+            environment: 'local',
+        );
+
         return $request->header('X-Inertia') ? back() : to_route('runs.show', $run);
     }
 }

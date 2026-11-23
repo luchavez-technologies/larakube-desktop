@@ -38,6 +38,13 @@ import {
     Server as ServerIcon,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
+import LiveDot from '@/components/live-dot';
+import {
+    LiveReloadRow,
+    type LiveReloadState,
+    reloadedTargets,
+    useLiveReload,
+} from '@/components/live-reload';
 import Button, { buttonClass } from '@/components/button';
 import CopyButton from '@/components/copy-button';
 import EnvironmentSettingsDrawer, {
@@ -50,15 +57,14 @@ import HostPicker from '@/components/host-picker';
 import DomainStatusPills from '@/components/domain-status-pills';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
-import LocalDevCompanionsCard, {
-    LocalDevCompanionsCardSkeleton,
-} from '@/components/local-dev-companions-card';
+import ProjectConnectCard from '@/components/project-connect-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import WorkloadsPodsCard, {
     WorkloadsPodsCardSkeleton,
 } from '@/components/workloads-pods-card';
 import ProjectFeaturesCard from '@/components/project-features-card';
 import EnvironmentSecretsCard from '@/components/environment-secrets-card';
+import MergedLogsPanel from '@/components/merged-logs-panel';
 import ProjectTerminalCard, {
     type ProjectRun,
 } from '@/components/project-terminal-card';
@@ -127,8 +133,8 @@ const STATIC = ['vite', 'astro', 'docusaurus'];
 
 const PROJECT_TABS = [
     { key: 'overview', label: 'Overview', localOnly: false },
+    { key: 'logs', label: 'Logs', localOnly: false },
     { key: 'configuration', label: 'Configuration', localOnly: false },
-    { key: 'companions', label: 'Dev Companions', localOnly: true },
     { key: 'settings', label: 'Settings', localOnly: false },
 ] as const;
 
@@ -206,7 +212,6 @@ export default function ShowProject({
     domains,
     companions,
     companionCredentials,
-    localTld,
     k9sInstalled = false,
     pods,
 }: {
@@ -289,6 +294,10 @@ export default function ShowProject({
     const [activeEnv, setActiveEnv] = useState<string>(() =>
         initialProjectEnv(pageUrl, project),
     );
+    const liveReload = useLiveReload(
+        project.id,
+        Boolean(project.initialized) && activeEnv === 'local',
+    );
     const [tab, setTab] = useState<ProjectTab>(() =>
         initialProjectTab(pageUrl),
     );
@@ -309,18 +318,13 @@ export default function ShowProject({
         setActiveEnv(nextEnv);
         const url = new URL(window.location.href);
         url.searchParams.set('env', nextEnv);
-        if (nextEnv !== 'local' && tab === 'companions') {
-            setTab('overview');
-            url.searchParams.set('tab', 'overview');
-        }
         window.history.replaceState(window.history.state, '', url);
     }
 
     const visibleTabs = PROJECT_TABS.filter(
         (item) => !item.localOnly || activeEnv === 'local',
     );
-    const activeTab: ProjectTab =
-        activeEnv !== 'local' && tab === 'companions' ? 'overview' : tab;
+    const activeTab: ProjectTab = tab;
 
     // Active cloud environment config when viewing cloud tabs
     const activeCloudEnvName =
@@ -458,7 +462,7 @@ export default function ShowProject({
                     <div className="lg:col-span-5">
                         <Card>
                             <div className="flex items-center gap-2.5">
-                                <span className="size-2 animate-ping rounded-full bg-brand" />
+                                <LiveDot />
                                 <p className="text-sm font-semibold text-ink">
                                     Creating application…
                                 </p>
@@ -539,6 +543,7 @@ export default function ShowProject({
                                             <LocalClusterCard
                                                 project={project}
                                                 runs={runs}
+                                                liveReload={liveReload}
                                                 pods={pods?.local ?? []}
                                                 healthMetrics={
                                                     healthMetrics?.local ?? null
@@ -588,6 +593,9 @@ export default function ShowProject({
                                                 <WorkloadsPodsCard
                                                     project={project}
                                                     activeEnv="local"
+                                                    reloadedTargets={reloadedTargets(
+                                                        liveReload.state,
+                                                    )}
                                                     pods={pods?.local ?? []}
                                                     runs={runs}
                                                     k9sInstalled={k9sInstalled}
@@ -606,6 +614,23 @@ export default function ShowProject({
                                                 currentEnv={activeEnvConfig}
                                                 services={backing?.[activeEnv]}
                                             />
+                                        )}
+
+                                        {project.initialized && (
+                                            <Deferred
+                                                data="companions"
+                                                fallback={
+                                                    <div className="h-24 animate-pulse rounded-2xl bg-paper ring-1 ring-line" />
+                                                }
+                                            >
+                                                <ProjectConnectCard
+                                                    project={project}
+                                                    companions={companions}
+                                                    companionCredentials={
+                                                        companionCredentials
+                                                    }
+                                                />
+                                            </Deferred>
                                         )}
                                     </>
                                 ) : (
@@ -701,6 +726,18 @@ export default function ShowProject({
                         </div>
                     )}
 
+                    {activeTab === 'logs' && (
+                        <div className="mt-6">
+                            <MergedLogsPanel
+                                key={activeEnv}
+                                endpoint={`/projects/${project.id}/logs`}
+                                params={{ environment: activeEnv }}
+                                allLabel="All services"
+                                failure="Could not read this project’s logs."
+                            />
+                        </div>
+                    )}
+
                     {activeTab === 'configuration' && (
                         <div className="space-y-5">
                             {activeEnv === 'local' && !project.initialized ? (
@@ -788,24 +825,6 @@ export default function ShowProject({
 
                     {activeTab === 'settings' && (
                         <ProjectSettingsCard project={project} />
-                    )}
-
-                    {activeTab === 'companions' && activeEnv === 'local' && (
-                        <Deferred
-                            data="companions"
-                            fallback={
-                                <LocalDevCompanionsCardSkeleton
-                                    localTld={localTld}
-                                />
-                            }
-                        >
-                            <LocalDevCompanionsCard
-                                project={project}
-                                companions={companions}
-                                companionCredentials={companionCredentials}
-                                localTld={localTld}
-                            />
-                        </Deferred>
                     )}
 
                     {/* Deploy Modal Popup */}
@@ -1005,9 +1024,7 @@ function ProjectTabAndEnvBar({
             value: 'local',
             label: 'Local Dev',
             icon: <Laptop className="size-3.5 shrink-0 text-brand" />,
-            badge: isLocalRunning ? (
-                <span className="size-2 animate-ping rounded-full bg-brand" />
-            ) : undefined,
+            badge: isLocalRunning ? <LiveDot /> : undefined,
             description: localHost,
         },
         ...cloudEnvs.map((env) => {
@@ -1044,9 +1061,7 @@ function ProjectTabAndEnvBar({
                                     {env.serverName}
                                 </span>
                             )}
-                            {isDeploying && (
-                                <span className="size-2 animate-ping rounded-full bg-brand" />
-                            )}
+                            {isDeploying && <LiveDot />}
                         </span>
                     ) : undefined,
                 description: env.webHost ?? 'No domain configured',
@@ -2656,7 +2671,7 @@ function DeployDialog({
                                                 }
                                                 className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
                                             >
-                                                <span className="size-2 animate-ping rounded-full bg-brand" />
+                                                <LiveDot />
                                                 <span>View live progress</span>
                                                 <ArrowRight className="size-3" />
                                             </Link>
@@ -3249,12 +3264,18 @@ function InitStatus({ latestRun }: { latestRun: ProjectRun | null }) {
 function LocalClusterCard({
     project,
     runs,
+    liveReload,
     pods = [],
     healthMetrics,
     podMetrics,
 }: {
     project: Project;
     runs: RecentRun[];
+    liveReload: {
+        state: LiveReloadState | null;
+        pending: boolean;
+        setEnabled: (enabled: boolean) => void;
+    };
     pods?: PodInfo[];
     healthMetrics?: HealthMetrics | null;
     podMetrics?: PodMetrics | null;
@@ -3444,7 +3465,7 @@ function LocalClusterCard({
                                 href={showRun(activeLifecycle.id).url}
                                 className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand ring-1 ring-brand/20 hover:underline"
                             >
-                                <span className="size-1.5 animate-ping rounded-full bg-brand" />
+                                <LiveDot size="sm" />
                                 {activeLifecycle.label}…
                             </Link>
                         )}
@@ -3493,7 +3514,12 @@ function LocalClusterCard({
                                 project.features ??
                                 []
                             ).some((f: string) =>
-                                ['horizon', 'queues', 'octane'].includes(f),
+                                [
+                                    'horizon',
+                                    'queues',
+                                    'octane',
+                                    'reverb',
+                                ].includes(f),
                             ) ||
                                 project.serverVariation === 'frankenphp') && (
                                 <Form action={reloadLifecycle(project.id)}>
@@ -3509,7 +3535,7 @@ function LocalClusterCard({
                                                 variant="secondary"
                                                 size="sm"
                                                 disabled={processing}
-                                                title="Gracefully restart long-running PHP workers (Horizon, queue workers, Octane) to load updated code (larakube reload)"
+                                                title="Gracefully restart long-running PHP workers (Horizon, queue workers, Octane, Reverb) to load updated code (larakube reload)"
                                             >
                                                 <RotateCw
                                                     className={cn(
@@ -3729,6 +3755,13 @@ function LocalClusterCard({
                         )}
                     </div>
                 )}
+
+                <LiveReloadRow
+                    state={liveReload.state}
+                    pending={liveReload.pending}
+                    running={status === 'running'}
+                    onToggle={liveReload.setEnabled}
+                />
 
                 <div className="border-t border-line pt-2.5">
                     <ProjectTldForm project={project} />

@@ -88,3 +88,84 @@ test('a single (non-multiple) text field is unaffected by the multiple-field pat
     expect($result['flags'])->toBe(['--admin-email=admin@example.com'])
         ->and($result['errors'])->toBe([]);
 });
+
+function frankenphpOctaneFields(): array
+{
+    return [
+        [
+            'key' => 'server',
+            'type' => 'select',
+            'label' => 'Server variation',
+            'implies' => ['frankenphp' => ['features' => 'octane']],
+            'options' => [
+                ['value' => 'fpm-nginx', 'flag' => '--fpm-nginx', 'unavailableWith' => []],
+                ['value' => 'frankenphp', 'flag' => '--frankenphp', 'unavailableWith' => []],
+            ],
+        ],
+        [
+            'key' => 'features',
+            'type' => 'multiselect',
+            'label' => 'Laravel features',
+            'options' => [
+                ['value' => 'reverb', 'flag' => '--reverb', 'unavailableWith' => []],
+                ['value' => 'octane', 'flag' => '--octane', 'unavailableWith' => ['frankenphp']],
+            ],
+        ],
+    ];
+}
+
+test('an implied option the chosen server hides is left to the CLI instead of failing validation', function (): void {
+    $result = (new FrameworkForm)->resolve(
+        frankenphpOctaneFields(),
+        ['server' => 'frankenphp', 'features' => ['reverb']],
+    );
+
+    expect($result['errors'])->toBe([])
+        ->and($result['flags'])->toBe(['--frankenphp', '--reverb']);
+});
+
+test('an implied option the chosen server offers is still added', function (): void {
+    $fields = frankenphpOctaneFields();
+    $fields[1]['options'][1]['unavailableWith'] = [];
+
+    $result = (new FrameworkForm)->resolve($fields, ['server' => 'frankenphp', 'features' => []]);
+
+    expect($result['errors'])->toBe([])
+        ->and($result['flags'])->toBe(['--frankenphp', '--octane']);
+});
+
+function teamsFields(): array
+{
+    return [
+        [
+            'key' => 'frontend',
+            'type' => 'select',
+            'label' => 'Frontend stack',
+            'nullable' => true,
+            'options' => [
+                ['value' => 'react', 'flag' => '--react', 'unavailableWith' => []],
+                ['value' => 'vite', 'flag' => '--vite', 'unavailableWith' => []],
+            ],
+        ],
+        [
+            'key' => 'teams',
+            'type' => 'confirm',
+            'label' => 'Teams',
+            'flag' => '--teams',
+            'default' => false,
+            'visibleWhen' => ['frontend' => ['react', 'vue', 'svelte', 'livewire']],
+        ],
+    ];
+}
+
+test('Teams is passed when it is ticked with a starter kit', function (): void {
+    $result = (new FrameworkForm)->resolve(teamsFields(), ['frontend' => 'react', 'teams' => true]);
+
+    expect($result['errors'])->toBe([])
+        ->and($result['flags'])->toBe(['--react', '--teams']);
+});
+
+test('Teams is dropped for a frontend without a starter kit, even when ticked', function (): void {
+    expect((new FrameworkForm)->resolve(teamsFields(), ['frontend' => 'vite', 'teams' => true])['flags'])->toBe(['--vite'])
+        ->and((new FrameworkForm)->resolve(teamsFields(), ['frontend' => null, 'teams' => true])['flags'])->toBe([]);
+});

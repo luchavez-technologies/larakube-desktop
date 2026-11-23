@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import {
+    ArrowUpCircle,
     Eye,
     EyeOff,
     ExternalLink,
@@ -8,18 +9,19 @@ import {
     Laptop,
     Pause,
     Play,
-    Plus,
+    Download,
     Sparkles,
     Trash2,
 } from 'lucide-react';
 import { buttonClass } from '@/components/button';
 import Card from '@/components/card';
+import ImageRef from '@/components/image-ref';
+import ServiceCard from '@/components/service-card';
 import CopyButton from '@/components/copy-button';
 import { ExternalLinkButton } from '@/lib/open-external';
 import QrCodePopover from '@/components/qr-code-popover';
 import StatusPill from '@/components/status-pill';
 import ToolLogo from '@/components/tool-logo';
-import { cn } from '@/lib/utils';
 import type {
     CompanionApp,
     CompanionCredential,
@@ -84,7 +86,7 @@ const DEFAULT_COMPANIONS: CompanionApp[] = [
 ];
 
 /** Host/user/password/database for a running companion, masked until clicked. */
-function ConnectionDetails({
+export function ConnectionDetails({
     credential,
 }: {
     credential: CompanionCredential;
@@ -100,7 +102,7 @@ function ConnectionDetails({
     if (fields.length === 0) return null;
 
     return (
-        <div className="mt-3 space-y-1 rounded-lg bg-paper/70 p-2.5 text-[11px]">
+        <div className="space-y-1 border-t border-line/60 pt-2 text-[11px]">
             <div className="mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1 font-medium text-faint">
                     <KeyRound className="size-3" />
@@ -147,13 +149,53 @@ function ConnectionDetails({
     );
 }
 
+/** Which companions suit a database/cache driver pair, e.g. pgAdmin for Postgres. */
+export function companionFits(
+    slug: string,
+    database: string | null | undefined,
+    cacheDriver: string | null | undefined,
+): boolean {
+    const db = (database ?? '').toLowerCase();
+    const cache = (cacheDriver ?? '').toLowerCase();
+    const mysql = db.includes('mysql') || db.includes('maria');
+    const postgres = db.includes('pgsql') || db.includes('postgres');
+
+    switch (slug) {
+        case 'adminer':
+            return mysql || postgres || db.includes('sqlite');
+        case 'phpmyadmin':
+            return mysql;
+        case 'pgadmin':
+            return postgres;
+        case 'redisinsight':
+            return cache.includes('redis');
+        case 'mongo-express':
+            return db.includes('mongo');
+        default:
+            return false;
+    }
+}
+
+export type CompanionUser = {
+    name: string;
+    database: string | null;
+    cacheDriver: string | null;
+};
+
+/**
+ * The shared dev companions of the local cluster. On the Local page
+ * (`projects`) each one says which local projects it suits; with a single
+ * `project` it says whether it matches that one.
+ */
 export default function LocalDevCompanionsCard({
     project,
+    projects,
     companions,
     companionCredentials,
     localTld = 'test',
 }: {
-    project: Project;
+    project?: Project;
+    projects?: CompanionUser[];
     companions?: CompanionApp[] | null;
     companionCredentials?: CompanionCredential[] | null;
     localTld?: string;
@@ -167,37 +209,25 @@ export default function LocalDevCompanionsCard({
     const credentialFor = (name: string): CompanionCredential | undefined =>
         (companionCredentials ?? []).find((c) => c.companion === name);
 
-    // Detect matched companions based on project database / cache
-    const db = (project.database ?? '').toLowerCase();
-    const cache = (project.cacheDriver ?? '').toLowerCase();
+    const getMatchBadge = (slug: string): string | null => {
+        if (project) {
+            return companionFits(slug, project.database, project.cacheDriver)
+                ? `Matches ${project.name}`
+                : null;
+        }
 
-    const matchBadges: Record<string, string | null> = {
-        adminer:
-            db.includes('mysql') ||
-            db.includes('maria') ||
-            db.includes('pgsql') ||
-            db.includes('postgres') ||
-            db.includes('sqlite')
-                ? `Recommended for ${db.toUpperCase()}`
-                : null,
-        phpmyadmin:
-            db.includes('mysql') || db.includes('maria')
-                ? 'Matches project MySQL'
-                : null,
-        pgadmin:
-            db.includes('pgsql') ||
-            db.includes('postgres') ||
-            db.includes('postgresql')
-                ? 'Matches project PostgreSQL'
-                : null,
-        redisinsight: cache.includes('redis') ? 'Matches project Redis' : null,
-        'mongo-express': db.includes('mongo')
-            ? 'Matches project MongoDB'
-            : null,
+        const users = (projects ?? [])
+            .filter((user) =>
+                companionFits(slug, user.database, user.cacheDriver),
+            )
+            .map((user) => user.name);
+
+        if (users.length === 0) return null;
+
+        return users.length <= 3
+            ? `Fits ${users.join(', ')}`
+            : `Fits ${users.slice(0, 2).join(', ')} and ${users.length - 2} more`;
     };
-
-    const getMatchBadge = (targetSlug: string): string | null =>
-        matchBadges[targetSlug] ?? null;
 
     return (
         <Card
@@ -269,104 +299,92 @@ export default function LocalDevCompanionsCard({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {list.map((companion) => {
                         const matchBadge = getMatchBadge(companion.slug);
+                        const running =
+                            companion.installed && companion.running;
+                        const credential = running
+                            ? credentialFor(companion.name)
+                            : undefined;
+                        const host =
+                            companion.url ??
+                            `https://${companion.slug}.${localTld}`;
+                        const image =
+                            companion.image ?? companion.available ?? null;
 
                         return (
-                            <div
+                            <ServiceCard
                                 key={companion.slug}
-                                className={cn(
-                                    'group flex flex-col justify-between rounded-xl border p-4 transition-all duration-150',
-                                    companion.installed && companion.running
-                                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                                        : 'border-line bg-paper/60',
-                                )}
-                            >
-                                <div>
-                                    <div className="flex items-start justify-between gap-2.5">
-                                        <div className="flex items-center gap-3">
-                                            <ToolLogo
-                                                slug={companion.slug}
-                                                size="md"
+                                highlighted={running}
+                                logo={
+                                    <ToolLogo slug={companion.slug} size="md" />
+                                }
+                                title={companion.name}
+                                status={
+                                    companion.installed ? (
+                                        companion.running ? (
+                                            <StatusPill tone="ok">
+                                                Running
+                                            </StatusPill>
+                                        ) : (
+                                            <StatusPill tone="warn">
+                                                Paused
+                                            </StatusPill>
+                                        )
+                                    ) : (
+                                        <StatusPill tone="muted">
+                                            Available
+                                        </StatusPill>
+                                    )
+                                }
+                                badge={
+                                    matchBadge && (
+                                        <span className="inline-flex items-center gap-1 rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand ring-1 ring-brand/20">
+                                            <Sparkles className="size-2.5" />
+                                            <span>{matchBadge}</span>
+                                        </span>
+                                    )
+                                }
+                                info={[
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="truncate font-mono text-[11px] text-soft">
+                                            {host.replace(/^https?:\/\//, '')}
+                                        </span>
+                                        {running && companion.url && (
+                                            <QrCodePopover
+                                                url={companion.url}
+                                                title={companion.name}
+                                                description={`Scan to open ${companion.name} on phone`}
                                             />
-                                            <div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <h4 className="text-sm font-semibold text-ink">
-                                                        {companion.name}
-                                                    </h4>
-                                                </div>
-                                                <div className="mt-0.5">
-                                                    {companion.installed ? (
-                                                        companion.running ? (
-                                                            <StatusPill tone="ok">
-                                                                Running
-                                                            </StatusPill>
-                                                        ) : (
-                                                            <StatusPill tone="warn">
-                                                                ⏸ Paused
-                                                            </StatusPill>
-                                                        )
-                                                    ) : (
-                                                        <StatusPill tone="muted">
-                                                            Available
-                                                        </StatusPill>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {matchBadge && (
-                                            <span className="inline-flex shrink-0 items-center gap-1 rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand ring-1 ring-brand/20">
-                                                <Sparkles className="size-2.5" />
-                                                <span>{matchBadge}</span>
-                                            </span>
                                         )}
-                                    </div>
-
-                                    <p className="mt-2.5 text-xs leading-relaxed text-soft">
-                                        {companion.description}
-                                    </p>
-                                </div>
-
-                                <div className="mt-3.5 flex items-center justify-between border-t border-line/60 pt-3">
-                                    <span className="font-mono text-[11px] text-faint">
-                                        {companion.url ??
-                                            `${companion.slug}.${localTld}`}
-                                    </span>
-
-                                    <div className="flex items-center gap-1.5">
-                                        {companion.installed ? (
-                                            <>
-                                                {companion.url &&
-                                                    companion.running && (
-                                                        <>
-                                                            <QrCodePopover
-                                                                url={
-                                                                    companion.url
-                                                                }
-                                                                title={
-                                                                    companion.name
-                                                                }
-                                                                description={`Scan to open ${companion.name} on phone`}
-                                                            />
-                                                            <ExternalLinkButton
-                                                                url={
-                                                                    companion.url
-                                                                }
-                                                                className={buttonClass(
-                                                                    'secondary',
-                                                                    'sm',
-                                                                    'gap-1',
-                                                                )}
-                                                            >
-                                                                <ExternalLink className="size-3" />
-                                                                <span>
-                                                                    Open
-                                                                </span>
-                                                            </ExternalLinkButton>
-                                                        </>
-                                                    )}
-                                                {companion.running ? (
+                                    </div>,
+                                    image ? (
+                                        <ImageRef
+                                            container={{
+                                                running: image,
+                                                available:
+                                                    companion.installed &&
+                                                    companion.available &&
+                                                    companion.available !==
+                                                        image
+                                                        ? companion.available
+                                                        : null,
+                                            }}
+                                        />
+                                    ) : null,
+                                    credential ? (
+                                        <ConnectionDetails
+                                            credential={credential}
+                                        />
+                                    ) : null,
+                                ]}
+                                actions={
+                                    companion.installed ? (
+                                        <>
+                                            {companion.available &&
+                                                companion.image &&
+                                                companion.available !==
+                                                    companion.image && (
                                                     <Link
-                                                        href="/companions/stop"
+                                                        href="/companions/update"
                                                         method="post"
                                                         data={{
                                                             companion:
@@ -375,38 +393,32 @@ export default function LocalDevCompanionsCard({
                                                         as="button"
                                                         preserveScroll
                                                         className={buttonClass(
-                                                            'ghost',
-                                                            'sm',
-                                                            'gap-1 text-soft',
-                                                        )}
-                                                        title="Pause companion to free RAM"
-                                                    >
-                                                        <Pause className="size-3" />
-                                                        <span>Pause</span>
-                                                    </Link>
-                                                ) : (
-                                                    <Link
-                                                        href="/companions/start"
-                                                        method="post"
-                                                        data={{
-                                                            companion:
-                                                                companion.slug,
-                                                        }}
-                                                        as="button"
-                                                        preserveScroll
-                                                        className={buttonClass(
-                                                            'secondary',
+                                                            'primary',
                                                             'sm',
                                                             'gap-1',
                                                         )}
-                                                        title="Resume companion"
+                                                        title={`Update ${companion.name} to ${companion.available}`}
                                                     >
-                                                        <Play className="size-3" />
-                                                        <span>Resume</span>
+                                                        <ArrowUpCircle className="size-3" />
+                                                        <span>Update</span>
                                                     </Link>
                                                 )}
+                                            {running && companion.url && (
+                                                <ExternalLinkButton
+                                                    url={companion.url}
+                                                    className={buttonClass(
+                                                        'secondary',
+                                                        'sm',
+                                                        'gap-1',
+                                                    )}
+                                                >
+                                                    <ExternalLink className="size-3" />
+                                                    <span>Open</span>
+                                                </ExternalLinkButton>
+                                            )}
+                                            {companion.running ? (
                                                 <Link
-                                                    href="/companions/remove"
+                                                    href="/companions/stop"
                                                     method="post"
                                                     data={{
                                                         companion:
@@ -415,18 +427,38 @@ export default function LocalDevCompanionsCard({
                                                     as="button"
                                                     preserveScroll
                                                     className={buttonClass(
-                                                        'danger',
+                                                        'secondary',
                                                         'sm',
-                                                        'p-1.5',
+                                                        'gap-1',
                                                     )}
-                                                    title="Remove companion"
+                                                    title="Pause companion to free RAM"
                                                 >
-                                                    <Trash2 className="size-3.5" />
+                                                    <Pause className="size-3" />
+                                                    <span>Pause</span>
                                                 </Link>
-                                            </>
-                                        ) : (
+                                            ) : (
+                                                <Link
+                                                    href="/companions/start"
+                                                    method="post"
+                                                    data={{
+                                                        companion:
+                                                            companion.slug,
+                                                    }}
+                                                    as="button"
+                                                    preserveScroll
+                                                    className={buttonClass(
+                                                        'secondary',
+                                                        'sm',
+                                                        'gap-1',
+                                                    )}
+                                                    title="Resume companion"
+                                                >
+                                                    <Play className="size-3" />
+                                                    <span>Resume</span>
+                                                </Link>
+                                            )}
                                             <Link
-                                                href="/companions/add"
+                                                href="/companions/remove"
                                                 method="post"
                                                 data={{
                                                     companion: companion.slug,
@@ -434,33 +466,40 @@ export default function LocalDevCompanionsCard({
                                                 as="button"
                                                 preserveScroll
                                                 className={buttonClass(
-                                                    'primary',
+                                                    'danger',
                                                     'sm',
                                                     'gap-1',
                                                 )}
-                                                title={`Install ${companion.name}`}
+                                                title={`Remove ${companion.name}`}
                                             >
-                                                <Plus className="size-3" />
-                                                <span>Install</span>
+                                                <Trash2 className="size-3.5" />
+                                                <span>Remove</span>
                                             </Link>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {companion.installed &&
-                                    companion.running &&
-                                    (() => {
-                                        const credential = credentialFor(
-                                            companion.name,
-                                        );
-
-                                        return credential ? (
-                                            <ConnectionDetails
-                                                credential={credential}
-                                            />
-                                        ) : null;
-                                    })()}
-                            </div>
+                                        </>
+                                    ) : (
+                                        <Link
+                                            href="/companions/add"
+                                            method="post"
+                                            data={{ companion: companion.slug }}
+                                            as="button"
+                                            preserveScroll
+                                            className={buttonClass(
+                                                'primary',
+                                                'sm',
+                                                'gap-1',
+                                            )}
+                                            title={`Install ${companion.name}`}
+                                        >
+                                            <Download className="size-3" />
+                                            <span>Install</span>
+                                        </Link>
+                                    )
+                                }
+                            >
+                                <p className="text-xs leading-relaxed text-soft">
+                                    {companion.description}
+                                </p>
+                            </ServiceCard>
                         );
                     })}
                 </div>

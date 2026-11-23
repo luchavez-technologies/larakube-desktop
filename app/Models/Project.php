@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $blueprint_cache
  * @property Carbon|null $last_inspected_at
  * @property bool $hidden_in_demo
+ * @property bool $live_reload
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Server|null $server
@@ -34,6 +35,11 @@ use Illuminate\Support\Carbon;
  */
 class Project extends Model
 {
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'live_reload' => true,
+    ];
+
     protected $fillable = [
         'path',
         'name',
@@ -45,6 +51,7 @@ class Project extends Model
         'blueprint_cache',
         'last_inspected_at',
         'hidden_in_demo',
+        'live_reload',
     ];
 
     /**
@@ -56,6 +63,7 @@ class Project extends Model
             'blueprint_cache' => 'array',
             'last_inspected_at' => 'datetime',
             'hidden_in_demo' => 'boolean',
+            'live_reload' => 'boolean',
         ];
     }
 

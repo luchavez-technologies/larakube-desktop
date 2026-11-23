@@ -1264,6 +1264,55 @@ test('projects.pods.logs returns json with container logs', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
+test('projects.logs returns the CLI merged stream for the environment', function () {
+    $sandbox = projectsSandbox();
+    $payload = ['success' => true, 'components' => ['web'], 'lines' => [['time' => '2026-11-23T01:00:00Z', 'pod' => 'web-1', 'container' => 'php', 'component' => 'web', 'line' => 'GET /up']]];
+
+    Process::fake([
+        '*logs*--json*' => Process::result(output: json_encode($payload)),
+        '*' => Process::result(),
+    ]);
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->getJson(route('projects.logs', ['project' => $project, 'environment' => 'local', 'component' => 'web']))
+        ->assertOk()
+        ->assertJson($payload);
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), '--environment=local')
+        && str_contains(implode(' ', (array) $process->command), '--component=web')
+        && str_contains(implode(' ', (array) $process->command), '--since=15m'));
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.logs accepts a Kubernetes nanosecond timestamp as the start time', function () {
+    $sandbox = projectsSandbox();
+    Process::fake([
+        '*logs*--json*' => Process::result(output: json_encode(['success' => true, 'components' => [], 'lines' => []])),
+        '*' => Process::result(),
+    ]);
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->getJson(route('projects.logs', ['project' => $project, 'environment' => 'local', 'since_time' => '2026-11-23T03:18:55.221884191Z']))
+        ->assertOk();
+
+    Process::assertRan(fn ($process): bool => str_contains(implode(' ', (array) $process->command), '--since-time=2026-11-23T03:18:55.221884191Z'));
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('projects.logs rejects an environment that is not a plain name', function () {
+    $sandbox = projectsSandbox();
+    Process::fake();
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->getJson(route('projects.logs', ['project' => $project, 'environment' => '--context=other']))
+        ->assertUnprocessable();
+
+    Process::assertNothingRan();
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('projects.pods.restart restarts the specified pod and redirects back', function () {
     $sandbox = projectsSandbox();
     File::put("{$sandbox['bin']}/kubectl", "#!/bin/sh\n");

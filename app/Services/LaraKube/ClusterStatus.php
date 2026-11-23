@@ -300,6 +300,7 @@ class ClusterStatus
             'initialized' => (bool) $report['initialized'],
             'context' => isset($report['context']) ? (string) $report['context'] : null,
             'services' => is_array($report['services']) ? $report['services'] : [],
+            'paused' => array_values(array_filter((array) ($report['paused'] ?? []), 'is_string')),
             'serviceCatalog' => is_array($report['serviceCatalog'] ?? null) ? $report['serviceCatalog'] : [],
             'tenants' => [
                 'tool' => $bucket($report['tenants']['tool'] ?? []),
@@ -401,9 +402,35 @@ class ClusterStatus
         });
     }
 
+    /**
+     * The Commons services this CLI build would change (`plex:outdated --json`):
+     * a server-side dry run against the live Commons, so it is cached like the
+     * rest and forgotten whenever a Plex run finishes.
+     *
+     * @return list<array{service: string, stateful: bool, from: string|null, to: string|null}>|null
+     */
+    public function plexOutdated(string $context): ?array
+    {
+        return $this->remember("plex-outdated:{$context}", function () use ($context): ?array {
+            $report = $this->json(['plex:outdated', "--context={$context}", '--json'], 60);
+
+            if (! is_array($report) || ($report['success'] ?? false) !== true || ! is_array($report['outdated'] ?? null)) {
+                return null;
+            }
+
+            return array_values(array_filter(array_map(fn (mixed $change): ?array => is_array($change) && is_string($change['service'] ?? null) ? [
+                'service' => $change['service'],
+                'stateful' => (bool) ($change['stateful'] ?? true),
+                'from' => is_string($change['from'] ?? null) ? $change['from'] : null,
+                'to' => is_string($change['to'] ?? null) ? $change['to'] : null,
+            ] : null, $report['outdated'])));
+        });
+    }
+
     public function forgetPlex(string $context): void
     {
         Cache::forget("cluster-status:plex:{$context}");
+        Cache::forget("cluster-status:plex-outdated:{$context}");
     }
 
     public function forgetClusterUsers(string $context): void

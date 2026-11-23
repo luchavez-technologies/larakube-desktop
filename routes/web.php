@@ -17,6 +17,7 @@ use App\Http\Controllers\DomainStatusController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LocalClusterController;
+use App\Http\Controllers\LocalController;
 use App\Http\Controllers\LocalSetupController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\NotificationController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\OpenExternalController;
 use App\Http\Controllers\PlexController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDotenvController;
+use App\Http\Controllers\ProjectLiveReloadController;
 use App\Http\Controllers\ProjectScalingController;
 use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\QuickActionController;
@@ -107,6 +109,8 @@ Route::post('/servers/{server}/tls', [ServerController::class, 'enableSsl'])->na
 Route::post('/servers/{server}/tls/prune', [ServerController::class, 'pruneTls'])->name('servers.tls.prune');
 Route::post('/servers/{server}/terminal', [ServerController::class, 'terminal'])->name('servers.terminal');
 Route::post('/servers/{server}/plex/init', [PlexController::class, 'initServer'])->name('servers.plex.init');
+Route::get('/servers/{server}/plex/outdated', [PlexController::class, 'outdated'])->name('servers.plex.outdated');
+Route::post('/servers/{server}/plex/update', [PlexController::class, 'updateServer'])->name('servers.plex.update');
 Route::post('/servers/{server}/plex/start', [PlexController::class, 'startServer'])->name('servers.plex.start');
 Route::post('/servers/{server}/plex/stop', [PlexController::class, 'stopServer'])->name('servers.plex.stop');
 Route::post('/servers/{server}/plex/refresh', [PlexController::class, 'refresh'])->name('servers.plex.refresh');
@@ -164,6 +168,9 @@ Route::post('/workspaces/{workspace}/resume', [WorkspaceController::class, 'resu
 Route::post('/workspaces/{workspace}/open', [WorkspaceController::class, 'open'])->name('workspaces.open');
 Route::delete('/workspaces/{workspace}', [WorkspaceController::class, 'destroy'])->name('workspaces.destroy');
 
+Route::get('/local', [LocalController::class, 'index'])->name('local.index');
+Route::post('/local/health/refresh', [LocalController::class, 'refreshHealth'])->name('local.health.refresh');
+Route::post('/local/certificates/prune', [LocalController::class, 'pruneCertificates'])->name('local.certificates.prune');
 Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
 Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
 Route::post('/projects/clone', [ProjectController::class, 'clone'])->name('projects.clone');
@@ -182,6 +189,8 @@ Route::post('/projects/groups/{group}/down', [ProjectController::class, 'downGro
 Route::post('/projects/groups/{group}/rename', [ProjectController::class, 'renameGroup'])->name('projects.groups.rename');
 Route::post('/projects/groups/{group}/color', [ProjectController::class, 'updateGroupColor'])->name('projects.groups.color');
 Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+Route::get('/projects/{project}/live-reload', [ProjectLiveReloadController::class, 'show'])->name('projects.live-reload.show');
+Route::post('/projects/{project}/live-reload', [ProjectLiveReloadController::class, 'update'])->name('projects.live-reload.update');
 Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 Route::post('/projects/{project}/group', [ProjectController::class, 'updateGroup'])->name('projects.group');
 Route::post('/projects/{project}/init', [ProjectController::class, 'init'])->name('projects.init');
@@ -208,6 +217,7 @@ Route::post('/projects/{project}/features/remove', [ProjectController::class, 'r
 Route::post('/projects/{project}/extensions/add', [ProjectController::class, 'addExtension'])->name('projects.extensions.add');
 Route::post('/projects/{project}/extensions/remove', [ProjectController::class, 'removeExtension'])->name('projects.extensions.remove');
 Route::post('/projects/{project}/k9s', [ProjectController::class, 'k9s'])->name('projects.k9s');
+Route::get('/projects/{project}/logs', [ProjectController::class, 'logs'])->name('projects.logs');
 Route::get('/projects/{project}/pods/{pod}/logs', [ProjectController::class, 'podLogs'])->name('projects.pods.logs');
 Route::post('/projects/{project}/pods/{pod}/terminal', [ProjectController::class, 'podTerminal'])->name('projects.pods.terminal');
 Route::post('/projects/{project}/pods/{pod}/restart', [ProjectController::class, 'restartPod'])->name('projects.pods.restart');
@@ -329,6 +339,7 @@ Route::post('/companions/add', [CompanionController::class, 'add'])->name('compa
 Route::post('/companions/remove', [CompanionController::class, 'remove'])->name('companions.remove');
 Route::post('/companions/start', [CompanionController::class, 'start'])->name('companions.start');
 Route::post('/companions/stop', [CompanionController::class, 'stop'])->name('companions.stop');
+Route::post('/companions/update', [CompanionController::class, 'update'])->name('companions.update');
 
 Route::get('/tunnels', [TunnelController::class, 'index'])->name('tunnels.index');
 Route::post('/tunnels/start', [TunnelController::class, 'start'])->name('tunnels.start');

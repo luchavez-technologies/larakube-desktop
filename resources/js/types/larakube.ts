@@ -179,6 +179,7 @@ export type RunKind =
     | 'plex-provision'
     | 'plex-evict'
     | 'plex-rotate'
+    | 'plex-update'
     | 'context-import'
     | 'context-switch'
     | 'context-backup'
@@ -190,6 +191,8 @@ export type RunKind =
     | 'companion-remove'
     | 'companion-start'
     | 'companion-stop'
+    | 'companion-update'
+    | 'trust-prune'
     | 'cloud-auth'
     | 'workspace-create'
     | 'workspace-suspend'
@@ -629,8 +632,17 @@ export type PlexStatus = {
     context: string | null;
     services: Record<
         string,
-        { service?: string; host?: string; port?: number } | string
+        | {
+              service?: string;
+              host?: string;
+              port?: number;
+              image?: string;
+              enabled?: boolean;
+          }
+        | string
     >;
+    /** Commons services scaled to zero by plex:stop. */
+    paused?: string[];
     // From plex:show --json's kind split: a tool's own Commons tenant, a
     // recognized LaraKube project's, or one `plex:provision`-created for a
     // custom app — see plans/active/plex-commons-desktop-page.md Decision 3.
@@ -661,6 +673,10 @@ export type CompanionApp = {
     running: boolean;
     paused: boolean;
     url: string | null;
+    /** The image its deployment runs, once installed. */
+    image?: string | null;
+    /** The image this CLI build installs. */
+    available?: string | null;
 };
 
 export type CompanionCredential = {
@@ -762,7 +778,7 @@ export type FrameworkField = {
     }[];
     optionHints?: Record<string, string>;
     conflicts?: string[][];
-    visibleWhen?: Record<string, string>;
+    visibleWhen?: Record<string, string | string[]>;
     forcedWhen?: { when: Record<string, string>; value: string }[];
     defaultWhen?: { when: Record<string, string>; value: string }[];
     implies?: Record<string, Record<string, string>>;

@@ -47,4 +47,27 @@ class LocalDnsCoverage
         // WSL/Windows paths that CliRunner handles separately.
         return false;
     }
+
+    /**
+     * Whether a local `up` will have to remove a block from /etc/hosts even
+     * though dnsmasq covers the TLD: the CLI deletes the shared-services and
+     * this project's companions entries, which takes sudo.
+     */
+    public function hostsNeedCleanup(?string $project, string $hostsFile = '/etc/hosts'): bool
+    {
+        $hosts = @file_get_contents($hostsFile);
+
+        if (! is_string($hosts)) {
+            return false;
+        }
+
+        $blocks = ['larakube-shared'];
+        if ($project !== null && $project !== '') {
+            $blocks[] = "{$project}-companions";
+        }
+
+        $names = implode('|', array_map(fn (string $block): string => preg_quote($block, '/'), $blocks));
+
+        return preg_match("/^# LaraKube: (?:{$names})\\s*$/m", $hosts) === 1;
+    }
 }

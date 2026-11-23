@@ -207,7 +207,8 @@ class CliRunner
      * dnsmasq already wildcards the project's TLD, the CLI's own
      * ensureHostsAreSet()/syncClusterServiceHosts() skip /etc/hosts and
      * `sudo` entirely for that run, so granting elevation would pop the GUI
-     * password prompt for a run that was never going to use it.
+     * password prompt for a run that was never going to use it. An old
+     * LaraKube entry still waiting to be removed counts as not covered.
      */
     public function needsElevation(?RunKind $kind, ?string $environment, ?string $tool, bool $localDnsAlreadyCovers = false): bool
     {
@@ -241,19 +242,27 @@ class CliRunner
             }
         }
 
-        return true;
+        // Covered, but the CLI still has an old entry to delete from /etc/hosts,
+        // and that takes sudo, so this run does need the password.
+        return ! $this->dns->hostsNeedCleanup($this->projectBlueprintValue($cwd, 'name'));
     }
 
     /** The project's own `localTld` override from its `.larakube.json`, or null without one. */
     private function projectLocalTld(?string $cwd): ?string
+    {
+        return $this->projectBlueprintValue($cwd, 'localTld');
+    }
+
+    /** A non-empty string value from the project's `.larakube.json`, or null. */
+    private function projectBlueprintValue(?string $cwd, string $key): ?string
     {
         if ($cwd === null) {
             return null;
         }
 
         $decoded = json_decode((string) @file_get_contents("{$cwd}/.larakube.json"), true);
-        $tld = is_array($decoded) ? ($decoded['localTld'] ?? null) : null;
+        $value = is_array($decoded) ? ($decoded[$key] ?? null) : null;
 
-        return is_string($tld) && $tld !== '' ? $tld : null;
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

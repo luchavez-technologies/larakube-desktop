@@ -14,6 +14,7 @@ import AutoRefreshToggle, {
     useAutoRefresh,
     useAutoRefreshSetting,
 } from '@/components/auto-refresh-toggle';
+import { LiveReloadBadge } from '@/components/live-reload';
 import Button from '@/components/button';
 import Card from '@/components/card';
 import CopyButton from '@/components/copy-button';
@@ -34,6 +35,7 @@ export default function WorkloadsPodsCard({
     k9sInstalled = false,
     onOpenK9s,
     launchingK9s = false,
+    reloadedTargets = [],
 }: {
     project: Project;
     activeEnv: string;
@@ -43,6 +45,7 @@ export default function WorkloadsPodsCard({
     k9sInstalled?: boolean;
     onOpenK9s?: () => void;
     launchingK9s?: boolean;
+    reloadedTargets?: string[];
 }) {
     const [selectedPodForLogs, setSelectedPodForLogs] =
         useState<PodInfo | null>(null);
@@ -292,18 +295,18 @@ export default function WorkloadsPodsCard({
                         {onOpenK9s && (
                             <Button
                                 type="button"
-                                variant="secondary"
+                                variant="ghost"
                                 size="sm"
                                 disabled={launchingK9s}
                                 onClick={onOpenK9s}
-                                className="gap-1.5 text-xs font-medium"
+                                className="gap-1.5 text-xs font-medium text-brand hover:bg-brand/10 hover:text-brand"
                                 title={
                                     k9sInstalled
                                         ? `Open k9s terminal UI scoped to ${activeEnv}`
                                         : 'k9s recommended for pod observability'
                                 }
                             >
-                                <SquareTerminal className="size-3.5 text-brand" />
+                                <SquareTerminal className="size-3.5" />
                                 <span>
                                     {launchingK9s ? 'Opening…' : 'Open k9s'}
                                 </span>
@@ -393,12 +396,22 @@ export default function WorkloadsPodsCard({
                         <table className="w-full text-left text-xs">
                             <thead>
                                 <tr className="border-b border-line text-[11px] font-medium tracking-wider text-soft uppercase">
-                                    <th className="pb-2.5">Workload / Pod</th>
-                                    <th className="pb-2.5">Status</th>
-                                    <th className="pb-2.5">Ready</th>
-                                    <th className="pb-2.5">Restarts</th>
-                                    <th className="pb-2.5">Age</th>
-                                    <th className="pb-2.5 text-right">
+                                    <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                        Workload / Pod
+                                    </th>
+                                    <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                        Status
+                                    </th>
+                                    <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                        Ready
+                                    </th>
+                                    <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                        Restarts
+                                    </th>
+                                    <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                        Age
+                                    </th>
+                                    <th className="pb-2.5 text-right whitespace-nowrap">
                                         Actions
                                     </th>
                                 </tr>
@@ -417,6 +430,9 @@ export default function WorkloadsPodsCard({
                                                 <span className="rounded bg-line/60 px-1.5 py-0.5 font-mono text-[10px] text-soft">
                                                     {pod.component}
                                                 </span>
+                                                {reloadedTargets.includes(
+                                                    pod.component,
+                                                ) && <LiveReloadBadge />}
                                             </div>
                                             <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-soft">
                                                 <span
@@ -793,12 +809,24 @@ export function WorkloadsPodsCardSkeleton() {
                 <table className="w-full text-left text-xs">
                     <thead>
                         <tr className="border-b border-line text-[11px] font-medium tracking-wider text-soft uppercase">
-                            <th className="pb-2.5">Workload / Pod</th>
-                            <th className="pb-2.5">Status</th>
-                            <th className="pb-2.5">Ready</th>
-                            <th className="pb-2.5">Restarts</th>
-                            <th className="pb-2.5">Age</th>
-                            <th className="pb-2.5 text-right">Actions</th>
+                            <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                Workload / Pod
+                            </th>
+                            <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                Status
+                            </th>
+                            <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                Ready
+                            </th>
+                            <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                Restarts
+                            </th>
+                            <th className="pr-3 pb-2.5 whitespace-nowrap">
+                                Age
+                            </th>
+                            <th className="pb-2.5 text-right whitespace-nowrap">
+                                Actions
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-line/60">

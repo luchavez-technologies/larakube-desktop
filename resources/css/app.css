@@ -133,6 +133,16 @@ html.dark {
     background-color: var(--color-soft);
 }
 
+/* No scrollbar at all, e.g. the collapsed sidebar, whose column is too narrow
+   for one. Unlayered like the rule above so it wins over it (a Tailwind
+   utility, being layered, never would). The element still scrolls. */
+.no-scrollbar {
+    scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
 /* Subtle custom scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;

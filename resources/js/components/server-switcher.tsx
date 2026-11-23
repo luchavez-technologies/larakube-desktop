@@ -9,7 +9,7 @@ import type { Server } from '@/types/larakube';
 
 type Accent = 'brand' | 'servers' | 'tools' | 'setup';
 
-const kindBadgeClasses: Record<ServerKind, string> = {
+export const kindBadgeClasses: Record<ServerKind, string> = {
     VPS: 'bg-servers/10 text-servers ring-1 ring-servers/25',
     Managed: 'bg-brand/10 text-brand ring-1 ring-brand/25',
     Local: 'bg-badge text-soft ring-1 ring-line/80',

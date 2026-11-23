@@ -54,6 +54,10 @@ type Props = {
     'aria-label'?: string;
     /** Whether the closed trigger repeats the selected option's badge; the list always shows it. */
     triggerBadge?: boolean;
+    /** Replaces the trigger's own label and chevron, e.g. a compact icon tile. */
+    trigger?: ReactNode;
+    /** Where the panel opens: below the trigger (default) or beside it, to the right. */
+    side?: 'bottom' | 'right';
     /** Shows a filter box at the top of the panel — turn on once a list is long enough that scanning it beats scrolling it. */
     searchable?: boolean;
 };
@@ -80,6 +84,8 @@ export default function SelectMenu({
     align = 'left',
     searchable = false,
     triggerBadge = true,
+    trigger,
+    side = 'bottom',
     ...rest
 }: Props) {
     const [open, setOpen] = useState(false);
@@ -143,37 +149,52 @@ export default function SelectMenu({
                     setOpen((prev) => !prev);
                 }}
                 aria-label={rest['aria-label']}
+                aria-expanded={open}
+                aria-haspopup="listbox"
                 className={cn(
                     'flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2 text-left text-sm ring-1 transition outline-none disabled:cursor-not-allowed disabled:opacity-45',
                     open ? ring.open : ring.hover,
                     triggerClassName,
                 )}
             >
-                <span className="flex min-w-0 items-center gap-1.5 truncate">
-                    {selected ? (
-                        <>
-                            {selected.icon}
-                            <span className="truncate">{selected.label}</span>
-                            {triggerBadge && selected.badge}
-                        </>
-                    ) : (
-                        <span className="text-faint">{placeholder}</span>
-                    )}
-                </span>
-                <ChevronDown
-                    className={cn(
-                        'size-3.5 shrink-0 text-soft transition-transform duration-200',
-                        open && 'rotate-180',
-                    )}
-                />
+                {trigger ?? (
+                    <>
+                        <span className="flex min-w-0 items-center gap-1.5 truncate">
+                            {selected ? (
+                                <>
+                                    {selected.icon}
+                                    <span className="truncate">
+                                        {selected.label}
+                                    </span>
+                                    {triggerBadge && selected.badge}
+                                </>
+                            ) : (
+                                <span className="text-faint">
+                                    {placeholder}
+                                </span>
+                            )}
+                        </span>
+                        <ChevronDown
+                            className={cn(
+                                'size-3.5 shrink-0 text-soft transition-transform duration-200',
+                                open && 'rotate-180',
+                            )}
+                        />
+                    </>
+                )}
             </button>
 
             {open && (
                 <div
                     onClick={(event) => event.stopPropagation()}
                     className={cn(
-                        'absolute top-full z-50 mt-1.5 max-h-80 w-full min-w-max overflow-y-auto rounded-2xl bg-surface p-1.5 shadow-2xl ring-1 ring-line',
-                        align === 'right' ? 'right-0' : 'left-0',
+                        'absolute z-50 max-h-80 min-w-max overflow-y-auto rounded-2xl bg-surface p-1.5 shadow-2xl ring-1 ring-line',
+                        side === 'right'
+                            ? 'top-0 left-full ml-2 w-64'
+                            : cn(
+                                  'top-full mt-1.5 w-full',
+                                  align === 'right' ? 'right-0' : 'left-0',
+                              ),
                         panelClassName,
                     )}
                 >

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, Lock, Plus, X } from 'lucide-react';
 import SelectMenu from '@/components/select-menu';
 import { cn } from '@/lib/utils';
 import type { FrameworkField, NewAppAnswers } from '@/types/larakube';
@@ -33,17 +33,21 @@ export function defaultAnswers(fields: FrameworkField[]): NewAppAnswers {
     );
 }
 
-/** Whether every condition holds: an answer equals it, or a multiselect holds it. */
+/**
+ * Whether every condition holds: an answer equals it, or a multiselect holds
+ * it. A list of values means any of them.
+ */
 function matches(
-    conditions: Record<string, string> | undefined,
+    conditions: Record<string, string | string[]> | undefined,
     answers: NewAppAnswers,
 ): boolean {
     return Object.entries(conditions ?? {}).every(([key, expected]) => {
         const answer = answers[key];
+        const accepted = Array.isArray(expected) ? expected : [expected];
 
         return Array.isArray(answer)
-            ? answer.includes(expected)
-            : answer === expected;
+            ? answer.some((value) => accepted.includes(value))
+            : typeof answer === 'string' && accepted.includes(answer);
     });
 }
 
@@ -53,6 +57,76 @@ function available(field: FrameworkField, server: string | null) {
         (option) =>
             server === null || !(option.unavailableWith ?? []).includes(server),
     );
+}
+
+/** "Horizon (with Redis)" → "Horizon": the name without its explanation. */
+function shortLabel(label: string): string {
+    return label.replace(/\s*\(.*\)\s*$/, '');
+}
+
+/** The label of the option an answer picked: `features: horizon` → "Horizon". */
+function answerLabel(
+    fields: FrameworkField[],
+    key: string,
+    value: string,
+): string {
+    const option = fields
+        .find((field) => field.key === key)
+        ?.options?.find((candidate) => candidate.value === value);
+
+    return shortLabel(option?.label ?? value);
+}
+
+/**
+ * The value another answer forces on this field (Horizon forces Redis), and
+ * the name of that answer, so the choice shows locked instead of silently
+ * snapping back.
+ */
+function forcedChoice(
+    fields: FrameworkField[],
+    field: FrameworkField,
+    answers: NewAppAnswers,
+): { value: string; by: string } | null {
+    const rule = (field.forcedWhen ?? []).find((candidate) =>
+        matches(candidate.when, answers),
+    );
+
+    if (!rule) return null;
+
+    const [key, expected] = Object.entries(rule.when)[0] ?? [];
+
+    return {
+        value: rule.value,
+        by:
+            key !== undefined && expected !== undefined
+                ? answerLabel(fields, key, expected)
+                : 'another choice',
+    };
+}
+
+/**
+ * Options another answer includes on the field's behalf (FrankenPHP includes
+ * Octane), keyed by value, with the label of the answer that includes them.
+ * They show checked and locked instead of disappearing.
+ */
+function lockedOptions(
+    fields: FrameworkField[],
+    answers: NewAppAnswers,
+    key: string,
+): Record<string, string> {
+    const locked: Record<string, string> = {};
+
+    for (const field of fields) {
+        const answer = answers[field.key];
+        if (typeof answer !== 'string') continue;
+
+        const add = field.implies?.[answer]?.[key];
+        if (add === undefined) continue;
+
+        locked[add] = answerLabel(fields, field.key, answer);
+    }
+
+    return locked;
 }
 
 /**
@@ -164,9 +238,19 @@ export default function FrameworkFields({
         const error = errors[`${errorPrefix}.${field.key}`];
         const answer = answers[field.key];
         const options = available(field, server);
+        const locked = lockedOptions(fields, answers, field.key);
+        const forced = forcedChoice(fields, field, answers);
+        const forcedLabel = forced
+            ? shortLabel(
+                  options.find((option) => option.value === forced.value)
+                      ?.label ?? forced.value,
+              )
+            : null;
         const hint = error
             ? undefined
-            : (field.optionHints?.[String(answer)] ?? field.description);
+            : forced
+              ? `${forced.by} needs ${forcedLabel}. Turn ${forced.by} off to choose another ${field.label.toLowerCase()}.`
+              : (field.optionHints?.[String(answer)] ?? field.description);
         const isSmallSelect =
             field.type === 'select' &&
             options.length > 0 &&
@@ -293,44 +377,69 @@ export default function FrameworkFields({
                             />
                         ) : field.type === 'multiselect' ? (
                             <div className="flex flex-wrap gap-2">
-                                {options.map((option) => {
-                                    const current = Array.isArray(answer)
-                                        ? answer
-                                        : [];
-                                    const selected = current.includes(
-                                        option.value,
-                                    );
+                                {(field.options ?? [])
+                                    .filter(
+                                        (option) =>
+                                            option.value in locked ||
+                                            options.includes(option),
+                                    )
+                                    .map((option) => {
+                                        const current = Array.isArray(answer)
+                                            ? answer
+                                            : [];
+                                        const lockedBy = locked[option.value];
 
-                                    return (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            onClick={() =>
-                                                set(
-                                                    field.key,
-                                                    selected
-                                                        ? current.filter(
-                                                              (value) =>
-                                                                  value !==
+                                        if (lockedBy !== undefined) {
+                                            return (
+                                                <span
+                                                    key={option.value}
+                                                    title={`Included with ${lockedBy}`}
+                                                    aria-disabled="true"
+                                                    className="inline-flex cursor-not-allowed items-center gap-1 rounded-full bg-brand/80 px-3 py-1 text-xs text-white"
+                                                >
+                                                    <Lock className="size-3" />
+                                                    {option.label}
+                                                    <span className="text-white/75">
+                                                        · with {lockedBy}
+                                                    </span>
+                                                </span>
+                                            );
+                                        }
+
+                                        const selected = current.includes(
+                                            option.value,
+                                        );
+
+                                        return (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() =>
+                                                    set(
+                                                        field.key,
+                                                        selected
+                                                            ? current.filter(
+                                                                  (value) =>
+                                                                      value !==
+                                                                      option.value,
+                                                              )
+                                                            : [
+                                                                  ...current,
                                                                   option.value,
-                                                          )
-                                                        : [
-                                                              ...current,
-                                                              option.value,
-                                                          ],
-                                                )
-                                            }
-                                            className={cn(
-                                                'rounded-full px-3 py-1 text-xs transition',
-                                                selected
-                                                    ? 'bg-brand text-white'
-                                                    : 'bg-surface ring-1 ring-line ring-inset hover:ring-faint',
-                                            )}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    );
-                                })}
+                                                              ],
+                                                    )
+                                                }
+                                                className={cn(
+                                                    'rounded-full px-3 py-1 text-xs transition',
+                                                    selected
+                                                        ? 'bg-brand text-white'
+                                                        : 'bg-surface ring-1 ring-line ring-inset hover:ring-faint',
+                                                )}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        );
+                                    })}
                             </div>
                         ) : isSmallSelect ? (
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -341,32 +450,75 @@ export default function FrameworkFields({
                                             : typeof field.default === 'string'
                                               ? field.default
                                               : '';
-                                    const selected =
-                                        currentVal === option.value;
+                                    const selected = forced
+                                        ? forced.value === option.value
+                                        : currentVal === option.value;
+                                    const blocked =
+                                        forced !== null && !selected;
 
                                     return (
                                         <button
                                             key={option.value}
                                             type="button"
+                                            disabled={forced !== null}
+                                            aria-disabled={forced !== null}
+                                            title={
+                                                forced
+                                                    ? selected
+                                                        ? `Included with ${forced.by}`
+                                                        : `${forced.by} needs ${forcedLabel}`
+                                                    : undefined
+                                            }
                                             onClick={() =>
                                                 set(field.key, option.value)
                                             }
                                             className={cn(
-                                                'flex cursor-pointer items-center justify-between rounded-xl p-3 text-left ring-1 transition',
+                                                'flex items-center justify-between rounded-xl p-3 text-left ring-1 transition',
+                                                forced
+                                                    ? 'cursor-not-allowed'
+                                                    : 'cursor-pointer',
                                                 selected
                                                     ? 'bg-brand/10 font-medium text-ink ring-2 ring-brand'
-                                                    : 'bg-surface text-soft ring-line hover:text-ink hover:ring-faint',
+                                                    : 'bg-surface text-soft ring-line',
+                                                !selected &&
+                                                    !blocked &&
+                                                    'hover:text-ink hover:ring-faint',
+                                                blocked && 'opacity-50',
                                             )}
                                         >
                                             <span className="text-xs font-semibold text-ink">
                                                 {option.label}
+                                                {selected && forced && (
+                                                    <span className="font-normal text-soft">
+                                                        {' '}
+                                                        · with {forced.by}
+                                                    </span>
+                                                )}
                                             </span>
-                                            {selected && (
-                                                <Check className="ml-1.5 size-3.5 shrink-0 text-brand" />
-                                            )}
+                                            {selected &&
+                                                (forced ? (
+                                                    <Lock className="ml-1.5 size-3.5 shrink-0 text-brand" />
+                                                ) : (
+                                                    <Check className="ml-1.5 size-3.5 shrink-0 text-brand" />
+                                                ))}
                                         </button>
                                     );
                                 })}
+                            </div>
+                        ) : forced ? (
+                            <div
+                                aria-disabled="true"
+                                title={`Included with ${forced.by}`}
+                                className={cn(
+                                    inputClass,
+                                    'flex cursor-not-allowed items-center gap-2',
+                                )}
+                            >
+                                <Lock className="size-3.5 shrink-0 text-brand" />
+                                <span className="text-ink">{forcedLabel}</span>
+                                <span className="text-soft">
+                                    · with {forced.by}
+                                </span>
                             </div>
                         ) : (
                             <SelectMenu

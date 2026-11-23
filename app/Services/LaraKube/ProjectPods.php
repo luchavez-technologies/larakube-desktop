@@ -162,6 +162,38 @@ class ProjectPods
         }
     }
 
+    /**
+     * Every service's recent lines for one environment, merged by the CLI's
+     * `logs --json`. Without a start time it reads the last 15 minutes.
+     *
+     * @return array<string, mixed>
+     */
+    public function mergedLogs(string $projectPath, string $environment, ?string $component, ?string $sinceTime, int $tail): array
+    {
+        $cli = $this->locator->find('larakube');
+
+        if ($cli === null) {
+            return ['success' => false, 'error' => 'LaraKube CLI not found.'];
+        }
+
+        $command = [$cli, 'logs', "--environment={$environment}", "--tail={$tail}", '--json', '--no-interaction'];
+        if ($component !== null && $component !== '') {
+            $command[] = "--component={$component}";
+        }
+        $command[] = $sinceTime !== null && $sinceTime !== '' ? "--since-time={$sinceTime}" : '--since=15m';
+
+        try {
+            $result = $this->locator->run($command, 45, cwd: $projectPath);
+        } catch (Throwable) {
+            return ['success' => false, 'error' => 'The cluster took too long to return logs.'];
+        }
+
+        $lines = preg_split('/\R/', trim($result->output())) ?: [];
+        $decoded = json_decode((string) end($lines), true);
+
+        return is_array($decoded) ? $decoded : ['success' => false, 'error' => 'Could not read this project\'s logs.'];
+    }
+
     public function restartPod(string $context, string $namespace, string $pod): bool
     {
         $cli = $this->locator->find('kubectl');

@@ -91,6 +91,7 @@ enum RunKind: string
     case PlexProvision = 'plex-provision';
     case PlexEvict = 'plex-evict';
     case PlexRotate = 'plex-rotate';
+    case PlexUpdate = 'plex-update';
     case ContextImport = 'context-import';
     case ContextSwitch = 'context-switch';
     case ContextBackup = 'context-backup';
@@ -102,6 +103,8 @@ enum RunKind: string
     case CompanionRemove = 'companion-remove';
     case CompanionStart = 'companion-start';
     case CompanionStop = 'companion-stop';
+    case CompanionUpdate = 'companion-update';
+    case TrustPrune = 'trust-prune';
     case CloudAuth = 'cloud-auth';
     /** Experimental: a development workspace (browser editor and a clone of a repository) on a server. */
     case WorkspaceCreate = 'workspace-create';
@@ -242,7 +245,7 @@ enum RunKind: string
      */
     public function changesPlex(): bool
     {
-        return in_array($this, [self::PlexInit, self::PlexStart, self::PlexStop, self::PlexProvision, self::PlexEvict, self::PlexRotate], true);
+        return in_array($this, [self::PlexInit, self::PlexStart, self::PlexStop, self::PlexProvision, self::PlexEvict, self::PlexRotate, self::PlexUpdate], true);
     }
 
     /** The Activity this run's completion is worth recording as, if any — deliberately narrow, see Activity. */

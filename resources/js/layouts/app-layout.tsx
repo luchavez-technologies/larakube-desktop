@@ -28,6 +28,7 @@ import {
     Eye,
     EyeOff,
     AlertTriangle,
+    Laptop,
 } from 'lucide-react';
 import { listenForNotificationClicks } from '@/lib/notifications';
 import { ExternalLinkButton } from '@/lib/open-external';
@@ -50,6 +51,7 @@ import { index as runsIndex } from '@/routes/runs';
 import { index as serversIndex } from '@/routes/servers';
 import { show as settingsShow } from '@/routes/settings';
 import { index as devBoxesIndex } from '@/routes/devboxes';
+import { index as localIndex } from '@/routes/local';
 import RunDrawer from '@/components/run-drawer';
 import NotificationBell from '@/components/notification-bell';
 import SidebarServerPicker, {
@@ -123,6 +125,15 @@ const navigation: NavItem[] = [
         active: (url) => url.startsWith('/projects'),
         accent: 'bg-brand',
         icon: FolderGit2,
+    },
+    {
+        label: 'Local Dev',
+        group: 'build',
+        description: 'This machine',
+        href: localIndex().url,
+        active: (url) => url.startsWith('/local'),
+        accent: 'bg-teal-600',
+        icon: Laptop,
     },
     {
         label: 'Dev Boxes',
@@ -428,7 +439,7 @@ export default function AppLayout({
                     prefetch
                     cacheFor={['30s', '1m']}
                     className={cn(
-                        'mx-auto flex size-10 items-center justify-center rounded-[10px] transition',
+                        'mx-auto flex size-9 shrink-0 items-center justify-center rounded-[10px] transition',
                         active ? 'bg-badge' : 'hover:bg-paper',
                     )}
                     title={tooltipText}
@@ -439,7 +450,7 @@ export default function AppLayout({
             ) : (
                 <div
                     key={item.label}
-                    className="mx-auto flex size-10 cursor-not-allowed items-center justify-center rounded-[10px] opacity-45"
+                    className="mx-auto flex size-9 shrink-0 cursor-not-allowed items-center justify-center rounded-[10px] opacity-45"
                     title={`${item.label} (disabled)`}
                 >
                     {iconContent}
@@ -605,10 +616,16 @@ export default function AppLayout({
                     <SidebarServerPicker
                         workspace={props.workspace}
                         collapsed={collapsed}
-                        onExpand={toggleSidebar}
                     />
                 )}
-                <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
+                <nav
+                    className={cn(
+                        'flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto',
+                        // Collapsed, the column is too narrow to give a scrollbar
+                        // room: it would push the icons off centre. It still scrolls.
+                        collapsed && 'no-scrollbar',
+                    )}
+                >
                     {mainNavigation.map((item, index) => {
                         const header =
                             item.group &&
@@ -632,7 +649,14 @@ export default function AppLayout({
                         );
                     })}
                 </nav>
-                <div className="mt-auto space-y-1 border-t border-line/60 pt-3">
+                <div
+                    className={cn(
+                        'mt-auto border-t border-line/60 pt-3',
+                        collapsed
+                            ? 'flex flex-col items-center gap-0.5 pt-2'
+                            : 'space-y-1',
+                    )}
+                >
                     {systemNavigation.map((item) => {
                         const Icon = item.icon;
                         const active = item.active(url);
@@ -644,7 +668,7 @@ export default function AppLayout({
                                 href={item.href ?? '#'}
                                 prefetch
                                 className={cn(
-                                    'mx-auto flex size-10 items-center justify-center rounded-lg transition',
+                                    'mx-auto flex size-8 items-center justify-center rounded-lg transition',
                                     active
                                         ? 'bg-badge text-ink'
                                         : 'text-soft hover:bg-paper hover:text-ink',
@@ -678,7 +702,7 @@ export default function AppLayout({
                                 type="button"
                                 onClick={toggleDemoMode}
                                 className={cn(
-                                    'mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg transition',
+                                    'mx-auto flex size-8 cursor-pointer items-center justify-center rounded-lg transition',
                                     demoMode
                                         ? 'bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400'
                                         : 'text-soft hover:bg-paper hover:text-ink',
@@ -698,7 +722,7 @@ export default function AppLayout({
                             </button>
                             <ExternalLinkButton
                                 url="https://github.com/sponsors/luchavez-technologies"
-                                className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
+                                className="mx-auto flex size-8 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
                                 title="Sponsor on GitHub"
                                 aria-label="Sponsor on GitHub"
                             >
@@ -707,7 +731,7 @@ export default function AppLayout({
                             <button
                                 type="button"
                                 onClick={toggleSidebar}
-                                className="mx-auto flex size-10 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
+                                className="mx-auto flex size-8 cursor-pointer items-center justify-center rounded-lg text-soft transition hover:bg-paper hover:text-ink"
                                 title="Expand sidebar (⌘B)"
                                 aria-label="Expand sidebar"
                             >

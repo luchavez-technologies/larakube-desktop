@@ -4,6 +4,7 @@ namespace App\Services\LaraKube;
 
 use App\Services\Runtime\WslDistro;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * This project's installed companion connection details, as
@@ -41,5 +42,44 @@ class ProjectCompanions
         }
 
         return array_values(array_filter($decoded['companions'], is_array(...)));
+    }
+
+    /**
+     * The image each companion installs with the current CLI build, by slug.
+     * Pins only change with the CLI itself, so this is cached against the CLI
+     * binary's own modification time and asks again after an update.
+     *
+     * @return array<string, string>
+     */
+    public function pinnedImages(): array
+    {
+        $cli = $this->locator->find('larakube');
+
+        if ($cli === null) {
+            return [];
+        }
+
+        $hostCli = $this->locator->isWindows() ? WslDistro::toWindows($cli) : $cli;
+        $version = is_file($hostCli) ? (string) filemtime($hostCli) : 'unknown';
+
+        return Cache::remember("companion-pins:{$version}", now()->addDay(), function () use ($cli): array {
+            try {
+                $result = $this->locator->run([$cli, 'companion:list', '--json', '--no-interaction'], 15);
+            } catch (ProcessTimedOutException) {
+                return [];
+            }
+
+            $lines = preg_split('/\R/', trim($result->output())) ?: [];
+            $catalog = json_decode((string) end($lines), true)['catalog'] ?? [];
+            $pins = [];
+
+            foreach (is_array($catalog) ? $catalog : [] as $entry) {
+                if (is_string($entry['slug'] ?? null) && is_string($entry['image'] ?? null)) {
+                    $pins[$entry['slug']] = $entry['image'];
+                }
+            }
+
+            return $pins;
+        });
     }
 }

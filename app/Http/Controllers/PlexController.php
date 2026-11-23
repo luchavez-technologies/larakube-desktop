@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Services\CurrentServer;
 use App\Services\LaraKube\CliRunner;
 use App\Services\LaraKube\ClusterMetrics;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\PlexCatalog;
 use App\Services\LaraKube\PlexCommonsServices;
@@ -15,6 +16,7 @@ use App\Services\LaraKube\PlexCompatibilityResolver;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -305,14 +307,48 @@ class PlexController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function startServer(string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
+    /** What `plex:update` would change on this server's Commons; the page asks after it loads. */
+    public function outdated(string $server, StackCatalog $stacks, ClusterStatus $status): JsonResponse
+    {
+        $stack = $stacks->find($server);
+        abort_unless($stack !== null && is_string($stack['context']), 404);
+
+        return response()->json(['outdated' => $status->plexOutdated($stack['context'])]);
+    }
+
+    /**
+     * Re-apply the Commons with this CLI build. The click is the confirmation:
+     * the dialog has already listed which services restart.
+     */
+    public function updateServer(Request $request, string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
+    {
+        $stack = $stacks->find($server);
+        abort_unless($stack !== null && is_string($stack['context']), 404);
+        $context = $stack['context'];
+
+        $run = $runner->start(
+            label: "Update {$this->subjectOf($request)} on {$server}",
+            arguments: ['plex:update', "--context={$context}", ...$this->serviceArgument($request), '--confirm-commons-restart', '--json'],
+            kind: RunKind::PlexUpdate,
+            subject: "server:{$server}",
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('runs.show', $run);
+    }
+
+    public function startServer(Request $request, string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
     {
         $stack = $stacks->find($server);
         abort_unless($stack !== null && is_string($stack['context']), 404);
 
         $run = $runner->start(
-            label: "Resume Plex Commons on {$server}",
-            arguments: ['plex:start', "--context={$stack['context']}"],
+            label: "Resume {$this->subjectOf($request)} on {$server}",
+            arguments: ['plex:start', "--context={$stack['context']}", ...$this->serviceArgument($request)],
             kind: RunKind::PlexStart,
             subject: "server:{$server}",
             meta: ['server' => $server, 'context' => $stack['context']],
@@ -325,14 +361,14 @@ class PlexController extends Controller
         return to_route('runs.show', $run);
     }
 
-    public function stopServer(string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
+    public function stopServer(Request $request, string $server, StackCatalog $stacks, CliRunner $runner): RedirectResponse
     {
         $stack = $stacks->find($server);
         abort_unless($stack !== null && is_string($stack['context']), 404);
 
         $run = $runner->start(
-            label: "Pause Plex Commons on {$server}",
-            arguments: ['plex:stop', "--context={$stack['context']}"],
+            label: "Pause {$this->subjectOf($request)} on {$server}",
+            arguments: ['plex:stop', "--context={$stack['context']}", ...$this->serviceArgument($request)],
             kind: RunKind::PlexStop,
             subject: "server:{$server}",
             meta: ['server' => $server, 'context' => $stack['context']],
@@ -408,6 +444,27 @@ class PlexController extends Controller
         );
 
         return to_route('projects.show', $project);
+    }
+
+    /** What a lifecycle run acts on, for its label: one service, or the whole Commons. */
+    private function subjectOf(Request $request): string
+    {
+        $service = $request->input('service');
+
+        return is_string($service) && preg_match('/^[a-z0-9-]+$/', $service) === 1 ? $service : 'Plex Commons';
+    }
+
+    /**
+     * `--service=<name>` when the request names one Commons service (a card's
+     * own Pause, Resume or Update); nothing for the whole Commons.
+     *
+     * @return list<string>
+     */
+    private function serviceArgument(Request $request): array
+    {
+        $service = $request->validate(['service' => ['nullable', 'string', 'regex:/^[a-z0-9-]+$/']])['service'] ?? null;
+
+        return is_string($service) && $service !== '' ? ["--service={$service}"] : [];
     }
 
     /**

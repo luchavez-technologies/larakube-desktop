@@ -23,6 +23,7 @@ import {
     Plus,
     X,
 } from 'lucide-react';
+import LiveDot from '@/components/live-dot';
 import BackingServicesCard from '@/components/backing-services-card';
 import BoxProjectActions from '@/components/box-project-actions';
 import Button, { buttonClass } from '@/components/button';
@@ -337,7 +338,7 @@ export default function ShowDevBoxProject({
                                                         <Cloud className="size-3.5 shrink-0 text-sky-500" />
                                                     ),
                                                     badge: isDeploying ? (
-                                                        <span className="size-2 animate-ping rounded-full bg-brand" />
+                                                        <LiveDot />
                                                     ) : undefined,
                                                     description:
                                                         env.webHost ??

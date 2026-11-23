@@ -5,6 +5,7 @@ use App\Jobs\Sync\SyncPlexJob;
 use App\Models\Project;
 use App\Models\Run;
 use App\Models\Server;
+use App\Services\LaraKube\ClusterStatus;
 use App\Services\LaraKube\StackCatalog;
 use App\Services\LaraKube\ToolLocator;
 use Illuminate\Support\Facades\Cache;
@@ -460,4 +461,114 @@ test('a PlexJoin/PlexLeave run has no context to bust, so it is a no-op here', f
     event(new ProcessExited($run->alias(), 0));
 
     expect(Cache::has('cluster-status:plex:larakube-34.27.253.31'))->toBeTrue();
+});
+
+function plexUpdateStacks(): void
+{
+    $stacks = mock(StackCatalog::class);
+    $stacks->shouldReceive('find')->with('demo-vps')->andReturn([
+        'name' => 'demo-vps',
+        'provider' => 'gcp',
+        'context' => 'larakube-34.27.253.31',
+        'status' => 'ready',
+        'ip' => null,
+    ]);
+    app()->instance(StackCatalog::class, $stacks);
+}
+
+test('Update runs plex:update, confirming the restarts the dialog already listed', function () {
+    $sandbox = plexSandbox();
+    plexUpdateStacks();
+    $fake = ChildProcess::fake();
+
+    $this->post(route('servers.plex.update', ['server' => 'demo-vps']))->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        "{$sandbox['bin']}/larakube", 'plex:update', '--context=larakube-34.27.253.31', '--confirm-commons-restart', '--json', '--no-interaction',
+    ]);
+    expect(Run::sole()->kind)->toBe(RunKind::PlexUpdate)
+        ->and(RunKind::PlexUpdate->changesPlex())->toBeTrue();
+});
+
+test('the outdated list comes from plex:outdated and is cached until a Plex run finishes', function () {
+    plexSandbox();
+    plexUpdateStacks();
+    Process::fake([
+        '*plex:outdated*' => Process::result(output: "progress\n".json_encode([
+            'success' => true,
+            'outdated' => [['service' => 'postgres', 'stateful' => true, 'from' => 'postgres:17.9', 'to' => 'pgvector/pgvector:0.8.7-pg17-trixie']],
+        ])),
+    ]);
+
+    $this->getJson(route('servers.plex.outdated', ['server' => 'demo-vps']))
+        ->assertOk()
+        ->assertExactJson(['outdated' => [['service' => 'postgres', 'stateful' => true, 'from' => 'postgres:17.9', 'to' => 'pgvector/pgvector:0.8.7-pg17-trixie']]]);
+    $this->getJson(route('servers.plex.outdated', ['server' => 'demo-vps']))->assertOk();
+
+    Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'plex:outdated'), 1);
+
+    app(ClusterStatus::class)->forgetPlex('larakube-34.27.253.31');
+    $this->getJson(route('servers.plex.outdated', ['server' => 'demo-vps']))->assertOk();
+
+    Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'plex:outdated'), 2);
+});
+
+test('an unreadable outdated report shows no Update rather than an error', function () {
+    plexSandbox();
+    plexUpdateStacks();
+    Process::fake(['*plex:outdated*' => Process::result(output: '', exitCode: 1)]);
+
+    $this->getJson(route('servers.plex.outdated', ['server' => 'demo-vps']))
+        ->assertOk()
+        ->assertExactJson(['outdated' => null]);
+});
+
+test('a card\'s Pause, Resume and Update act on that one service', function () {
+    $sandbox = plexSandbox();
+    plexUpdateStacks();
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('servers.plex.stop', ['server' => 'demo-vps']), ['service' => 'postgres'])->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:stop', '--context=larakube-34.27.253.31', '--service=postgres', '--no-interaction',
+    ]);
+
+    $this->post(route('servers.plex.start', ['server' => 'demo-vps']), ['service' => 'postgres'])->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:start', '--context=larakube-34.27.253.31', '--service=postgres', '--no-interaction',
+    ]);
+
+    $this->post(route('servers.plex.update', ['server' => 'demo-vps']), ['service' => 'redis'])->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:update', '--context=larakube-34.27.253.31', '--service=redis', '--confirm-commons-restart', '--json', '--no-interaction',
+    ]);
+
+    expect(Run::query()->pluck('label')->all())->toBe([
+        'Pause postgres on demo-vps',
+        'Resume postgres on demo-vps',
+        'Update redis on demo-vps',
+    ]);
+});
+
+test('a service name that is not a plain slug is rejected', function () {
+    plexSandbox();
+    plexUpdateStacks();
+    ChildProcess::fake();
+
+    $this->post(route('servers.plex.stop', ['server' => 'demo-vps']), ['service' => 'postgres --all'])->assertSessionHasErrors('service');
+
+    expect(Run::count())->toBe(0);
+});
+
+test('paused Commons services pass through from plex:show', function () {
+    $parsed = app(ClusterStatus::class)->parsePlexReport([
+        'initialized' => true,
+        'services' => ['postgres' => ['enabled' => true, 'image' => 'pgvector/pgvector:0.8.7-pg17-trixie']],
+        'paused' => ['postgres', 42],
+        'tenants' => [],
+    ]);
+
+    expect($parsed['paused'])->toBe(['postgres'])
+        ->and($parsed['services']['postgres']['image'])->toBe('pgvector/pgvector:0.8.7-pg17-trixie');
 });
