@@ -1,4 +1,4 @@
-import { Form, Head, usePoll } from '@inertiajs/react';
+import { Form, Head, Link, usePoll } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     ChevronDown,
@@ -27,6 +27,7 @@ import ToolLogo from '@/components/tool-logo';
 import SyncStatusBadge, {
     type SyncStatus,
 } from '@/components/sync-status-badge';
+import { index as appsIndex } from '@/routes/servers/apps';
 import openbao from '@/routes/servers/openbao';
 import type { Server } from '@/types/larakube';
 import { useServerDataReload } from '@/lib/native-events';
@@ -131,9 +132,18 @@ function OpenBaoEmptyState({ server }: { server: Server }) {
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-soft">
                 OpenBao is LaraKube&rsquo;s secrets backend: automatic database
                 credential rotation, a backup copy of every generated secret,
-                and scoped access grants. Deploy it from the App Store (search
-                &ldquo;OpenBao&rdquo;) to manage it here.
+                and scoped access grants.
             </p>
+            <Link
+                href={appsIndex(
+                    { server: server.name },
+                    { query: { install: 'openbao' } },
+                )}
+                className={buttonClass('primary', 'md', 'mt-5 gap-1.5')}
+            >
+                <Download className="size-4" />
+                <span>Install OpenBao</span>
+            </Link>
         </div>
     );
 }

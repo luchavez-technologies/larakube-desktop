@@ -341,6 +341,24 @@ export default function ToolsIndex({
                 setManagingTool(found);
             }
         }
+
+        const installSlug = params.get('install');
+        if (installSlug && tools) {
+            const target = tools.find(
+                (t) => t.tool === installSlug && !t.installed,
+            );
+            if (target) {
+                setInstallingTool(target);
+            }
+            // Dropped so a reload doesn't reopen the form.
+            params.delete('install');
+            const query = params.toString();
+            window.history.replaceState(
+                window.history.state,
+                '',
+                `${window.location.pathname}${query ? `?${query}` : ''}`,
+            );
+        }
     }, [tools]);
 
     const handleAddInstance = (tool: ClusterTool) => {
