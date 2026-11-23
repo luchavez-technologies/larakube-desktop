@@ -26,7 +26,7 @@ import type {
 } from '@/types/larakube';
 
 type DbEngine = 'postgres' | 'mysql' | 'mariadb';
-type StorageEngine = 'seaweedfs' | 'minio' | 'none';
+type StorageEngine = 'seaweedfs' | 'none';
 
 type Preset = 'modern' | 'laravel-classic' | 'minimal' | 'full' | 'custom';
 
@@ -238,7 +238,6 @@ export default function PlexEmptyState({
         if (dbEngine === 'mariadb') mb += 450;
         if (enableRedis) mb += 128;
         if (storageEngine === 'seaweedfs') mb += 256;
-        if (storageEngine === 'minio') mb += 512;
         if (enableMeilisearch) mb += 256;
         if (enableChrome) mb += 512;
 
@@ -717,13 +716,13 @@ export default function PlexEmptyState({
                             </div>
                             <p className="mt-1 text-xs text-soft">
                                 Shared blob storage. Tenants get dedicated S3
-                                buckets without spinning up redundant MinIO
+                                buckets without spinning up redundant storage
                                 pods.
                             </p>
                         </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
                         {/* SeaweedFS */}
                         <div
                             onClick={() => setStorageEngine('seaweedfs')}
@@ -754,40 +753,6 @@ export default function PlexEmptyState({
                                 <p className="mt-1 text-xs leading-relaxed text-soft">
                                     High-performance S3 storage with minimal RAM
                                     usage (~256MB). Recommended for VPS.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* MinIO */}
-                        <div
-                            onClick={() => setStorageEngine('minio')}
-                            className={cn(
-                                'group relative cursor-pointer rounded-xl border p-4 transition',
-                                storageEngine === 'minio'
-                                    ? 'border-tools bg-tools-tint/30 ring-1 ring-tools'
-                                    : 'border-line bg-surface hover:border-tools/40 hover:bg-paper',
-                            )}
-                        >
-                            <div className="flex items-start justify-between">
-                                <ToolLogo slug="minio" size="sm" />
-                                {storageEngine === 'minio' ? (
-                                    <CheckCircle2 className="size-4 text-tools" />
-                                ) : (
-                                    <div className="size-4 rounded-full border border-line" />
-                                )}
-                            </div>
-                            <div className="mt-3">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-semibold text-ink">
-                                        MinIO
-                                    </span>
-                                    <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
-                                        Standard S3
-                                    </span>
-                                </div>
-                                <p className="mt-1 text-xs leading-relaxed text-soft">
-                                    Full AWS S3 API fidelity with integrated web
-                                    console. Higher memory usage (~512MB).
                                 </p>
                             </div>
                         </div>

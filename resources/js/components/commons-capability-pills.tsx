@@ -118,13 +118,13 @@ export default function CommonsCapabilityPills({
     const storage = capabilities.storage ?? [];
     if (
         storage.includes('s3') ||
-        storage.includes('minio') ||
+        storage.includes('seaweedfs') ||
         storage.includes('garage')
     ) {
         const isStorageActive = instanceCommons
             ? instanceCommons.buckets.length > 0
             : activeSet.has('s3') ||
-              activeSet.has('minio') ||
+              activeSet.has('seaweedfs') ||
               activeSet.has('garage');
         pills.push({
             key: 's3',

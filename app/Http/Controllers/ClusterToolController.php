@@ -178,7 +178,7 @@ class ClusterToolController extends Controller
                             $active[] = $driver->plexServiceKey();
                         }
                     }
-                    if (in_array($name, ['seaweedfs', 'minio', 'garage'], true)) {
+                    if (in_array($name, ['seaweedfs', 'garage'], true)) {
                         $active[] = 's3';
                     }
                 }

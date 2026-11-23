@@ -13,7 +13,6 @@ import {
     SiGitea,
     SiGrafana,
     SiPrometheus,
-    SiMinio,
     SiN8n,
     SiMetabase,
     SiRedis,
@@ -237,16 +236,7 @@ function getBrandVisual(
         };
     }
 
-    // 11. MinIO / Drive / Object Storage
-    if (id === 'minio') {
-        return {
-            containerClass:
-                'bg-rose-500/10 ring-1 ring-rose-500/25 text-[#C72E49] dark:text-[#FB7185]',
-            icon: <SiMinio size={px} color="#C72E49" />,
-        };
-    }
-
-    // 11b. Plex Commons service drivers without a Simple Icons brand mark —
+    // 11. Plex Commons service drivers without a Simple Icons brand mark —
     // a clean Lucide fallback with a distinct tint rather than a hand-drawn
     // approximation of a logo this component has no verified source for.
     if (id === 'seaweedfs') {

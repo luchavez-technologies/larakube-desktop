@@ -295,7 +295,6 @@ export default function PlexTenantHub({
                 }
                 if (
                     filter.includes('seaweed') ||
-                    filter.includes('minio') ||
                     filter.includes('garage') ||
                     filter.includes('s3')
                 ) {

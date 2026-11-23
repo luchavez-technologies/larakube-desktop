@@ -102,7 +102,7 @@ export default function PlexCommonsCard({
                         Shared Commons Infrastructure
                     </p>
                     <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-soft">
-                        Shared PostgreSQL, Redis, and MinIO S3 storage for
+                        Shared PostgreSQL, Redis, and SeaweedFS storage for
                         tenant apps and static sites. Saves cluster memory and
                         avoids duplicate database pods.
                     </p>
@@ -152,11 +152,11 @@ export default function PlexCommonsCard({
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs">☁️</span>
                                     <span className="text-xs font-semibold text-ink">
-                                        MinIO S3
+                                        SeaweedFS
                                     </span>
                                 </div>
                                 <p className="mt-1 truncate font-mono text-[10px] text-soft">
-                                    minio.larakube-plex:9000
+                                    seaweedfs.larakube-plex:8333
                                 </p>
                             </div>
                         </div>

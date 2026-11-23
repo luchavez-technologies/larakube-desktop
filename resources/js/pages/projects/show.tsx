@@ -1906,9 +1906,7 @@ function EnvironmentBackingServicesCard({
                 } else if (['redis', 'cache'].includes(lower)) {
                     label = 'Cache & Queues';
                     desc = `${item} (shared cache instance)`;
-                } else if (
-                    ['seaweedfs', 'minio', 's3', 'storage'].includes(lower)
-                ) {
+                } else if (['seaweedfs', 's3', 'storage'].includes(lower)) {
                     label = 'Object Storage';
                     desc = `${item} (shared S3 bucket)`;
                 } else if (['meilisearch', 'search'].includes(lower)) {

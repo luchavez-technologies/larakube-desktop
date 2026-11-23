@@ -83,7 +83,6 @@ export default function PlexQuickConnectModal({
     if (
         tenant?.s3Bucket ||
         driver?.includes('seaweed') ||
-        driver?.includes('minio') ||
         driver?.includes('s3') ||
         !driver
     ) {

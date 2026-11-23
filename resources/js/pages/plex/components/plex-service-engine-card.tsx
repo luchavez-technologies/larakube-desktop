@@ -107,7 +107,7 @@ function getEngineSpec(driver: string): EngineSpec {
             capacityUnit: 'idx',
         };
     }
-    if (d.includes('seaweed') || d.includes('minio') || d.includes('garage')) {
+    if (d.includes('seaweed') || d.includes('garage')) {
         return {
             memoryLimitMiB: 512,
             cpuLimitMilli: 500,

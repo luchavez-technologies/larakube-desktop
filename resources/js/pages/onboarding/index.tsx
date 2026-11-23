@@ -127,7 +127,6 @@ const TOOL_LOGO_WALL = [
     'gitea',
     'grafana',
     'prometheus',
-    'minio',
     'ocis',
     'n8n',
     'windmill',

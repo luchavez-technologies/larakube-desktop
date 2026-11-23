@@ -13,7 +13,7 @@ const DATABASE_DRIVER_PRIORITY = [
     'mongodb',
     'sqlite',
 ];
-const STORAGE_DRIVER_PRIORITY = ['seaweedfs', 'minio', 'garage'];
+const STORAGE_DRIVER_PRIORITY = ['seaweedfs', 'garage'];
 
 function firstActiveOption(
     services: PlexCommonsServicesReport | null | undefined,

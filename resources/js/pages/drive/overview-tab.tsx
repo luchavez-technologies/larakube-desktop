@@ -47,7 +47,7 @@ export default function OverviewTab({
         info?.webdavUrl || `https://${host}/remote.php/dav/files/${adminUser}/`;
     const storageMode =
         info?.storageMode ||
-        (info?.bucket ? 'Plex Commons (MinIO S3)' : 'Plex Commons S3');
+        (info?.bucket ? 'Plex Commons (SeaweedFS)' : 'Plex Commons S3');
     const isOfficeReady = Boolean(info?.office?.ready);
     const isOfficeInstalled = Boolean(info?.office?.installed);
     const components = info?.components ?? [];

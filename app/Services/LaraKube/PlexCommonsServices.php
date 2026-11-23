@@ -69,7 +69,7 @@ class PlexCommonsServices
             $details[] = ['label' => 'Internal', 'value' => "{$cfg['host']}:{$cfg['port']}", 'secret' => false];
         }
 
-        foreach (['host' => 'Public', 'console_host' => 'Console', 'admin_host' => 'Admin'] as $field => $label) {
+        foreach (['host' => 'Public', 'admin_host' => 'Admin'] as $field => $label) {
             if (! empty($cfg[$field])) {
                 $details[] = ['label' => $label, 'value' => "https://{$cfg[$field]}", 'secret' => false];
             }

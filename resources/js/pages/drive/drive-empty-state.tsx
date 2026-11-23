@@ -83,8 +83,8 @@ export default function DriveEmptyState({
                             Plex Commons S3 Storage
                         </h3>
                         <p className="mt-1 text-xs text-soft">
-                            Seamlessly leases dedicated MinIO S3 object buckets
-                            and Postgres instances with zero setup.
+                            Seamlessly leases dedicated SeaweedFS S3 object
+                            buckets and Postgres instances with zero setup.
                         </p>
                     </div>
 

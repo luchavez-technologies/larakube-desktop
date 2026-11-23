@@ -157,7 +157,7 @@ test('get /tray/data includes active plex commons engines and filters projects f
             'services' => [
                 'db' => 'postgresql',
                 'redis' => 'valkey',
-                's3' => 'minio',
+                's3' => 'seaweedfs',
             ],
             'tenants' => [
                 'project' => [['name' => 'demo-app']],
@@ -332,7 +332,6 @@ test('get /tray/data filters out inactive or disabled plex commons', function ()
                 'mariadb' => ['enabled' => false, 'port' => 3306],
                 'redis' => ['enabled' => true, 'port' => 6379],
                 'seaweedfs' => ['enabled' => true, 'port' => 8333],
-                'minio' => ['enabled' => false, 'port' => 9000],
                 'garage' => ['enabled' => false, 'port' => 3900],
                 'meilisearch' => ['enabled' => false, 'port' => 7700],
             ],
@@ -358,7 +357,6 @@ test('get /tray/data filters out inactive or disabled plex commons', function ()
                     'active' => 'seaweedfs',
                     'options' => [
                         'seaweedfs' => ['enabled' => true, 'ready' => true],
-                        'minio' => ['enabled' => false, 'ready' => false],
                         'garage' => ['enabled' => false, 'ready' => false],
                     ],
                 ],
@@ -378,7 +376,7 @@ test('get /tray/data filters out inactive or disabled plex commons', function ()
     $drivers = array_column($engines, 'driver');
 
     expect($drivers)->toContain('postgresql', 'redis', 'seaweedfs')
-        ->and($drivers)->not->toContain('mysql', 'mariadb', 'minio', 'garage', 'meilisearch');
+        ->and($drivers)->not->toContain('mysql', 'mariadb', 'garage', 'meilisearch');
 });
 
 test('get /tray/data returns localProjects with real-time status, hasRunningLocal, and activeTab', function () {

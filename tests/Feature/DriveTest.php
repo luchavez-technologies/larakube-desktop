@@ -74,7 +74,7 @@ test('viewing drive page renders drive/index with installation status', function
         'url' => 'https://drive.example.com',
         'adminUsername' => 'admin',
         'adminPassword' => 'ocis-pass-123',
-        'storageMode' => 'Plex Commons (MinIO S3)',
+        'storageMode' => 'Plex Commons (SeaweedFS)',
         'bucket' => 'drive-bucket',
         'office' => [
             'installed' => true,

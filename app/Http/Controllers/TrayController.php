@@ -464,7 +464,6 @@ class TrayController extends Controller
                     'mariadb' => 'MariaDB',
                     'redis' => 'Redis',
                     'valkey' => 'Valkey',
-                    'minio' => 'MinIO',
                     'seaweedfs' => 'SeaweedFS',
                     'garage' => 'Garage',
                     'meilisearch' => 'Meilisearch',
@@ -550,7 +549,7 @@ class TrayController extends Controller
                     $usedCap = match (true) {
                         str_contains($driverNormalized, 'postgres') || str_contains($driverNormalized, 'mysql') || str_contains($driverNormalized, 'mariadb') => count(array_filter($tenants, fn (array $t): bool => ! empty($t['database']) && (! isset($t['databaseService']) || empty($t['databaseService']) || $t['databaseService'] === $driverNormalized))),
                         str_contains($driverNormalized, 'redis') || str_contains($driverNormalized, 'valkey') => count(array_filter($tenants, fn (array $t): bool => isset($t['redisIndex']))),
-                        str_contains($driverNormalized, 'seaweed') || str_contains($driverNormalized, 'minio') || str_contains($driverNormalized, 'garage') => count(array_filter($tenants, fn (array $t): bool => ! empty($t['s3Bucket']))),
+                        str_contains($driverNormalized, 'seaweed') || str_contains($driverNormalized, 'garage') => count(array_filter($tenants, fn (array $t): bool => ! empty($t['s3Bucket']))),
                         str_contains($driverNormalized, 'chrome') || str_contains($driverNormalized, 'headless') => 1,
                         default => 1,
                     };
@@ -664,7 +663,7 @@ class TrayController extends Controller
                 'capacityUnit' => 'idx',
             ];
         }
-        if (str_contains($d, 'seaweed') || str_contains($d, 'minio') || str_contains($d, 'garage')) {
+        if (str_contains($d, 'seaweed') || str_contains($d, 'garage')) {
             return [
                 'memoryLimitMiB' => 512,
                 'cpuLimitMilli' => 500,
