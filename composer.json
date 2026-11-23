@@ -7,7 +7,7 @@
         "laravel",
         "framework"
     ],
-    "license": "MIT",
+    "license": "FSL-1.1-MIT",
     "require": {
         "php": "^8.3",
         "chillerlan/php-qrcode": "^5.0",
