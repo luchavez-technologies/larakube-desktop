@@ -916,7 +916,14 @@ class ProjectController extends Controller
             'plex' => ['nullable', 'array'],
             'plex.*' => ['string', 'alpha_dash'],
             'plex_configured' => ['nullable', 'boolean'],
-        ], ['web_host.regex' => 'Enter a domain like app.example.com, without https://.']);
+            'managed' => ['nullable', 'array'],
+            'managed.*' => ['string', 'alpha_dash'],
+            'hosts' => ['nullable', 'array'],
+            'hosts.*' => ['nullable', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
+        ], [
+            'web_host.regex' => 'Enter a domain like app.example.com, without https://.',
+            'hosts.*.regex' => 'Enter a domain like ws.example.com, without https://.',
+        ]);
         $environment = $validated['environment'] ?? self::ENVIRONMENT;
         $name = $validated['server'];
         $server = $stacks->find($name);
@@ -942,6 +949,18 @@ class ProjectController extends Controller
         if ($request->has('plex') || $request->boolean('plex_configured')) {
             $plex = array_values(array_unique((array) ($validated['plex'] ?? [])));
             $args[] = '--plex='.implode(',', $plex);
+        }
+
+        // Services hosted outside the cluster (e.g. AWS RDS); their connection keys stay blank for the user.
+        if ($request->has('managed')) {
+            $args[] = '--managed='.implode(',', array_values(array_unique((array) ($validated['managed'] ?? []))));
+        }
+
+        // Client-facing hosts of individual services, e.g. Reverb's WebSocket host.
+        foreach ((array) ($validated['hosts'] ?? []) as $service => $host) {
+            if (is_string($service) && preg_match('/^[a-z0-9_-]+$/', $service) === 1 && is_string($host) && $host !== '') {
+                $args[] = "--host={$service}={$host}";
+            }
         }
 
         if (! empty($server['sshKey'])) {

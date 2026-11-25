@@ -2108,3 +2108,26 @@ test('project show exposes scoutDriver and cached server plex summary without li
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('linking passes external services and per-service hosts to cloud:configure', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.link', $project), [
+        'server' => 'workshop-demo', 'environment' => 'staging', 'web_host' => 'stg.example.com',
+        'managed' => ['postgres'], 'hosts' => ['reverb' => 'ws-stg.example.com'],
+    ])->assertRedirect();
+    $this->post(route('projects.link', $project), [
+        'server' => 'workshop-demo', 'web_host' => 'stg.example.com', 'hosts' => ['reverb' => 'https://bad'],
+    ])->assertSessionHasErrors('hosts.reverb');
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-host=stg.example.com', '--web-hosts=',
+        '--managed=postgres', '--host=reverb=ws-stg.example.com', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});
