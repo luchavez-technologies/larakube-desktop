@@ -6,6 +6,7 @@ import {
     Layers,
     Search,
     Share2,
+    Cloud,
 } from 'lucide-react';
 import Button from '@/components/button';
 import { cn } from '@/lib/utils';
@@ -112,6 +113,8 @@ export default function BackingServicesPicker({
     connectedPlex = [],
     pendingPlex = [],
     externalManaged = [],
+    external,
+    onExternalChange,
     disabled = false,
 }: {
     project: Pick<
@@ -126,6 +129,9 @@ export default function BackingServicesPicker({
     connectedPlex?: string[];
     pendingPlex?: string[];
     externalManaged?: string[];
+    /** Services hosted outside the cluster (e.g. AWS RDS); shows a third "External" option when set. */
+    external?: string[];
+    onExternalChange?: (next: string[]) => void;
     disabled?: boolean;
 }) {
     const eligible = eligibleBackingServices(project);
@@ -137,8 +143,15 @@ export default function BackingServicesPicker({
     const envLabel = environment.trim() || 'this environment';
     const namespaceLabel = `${project.name}-${envLabel}`;
 
-    const setServiceMode = (slug: string, mode: 'pod' | 'commons') => {
+    const setServiceMode = (
+        slug: string,
+        mode: 'pod' | 'commons' | 'external',
+    ) => {
         if (disabled) return;
+        if (onExternalChange) {
+            const others = (external ?? []).filter((item) => item !== slug);
+            onExternalChange(mode === 'external' ? [...others, slug] : others);
+        }
         if (mode === 'commons') {
             if (!selected.includes(slug)) {
                 onChange([...selected, slug]);
@@ -157,6 +170,9 @@ export default function BackingServicesPicker({
             <input type="hidden" name="plex_configured" value="1" />
             {selected.map((slug) => (
                 <input key={slug} type="hidden" name="plex[]" value={slug} />
+            ))}
+            {(external ?? []).map((slug) => (
+                <input key={slug} type="hidden" name="managed[]" value={slug} />
             ))}
 
             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
@@ -208,7 +224,9 @@ export default function BackingServicesPicker({
 
             <div className="space-y-2">
                 {eligible.map((service) => {
-                    const isCommons = selected.includes(service.slug);
+                    const isExternal = (external ?? []).includes(service.slug);
+                    const isCommons =
+                        !isExternal && selected.includes(service.slug);
                     const isConnected = connectedPlex.includes(service.slug);
                     const isPending = pendingPlex.includes(service.slug);
                     const isExternalManaged = externalManaged.includes(
@@ -288,7 +306,7 @@ export default function BackingServicesPicker({
                                     }
                                     className={cn(
                                         'inline-flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
-                                        !isCommons
+                                        !isCommons && !isExternal
                                             ? 'bg-surface text-ink shadow-2xs ring-1 ring-line/60'
                                             : 'text-soft hover:text-ink',
                                     )}
@@ -312,6 +330,28 @@ export default function BackingServicesPicker({
                                     <Share2 className="size-3" />
                                     <span>Plex Commons</span>
                                 </button>
+                                {onExternalChange && (
+                                    <button
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() =>
+                                            setServiceMode(
+                                                service.slug,
+                                                'external',
+                                            )
+                                        }
+                                        title="Hosted outside the cluster, e.g. AWS RDS. You fill in its connection details in the environment's .env."
+                                        className={cn(
+                                            'inline-flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
+                                            isExternal
+                                                ? 'bg-surface text-ink shadow-2xs ring-1 ring-line/60'
+                                                : 'text-soft hover:text-ink',
+                                        )}
+                                    >
+                                        <Cloud className="size-3" />
+                                        <span>External</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     );

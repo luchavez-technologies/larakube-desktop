@@ -2790,6 +2790,7 @@ function AddEnvironmentDialog({
     const [serviceHosts, setServiceHosts] = useState<Record<string, string>>(
         {},
     );
+    const [externalServices, setExternalServices] = useState<string[]>([]);
     const [selectedPlex, setSelectedPlex] = useState<string[]>([]);
     const [plexTouched, setPlexTouched] = useState(false);
 
@@ -2900,6 +2901,7 @@ function AddEnvironmentDialog({
                         setName('');
                         setWebHost('');
                         setServiceHosts({});
+                        setExternalServices([]);
                         setSelectedPlex([]);
                         setPlexTouched(false);
                         handleClose();
@@ -3090,6 +3092,11 @@ function AddEnvironmentDialog({
                                             project={project}
                                             environment={name || 'staging'}
                                             selected={selectedPlex}
+                                            external={externalServices}
+                                            onExternalChange={(next) => {
+                                                setPlexTouched(true);
+                                                setExternalServices(next);
+                                            }}
                                             onChange={(next) => {
                                                 setPlexTouched(true);
                                                 setSelectedPlex(next);
