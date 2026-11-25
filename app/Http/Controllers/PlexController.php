@@ -387,15 +387,26 @@ class PlexController extends Controller
 
         $projectName = basename($project->path);
         $env = $request->input('environment');
-        $label = $env ? "Join Plex Commons ({$env})" : 'Join Plex Commons';
+        $services = array_values(array_filter((array) $request->input('services', []), 'is_string'));
+
         $arguments = $env ? ['plex:join', (string) $env] : ['plex:join', '--fast'];
+        foreach ($services as $service) {
+            $arguments[] = "--service={$service}";
+        }
+
+        $servicesLabel = ! empty($services) ? ' ('.implode(', ', $services).')' : '';
+        $label = $env ? "Join Plex Commons ({$env}){$servicesLabel}" : "Join Plex Commons{$servicesLabel}";
 
         $run = $runner->start(
             label: $label,
             arguments: $arguments,
             kind: RunKind::PlexJoin,
             subject: "project:{$project->id}",
-            meta: array_filter(['project' => (string) $project->id, 'environment' => $env ? (string) $env : null]),
+            meta: array_filter([
+                'project' => (string) $project->id,
+                'environment' => $env ? (string) $env : null,
+                'services' => ! empty($services) ? implode(',', $services) : null,
+            ]),
             cwd: $project->path,
             targetType: 'project',
             targetName: $projectName,

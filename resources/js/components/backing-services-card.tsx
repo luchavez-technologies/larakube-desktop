@@ -20,21 +20,43 @@ export default function BackingServicesCard({
     label,
     services,
     hasCommons,
+    pendingCommons = false,
     footer,
 }: {
     label: string;
     /** undefined while loading, null when it could not be read. */
     services?: BackingServices | null;
     hasCommons: boolean;
+    pendingCommons?: boolean;
     footer?: ReactNode;
 }) {
+    const hasConnectedCommons = services
+        ? services.services.some(
+              (service) => service.mode === 'commons' && !service.pending,
+          )
+        : hasCommons;
+    const hasPendingCommons = services
+        ? services.services.some(
+              (service) =>
+                  service.mode === 'commons' && Boolean(service.pending),
+          )
+        : pendingCommons;
+
     return (
         <Card
             label={label}
             action={
-                hasCommons ? (
+                hasConnectedCommons && hasPendingCommons ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-tools-tint px-2 py-0.5 font-mono text-[11px] font-medium text-tools ring-1 ring-tools/20">
+                        🟣 Plex Commons · Partial
+                    </span>
+                ) : hasConnectedCommons ? (
                     <span className="inline-flex items-center gap-1 rounded bg-tools-tint px-2 py-0.5 font-mono text-[11px] font-medium text-tools ring-1 ring-tools/20">
                         🟣 Plex Commons Active
+                    </span>
+                ) : hasPendingCommons ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-warn/10 px-2 py-0.5 font-mono text-[11px] font-medium text-warn ring-1 ring-warn/25">
+                        🟣 Plex Commons · Pending
                     </span>
                 ) : (
                     <span className="inline-flex items-center gap-1 rounded bg-line/60 px-2 py-0.5 font-mono text-[11px] text-soft">
@@ -71,30 +93,47 @@ export default function BackingServicesCard({
                                         className={cn(
                                             'shrink-0 rounded px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset',
                                             service.mode === 'commons'
-                                                ? 'bg-tools-tint text-tools ring-tools/20'
+                                                ? service.pending
+                                                    ? 'bg-warn/10 text-warn ring-warn/25'
+                                                    : 'bg-tools-tint text-tools ring-tools/20'
                                                 : 'bg-paper text-soft ring-line',
                                         )}
                                     >
-                                        {MODE_LABEL[service.mode]}
+                                        {service.mode === 'commons' &&
+                                        service.pending
+                                            ? 'Plex Commons · Pending'
+                                            : MODE_LABEL[service.mode]}
                                     </span>
                                 </div>
-                                {service.details.length > 0 && (
-                                    <dl className="mt-3 space-y-1 text-[11px]">
-                                        {service.details.map((row) => (
-                                            <div
-                                                key={row.label}
-                                                className="flex justify-between gap-3"
-                                            >
-                                                <dt className="shrink-0 text-soft">
-                                                    {row.label}
-                                                </dt>
-                                                <dd className="min-w-0 truncate font-mono text-ink">
-                                                    {row.value ?? '••••••••'}
-                                                </dd>
-                                            </div>
-                                        ))}
-                                    </dl>
-                                )}
+                                {service.mode === 'commons' &&
+                                    service.pending && (
+                                        <p className="mt-1.5 text-[11px] text-soft">
+                                            Will join Plex Commons on next
+                                            deploy or CI configure.
+                                        </p>
+                                    )}
+                                {!(
+                                    service.mode === 'commons' &&
+                                    service.pending
+                                ) &&
+                                    service.details.length > 0 && (
+                                        <dl className="mt-3 space-y-1 text-[11px]">
+                                            {service.details.map((row) => (
+                                                <div
+                                                    key={row.label}
+                                                    className="flex justify-between gap-3"
+                                                >
+                                                    <dt className="shrink-0 text-soft">
+                                                        {row.label}
+                                                    </dt>
+                                                    <dd className="min-w-0 truncate font-mono text-ink">
+                                                        {row.value ??
+                                                            '••••••••'}
+                                                    </dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    )}
                             </div>
                         ))}
                     </div>

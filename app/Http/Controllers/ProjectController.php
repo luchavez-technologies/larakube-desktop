@@ -23,6 +23,7 @@ use App\Services\LaraKube\GlobalSettings;
 use App\Services\LaraKube\HealthPing;
 use App\Services\LaraKube\LaravelOptions;
 use App\Services\LaraKube\LocalCluster;
+use App\Services\LaraKube\PlexCatalog;
 use App\Services\LaraKube\ProjectCompanions;
 use App\Services\LaraKube\ProjectInspector;
 use App\Services\LaraKube\ProjectPods;
@@ -612,6 +613,7 @@ class ProjectController extends Controller
         ProjectPods $projectPods,
         LocalCluster $localCluster,
         GlobalSettings $settings,
+        PlexCatalog $plexCatalog,
     ): Response {
         $this->abortIfDemoHidden($project, $settings);
 
@@ -687,11 +689,29 @@ class ProjectController extends Controller
                 'environment' => $latestRun->environment ?: $this->resolveRunEnvironment($latestRun),
             ] : null,
             'editors' => $editors->available($inspection['framework'] ?? $inspection['detectedFramework'] ?? null),
-            'readyServers' => array_map(fn (array $stack): array => [
-                'name' => $stack['name'],
-                'ip' => $stack['ip'],
-                'provider' => $stack['provider'],
-            ], $servers),
+            'readyServers' => array_map(function (array $stack) use ($plexCatalog): array {
+                $context = is_string($stack['context'] ?? null) ? $stack['context'] : '';
+                $plexData = $context !== '' ? $plexCatalog->forContext($context) : null;
+                $enabledServices = [];
+
+                if ($plexData !== null) {
+                    foreach ($plexData['services'] as $serviceKey => $meta) {
+                        if (is_array($meta) && ! empty($meta['enabled'])) {
+                            $enabledServices[] = $serviceKey;
+                        }
+                    }
+                }
+
+                return [
+                    'name' => $stack['name'],
+                    'ip' => $stack['ip'],
+                    'provider' => $stack['provider'],
+                    'plex' => $plexData !== null ? [
+                        'initialized' => $plexData['initialized'],
+                        'services' => $enabledServices,
+                    ] : null,
+                ];
+            }, $servers),
             'scaffold' => $scaffold === null ? null : ['id' => $scaffold->id, 'status' => $scaffold->status, 'canRetry' => $this->canRetry($project, $scaffold)],
             'wizardFrameworks' => $this->initEmailFrameworks($frameworks),
             'email' => (string) Cache::get(self::EMAIL_CACHE_KEY, ''),
@@ -893,6 +913,9 @@ class ProjectController extends Controller
             // --web-host= (singular — the primary one) at all, so linking a
             // brand-new environment's server always failed.
             'web_host' => ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/'],
+            'plex' => ['nullable', 'array'],
+            'plex.*' => ['string', 'alpha_dash'],
+            'plex_configured' => ['nullable', 'boolean'],
         ], ['web_host.regex' => 'Enter a domain like app.example.com, without https://.']);
         $environment = $validated['environment'] ?? self::ENVIRONMENT;
         $name = $validated['server'];
@@ -916,11 +939,37 @@ class ProjectController extends Controller
             'cloud:configure', $environment, '--only=target', "--context={$server['context']}", '--rebind', "--web-host={$validated['web_host']}", '--web-hosts=',
         ];
 
+        if ($request->has('plex') || $request->boolean('plex_configured')) {
+            $plex = array_values(array_unique((array) ($validated['plex'] ?? [])));
+            $args[] = '--plex='.implode(',', $plex);
+        }
+
         if (! empty($server['sshKey'])) {
             $args[] = "--ssh-key={$server['sshKey']}";
         }
 
         return $this->run($runner, $project, RunKind::LinkServer, "Link {$this->name($project)} ({$environment}) to {$name}", $args, $environment);
+    }
+
+    public function configureBackingServices(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash', 'not_in:local'],
+            'plex' => ['nullable', 'array'],
+            'plex.*' => ['string', 'alpha_dash'],
+        ]);
+
+        $environment = $validated['environment'];
+        $plex = array_values(array_unique((array) ($validated['plex'] ?? [])));
+
+        return $this->run(
+            $runner,
+            $project,
+            RunKind::ConfigureBackingServices,
+            "Configure backing services for {$this->name($project)} ({$environment})",
+            ['cloud:configure', $environment, '--only=plex', '--plex='.implode(',', $plex)],
+            $environment,
+        );
     }
 
     public function host(Request $request, Project $project, CliRunner $runner): RedirectResponse
@@ -1969,7 +2018,7 @@ class ProjectController extends Controller
             return 'local';
         }
 
-        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost, RunKind::ConfigureCi, RunKind::ConfigureReplicas, RunKind::ConfigureAutoscale, RunKind::ConfigureResources, RunKind::DotenvPush, RunKind::DotenvPull], true)) {
+        if (in_array($run->kind, [RunKind::DeployApp, RunKind::LinkServer, RunKind::ConfigureHost, RunKind::ConfigureBackingServices, RunKind::ConfigureCi, RunKind::ConfigureReplicas, RunKind::ConfigureAutoscale, RunKind::ConfigureResources, RunKind::DotenvPush, RunKind::DotenvPull], true)) {
             return 'production';
         }
 

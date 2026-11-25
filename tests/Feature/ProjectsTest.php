@@ -1999,3 +1999,112 @@ YAML);
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('linking a ready server forwards selected plex services and explicit empty plex configuration', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('projects.link', $project), [
+        'server' => 'workshop-demo',
+        'environment' => 'staging',
+        'web_host' => 'staging.example.com',
+        'plex_configured' => true,
+        'plex' => ['postgres', 'redis'],
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cloud:configure', 'staging', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-host=staging.example.com', '--web-hosts=', '--plex=postgres,redis', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    $this->post(route('projects.link', $project), [
+        'server' => 'workshop-demo',
+        'environment' => 'qa',
+        'web_host' => 'qa.example.com',
+        'plex_configured' => true,
+        'plex' => [],
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cloud:configure', 'qa', '--only=target', '--context=larakube-203.0.113.21', '--rebind', '--web-host=qa.example.com', '--web-hosts=', '--plex=', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('configuring environment backing services dispatches cloud:configure --only=plex and rejects local', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('projects.backing-services', $project), [
+        'environment' => 'local',
+        'plex' => ['postgres'],
+    ])->assertSessionHasErrors('environment');
+
+    $this->post(route('projects.backing-services', $project), [
+        'environment' => 'staging',
+        'plex' => ['postgres', 'seaweedfs'],
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cloud:configure', 'staging', '--only=plex', '--plex=postgres,seaweedfs', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+    expect(Run::sole()->kind)->toBe(RunKind::ConfigureBackingServices)
+        ->and(Run::sole()->environment)->toBe('staging');
+
+    File::deleteDirectory($sandbox['home']);
+});
+
+test('project show exposes scoutDriver and cached server plex summary without live subprocesses', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'database' => 'postgres',
+        'cacheDriver' => 'redis',
+        'objectStorage' => 'seaweedfs',
+        'scoutDriver' => 'meilisearch',
+        'environments' => ['local' => [], 'staging' => []],
+    ]));
+
+    Server::create([
+        'name' => 'workshop-demo',
+        'kind' => 'vps',
+        'ip' => '203.0.113.21',
+        'context' => 'larakube-203.0.113.21',
+        'provider' => 'gcp',
+        'status' => 'ready',
+        'plex_sync_status' => 'fresh',
+        'plex_last_synced_at' => now(),
+        'plex_data' => [
+            'initialized' => true,
+            'context' => 'larakube-203.0.113.21',
+            'services' => [
+                'postgres' => ['enabled' => true],
+                'redis' => ['enabled' => true],
+                'seaweedfs' => ['enabled' => false],
+            ],
+            'serviceCatalog' => [],
+            'tenants' => ['tool' => [], 'project' => [], 'custom' => []],
+        ],
+    ]);
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $this->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('project.scoutDriver', 'meilisearch')
+            ->where('readyServers.0.plex.initialized', true)
+            ->where('readyServers.0.plex.services', ['postgres', 'redis']));
+
+    File::deleteDirectory($sandbox['home']);
+});

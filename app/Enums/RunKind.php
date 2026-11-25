@@ -69,6 +69,7 @@ enum RunKind: string
     case RemoveEnvironment = 'remove-environment';
     case ConfigureHost = 'configure-host';
     case ConfigureCi = 'configure-ci';
+    case ConfigureBackingServices = 'configure-backing-services';
     case ConfigureReplicas = 'configure-replicas';
     case ConfigureAutoscale = 'configure-autoscale';
     case ConfigureResources = 'configure-resources';

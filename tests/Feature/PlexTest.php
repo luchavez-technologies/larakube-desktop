@@ -146,6 +146,23 @@ test('project plex leave accepts specific services', function () {
     File::deleteDirectory($sandbox['home']);
 });
 
+test('project plex join accepts specific services', function () {
+    $sandbox = plexSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('projects.plex.join', $project), [
+        'environment' => 'staging',
+        'services' => ['postgres', 'redis'],
+    ])->assertRedirect();
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'plex:join', 'staging', '--service=postgres', '--service=redis', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 // --- the dedicated /plex page ------------------------------------------
 
 function plexPageFakes(): array

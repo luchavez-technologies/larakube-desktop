@@ -14,8 +14,13 @@ import {
     ArrowRight,
     CheckCircle2,
     AlertTriangle,
+    Database,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
+import BackingServicesPicker, {
+    eligibleBackingServices,
+    type ServerPlexSummary,
+} from '@/components/backing-services-picker';
 import Button from '@/components/button';
 import SelectMenu from '@/components/select-menu';
 import Redactable from '@/components/redactable';
@@ -25,6 +30,7 @@ import { ExternalLinkButton } from '@/lib/open-external';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import { cn } from '@/lib/utils';
 import {
+    backingServices as backingServicesRoute,
     ci as configureCiRoute,
     host as setHost,
     link,
@@ -42,11 +48,13 @@ export type ReadyServer = {
     name: string;
     ip: string | null;
     provider?: string | null;
+    plex?: ServerPlexSummary | null;
 };
 
 export type EnvironmentSettingsDrawerSection =
     | 'server'
     | 'address'
+    | 'services'
     | 'pipeline';
 
 export type EnvironmentSettingsDrawerProps = {
@@ -59,6 +67,8 @@ export type EnvironmentSettingsDrawerProps = {
     activeHost?: string | null;
     domains?: ServerDomain[] | null;
     activeCi?: ProjectEnvironment['ci'];
+    activePlex?: string[];
+    activeManaged?: string[];
     initialSection?: EnvironmentSettingsDrawerSection | null;
     onSuccess?: () => void;
 };
@@ -1026,6 +1036,8 @@ export default function EnvironmentSettingsDrawer({
     activeHost,
     domains,
     activeCi,
+    activePlex = [],
+    activeManaged = [],
     initialSection = 'server',
     onSuccess,
 }: EnvironmentSettingsDrawerProps) {
@@ -1034,9 +1046,50 @@ export default function EnvironmentSettingsDrawer({
         useState<EnvironmentSettingsDrawerSection | null>(null);
 
     const [showRotateConfirm, setShowRotateConfirm] = useState(false);
+    const [selectedPlex, setSelectedPlex] = useState<string[]>(activePlex);
+
+    const eligibleServices = useMemo(
+        () => eligibleBackingServices(project),
+        [project],
+    );
+    const activeServerPlex = useMemo(
+        () =>
+            readyServers.find(
+                (candidate) => candidate.name === activeServer?.name,
+            )?.plex ?? null,
+        [readyServers, activeServer?.name],
+    );
+
+    const plexSignature = activePlex.join(',');
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedPlex(activePlex);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, environment, plexSignature]);
+
+    const plexDirty = useMemo(() => {
+        const a = [...selectedPlex].sort().join(',');
+        const b = [...activePlex].sort().join(',');
+        return a !== b;
+    }, [selectedPlex, activePlex]);
+
+    const connectedPlex = useMemo(
+        () => activePlex.filter((slug) => activeManaged.includes(slug)),
+        [activePlex, activeManaged],
+    );
+    const pendingPlex = useMemo(
+        () => activePlex.filter((slug) => !activeManaged.includes(slug)),
+        [activePlex, activeManaged],
+    );
+    const externalManaged = useMemo(
+        () => activeManaged.filter((slug) => !activePlex.includes(slug)),
+        [activePlex, activeManaged],
+    );
 
     const serverRef = useRef<HTMLDivElement>(null);
     const addressRef = useRef<HTMLDivElement>(null);
+    const servicesRef = useRef<HTMLDivElement>(null);
     const pipelineRef = useRef<HTMLDivElement>(null);
 
     useRightDrawerOpen(isOpen);
@@ -1080,6 +1133,7 @@ export default function EnvironmentSettingsDrawer({
             const el = {
                 server: serverRef.current,
                 address: addressRef.current,
+                services: servicesRef.current,
                 pipeline: pipelineRef.current,
             }[target];
 
@@ -1104,6 +1158,7 @@ export default function EnvironmentSettingsDrawer({
         const el = {
             server: serverRef.current,
             address: addressRef.current,
+            services: servicesRef.current,
             pipeline: pipelineRef.current,
         }[section];
 
@@ -1188,6 +1243,21 @@ export default function EnvironmentSettingsDrawer({
                         <Globe className="size-3" />
                         <span>Public Address</span>
                     </button>
+                    {eligibleServices.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => scrollToSection('services')}
+                            className={cn(
+                                'inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 font-medium transition',
+                                highlightedSection === 'services'
+                                    ? 'bg-brand/10 text-brand'
+                                    : 'text-soft hover:bg-surface hover:text-ink',
+                            )}
+                        >
+                            <Database className="size-3" />
+                            <span>Backing Services</span>
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => scrollToSection('pipeline')}
@@ -1326,7 +1396,95 @@ export default function EnvironmentSettingsDrawer({
                         />
                     </div>
 
-                    {/* Section 3: Delivery Pipeline & CI/CD */}
+                    {/* Section 3: Backing Services */}
+                    {eligibleServices.length > 0 && (
+                        <div
+                            ref={servicesRef}
+                            className={cn(
+                                'rounded-2xl border border-line bg-paper/40 p-5 transition-all duration-700',
+                                highlightedSection === 'services'
+                                    ? 'bg-brand/5 shadow-md ring-2 ring-brand/60'
+                                    : 'ring-0',
+                            )}
+                        >
+                            <div className="mb-4 flex items-center justify-between border-b border-line/60 pb-3">
+                                <div className="flex items-center gap-2">
+                                    <Database className="size-4 text-brand" />
+                                    <h3 className="text-sm font-semibold text-ink">
+                                        Backing Services
+                                    </h3>
+                                </div>
+                                <span className="rounded-full bg-line/60 px-2 py-0.5 text-[10px] font-semibold text-soft uppercase">
+                                    Pods vs Plex Commons
+                                </span>
+                            </div>
+
+                            <Form
+                                action={backingServicesRoute(project.id)}
+                                className="space-y-3"
+                                onSuccess={onSuccess}
+                            >
+                                {({ errors, processing }) => (
+                                    <>
+                                        <input
+                                            type="hidden"
+                                            name="environment"
+                                            value={environment}
+                                        />
+                                        <BackingServicesPicker
+                                            project={project}
+                                            environment={environment}
+                                            selected={selectedPlex}
+                                            onChange={setSelectedPlex}
+                                            serverName={activeServer?.name}
+                                            serverPlex={activeServerPlex}
+                                            connectedPlex={connectedPlex}
+                                            pendingPlex={pendingPlex}
+                                            externalManaged={externalManaged}
+                                            disabled={
+                                                !project.initialized ||
+                                                processing
+                                            }
+                                        />
+                                        {errors.plex && (
+                                            <p className="text-xs text-accent">
+                                                {errors.plex}
+                                            </p>
+                                        )}
+                                        <div className="flex items-center justify-between gap-3 pt-1">
+                                            <p className="text-[11px] text-soft">
+                                                Updates manifests now; cluster
+                                                Plex services provision on next
+                                                deploy or CI setup.
+                                            </p>
+                                            <Button
+                                                type="submit"
+                                                size="sm"
+                                                disabled={
+                                                    !project.initialized ||
+                                                    processing ||
+                                                    !plexDirty
+                                                }
+                                            >
+                                                {processing ? (
+                                                    <RotateCw className="size-3 animate-spin" />
+                                                ) : (
+                                                    <Save className="size-3" />
+                                                )}
+                                                <span>
+                                                    {processing
+                                                        ? 'Saving…'
+                                                        : 'Save Backing Services'}
+                                                </span>
+                                            </Button>
+                                        </div>
+                                    </>
+                                )}
+                            </Form>
+                        </div>
+                    )}
+
+                    {/* Section 4: Delivery Pipeline & CI/CD */}
                     <div
                         ref={pipelineRef}
                         className={cn(

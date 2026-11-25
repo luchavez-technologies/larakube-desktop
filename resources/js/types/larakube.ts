@@ -161,6 +161,7 @@ export type RunKind =
     | 'link-server'
     | 'configure-host'
     | 'configure-ci'
+    | 'configure-backing-services'
     | 'configure-replicas'
     | 'configure-autoscale'
     | 'configure-resources'
@@ -726,6 +727,7 @@ export type Project = {
     database?: string | null;
     cacheDriver?: string | null;
     objectStorage?: string | null;
+    scoutDriver?: string | null;
     phpVersion?: string | null;
     serverVariation?: string | null;
     additionalExtensions?: string[];
@@ -866,6 +868,8 @@ export type BackingService = {
     name: string | null;
     /** commons (shared Plex Commons), managed (the cloud's own), pod, file or none. */
     mode: 'commons' | 'managed' | 'pod' | 'file' | 'none';
+    /** True when configured for Plex Commons in .larakube.json but not yet joined on the cluster. */
+    pending?: boolean;
     details: { label: string; value: string | null; secret: boolean }[];
 };
 

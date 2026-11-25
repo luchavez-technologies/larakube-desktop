@@ -36,6 +36,8 @@ import {
     HeartPulse,
     Globe,
     Server as ServerIcon,
+    Database,
+    SlidersHorizontal,
 } from 'lucide-react';
 import { SiGithub, SiGitlab, SiForgejo } from '@icons-pack/react-simple-icons';
 import LiveDot from '@/components/live-dot';
@@ -52,11 +54,15 @@ import EnvironmentSettingsDrawer, {
     HostForm,
     CiPipelineForm,
     type EnvironmentSettingsDrawerSection,
+    type ReadyServer,
 } from '@/components/environment-settings-drawer';
 import HostPicker from '@/components/host-picker';
 import DomainStatusPills from '@/components/domain-status-pills';
 import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
+import BackingServicesPicker, {
+    eligibleBackingServices,
+} from '@/components/backing-services-picker';
 import ProjectConnectCard from '@/components/project-connect-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
 import WorkloadsPodsCard, {
@@ -168,12 +174,6 @@ function initialProjectEnv(pageUrl: string, project: Project): string {
 }
 
 type Editor = { slug: string; label: string; category?: 'editor' | 'agent' };
-
-type ReadyServer = {
-    name: string;
-    ip: string | null;
-    provider?: string | null;
-};
 
 export function resolveServerProvider(
     serverName?: string | null,
@@ -711,6 +711,9 @@ export default function ShowProject({
                                             project={project}
                                             currentEnv={activeEnvConfig}
                                             services={backing?.[activeEnv]}
+                                            onConfigureServices={() =>
+                                                setSettingsSection('services')
+                                            }
                                         />
                                     </>
                                 )}
@@ -880,6 +883,8 @@ export default function ShowProject({
                                 activeEnvConfig?.ci ??
                                 project.environments?.[activeEnv]?.ci
                             }
+                            activePlex={activeEnvConfig?.plex ?? []}
+                            activeManaged={activeEnvConfig?.managed ?? []}
                             initialSection={settingsSection}
                         />
                     )}
@@ -1571,6 +1576,8 @@ function CloudEnvironmentOverviewCard({
                         activeHost={activeHost}
                         domains={domains}
                         activeCi={activeCi}
+                        activePlex={activeEnvConfig?.plex ?? []}
+                        activeManaged={activeEnvConfig?.managed ?? []}
                         initialSection={localSettingsSection}
                     />
                 )}
@@ -1843,20 +1850,40 @@ function EnvironmentBackingServicesCard({
     project,
     currentEnv,
     services,
+    onConfigureServices,
 }: {
     project: Project;
     currentEnv: ProjectEnvironment;
     /** undefined while loading, null when the CLI could not say. */
     services?: BackingServices | null;
+    onConfigureServices?: () => void;
 }) {
-    const hasPlex = services?.commons ?? (currentEnv.plex?.length ?? 0) > 0;
-    const plexServices = currentEnv.plex ?? [];
     const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
     const [leaving, setLeaving] = useState(false);
     const [selectedServices, setSelectedServices] = useState<string[]>([]);
     const [revealed, setRevealed] = useState<BackingServices | null>(null);
     const [revealing, setRevealing] = useState(false);
     const shown = revealed ?? services;
+
+    const plexServices = currentEnv.plex ?? [];
+    const managedServices = currentEnv.managed ?? [];
+    const connectedPlexServices = plexServices.filter((slug) =>
+        managedServices.includes(slug),
+    );
+    const pendingPlexServices = plexServices.filter(
+        (slug) => !managedServices.includes(slug),
+    );
+    const hasConnectedPlex = shown
+        ? shown.services.some(
+              (service) => service.mode === 'commons' && !service.pending,
+          )
+        : connectedPlexServices.length > 0;
+    const hasPendingPlex = shown
+        ? shown.services.some(
+              (service) =>
+                  service.mode === 'commons' && Boolean(service.pending),
+          )
+        : pendingPlexServices.length > 0;
 
     const commonsServicesList = useMemo(() => {
         const active: { id: string; label: string; desc: string }[] = [];
@@ -1978,15 +2005,18 @@ function EnvironmentBackingServicesCard({
             .finally(() => setRevealing(false));
     }
 
-    const hasSecrets = shown?.services.some((service) =>
-        service.details.some((row) => row.secret),
+    const hasSecrets = shown?.services.some(
+        (service) =>
+            !(service.mode === 'commons' && service.pending) &&
+            service.details.some((row) => row.secret),
     );
 
     return (
         <BackingServicesCard
             label={`Backing Services · ${currentEnv.name.toUpperCase()}`}
             services={shown}
-            hasCommons={hasPlex}
+            hasCommons={hasConnectedPlex}
+            pendingCommons={hasPendingPlex}
             footer={
                 <>
                     {hasSecrets && (
@@ -2024,20 +2054,60 @@ function EnvironmentBackingServicesCard({
                             </span>
                             <div>
                                 <p className="text-xs font-semibold text-ink">
-                                    {hasPlex
-                                        ? `Connected to Plex Commons (${currentEnv.name})`
-                                        : `Plex Commons (${currentEnv.name})`}
+                                    {hasConnectedPlex && hasPendingPlex
+                                        ? `Plex Commons (${currentEnv.name}) · Partial`
+                                        : hasPendingPlex
+                                          ? `Plex Commons (${currentEnv.name}) · Pending deploy`
+                                          : hasConnectedPlex
+                                            ? `Connected to Plex Commons (${currentEnv.name})`
+                                            : `Plex Commons (${currentEnv.name})`}
                                 </p>
                                 <p className="text-[11px] text-soft">
-                                    {hasPlex
-                                        ? 'Shares the cluster-wide database, cache and storage to conserve CPU and RAM.'
-                                        : 'Connect this environment to Plex Commons to share cluster-wide services.'}
+                                    {hasConnectedPlex && hasPendingPlex
+                                        ? 'Some services are active on Plex Commons; pending ones will provision on next deploy or CI/CD configure.'
+                                        : hasPendingPlex
+                                          ? 'Configured for Plex Commons — will provision on your next deploy or CI/CD configure.'
+                                          : hasConnectedPlex
+                                            ? 'Shares the cluster-wide database, cache and storage to conserve CPU and RAM.'
+                                            : 'Connect this environment to Plex Commons to share cluster-wide services.'}
                                 </p>
                             </div>
                         </div>
 
-                        <div className="shrink-0">
-                            {hasPlex ? (
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            {onConfigureServices && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onConfigureServices}
+                                    className="h-7 gap-1.5 px-2.5 text-xs"
+                                    title={`Choose Own pod vs Plex Commons per service for ${currentEnv.name}`}
+                                >
+                                    <SlidersHorizontal className="size-3.5" />
+                                    <span>Configure</span>
+                                </Button>
+                            )}
+                            {hasPendingPlex && (
+                                <Link
+                                    href={joinPlex(project.id).url}
+                                    method="post"
+                                    data={{
+                                        environment: currentEnv.name,
+                                        services: pendingPlexServices,
+                                    }}
+                                    as="button"
+                                    className={cn(
+                                        buttonClass('tools', 'sm'),
+                                        'h-7 px-2.5 text-xs',
+                                    )}
+                                    title={`Provision pending Plex Commons services for ${currentEnv.name} now`}
+                                >
+                                    <Share2 className="size-3.5" />
+                                    <span>Provision Now</span>
+                                </Link>
+                            )}
+                            {hasConnectedPlex ? (
                                 <Button
                                     type="button"
                                     variant="danger"
@@ -2050,20 +2120,22 @@ function EnvironmentBackingServicesCard({
                                     <span>Disconnect Commons</span>
                                 </Button>
                             ) : (
-                                <Link
-                                    href={joinPlex(project.id).url}
-                                    method="post"
-                                    data={{ environment: currentEnv.name }}
-                                    as="button"
-                                    className={cn(
-                                        buttonClass('tools', 'sm'),
-                                        'h-7 px-2.5 text-xs',
-                                    )}
-                                    title={`Join ${currentEnv.name} to Plex Commons`}
-                                >
-                                    <Share2 className="size-3.5" />
-                                    <span>Join Commons</span>
-                                </Link>
+                                !hasPendingPlex && (
+                                    <Link
+                                        href={joinPlex(project.id).url}
+                                        method="post"
+                                        data={{ environment: currentEnv.name }}
+                                        as="button"
+                                        className={cn(
+                                            buttonClass('tools', 'sm'),
+                                            'h-7 px-2.5 text-xs',
+                                        )}
+                                        title={`Join ${currentEnv.name} to Plex Commons`}
+                                    >
+                                        <Share2 className="size-3.5" />
+                                        <span>Join Commons</span>
+                                    </Link>
+                                )
                             )}
                         </div>
                     </div>
@@ -2709,6 +2781,9 @@ function AddEnvironmentDialog({
     const [server, setServer] = useState(readyServers[0]?.name ?? '');
     const [webHost, setWebHost] = useState('');
     const [slidIn, setSlidIn] = useState(false);
+    const eligible = useMemo(() => eligibleBackingServices(project), [project]);
+    const [selectedPlex, setSelectedPlex] = useState<string[]>([]);
+    const [plexTouched, setPlexTouched] = useState(false);
 
     useRightDrawerOpen(open);
 
@@ -2721,8 +2796,30 @@ function AddEnvironmentDialog({
         }
     }, [open]);
 
+    const activeServer = readyServers.find((s) => s.name === server) ?? null;
+
+    useEffect(() => {
+        if (!open) {
+            setPlexTouched(false);
+            return;
+        }
+        if (plexTouched) return;
+
+        if (activeServer?.plex?.initialized) {
+            const activeOnServer = activeServer.plex.services ?? [];
+            setSelectedPlex(
+                eligible
+                    .map((item) => item.slug)
+                    .filter((slug) => activeOnServer.includes(slug)),
+            );
+        } else {
+            setSelectedPlex([]);
+        }
+    }, [open, activeServer, eligible, plexTouched]);
+
     const handleClose = () => {
         setSlidIn(false);
+        setPlexTouched(false);
         setTimeout(() => onClose(), 250);
     };
 
@@ -2740,8 +2837,6 @@ function AddEnvironmentDialog({
 
     if (!open) return null;
 
-    const activeServer = readyServers.find((s) => s.name === server) ?? null;
-
     return (
         <div
             className={cn(
@@ -2755,7 +2850,7 @@ function AddEnvironmentDialog({
                 aria-modal="true"
                 aria-labelledby="add-env-dialog-title"
                 className={cn(
-                    'flex h-full w-full max-w-xl flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-300 ease-out md:max-w-lg',
+                    'flex h-full w-full max-w-xl flex-col overflow-hidden bg-surface shadow-2xl ring-1 ring-line transition-transform duration-300 ease-out md:max-w-xl',
                     slidIn ? 'translate-x-0' : 'translate-x-full',
                 )}
                 onClick={(e) => e.stopPropagation()}
@@ -2796,6 +2891,8 @@ function AddEnvironmentDialog({
                         onCreated?.(name);
                         setName('');
                         setWebHost('');
+                        setSelectedPlex([]);
+                        setPlexTouched(false);
                         handleClose();
                     }}
                 >
@@ -2913,6 +3010,47 @@ function AddEnvironmentDialog({
                                         later.
                                     </p>
                                 </div>
+
+                                {eligible.length > 0 && (
+                                    <div className="rounded-2xl border border-line bg-paper/40 p-5">
+                                        <div className="mb-4 flex items-center justify-between border-b border-line/60 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Database className="size-4 text-brand" />
+                                                <h3 className="text-sm font-semibold text-ink">
+                                                    Backing Services
+                                                </h3>
+                                            </div>
+                                            <span className="rounded-full bg-line/60 px-2 py-0.5 text-[10px] font-semibold text-soft uppercase">
+                                                Pods vs Plex Commons
+                                            </span>
+                                        </div>
+                                        <BackingServicesPicker
+                                            project={project}
+                                            environment={name || 'staging'}
+                                            selected={selectedPlex}
+                                            onChange={(next) => {
+                                                setPlexTouched(true);
+                                                setSelectedPlex(next);
+                                            }}
+                                            serverName={activeServer?.name}
+                                            serverPlex={activeServer?.plex}
+                                            disabled={processing}
+                                        />
+                                        {(project.environments?.local?.plex
+                                            ?.length ?? 0) > 0 && (
+                                            <p className="mt-2.5 text-[11px] text-soft">
+                                                Local development uses Plex
+                                                Commons for{' '}
+                                                <span className="font-medium text-ink">
+                                                    {project.environments?.local?.plex?.join(
+                                                        ', ',
+                                                    )}
+                                                </span>
+                                                .
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Drawer Footer */}
