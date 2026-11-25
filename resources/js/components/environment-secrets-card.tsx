@@ -41,6 +41,7 @@ type DriftItem = {
     status: string;
     isSecret: boolean;
     isExcluded: boolean;
+    isBlank?: boolean;
     local: string | null;
     cluster: string | null;
 };
@@ -428,6 +429,14 @@ export default function EnvironmentSecretsCard({
         [data],
     );
 
+    const needsValue = useMemo(
+        () =>
+            (data?.items ?? [])
+                .filter((item) => item.isBlank)
+                .map((item) => item.key),
+        [data],
+    );
+
     const summary = data?.summary;
     const mountedLocalCount = isLocalEnv
         ? (data?.items ?? []).filter(
@@ -775,6 +784,21 @@ export default function EnvironmentSecretsCard({
                         >
                             <X className="size-3" />
                         </button>
+                    </div>
+                )}
+
+                {needsValue.length > 0 && (
+                    <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                        <p className="font-semibold">
+                            Needs a value ({needsValue.length})
+                        </p>
+                        <p className="mt-0.5">
+                            These keys are empty in .env.{activeEnv}. Fill them
+                            in before pushing or deploying:{' '}
+                            <span className="font-mono">
+                                {needsValue.join(', ')}
+                            </span>
+                        </p>
                     </div>
                 )}
 
