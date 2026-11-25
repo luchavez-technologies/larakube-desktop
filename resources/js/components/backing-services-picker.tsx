@@ -343,3 +343,28 @@ export default function BackingServicesPicker({
         </div>
     );
 }
+
+export type HostService = { slug: string; label: string };
+
+/**
+ * Services that get their own public address in a cloud environment, passed to the LaraKube CLI
+ * as `--host=<slug>=<hostname>`. Mirrors the CLI's HasPromptableHosts (LaravelFeature::REVERB,
+ * StorageDriver SEAWEEDFS/GARAGE); keep both lists in step.
+ */
+export function promptableHostServices(
+    project: Pick<Project, 'features' | 'objectStorage'>,
+): HostService[] {
+    const list: HostService[] = [];
+
+    if (project.features?.includes('reverb')) {
+        list.push({ slug: 'reverb', label: 'Reverb WebSocket' });
+    }
+
+    if (project.objectStorage === 'seaweedfs') {
+        list.push({ slug: 's3', label: 'SeaweedFS S3 API' });
+    } else if (project.objectStorage === 'garage') {
+        list.push({ slug: 's3', label: 'Garage S3 API' });
+    }
+
+    return list;
+}
