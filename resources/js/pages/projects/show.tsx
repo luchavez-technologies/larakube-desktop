@@ -62,6 +62,7 @@ import { useRightDrawerOpen } from '@/lib/right-drawer-open';
 import BackingServicesCard from '@/components/backing-services-card';
 import BackingServicesPicker, {
     eligibleBackingServices,
+    promptableHostServices,
 } from '@/components/backing-services-picker';
 import ProjectConnectCard from '@/components/project-connect-card';
 import WorkloadScalingCard from '@/components/workload-scaling-card';
@@ -2782,6 +2783,13 @@ function AddEnvironmentDialog({
     const [webHost, setWebHost] = useState('');
     const [slidIn, setSlidIn] = useState(false);
     const eligible = useMemo(() => eligibleBackingServices(project), [project]);
+    const hostServices = useMemo(
+        () => promptableHostServices(project),
+        [project],
+    );
+    const [serviceHosts, setServiceHosts] = useState<Record<string, string>>(
+        {},
+    );
     const [selectedPlex, setSelectedPlex] = useState<string[]>([]);
     const [plexTouched, setPlexTouched] = useState(false);
 
@@ -2891,6 +2899,7 @@ function AddEnvironmentDialog({
                         onCreated?.(name);
                         setName('');
                         setWebHost('');
+                        setServiceHosts({});
                         setSelectedPlex([]);
                         setPlexTouched(false);
                         handleClose();
@@ -3003,6 +3012,59 @@ function AddEnvironmentDialog({
                                             {errors.web_host}
                                         </p>
                                     )}
+                                    {hostServices.map((service) => {
+                                        const error = (
+                                            errors as Record<string, string>
+                                        )[`hosts.${service.slug}`];
+
+                                        return (
+                                            <div
+                                                key={service.slug}
+                                                className="mt-4"
+                                            >
+                                                <p className="mb-1.5 text-xs font-medium text-ink">
+                                                    {service.label} address
+                                                </p>
+                                                <HostPicker
+                                                    key={`${server}-${service.slug}`}
+                                                    name={`hosts[${service.slug}]`}
+                                                    value={
+                                                        serviceHosts[
+                                                            service.slug
+                                                        ] ?? ''
+                                                    }
+                                                    onChange={(value: string) =>
+                                                        setServiceHosts(
+                                                            (current) => ({
+                                                                ...current,
+                                                                [service.slug]:
+                                                                    value,
+                                                            }),
+                                                        )
+                                                    }
+                                                    serverName={server || null}
+                                                    serverIp={
+                                                        activeServer?.ip ?? null
+                                                    }
+                                                    defaultSubdomain={`${service.slug}-${(
+                                                        name || project.name
+                                                    )
+                                                        .toLowerCase()
+                                                        .replace(
+                                                            /[^a-z0-9-]/g,
+                                                            '',
+                                                        )}`}
+                                                    hideLabel
+                                                    disabled={processing}
+                                                />
+                                                {error && (
+                                                    <p className="mt-1.5 text-xs text-accent">
+                                                        {error}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                     <p className="mt-2 text-[11px] text-soft">
                                         Domains already connected to this
                                         server&rsquo;s cluster are detected
