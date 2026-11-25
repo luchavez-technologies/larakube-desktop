@@ -171,6 +171,9 @@ export default function BackingServicesPicker({
             {selected.map((slug) => (
                 <input key={slug} type="hidden" name="plex[]" value={slug} />
             ))}
+            {onExternalChange && (
+                <input type="hidden" name="managed_configured" value="1" />
+            )}
             {(external ?? []).map((slug) => (
                 <input key={slug} type="hidden" name="managed[]" value={slug} />
             ))}

@@ -952,7 +952,7 @@ class ProjectController extends Controller
         }
 
         // Services hosted outside the cluster (e.g. AWS RDS); their connection keys stay blank for the user.
-        if ($request->has('managed')) {
+        if ($request->boolean('managed_configured') || $request->has('managed')) {
             $args[] = '--managed='.implode(',', array_values(array_unique((array) ($validated['managed'] ?? []))));
         }
 
@@ -976,17 +976,26 @@ class ProjectController extends Controller
             'environment' => ['required', 'string', 'alpha_dash', 'not_in:local'],
             'plex' => ['nullable', 'array'],
             'plex.*' => ['string', 'alpha_dash'],
+            'managed' => ['nullable', 'array'],
+            'managed.*' => ['string', 'alpha_dash'],
+            'managed_configured' => ['nullable', 'boolean'],
         ]);
 
         $environment = $validated['environment'];
         $plex = array_values(array_unique((array) ($validated['plex'] ?? [])));
+        $args = ['cloud:configure', $environment, '--only=plex', '--plex='.implode(',', $plex)];
+
+        // Services hosted outside the cluster (e.g. AWS RDS), when the picker offers that choice.
+        if ($request->boolean('managed_configured') || $request->has('managed')) {
+            $args[] = '--managed='.implode(',', array_values(array_unique((array) ($validated['managed'] ?? []))));
+        }
 
         return $this->run(
             $runner,
             $project,
             RunKind::ConfigureBackingServices,
             "Configure backing services for {$this->name($project)} ({$environment})",
-            ['cloud:configure', $environment, '--only=plex', '--plex='.implode(',', $plex)],
+            $args,
             $environment,
         );
     }

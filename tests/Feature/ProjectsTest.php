@@ -2131,3 +2131,26 @@ test('linking passes external services and per-service hosts to cloud:configure'
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('saving backing services passes external services, and clears them when none are chosen', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+    $bin = "{$sandbox['bin']}/larakube";
+
+    $this->post(route('projects.backing-services', $project), [
+        'environment' => 'staging', 'plex' => ['redis'], 'managed' => ['postgres'], 'managed_configured' => '1',
+    ])->assertRedirect();
+    $this->post(route('projects.backing-services', $project), [
+        'environment' => 'staging', 'plex' => ['redis'], 'managed_configured' => '1',
+    ])->assertRedirect();
+
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cloud:configure', 'staging', '--only=plex', '--plex=redis', '--managed=postgres', '--no-interaction',
+    ]);
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'cloud:configure', 'staging', '--only=plex', '--plex=redis', '--managed=', '--no-interaction',
+    ]);
+
+    File::deleteDirectory($sandbox['home']);
+});

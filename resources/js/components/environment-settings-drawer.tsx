@@ -1086,6 +1086,8 @@ export default function EnvironmentSettingsDrawer({
         () => activeManaged.filter((slug) => !activePlex.includes(slug)),
         [activePlex, activeManaged],
     );
+    const [externalServices, setExternalServices] =
+        useState<string[]>(externalManaged);
 
     const serverRef = useRef<HTMLDivElement>(null);
     const addressRef = useRef<HTMLDivElement>(null);
@@ -1436,6 +1438,10 @@ export default function EnvironmentSettingsDrawer({
                                             environment={environment}
                                             selected={selectedPlex}
                                             onChange={setSelectedPlex}
+                                            external={externalServices}
+                                            onExternalChange={
+                                                setExternalServices
+                                            }
                                             serverName={activeServer?.name}
                                             serverPlex={activeServerPlex}
                                             connectedPlex={connectedPlex}
