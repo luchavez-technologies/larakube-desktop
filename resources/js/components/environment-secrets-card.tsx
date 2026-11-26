@@ -160,6 +160,7 @@ export default function EnvironmentSecretsCard({
 
     const [saving, setSaving] = useState(false);
     const [pushing, setPushing] = useState(false);
+    const [leaveBlank, setLeaveBlank] = useState(false);
     const [pulling, setPulling] = useState(false);
     const [message, setMessage] = useState<{
         text: string;
@@ -358,6 +359,7 @@ export default function EnvironmentSecretsCard({
     }
 
     function handlePush() {
+        if (pushBlocked) return;
         setConfirmAction('push');
     }
 
@@ -436,6 +438,8 @@ export default function EnvironmentSecretsCard({
                 .map((item) => item.key),
         [data],
     );
+
+    const pushBlocked = needsValue.length > 0 && !leaveBlank;
 
     const summary = data?.summary;
     const mountedLocalCount = isLocalEnv
@@ -799,6 +803,18 @@ export default function EnvironmentSecretsCard({
                                 {needsValue.join(', ')}
                             </span>
                         </p>
+                        <label className="mt-1.5 flex cursor-pointer items-center gap-1.5">
+                            <input
+                                type="checkbox"
+                                checked={leaveBlank}
+                                onChange={(event) =>
+                                    setLeaveBlank(event.target.checked)
+                                }
+                            />
+                            <span>
+                                Leave these blank and allow pushing anyway
+                            </span>
+                        </label>
                     </div>
                 )}
 
@@ -966,7 +982,7 @@ export default function EnvironmentSecretsCard({
                                     <Button
                                         variant="secondary"
                                         size="sm"
-                                        disabled={pushing}
+                                        disabled={pushing || pushBlocked}
                                         onClick={handlePush}
                                     >
                                         <ArrowUpCircle className="size-3.5 text-ink" />
@@ -994,7 +1010,7 @@ export default function EnvironmentSecretsCard({
                                         <Button
                                             variant="secondary"
                                             size="sm"
-                                            disabled={pushing}
+                                            disabled={pushing || pushBlocked}
                                             onClick={handlePush}
                                         >
                                             <ArrowUpCircle className="size-3.5 text-ink" />
