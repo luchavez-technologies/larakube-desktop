@@ -858,7 +858,11 @@ export default function ShowProject({
                         onClose={() => setAddEnvModalOpen(false)}
                         project={project}
                         readyServers={readyServers}
-                        onCreated={(newEnv) => handleSelectEnv(newEnv)}
+                        onCreated={(newEnv) => {
+                            handleSelectEnv(newEnv);
+                            // Carry straight on to the next step: CI/CD and the env file.
+                            setSettingsSection('pipeline');
+                        }}
                     />
 
                     {/* Remove Environment Modal Popup */}
