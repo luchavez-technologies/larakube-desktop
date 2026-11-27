@@ -3,6 +3,7 @@
 namespace App\Services\LaraKube;
 
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncJob;
 use App\Jobs\Sync\SyncSsoJob;
 use App\Models\ClusterTool;
 use App\Models\Server;
@@ -105,7 +106,7 @@ class SsoStatus
         $tool = $server->ssoTool();
 
         if ($tool === null) {
-            SyncClusterToolsJob::dispatch($server->id);
+            SyncJob::dispatchInteractive(new SyncClusterToolsJob($server->id));
 
             return;
         }

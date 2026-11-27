@@ -182,6 +182,14 @@ return [
             'timeout' => 120,
             'sleep' => 2,
         ],
+        // Explicit refreshes (a Refresh button, a Run that just changed a server's data), on their
+        // own worker so they never wait behind the routine per-server syncs on 'default'.
+        'interactive' => [
+            'queues' => ['interactive'],
+            'memory_limit' => 128,
+            'timeout' => 120,
+            'sleep' => 1,
+        ],
         'sync' => [
             'queues' => ['sync'],
             'memory_limit' => 128,

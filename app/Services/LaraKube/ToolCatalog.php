@@ -4,6 +4,7 @@ namespace App\Services\LaraKube;
 
 use App\Jobs\Sync\SyncCatalogToolsJob;
 use App\Jobs\Sync\SyncClusterToolsJob;
+use App\Jobs\Sync\SyncJob;
 use App\Models\CatalogTool;
 use App\Models\ClusterTool;
 use App\Models\Server;
@@ -166,7 +167,7 @@ class ToolCatalog
 
         if ($server !== null) {
             ClusterTool::where('server_id', $server->id)->update(['sync_status' => 'stale']);
-            SyncClusterToolsJob::dispatch($server->id);
+            SyncJob::dispatchInteractive(new SyncClusterToolsJob($server->id));
         }
 
         Cache::forget($this->registeredKey($context));

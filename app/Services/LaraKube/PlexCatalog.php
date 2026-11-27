@@ -2,6 +2,7 @@
 
 namespace App\Services\LaraKube;
 
+use App\Jobs\Sync\SyncJob;
 use App\Jobs\Sync\SyncPlexJob;
 use App\Models\Server;
 
@@ -69,7 +70,7 @@ class PlexCatalog
 
         if ($server !== null) {
             $server->update(['plex_sync_status' => 'stale']);
-            SyncPlexJob::dispatch($server->id);
+            SyncJob::dispatchInteractive(new SyncPlexJob($server->id));
         }
     }
 

@@ -4,6 +4,7 @@ namespace App\Services\LaraKube;
 
 use App\Jobs\Sync\SyncClusterToolsJob;
 use App\Jobs\Sync\SyncDriveJob;
+use App\Jobs\Sync\SyncJob;
 use App\Models\ClusterTool;
 use App\Models\Server;
 
@@ -260,9 +261,9 @@ class DriveStatus
 
         if ($driveTool !== null) {
             $driveTool->update(['sync_status' => 'syncing']);
-            SyncDriveJob::dispatch($server->id);
+            SyncJob::dispatchInteractive(new SyncDriveJob($server->id));
         } else {
-            SyncClusterToolsJob::dispatch($server->id);
+            SyncJob::dispatchInteractive(new SyncClusterToolsJob($server->id));
         }
     }
 

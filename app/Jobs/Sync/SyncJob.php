@@ -3,6 +3,8 @@
 namespace App\Jobs\Sync;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Bus\UniqueLock;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,6 +23,21 @@ abstract class SyncJob implements ShouldBeUnique, ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
+    /** The queue explicit refreshes run on, with its own worker, so they never wait behind routine syncs. */
+    public const INTERACTIVE_QUEUE = 'interactive';
+
+    /**
+     * Run this sync now-ish, for something the person asked for (a Refresh button, a Run that just
+     * changed this data): on the interactive queue, and past any routine copy of the same sync still
+     * waiting on the default queue, whose uniqueness lock would otherwise swallow this one.
+     */
+    public static function dispatchInteractive(self $job): void
+    {
+        (new UniqueLock(app(Cache::class)))->release($job);
+
+        dispatch($job->onQueue(self::INTERACTIVE_QUEUE));
+    }
 
     public function uniqueId(): string
     {
