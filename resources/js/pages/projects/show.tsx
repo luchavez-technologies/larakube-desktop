@@ -104,6 +104,7 @@ import {
     link,
     reload as reloadLifecycle,
     removeEnvironment,
+    destroyEnvironment,
     retry,
     start as startLifecycle,
     stop as stopLifecycle,
@@ -3162,7 +3163,12 @@ function AddEnvironmentDialog({
     );
 }
 
-/** Confirmation dialog for dropping a cloud environment from the blueprint, triggered by the X on its tab */
+/**
+ * Deleting a cloud environment, from the trash button by its picker. When it runs on a server, the
+ * default deletes everything (`env:destroy`: what it runs there and in Plex Commons, then its blueprint
+ * entry, manifests and deploy workflow); "only from this project" forgets it (`env:remove`) and
+ * leaves the server alone.
+ */
 function RemoveEnvironmentDialog({
     environment,
     onClose,
@@ -3175,6 +3181,12 @@ function RemoveEnvironmentDialog({
     onRemoved?: () => void;
 }) {
     const [removing, setRemoving] = useState(false);
+    const target = environment
+        ? project.environments?.[environment]
+        : undefined;
+    const serverLabel =
+        target?.serverName ?? target?.serverContext ?? target?.serverIp ?? null;
+    const [everything, setEverything] = useState(true);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -3183,6 +3195,7 @@ function RemoveEnvironmentDialog({
             }
         };
         if (environment) {
+            setEverything(true);
             window.addEventListener('keydown', handleKeyDown);
         }
         return () => window.removeEventListener('keydown', handleKeyDown);
@@ -3190,10 +3203,13 @@ function RemoveEnvironmentDialog({
 
     if (!environment) return null;
 
+    const destroying = serverLabel !== null && everything;
+
     const handleRemove = () => {
         setRemoving(true);
         router.post(
-            removeEnvironment(project.id).url,
+            (destroying ? destroyEnvironment : removeEnvironment)(project.id)
+                .url,
             { environment },
             {
                 preserveScroll: true,
@@ -3206,6 +3222,32 @@ function RemoveEnvironmentDialog({
         );
     };
 
+    const option = (value: boolean, title: string, body: ReactNode) => (
+        <label
+            className={`flex cursor-pointer gap-3 rounded-xl p-3 ring-1 transition ${
+                everything === value
+                    ? 'bg-accent/5 ring-accent/40'
+                    : 'ring-line hover:bg-paper'
+            }`}
+        >
+            <input
+                type="radio"
+                name="remove-env-scope"
+                checked={everything === value}
+                onChange={() => setEverything(value)}
+                className="mt-0.5 accent-[var(--color-accent)]"
+            />
+            <span className="min-w-0">
+                <span className="block text-xs font-semibold text-ink">
+                    {title}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-soft">
+                    {body}
+                </span>
+            </span>
+        </label>
+    );
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-6 backdrop-blur-xs">
             <div
@@ -3216,36 +3258,58 @@ function RemoveEnvironmentDialog({
             >
                 <div className="flex items-start gap-3.5">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/20">
-                        <Unplug className="size-5" />
+                        <Trash2 className="size-5" />
                     </div>
                     <div className="min-w-0 flex-1">
                         <h3
                             id="remove-env-dialog-title"
                             className="text-base font-semibold text-ink"
                         >
-                            Remove {environment}?
+                            Delete {environment}?
                         </h3>
-                        <p className="mt-1.5 text-xs leading-relaxed text-soft">
-                            This runs{' '}
-                            <code className="rounded bg-paper px-1 py-0.5 font-mono text-ink">
-                                larakube env:remove {environment}
-                            </code>{' '}
-                            to drop it from{' '}
-                            <code className="font-mono text-ink">
-                                .larakube.json
-                            </code>{' '}
-                            and remove its generated{' '}
-                            <code className="font-mono text-ink">
-                                k8s/overlays/{environment}
-                            </code>{' '}
-                            manifests.
-                        </p>
-                        <p className="mt-2 text-xs font-medium text-ink">
-                            Its live server, cluster resources, and .env.
-                            {environment} are not touched.
-                        </p>
+                        {serverLabel === null ? (
+                            <p className="mt-1.5 text-xs leading-relaxed text-soft">
+                                It isn't on a server, so this removes it from{' '}
+                                <code className="font-mono text-ink">
+                                    .larakube.json
+                                </code>{' '}
+                                with its generated manifests and deploy
+                                workflow.
+                            </p>
+                        ) : null}
                     </div>
                 </div>
+
+                {serverLabel !== null ? (
+                    <div className="mt-4 space-y-2">
+                        {option(
+                            true,
+                            'Delete everything',
+                            <>
+                                Its workloads and data on{' '}
+                                <span className="font-medium text-ink">
+                                    {serverLabel}
+                                </span>
+                                , its Plex Commons data (after a database
+                                backup), and its manifests and deploy workflow.
+                                The server itself keeps running.
+                            </>,
+                        )}
+                        {option(
+                            false,
+                            'Only remove it from this project',
+                            <>
+                                Forget it here and delete its generated files;
+                                everything on {serverLabel} stays as it is.
+                            </>,
+                        )}
+                    </div>
+                ) : null}
+
+                <p className="mt-3 text-xs text-soft">
+                    .env.{environment} and its CI secrets on your Git host are
+                    left for you.
+                </p>
 
                 <div className="mt-6 flex items-center justify-end gap-2.5">
                     <Button
@@ -3269,7 +3333,11 @@ function RemoveEnvironmentDialog({
                     >
                         <Trash2 className="size-3.5" />
                         <span>
-                            {removing ? 'Removing…' : `Remove ${environment}`}
+                            {removing
+                                ? 'Deleting…'
+                                : destroying
+                                  ? `Delete ${environment} and its data`
+                                  : `Remove ${environment}`}
                         </span>
                     </Button>
                 </div>

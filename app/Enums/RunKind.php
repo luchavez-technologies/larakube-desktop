@@ -67,6 +67,8 @@ enum RunKind: string
     case LinkServer = 'link-server';
     /** A cloud environment dropped from the project's blueprint with `env:remove` — never touches a live server or cluster. */
     case RemoveEnvironment = 'remove-environment';
+    /** A cloud environment deleted with `env:destroy`: its namespace and volumes, its Plex Commons data, then its blueprint entry. */
+    case DestroyEnvironment = 'destroy-environment';
     case ConfigureHost = 'configure-host';
     case ConfigureCi = 'configure-ci';
     case ConfigureBackingServices = 'configure-backing-services';

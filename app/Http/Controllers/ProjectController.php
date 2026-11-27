@@ -1030,6 +1030,17 @@ class ProjectController extends Controller
         return $this->run($runner, $project, RunKind::RemoveEnvironment, "Remove {$environment} from {$this->name($project)}'s blueprint", ['env:remove', $environment, '--force'], $environment);
     }
 
+    /** Deletes a cloud environment completely: what it runs on its server and in Plex Commons, then its blueprint entry. */
+    public function destroyEnvironment(Request $request, Project $project, CliRunner $runner): RedirectResponse
+    {
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'alpha_dash', 'not_in:local'],
+        ]);
+        $environment = $validated['environment'];
+
+        return $this->run($runner, $project, RunKind::DestroyEnvironment, "Delete {$environment} of {$this->name($project)}", ['env:destroy', $environment, '--force'], $environment);
+    }
+
     public function configureCi(Request $request, Project $project, CliRunner $runner): RedirectResponse
     {
         $validated = $request->validate([

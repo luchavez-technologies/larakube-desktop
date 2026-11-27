@@ -721,6 +721,26 @@ test('removing an environment dispatches env:remove --force and never touches lo
     File::deleteDirectory($sandbox['home']);
 });
 
+test('deleting an environment completely dispatches env:destroy --force and never touches local', function () {
+    $sandbox = projectsSandbox();
+    $project = Project::create(['path' => $sandbox['app']]);
+    $fake = ChildProcess::fake();
+
+    $this->post(route('projects.destroyEnvironment', $project), ['environment' => 'local'])
+        ->assertSessionHasErrors('environment');
+
+    $this->post(route('projects.destroyEnvironment', $project), ['environment' => 'staging'])
+        ->assertRedirect();
+
+    $bin = "{$sandbox['bin']}/larakube";
+    $fake->assertStarted(fn (array|string $cmd, string $alias, ?string $cwd, mixed ...$rest): bool => array_slice($cmd, 4) === [
+        $bin, 'env:destroy', 'staging', '--force', '--no-interaction',
+    ] && $cwd === $sandbox['app']);
+    expect(Run::sole()->kind)->toBe(RunKind::DestroyEnvironment);
+
+    File::deleteDirectory($sandbox['home']);
+});
+
 test('linking a server supports custom environments like staging', function () {
     $sandbox = projectsSandbox();
     projectsStacks();
