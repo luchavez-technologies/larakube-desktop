@@ -16,6 +16,7 @@ import ImageRef from '@/components/image-ref';
 import ServiceCard from '@/components/service-card';
 import StatusPill from '@/components/status-pill';
 import PlexPauseButton from './plex-pause-button';
+import PlexPublicAddress from './plex-public-address';
 import PlexUpdateButton, { type CommonsChange } from './plex-update-button';
 
 /**
@@ -323,32 +324,38 @@ export default function PlexServiceEngineCard({
                                     )
                                 }
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 text-[11px] text-soft transition hover:border-brand hover:text-ink"
-                                title="Click to copy cluster-internal address"
+                                title={`Copy the in-cluster address ${internalDetail.value ?? ''}`}
                             >
                                 {copiedLabel === 'internal' ? (
                                     <Check className="size-3 text-emerald-500" />
                                 ) : (
                                     <Copy className="size-3 text-faint" />
                                 )}
-                                <span className="max-w-[170px] truncate font-mono">
+                                <span className="max-w-[260px] truncate font-mono">
                                     {internalDetail.value}
                                 </span>
                             </button>
                         )}
 
                         {publicDetail && publicDetail.value && (
-                            <a
-                                href={publicDetail.value}
-                                target="_blank"
-                                rel="noreferrer"
+                            <ExternalLinkButton
+                                url={publicDetail.value}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 text-[11px] text-soft transition hover:border-brand hover:text-ink"
-                                title="Open web console"
+                                title={`${publicDetail.label} address`}
                             >
                                 <ExternalLink className="size-3 text-faint" />
-                                <span>{publicDetail.label}</span>
-                            </a>
+                                <span className="font-mono">
+                                    {publicDetail.value.replace(
+                                        /^https?:\/\//,
+                                        '',
+                                    )}
+                                </span>
+                            </ExternalLinkButton>
                         )}
                     </div>
+                ) : null,
+                option.needsPublicAddress ? (
+                    <PlexPublicAddress server={server} option={option} />
                 ) : null,
                 companion?.url ? (
                     <p className="text-[10px] leading-snug text-faint">

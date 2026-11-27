@@ -279,7 +279,7 @@ class ClusterStatus
      * as "unknown" (null) rather than crashing a deferred prop or silently
      * passing garbage to ToolCommons::describe().
      *
-     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, paused: list<string>, serviceCatalog: array<string, mixed>, endpoints: array<string, array{internal: string, public: ?string, publicCapable: bool}>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
      */
     public function parsePlexReport(mixed $report): ?array
     {
@@ -302,6 +302,15 @@ class ClusterStatus
             'services' => is_array($report['services']) ? $report['services'] : [],
             'paused' => array_values(array_filter((array) ($report['paused'] ?? []), 'is_string')),
             'serviceCatalog' => is_array($report['serviceCatalog'] ?? null) ? $report['serviceCatalog'] : [],
+            // Where each engine is reached: in-cluster, public, and whether it can have a public address.
+            'endpoints' => array_map(
+                fn (array $endpoint): array => [
+                    'internal' => (string) ($endpoint['internal'] ?? ''),
+                    'public' => is_string($endpoint['public'] ?? null) ? $endpoint['public'] : null,
+                    'publicCapable' => (bool) ($endpoint['publicCapable'] ?? false),
+                ],
+                array_filter((array) ($report['endpoints'] ?? []), 'is_array'),
+            ),
             'tenants' => [
                 'tool' => $bucket($report['tenants']['tool'] ?? []),
                 'project' => $bucket($report['tenants']['project'] ?? []),

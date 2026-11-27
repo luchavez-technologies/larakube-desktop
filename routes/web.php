@@ -116,6 +116,7 @@ Route::post('/servers/{server}/plex/stop', [PlexController::class, 'stopServer']
 Route::post('/servers/{server}/plex/refresh', [PlexController::class, 'refresh'])->name('servers.plex.refresh');
 Route::post('/servers/{server}/plex/provision', [PlexController::class, 'provision'])->name('servers.plex.provision');
 Route::post('/servers/{server}/plex/services', [PlexController::class, 'addService'])->name('servers.plex.services.add');
+Route::post('/servers/{server}/plex/services/{service}/public-host', [PlexController::class, 'setPublicHost'])->where('service', '[a-z0-9-]+')->name('servers.plex.services.public-host');
 Route::post('/servers/{server}/plex/tenants/{tenant}/evict', [PlexController::class, 'evictTenant'])->name('servers.plex.tenants.evict');
 Route::post('/servers/{server}/plex/tenants/{tenant}/rotate', [PlexController::class, 'rotateTenant'])->name('servers.plex.tenants.rotate');
 Route::get('/backups', [BackupController::class, 'entry'])->name('backups');

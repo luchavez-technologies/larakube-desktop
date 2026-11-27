@@ -18,7 +18,7 @@ class PlexCatalog
     public const FRESH_SECONDS = SyncPlexJob::FRESH_SECONDS;
 
     /**
-     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
+     * @return array{initialized: bool, context: ?string, services: array<string, mixed>, serviceCatalog: array<string, mixed>, endpoints?: array<string, array{internal: string, public: ?string, publicCapable: bool}>, tenants: array{tool: list<array<string, mixed>>, project: list<array<string, mixed>>, custom: list<array<string, mixed>>}}|null
      */
     public function forContext(string $context): ?array
     {

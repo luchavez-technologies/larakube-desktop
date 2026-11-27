@@ -888,6 +888,8 @@ export type PlexServiceOptionDetail = {
     enabled: boolean;
     ready: boolean;
     details: { label: string; value: string | null; secret: boolean }[];
+    /** Object storage with no public address yet: its file links only work inside the cluster. */
+    needsPublicAddress?: boolean;
 };
 
 export type PlexServiceCategoryDetail = {

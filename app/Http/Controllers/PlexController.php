@@ -128,7 +128,7 @@ class PlexController extends Controller
                 $report = $plex->forContext($context);
 
                 return $report !== null && $report['initialized']
-                    ? $commonsServices->describe($report['serviceCatalog'], $report['services'])
+                    ? $commonsServices->describe($report['serviceCatalog'], $report['services'], $report['endpoints'] ?? [])
                     : null;
             }, 'services'),
             'podMetrics' => Inertia::defer(fn (): ?array => $metrics->podMetrics($context, 'larakube-plex'), 'podMetrics'),
@@ -234,6 +234,51 @@ class PlexController extends Controller
         );
 
         return to_route('runs.show', $run);
+    }
+
+    /**
+     * Gives a Commons object storage engine its public address, so apps' file links open in browsers.
+     * Re-runs plex:init with the engines already active plus --s3-host: it fills only the empty
+     * address and adds the ingress, leaving the running engine and its data as they are.
+     */
+    public function setPublicHost(Request $request, string $server, string $service, PlexCatalog $plexCatalog, CliRunner $runner): RedirectResponse
+    {
+        $validated = $request->validate([
+            'host' => ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i'],
+        ], ['host.regex' => 'Enter an address like s3.example.com, without https://.']);
+
+        $stack = $this->readyServer($server);
+        $context = (string) $stack['context'];
+
+        $plex = $plexCatalog->forContext($context);
+        abort_unless($plex !== null && $plex['initialized'], 404);
+
+        $endpoint = $plex['endpoints'][$service] ?? null;
+        abort_unless(is_array($endpoint) && $endpoint['publicCapable'] && empty($endpoint['public']), 422);
+
+        $active = [];
+        foreach ($plex['serviceCatalog'] as $category) {
+            foreach ($category['options'] ?? [] as $option => $meta) {
+                if ($meta['enabled'] ?? false) {
+                    $active[] = $option;
+                }
+            }
+        }
+        $host = strtolower($validated['host']);
+
+        $runner->start(
+            label: "Give {$service} on {$server} the public address {$host}",
+            arguments: ['plex:init', "--context={$context}", '--services='.implode(',', $active), "--s3-host={$host}"],
+            kind: RunKind::PlexInit,
+            subject: $service,
+            meta: ['server' => $server, 'context' => $context],
+            targetType: 'server',
+            targetName: $server,
+            serverName: $server,
+            context: $context,
+        );
+
+        return to_route('servers.plex.index', $server);
     }
 
     /** Evicts an orphaned tenant from the Commons — the "no project checked out" case this page's own context fits. */
