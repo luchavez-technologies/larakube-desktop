@@ -58,7 +58,8 @@ class ClusterStatus
     public function tls(string $context): ?array
     {
         return $this->remember("tls:{$context}", function () use ($context): ?array {
-            $report = $this->json(['tls:show', 'production', "--context={$context}", '--json'], 120);
+            // Under the worker's 120s, so a slow server ends this sync cleanly instead of the worker killing it.
+            $report = $this->json(['tls:show', 'production', "--context={$context}", '--json'], 90);
 
             return is_array($report) && ($report['success'] ?? false) === true ? $report : null;
         });

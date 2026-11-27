@@ -4,6 +4,7 @@ namespace App\Jobs\Sync;
 
 use App\Enums\ServerDataScope;
 use App\Jobs\Middleware\AnnounceServerDataSynced;
+use App\Jobs\Middleware\SkipUnreachableServer;
 
 /**
  * A sync of one server's data. Every attempt ends by announcing
@@ -24,6 +25,6 @@ abstract class ServerSyncJob extends SyncJob
     /** @return list<object> */
     public function middleware(): array
     {
-        return [new AnnounceServerDataSynced];
+        return [new AnnounceServerDataSynced, new SkipUnreachableServer];
     }
 }

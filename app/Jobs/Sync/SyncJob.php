@@ -24,6 +24,9 @@ abstract class SyncJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 3;
 
+    /** A sync that ran out of time would only run out of time again: fail it once, don't retry it. */
+    public bool $failOnTimeout = true;
+
     /** The queue explicit refreshes run on, with its own worker, so they never wait behind routine syncs. */
     public const INTERACTIVE_QUEUE = 'interactive';
 

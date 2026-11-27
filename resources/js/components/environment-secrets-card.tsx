@@ -165,6 +165,8 @@ export default function EnvironmentSecretsCard({
     const [message, setMessage] = useState<{
         text: string;
         type: 'ok' | 'warn' | 'error';
+        /** "Pushing…"/"Pulling…": cleared when that run finishes. */
+        progress?: boolean;
     } | null>(null);
 
     const pushUrl =
@@ -243,6 +245,10 @@ export default function EnvironmentSecretsCard({
             return;
         }
         prevRefreshKeyRef.current = refreshKey;
+        // The run behind a "Pushing…"/"Pulling…" message has finished: the status below now shows its result.
+        if (/:(succeeded|failed|cancelled)$/.test(String(refreshKey ?? ''))) {
+            setMessage((current) => (current?.progress ? null : current));
+        }
         setNowMs(Date.now());
         fetchStatus(revealRef.current);
     }, [fetchStatus, refreshKey]);
@@ -377,8 +383,9 @@ export default function EnvironmentSecretsCard({
                     setMessage({
                         text: isStaticCloud
                             ? `Pushing ${envFilename} to ${ciPlatformLabel} (${buildSecretName})…`
-                            : `Pushing ${envFilename} secrets to ${activeEnv}…`,
+                            : `Pushing ${envFilename} to ${activeEnv}…`,
                         type: 'ok',
+                        progress: true,
                     });
                 },
                 onFinish: () => {
@@ -407,6 +414,7 @@ export default function EnvironmentSecretsCard({
                 onSuccess: () => {
                     setMessage({
                         text: `Pulling ${activeEnv} secrets into ${envFilename}…`,
+                        progress: true,
                         type: 'ok',
                     });
                 },
