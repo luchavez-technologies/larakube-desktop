@@ -323,7 +323,7 @@ export default function PlexServiceEngineCard({
                                         'internal',
                                     )
                                 }
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 text-[11px] text-soft transition hover:border-brand hover:text-ink"
+                                className="flex w-full min-w-0 items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 text-left text-[11px] text-soft transition hover:border-brand hover:text-ink"
                                 title={`Copy the in-cluster address ${internalDetail.value ?? ''}`}
                             >
                                 {copiedLabel === 'internal' ? (
@@ -331,7 +331,7 @@ export default function PlexServiceEngineCard({
                                 ) : (
                                     <Copy className="size-3 text-faint" />
                                 )}
-                                <span className="max-w-[260px] truncate font-mono">
+                                <span className="min-w-0 flex-1 truncate font-mono">
                                     {internalDetail.value}
                                 </span>
                             </button>
