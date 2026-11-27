@@ -792,6 +792,7 @@ export default function ShowProject({
                                             <ProjectFeaturesCard
                                                 project={project}
                                                 currentEnv={activeEnvConfig}
+                                                environment={activeEnv}
                                                 pods={pods?.[activeEnv] ?? []}
                                             />
                                             <WorkloadScalingCard
@@ -816,6 +817,7 @@ export default function ShowProject({
                                         <ProjectFeaturesCard
                                             project={project}
                                             currentEnv={activeEnvConfig}
+                                            environment={activeEnv}
                                             pods={pods?.[activeEnv] ?? []}
                                         />
                                         <WorkloadScalingCard

@@ -27,6 +27,8 @@ type FeatureDefinition = {
     label: string;
     description: string;
     icon: typeof Layers;
+    /** Runs a pod of its own, so its status is that pod's; the rest only change what the app does. */
+    ownPod?: boolean;
 };
 
 const AVAILABLE_FEATURES: FeatureDefinition[] = [
@@ -35,30 +37,35 @@ const AVAILABLE_FEATURES: FeatureDefinition[] = [
         label: 'Queues',
         description: 'Standard background queue worker pod',
         icon: Cpu,
+        ownPod: true,
     },
     {
         id: 'horizon',
         label: 'Horizon',
         description: 'Redis queue supervisor & real-time dashboard',
         icon: Layers,
+        ownPod: true,
     },
     {
         id: 'reverb',
         label: 'Reverb',
         description: 'WebSocket server for real-time events',
         icon: Radio,
+        ownPod: true,
     },
     {
         id: 'scheduler',
         label: 'Scheduler',
         description: 'Automated cron runner (artisan schedule:run)',
         icon: Clock,
+        ownPod: true,
     },
     {
         id: 'ssr',
         label: 'Inertia SSR',
         description: 'Node server-side rendering daemon',
         icon: Flame,
+        ownPod: true,
     },
     {
         id: 'ai',
@@ -77,10 +84,13 @@ const AVAILABLE_FEATURES: FeatureDefinition[] = [
 export default function ProjectFeaturesCard({
     project,
     currentEnv,
+    environment = 'local',
     pods = [],
 }: {
     project: Project;
     currentEnv: ProjectEnvironment;
+    /** The environment shown, so a missing pod reads as "needs Up" locally and "next deploy" in the cloud. */
+    environment?: string;
     pods?: PodInfo[];
 }) {
     const isLaravel =
@@ -125,6 +135,14 @@ export default function ProjectFeaturesCard({
     });
 
     const getFeaturePodInfo = (featureId: string) => {
+        // Laravel AI, Scout, Octane, mcp, boost…: no pod of their own to wait for.
+        if (
+            !AVAILABLE_FEATURES.find((feature) => feature.id === featureId)
+                ?.ownPod
+        ) {
+            return { state: 'configured' as const, label: '✓ Enabled' };
+        }
+
         const pod = pods.find((p) => {
             const name = p.name.toLowerCase();
             const component = p.component.toLowerCase();
@@ -150,7 +168,10 @@ export default function ProjectFeaturesCard({
         if (!pod) {
             return {
                 state: 'configured' as const,
-                label: '○ Configured (Needs Up)',
+                label:
+                    environment === 'local'
+                        ? '○ Configured (Needs Up)'
+                        : '○ Starts on next deploy',
             };
         }
 
