@@ -3031,52 +3031,74 @@ function AddEnvironmentDialog({
                                             {errors.web_host}
                                         </p>
                                     )}
-                                    {hostServices.map((service) => {
-                                        const error = (
-                                            errors as Record<string, string>
-                                        )[`hosts.${service.slug}`];
+                                    {hostServices
+                                        // Object storage on Plex Commons or external has its own public address;
+                                        // only a pod in this environment needs one here.
+                                        .filter(
+                                            (service) =>
+                                                service.slug !== 's3' ||
+                                                !(
+                                                    selectedPlex.includes(
+                                                        project.objectStorage ??
+                                                            '',
+                                                    ) ||
+                                                    externalServices.includes(
+                                                        project.objectStorage ??
+                                                            '',
+                                                    )
+                                                ),
+                                        )
+                                        .map((service) => {
+                                            const error = (
+                                                errors as Record<string, string>
+                                            )[`hosts.${service.slug}`];
 
-                                        return (
-                                            <div
-                                                key={service.slug}
-                                                className="mt-4"
-                                            >
-                                                <p className="mb-1.5 text-xs font-medium text-ink">
-                                                    {service.label} address
-                                                </p>
-                                                <HostPicker
-                                                    key={`${server}-${service.slug}-${hostBase}`}
-                                                    name={`hosts[${service.slug}]`}
-                                                    value={
-                                                        serviceHosts[
-                                                            service.slug
-                                                        ] ?? ''
-                                                    }
-                                                    onChange={(value: string) =>
-                                                        setServiceHosts(
-                                                            (current) => ({
-                                                                ...current,
-                                                                [service.slug]:
-                                                                    value,
-                                                            }),
-                                                        )
-                                                    }
-                                                    serverName={server || null}
-                                                    serverIp={
-                                                        activeServer?.ip ?? null
-                                                    }
-                                                    defaultSubdomain={`${service.slug}-${hostBase}`}
-                                                    hideLabel
-                                                    disabled={processing}
-                                                />
-                                                {error && (
-                                                    <p className="mt-1.5 text-xs text-accent">
-                                                        {error}
+                                            return (
+                                                <div
+                                                    key={service.slug}
+                                                    className="mt-4"
+                                                >
+                                                    <p className="mb-1.5 text-xs font-medium text-ink">
+                                                        {service.label} address
                                                     </p>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                                    <HostPicker
+                                                        key={`${server}-${service.slug}-${hostBase}`}
+                                                        name={`hosts[${service.slug}]`}
+                                                        value={
+                                                            serviceHosts[
+                                                                service.slug
+                                                            ] ?? ''
+                                                        }
+                                                        onChange={(
+                                                            value: string,
+                                                        ) =>
+                                                            setServiceHosts(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    [service.slug]:
+                                                                        value,
+                                                                }),
+                                                            )
+                                                        }
+                                                        serverName={
+                                                            server || null
+                                                        }
+                                                        serverIp={
+                                                            activeServer?.ip ??
+                                                            null
+                                                        }
+                                                        defaultSubdomain={`${service.slug}-${hostBase}`}
+                                                        hideLabel
+                                                        disabled={processing}
+                                                    />
+                                                    {error && (
+                                                        <p className="mt-1.5 text-xs text-accent">
+                                                            {error}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     <p className="mt-2 text-[11px] text-soft">
                                         Domains already connected to this
                                         server&rsquo;s cluster are detected
