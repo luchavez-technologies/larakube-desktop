@@ -2174,3 +2174,56 @@ test('saving backing services passes external services, and clears them when non
 
     File::deleteDirectory($sandbox['home']);
 });
+
+test('save and redeploy restarts the deployments on the environment\'s own cluster, and only reports it when the restart worked', function () {
+    $sandbox = projectsSandbox();
+    projectsStacks();
+    projectsFrameworks();
+
+    File::put("{$sandbox['app']}/.larakube.json", json_encode([
+        'name' => 'shop',
+        'framework' => 'laravel',
+        'environments' => ['staging' => []],
+    ]));
+    File::put("{$sandbox['app']}/.env.staging", "APP_NAME=Shop\n");
+
+    $project = Project::create(['path' => $sandbox['app']]);
+
+    $fakes = fn (bool $restartWorks): array => [
+        '*cloud:stacks*' => Process::result(output: json_encode(['success' => true, 'stacks' => []])),
+        '*new:frameworks*' => Process::result(output: json_encode(['success' => true, 'categories' => [], 'frameworks' => []])),
+        '*dotenv:push*' => Process::result(output: json_encode(['success' => true])),
+        '*dotenv*--json*' => Process::result(output: json_encode([
+            'success' => true,
+            'environment' => 'staging',
+            'namespace' => 'shop-staging',
+            'context' => 'larakube-203.0.113.21',
+            'items' => [],
+            'summary' => ['drift' => 0, 'onlyLocal' => 0, 'onlyCluster' => 0, 'hidden' => 0, 'inSync' => 0, 'rotated' => 0, 'canReadSecrets' => true],
+        ])),
+        // Arguments are matched shell-quoted ('rollout' 'restart'), so the pattern can't span them.
+        '*rollout*restart*' => $restartWorks
+            ? Process::result(output: 'deployment.apps/web restarted')
+            : Process::result(errorOutput: 'No resources found', exitCode: 1),
+    ];
+
+    Process::fake($fakes(true));
+    $this->postJson(route('projects.dotenv.update', $project), [
+        'environment' => 'staging',
+        'variables' => ['DB_CONNECTION' => 'pgsql'],
+        'redeploy' => true,
+    ])->assertOk()->assertJsonPath('rolled', true);
+
+    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'rollout restart')
+        && str_contains(implode(' ', (array) $process->command), '--context larakube-203.0.113.21')
+        && str_contains(implode(' ', (array) $process->command), '-n shop-staging'));
+
+    Process::fake($fakes(false));
+    $this->postJson(route('projects.dotenv.update', $project), [
+        'environment' => 'staging',
+        'variables' => ['DB_CONNECTION' => 'pgsql'],
+        'redeploy' => true,
+    ])->assertOk()->assertJsonPath('rolled', false);
+
+    File::deleteDirectory($sandbox['home']);
+});

@@ -25,7 +25,7 @@ class ProjectDotenv
     public function __construct(private ToolLocator $locator) {}
 
     /**
-     * @return array{environment: ?string, namespace: ?string, items: list<array<string, mixed>>, summary: array<string, mixed>}|null
+     * @return array{environment: ?string, namespace: ?string, context: ?string, items: list<array<string, mixed>>, summary: array<string, mixed>}|null
      */
     public function get(string $projectPath, string $environment, bool $reveal = false): ?array
     {
@@ -56,6 +56,7 @@ class ProjectDotenv
         return [
             'environment' => $decoded['environment'] ?? $environment,
             'namespace' => $decoded['namespace'] ?? null,
+            'context' => is_string($decoded['context'] ?? null) ? $decoded['context'] : null,
             'items' => array_values(array_filter($decoded['items'], is_array(...))),
             'summary' => is_array($decoded['summary'] ?? null) ? $decoded['summary'] : [],
         ];
@@ -165,8 +166,12 @@ class ProjectDotenv
         if ($redeploy && $namespace) {
             $kubectl = $this->locator->find('kubectl') ?: 'kubectl';
             try {
+                // The environment's own cluster, never kubectl's current context: that may be a
+                // different cluster entirely, where the restart quietly finds nothing to restart.
+                $context = is_string($status['context'] ?? null) && $status['context'] !== '' ? $status['context'] : null;
                 $restartCmd = [
                     $kubectl,
+                    ...($context !== null ? ['--context', $context] : []),
                     'rollout',
                     'restart',
                     'deployment',
@@ -175,8 +180,7 @@ class ProjectDotenv
                     '-n',
                     $namespace,
                 ];
-                $this->locator->run($restartCmd, 30, cwd: $projectPath);
-                $rolled = true;
+                $rolled = $this->locator->run($restartCmd, 30, cwd: $projectPath)->successful();
             } catch (\Throwable) {
                 $rolled = false;
             }
