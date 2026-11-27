@@ -2811,6 +2811,17 @@ function AddEnvironmentDialog({
     }, [open]);
 
     const activeServer = readyServers.find((s) => s.name === server) ?? null;
+    // The suggested subdomain: the project's name, plus the environment's unless it is production,
+    // so cloud's staging is cloud-staging and never collides with production or another project's staging.
+    const slug = (value: string) =>
+        value
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    const hostBase =
+        slug(name) === '' || slug(name) === 'production'
+            ? slug(project.name)
+            : `${slug(project.name)}-${slug(name)}`;
 
     useEffect(() => {
         if (!open) {
@@ -2925,7 +2936,7 @@ function AddEnvironmentDialog({
                                     <input
                                         name="environment"
                                         value={name}
-                                        onChange={(e) =>
+                                        onChange={(e) => {
                                             setName(
                                                 e.target.value
                                                     .toLowerCase()
@@ -2933,8 +2944,11 @@ function AddEnvironmentDialog({
                                                         /[^a-z0-9_-]/g,
                                                         '',
                                                     ),
-                                            )
-                                        }
+                                            );
+                                            // The addresses follow the name, so staging never quietly takes production's.
+                                            setWebHost('');
+                                            setServiceHosts({});
+                                        }}
                                         placeholder="staging, qa, uat"
                                         spellCheck={false}
                                         className="w-full rounded-xl border-0 bg-surface px-3 py-2.5 font-mono text-sm text-ink ring-1 ring-line outline-none focus:ring-2 focus:ring-servers"
@@ -3002,15 +3016,13 @@ function AddEnvironmentDialog({
                                         </h3>
                                     </div>
                                     <HostPicker
-                                        key={server}
+                                        key={`${server}-${hostBase}`}
                                         name="web_host"
                                         value={webHost}
                                         onChange={setWebHost}
                                         serverName={server || null}
                                         serverIp={activeServer?.ip ?? null}
-                                        defaultSubdomain={(name || project.name)
-                                            .toLowerCase()
-                                            .replace(/[^a-z0-9-]/g, '')}
+                                        defaultSubdomain={hostBase}
                                         hideLabel
                                         disabled={processing}
                                     />
@@ -3033,7 +3045,7 @@ function AddEnvironmentDialog({
                                                     {service.label} address
                                                 </p>
                                                 <HostPicker
-                                                    key={`${server}-${service.slug}`}
+                                                    key={`${server}-${service.slug}-${hostBase}`}
                                                     name={`hosts[${service.slug}]`}
                                                     value={
                                                         serviceHosts[
@@ -3053,14 +3065,7 @@ function AddEnvironmentDialog({
                                                     serverIp={
                                                         activeServer?.ip ?? null
                                                     }
-                                                    defaultSubdomain={`${service.slug}-${(
-                                                        name || project.name
-                                                    )
-                                                        .toLowerCase()
-                                                        .replace(
-                                                            /[^a-z0-9-]/g,
-                                                            '',
-                                                        )}`}
+                                                    defaultSubdomain={`${service.slug}-${hostBase}`}
                                                     hideLabel
                                                     disabled={processing}
                                                 />
