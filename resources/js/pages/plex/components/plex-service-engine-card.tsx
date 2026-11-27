@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Check, Code2, Copy, ExternalLink, Filter, Server } from 'lucide-react';
+import {
+    Check,
+    Code2,
+    Copy,
+    ExternalLink,
+    Filter,
+    Globe,
+    Network,
+    Server,
+} from 'lucide-react';
 import Button from '@/components/button';
 import RadialGauge from '@/components/metrics/radial-gauge';
 import { brandIcon } from '@/components/tool-logo';
@@ -313,7 +322,7 @@ export default function PlexServiceEngineCard({
                     </div>
                 ) : null,
                 internalDetail || publicDetail?.value ? (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-col gap-1.5">
                         {internalDetail && (
                             <button
                                 type="button"
@@ -323,33 +332,41 @@ export default function PlexServiceEngineCard({
                                         'internal',
                                     )
                                 }
-                                className="flex w-full min-w-0 items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 text-left text-[11px] text-soft transition hover:border-brand hover:text-ink"
+                                className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-line bg-paper/70 px-2.5 py-1.5 text-left text-[11px] text-soft transition hover:border-brand hover:text-ink"
                                 title={`Copy the in-cluster address ${internalDetail.value ?? ''}`}
                             >
-                                {copiedLabel === 'internal' ? (
-                                    <Check className="size-3 text-emerald-500" />
-                                ) : (
-                                    <Copy className="size-3 text-faint" />
-                                )}
+                                <Network
+                                    className="size-3.5 shrink-0 text-servers"
+                                    aria-label="In-cluster address"
+                                />
                                 <span className="min-w-0 flex-1 truncate font-mono">
                                     {internalDetail.value}
                                 </span>
+                                {copiedLabel === 'internal' ? (
+                                    <Check className="size-3 shrink-0 text-emerald-500" />
+                                ) : (
+                                    <Copy className="size-3 shrink-0 text-faint" />
+                                )}
                             </button>
                         )}
 
                         {publicDetail && publicDetail.value && (
                             <ExternalLinkButton
                                 url={publicDetail.value}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2.5 py-1 text-[11px] text-soft transition hover:border-brand hover:text-ink"
-                                title={`${publicDetail.label} address`}
+                                className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-line bg-paper/70 px-2.5 py-1.5 text-left text-[11px] text-soft transition hover:border-brand hover:text-ink"
+                                title={`Open the ${publicDetail.label.toLowerCase()} address ${publicDetail.value}`}
                             >
-                                <ExternalLink className="size-3 text-faint" />
-                                <span className="font-mono">
+                                <Globe
+                                    className="size-3.5 shrink-0 text-brand"
+                                    aria-label={`${publicDetail.label} address`}
+                                />
+                                <span className="min-w-0 flex-1 truncate font-mono">
                                     {publicDetail.value.replace(
                                         /^https?:\/\//,
                                         '',
                                     )}
                                 </span>
+                                <ExternalLink className="size-3 shrink-0 text-faint" />
                             </ExternalLinkButton>
                         )}
                     </div>
